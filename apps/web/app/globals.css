@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0A1628;
+  --bg-2: #0F1E36;
+  --bg-3: #162844;
+  --fg: #E8EEF5;
+  --fg-2: #B0C4DE;
+  --fg-3: #8FA3BD;
+  --fg-4: #5A7090;
+  --border: #1E3252;
+  --border-2: #2A4060;
+  --accent: #3B82F6;
+  --accent-2: #2563EB;
+  --accent-3: #60A5FA;
+  --success: #10B981;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+}
+
+/* Light theme — will be enabled via .light class on <html> */
+html.light {
+  --bg: #FFFFFF;
+  --bg-2: #F1F5F9;
+  --bg-3: #EFF6FF;
+  --fg: #0F172A;
+  --fg-2: #1E293B;
+  --fg-3: #475569;
+  --fg-4: #64748B;
+  --border: #CBD5E1;
+  --border-2: #94A3B8;
+  --accent: #1D4ED8;
+  --accent-2: #2563EB;
+  --accent-3: #60A5FA;
+  --success: #059669;
+  --danger: #DC2626;
+  --warning: #F59E0B;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', system-ui, sans-serif;
+}
