@@ -16,7 +16,7 @@ CPM, PERT и CCM в одном интерфейсе.
 ## Структура
 
 ```
-planumpro/
+profyplan/
 ├── apps/
 │   ├── web/          # Next.js приложение
 │   └── api/          # FastAPI приложение
