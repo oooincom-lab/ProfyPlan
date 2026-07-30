@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
-<title>ProfyPlan — Сетевой график</title>
+<title>ProfyPlan вЂ” РЎРµС‚РµРІРѕР№ РіСЂР°С„РёРє</title>
 <style>
   :root {
     --bg: #0A1628; --bg-2: #0F1E36; --bg-3: #162844;
@@ -71,47 +71,52 @@
 <body>
 <div class="topbar">
   <div class="topbar-left">
-    <h1>Сетевой график</h1>
-    <span class="badge">PCB-1421 · CPM</span>
+    <h1>РЎРµС‚РµРІРѕР№ РіСЂР°С„РёРє</h1>
+    <span class="badge">PCB-1421 В· CPM</span>
   </div>
   <div class="mode-tabs" id="modeTabs">
-    <button class="mode-btn active" data-mode="absolute">Абсолютный</button>
-    <button class="mode-btn" data-mode="relative">Относительный</button>
+    <button class="mode-btn active" data-mode="absolute">РђР±СЃРѕР»СЋС‚РЅС‹Р№</button>
+    <button class="mode-btn" data-mode="relative">РћС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Р№</button>
   </div>
   <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="border-color:var(--danger);background:rgba(239,68,68,0.18);box-shadow:0 0 8px rgba(239,68,68,0.5);"></div> Критический</div>
-    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(59,130,246,0.08);box-shadow:0 0 8px rgba(59,130,246,0.35);"></div> С резервом</div>
-    <button class="btn" id="btnReset">Сброс</button>
-    <button class="btn btn-primary" id="btnCritical">Только крит. путь</button>
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--danger);background:rgba(239,68,68,0.18);box-shadow:0 0 8px rgba(239,68,68,0.5);"></div> РљСЂРёС‚РёС‡РµСЃРєРёР№</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(59,130,246,0.08);box-shadow:0 0 8px rgba(59,130,246,0.35);"></div> РЎ СЂРµР·РµСЂРІРѕРј</div>
+    <button class="btn" id="btnReset">РЎР±СЂРѕСЃ</button>
+    <button class="btn btn-primary" id="btnCritical">РўРѕР»СЊРєРѕ РєСЂРёС‚. РїСѓС‚СЊ</button>
   </div>
 </div>
 <div class="canvas-wrap" id="wrap">
   <canvas id="c"></canvas>
   <div class="tooltip" id="tip"></div>
   <div class="info-panel" id="infoPanel">
-    <strong>Критический путь:</strong> <span id="cpDur">64</span> дня · <span id="cpCount">12</span> операций<br>
-    <span style="color:var(--fg-4);margin-top:2px;display:inline-block;">Drag · Scroll · <span id="modeLabel">Режим: Абсолютный</span></span>
+    <strong>РљСЂРёС‚РёС‡РµСЃРєРёР№ РїСѓС‚СЊ:</strong> <span id="cpDur">64</span> РґРЅСЏ В· <span id="cpCount">12</span> РѕРїРµСЂР°С†РёР№<br>
+    <span style="color:var(--fg-4);margin-top:2px;display:inline-block;">Drag В· Scroll В· <span id="modeLabel">Р РµР¶РёРј: РђР±СЃРѕР»СЋС‚РЅС‹Р№</span></span>
   </div>
 </div>
 <script>
 var NODE_R = 26, MIN_NODE_GAP = 60;
-var REL_SCALE = 20; // world pixels per day
+var REL_SCALE = 20;
+
+function getNodeR() {
+  var r = NODE_R * (0.72 / Math.max(scale, 0.18));
+  return Math.min(Math.max(r, 18), 40);
+}
 
 var ops = [
-  { id:"1",  num:1,  name:"Подготовка производства",  dur:3,  es:0,  ef:3,  ls:0,  lf:3,  tf:0,  crit:1 },
-  { id:"2",  num:2,  name:"Закупка компонентов",      dur:8,  es:3,  ef:11, ls:3,  lf:11, tf:0,  crit:1 },
-  { id:"3",  num:3,  name:"Входной контроль",         dur:2,  es:11, ef:13, ls:11, lf:13, tf:0,  crit:1 },
-  { id:"4",  num:4,  name:"Термопрофилирование",      dur:1,  es:11, ef:12, ls:12, lf:13, tf:1,  crit:0 },
-  { id:"5",  num:5,  name:"Монтаж SMD",               dur:12, es:13, ef:25, ls:13, lf:25, tf:0,  crit:1 },
-  { id:"6",  num:6,  name:"Монтаж DIP",               dur:4,  es:13, ef:17, ls:21, lf:25, tf:8,  crit:0 },
-  { id:"7",  num:7,  name:"Пайка волной",             dur:6,  es:25, ef:31, ls:25, lf:31, tf:0,  crit:1 },
-  { id:"8",  num:8,  name:"Установка разъемов",       dur:5,  es:31, ef:36, ls:31, lf:36, tf:0,  crit:1 },
-  { id:"9",  num:9,  name:"Контроль пайки (AOI)",     dur:3,  es:36, ef:39, ls:36, lf:39, tf:0,  crit:1 },
-  { id:"10", num:10, name:"Функциональный тест",      dur:8,  es:39, ef:47, ls:39, lf:47, tf:0,  crit:1 },
-  { id:"11", num:11, name:"Термотренировка",          dur:12, es:47, ef:59, ls:47, lf:59, tf:0,  crit:1 },
-  { id:"12", num:12, name:"Выходной контроль",        dur:3,  es:59, ef:62, ls:59, lf:62, tf:0,  crit:1 },
-  { id:"13", num:13, name:"Маркировка",               dur:2,  es:62, ef:64, ls:62, lf:64, tf:0,  crit:1 },
-  { id:"14", num:14, name:"Упаковка",                 dur:2,  es:62, ef:64, ls:62, lf:64, tf:0,  crit:0 },
+  { id:"1",  num:1,  name:"РџРѕРґРіРѕС‚РѕРІРєР° РїСЂРѕРёР·РІРѕРґСЃС‚РІР°",  dur:3,  es:0,  ef:3,  ls:0,  lf:3,  tf:0,  crit:1 },
+  { id:"2",  num:2,  name:"Р—Р°РєСѓРїРєР° РєРѕРјРїРѕРЅРµРЅС‚РѕРІ",      dur:8,  es:3,  ef:11, ls:3,  lf:11, tf:0,  crit:1 },
+  { id:"3",  num:3,  name:"Р’С…РѕРґРЅРѕР№ РєРѕРЅС‚СЂРѕР»СЊ",         dur:2,  es:11, ef:13, ls:11, lf:13, tf:0,  crit:1 },
+  { id:"4",  num:4,  name:"РўРµСЂРјРѕРїСЂРѕС„РёР»РёСЂРѕРІР°РЅРёРµ",      dur:1,  es:11, ef:12, ls:12, lf:13, tf:1,  crit:0 },
+  { id:"5",  num:5,  name:"РњРѕРЅС‚Р°Р¶ SMD",               dur:12, es:13, ef:25, ls:13, lf:25, tf:0,  crit:1 },
+  { id:"6",  num:6,  name:"РњРѕРЅС‚Р°Р¶ DIP",               dur:4,  es:13, ef:17, ls:21, lf:25, tf:8,  crit:0 },
+  { id:"7",  num:7,  name:"РџР°Р№РєР° РІРѕР»РЅРѕР№",             dur:6,  es:25, ef:31, ls:25, lf:31, tf:0,  crit:1 },
+  { id:"8",  num:8,  name:"РЈСЃС‚Р°РЅРѕРІРєР° СЂР°Р·СЉРµРјРѕРІ",       dur:5,  es:31, ef:36, ls:31, lf:36, tf:0,  crit:1 },
+  { id:"9",  num:9,  name:"РљРѕРЅС‚СЂРѕР»СЊ РїР°Р№РєРё (AOI)",     dur:3,  es:36, ef:39, ls:36, lf:39, tf:0,  crit:1 },
+  { id:"10", num:10, name:"Р¤СѓРЅРєС†РёРѕРЅР°Р»СЊРЅС‹Р№ С‚РµСЃС‚",      dur:8,  es:39, ef:47, ls:39, lf:47, tf:0,  crit:1 },
+  { id:"11", num:11, name:"РўРµСЂРјРѕС‚СЂРµРЅРёСЂРѕРІРєР°",          dur:12, es:47, ef:59, ls:47, lf:59, tf:0,  crit:1 },
+  { id:"12", num:12, name:"Р’С‹С…РѕРґРЅРѕР№ РєРѕРЅС‚СЂРѕР»СЊ",        dur:3,  es:59, ef:62, ls:59, lf:62, tf:0,  crit:1 },
+  { id:"13", num:13, name:"РњР°СЂРєРёСЂРѕРІРєР°",               dur:2,  es:62, ef:64, ls:62, lf:64, tf:0,  crit:1 },
+  { id:"14", num:14, name:"РЈРїР°РєРѕРІРєР°",                 dur:2,  es:62, ef:64, ls:62, lf:64, tf:0,  crit:0 },
 ];
 
 var om = {};
@@ -125,7 +130,7 @@ var deps = [
   ["12","14"]
 ];
 
-var PROJECT_START = new Date(2026, 6, 29); // 29 июля 2026
+var PROJECT_START = new Date(2026, 6, 29); // 29 РёСЋР»СЏ 2026
 var viewMode = 'absolute';
 
 // --- Layout ---
@@ -141,8 +146,8 @@ function buildAbsoluteLayout() {
   for (var li = 0; li < layerOrder.length; li++) {
     var lx = 30 + li * 150;
     var ids = layers[layerOrder[li]];
-    var startY = 340 - ((ids.length - 1) * NODE_R * 3.2) / 2;
-    for (var i = 0; i < ids.length; i++) layout[ids[i]] = [lx, startY + i * NODE_R * 3.2];
+    var startY = 340 - ((ids.length - 1) * getNodeR() * 3.2) / 2;
+    for (var i = 0; i < ids.length; i++) layout[ids[i]] = [lx, startY + i * getNodeR() * 3.2];
   }
   resolveCrossings(layout, [LANE_ABOVE, LANE_BELOW]);
   return layout;
@@ -160,8 +165,8 @@ function buildRelativeLayout() {
     var es = layerOrder[li];
     var lx = 30 + es * REL_SCALE;
     var ids = layers[es];
-    var startY = 340 - ((ids.length - 1) * NODE_R * 3.2) / 2;
-    for (var i = 0; i < ids.length; i++) layout[ids[i]] = [lx, startY + i * NODE_R * 3.2];
+    var startY = 340 - ((ids.length - 1) * getNodeR() * 3.2) / 2;
+    for (var i = 0; i < ids.length; i++) layout[ids[i]] = [lx, startY + i * getNodeR() * 3.2];
   }
   // Ensure min gap
   for (var li = 1; li < layerOrder.length; li++) {
@@ -202,7 +207,7 @@ function segCross(s1,s2) {
 }
 function edgeToSeg(a,b,lo) {
   var pa=lo[a],pb=lo[b],ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]);
-  return {ax:pa[0]+Math.cos(ang)*NODE_R,ay:pa[1]+Math.sin(ang)*NODE_R,bx:pb[0]-Math.cos(ang)*NODE_R,by:pb[1]-Math.sin(ang)*NODE_R};
+  return {ax:pa[0]+Math.cos(ang)*nr,ay:pa[1]+Math.sin(ang)*nr,bx:pb[0]-Math.cos(ang)*nr,by:pb[1]-Math.sin(ang)*nr};
 }
 function crossesAny(key,lo,placed) {
   var s=edgeToSeg(key[0],key[1],lo);
@@ -213,8 +218,8 @@ function nodeOverlap(nid,lo,ex) {
   var TA=24,TB=20,pn=lo[nid];if(!pn)return false;
   var ids=Object.keys(lo);
   for (var i=0;i<ids.length;i++) {var oid=ids[i];if(oid===nid||oid===ex)continue;
-    var po=lo[oid],hg=Math.abs(pn[0]-po[0]);if(hg>NODE_R*3)continue;
-    var sT=pn[1]-NODE_R-TA,sB=pn[1]+NODE_R+TB,oT=po[1]-NODE_R-TA,oB=po[1]+NODE_R+TB;
+    var po=lo[oid],hg=Math.abs(pn[0]-po[0]);if(hg>getNodeR()*3)continue;
+    var sT=pn[1]-nr-TA,sB=pn[1]+getNodeR()+TB,oT=po[1]-nr-TA,oB=po[1]+getNodeR()+TB;
     if(sT<oB&&sB>oT)return true;}return false;
 }
 
@@ -242,7 +247,7 @@ var wrap=document.getElementById('wrap'),tip=document.getElementById('tip');
 
 function sx(wx){return(wx+ox)*scale;}
 function sy(wy){return(wy+oy)*scale;}
-function hit(cx,cy,mx,my){var rr=(NODE_R*scale);return(mx-cx)*(mx-cx)+(my-cy)*(my-cy)<=rr*rr;}
+function hit(cx,cy,mx,my){var rr=(getNodeR()*scale);return(mx-cx)*(mx-cx)+(my-cy)*(my-cy)<=rr*rr;}
 
 // Date helpers
 function addDays(d, days) { var r = new Date(d); r.setDate(r.getDate()+days); return r; }
@@ -287,8 +292,8 @@ function drawTimelineGrid(W,H) {
     // Date label
     var date=addDays(PROJECT_START,d);
     var label=fmt(date);
-    // For day 0, add "Старт" prefix
-    if(d===0)label='Старт '+label;
+    // For day 0, add "РЎС‚Р°СЂС‚" prefix
+    if(d===0)label='РЎС‚Р°СЂС‚ '+label;
 
     var fsz=Math.round(10*scale);if(fsz<8)fsz=8;
     ctx.fillStyle='#B0C4DE';ctx.font=fsz+'px "IBM Plex Mono",monospace';
@@ -322,7 +327,7 @@ function draw() {
   for(var i=0;i<deps.length;i++){
     var a=deps[i][0],b=deps[i][1];if(!vs[a]||!vs[b])continue;
     var fa=om[a],fb=om[b],pa=pos[a],pb=pos[b];
-    var ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]),nr=NODE_R;
+    var ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]),nr=getNodeR();
     var ax=pa[0]+Math.cos(ang)*nr,ay=pa[1]+Math.sin(ang)*nr;
     var bx=pb[0]-Math.cos(ang)*nr,by=pb[1]-Math.sin(ang)*nr;
     var both=(fa&&fb)?(fa.crit&&fb.crit):false;
@@ -337,7 +342,7 @@ function draw() {
 
   // Nodes
   for(var i=0;i<vis.length;i++){
-    var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]),r=NODE_R*scale;
+    var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]),r=getNodeR()*scale;
     ctx.beginPath();ctx.arc(cx,cy,r+3,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.06)':'rgba(59,130,246,0.03)';ctx.fill();
     ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.08)':'rgba(59,130,246,0.04)';ctx.fill();
     ctx.strokeStyle=o.crit?'rgba(239,68,68,0.5)':'rgba(96,165,250,0.35)';ctx.lineWidth=o.crit?2:1.3;ctx.stroke();
@@ -379,7 +384,7 @@ window.addEventListener('mousemove',function(e){
       +'<div class="tooltip-row" style="margin-top:4px;color:'+(found.crit?'var(--danger)':'var(--fg-4)')+';">'+(found.crit?'\u26a0 \u041a\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0443\u0442\u044c':'\u0421 \u0440\u0435\u0437\u0435\u0440\u0432\u043e\u043c')+'</div>';
     tip.classList.add('on');
   }else if(!found&&hoverId!==null){hoverId=null;tip.classList.remove('on');}
-  if(found){var cx=sx(pos[found.id][0]),cy=sy(pos[found.id][1]),r=NODE_R*scale;
+  if(found){var cx=sx(pos[found.id][0]),cy=sy(pos[found.id][1]),r=getNodeR()*scale;
     tip.style.left=Math.min(cx+r+14,window.innerWidth-280)+'px';tip.style.top=Math.max(4,cy-80)+'px';}
 });
 window.addEventListener('mouseup',function(){dragId=null;panning=false;wrap.classList.remove('dragging','panning');});
@@ -404,3 +409,4 @@ draw();
 </script>
 </body>
 </html>
+
