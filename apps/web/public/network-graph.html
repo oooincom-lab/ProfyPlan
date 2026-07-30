@@ -281,9 +281,25 @@ function spreadLayersVertical(layout){
         pa[1]+=(targetEdge-pa[1])*([0.06,0.12,0.20][sprMode]);
         pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
       }
+  // Final pass: resolve title + reserve label overlaps (title is ~14px above circle, reserve ~16px below)
+  var TITLE_PAD=NODE_R+14,RESERVE_PAD=NODE_R+16;
+  for(var iter=0;iter<6;iter++){
+    for(var i=0;i<allIds.length;i++){
+      var a=allIds[i],pa=layout[a];if(!pa)continue;
+      for(var j=i+1;j<allIds.length;j++){
+        var b=allIds[j],pb=layout[b];if(!pb)continue;
+        var dx=Math.abs(pa[0]-pb[0]);
+        if(dx>NODE_R*4)continue; // only nearby columns
+        // Title overlap: top of each circle
+        var tY1=pa[1]-TITLE_PAD,tY2=pb[1]-TITLE_PAD;
+        var rY1=pa[1]+RESERVE_PAD,rY2=pb[1]+RESERVE_PAD;
+        var nudge=0;
+        if(Math.abs(tY1-tY2)<12){nudge=(12-Math.abs(tY1-tY2))*(pa[1]>pb[1]?1:-1);}
+        else if(Math.abs(rY1-rY2)<10){nudge=(10-Math.abs(rY1-rY2))*(pa[1]>pb[1]?1:-1);}
+        if(nudge!==0){pa[1]+=nudge/2;pb[1]-=nudge/2;}
+      }
     }
   }
-}
 
 var absLayout=buildAbsoluteLayout(),relLayout=buildRelativeLayout();
 function clone(src){var o={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o;}
