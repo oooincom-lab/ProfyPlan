@@ -103,6 +103,13 @@
       <span class="unit-label" id="sprMax">агрес</span>
       <span class="unit-label" id="sprCur" style="color:var(--accent-3);font-weight:700;">оптим</span>
     </div>
+    <div class="unit-slider">
+      <span class="unit-label" style="font-size:10px;color:var(--fg-4);">Шрифт:</span>
+      <span class="unit-label" id="fsMin">станд</span>
+      <input type="range" id="fsRange" min="0" max="1" value="0" step="1">
+      <span class="unit-label" id="fsMax">крупн</span>
+      <span class="unit-label" id="fsCur" style="color:var(--accent-3);font-weight:700;">станд</span>
+    </div>
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--danger);background:rgba(239,68,68,0.18);box-shadow:0 0 8px rgba(239,68,68,0.5);"></div> Критический</div>
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(59,130,246,0.08);box-shadow:0 0 8px rgba(59,130,246,0.35);"></div> С резервом</div>
     <button class="btn" id="btnReset">Сброс</button>
@@ -150,6 +157,9 @@ var PROJECT_START = new Date(2026, 6, 29);
 var viewMode = 'absolute';
 var displayUnit = 'd';
 var sprMode = 1; // 0=сдержанно 1=оптимально 2=агрессивно — controls Y spread
+
+// Font size multiplier: 1.0=standard, 1.5=large
+var fontScale=1.0;
 
 var UNITS={s:'\u0441\u0435\u043a',m:'\u043c\u0438\u043d',h:'\u0447',d:'\u0434\u043d',w:'\u043d\u0435\u0434',mo:'\u043c\u0435\u0441',y:'\u0433\u043e\u0434'};
 function toDays(dur,unit){if(unit==='h')return dur/24;if(unit==='m')return dur/1440;if(unit==='s')return dur/86400;return dur;}
@@ -386,7 +396,7 @@ function drawTimelineGrid(W,H){
       else if(ctxRows[ci].fmt==='d'){cl=fmt(dt);}
       else if(ctxRows[ci].fmt==='mo'){cl=MNctx[dt.getMonth()];}
       else{cl=''+dt.getFullYear();}
-      var cfsz=Math.round(ctxRows[ci].fs*scale);if(cfsz<7)cfsz=7;if(cfsz>13)cfsz=13;
+      var cfsz=Math.round(ctxRows[ci].fs*scale*fontScale);if(cfsz<7)cfsz=7;if(cfsz>13)cfsz=13;
       ctx.fillStyle='rgba(90,112,144,0.55)';ctx.font=cfsz+'px "IBM Plex Mono",monospace';
       ctx.textAlign='center';ctx.textBaseline='top';
       var lw=ctx.measureText(cl).width;
@@ -412,8 +422,8 @@ function drawTimelineGrid(W,H){
       var dd=Math.floor(d);label=fmt(addDays(PROJECT_START,dd));
     }
 
-    var fsz=Math.round(isTime?11*scale:10*scale);
-    if(fsz<7)fsz=7;if(fsz>14)fsz=14;
+    var fsz=Math.round((isTime?11:10)*scale*fontScale);
+    if(fsz<7)fsz=7;if(fsz>14*fontScale)fsz=14*fontScale;
     ctx.fillStyle=isTime?'rgba(96,165,250,0.8)':'#B0C4DE';
     ctx.font=(isTime?'bold ':'')+fsz+'px "IBM Plex Mono",monospace';
     ctx.textAlign='center';ctx.textBaseline='top';
@@ -452,7 +462,7 @@ function draw(){
       var midX=(ax+bx)/2,midY=(ay+by)/2,perpAng=ang+Math.PI/2;
       var loff=10, mx=midX+Math.cos(perpAng)*loff,my=midY+Math.sin(perpAng)*loff;
       ctx.save();ctx.fillStyle=both?'rgba(239,68,68,0.9)':'rgba(176,196,222,0.9)';
-      ctx.font='bold '+Math.round(10*scale)+'px "IBM Plex Mono",monospace';
+      ctx.font='bold '+Math.round(10*scale*fontScale)+'px "IBM Plex Mono",monospace';
       ctx.textAlign='center';ctx.textBaseline='middle';
       // Background pill
       var lbl=fmtDur(fa.dur,fa.unit);
@@ -477,9 +487,9 @@ function draw(){
         var hs=r+8; ctx.beginPath();ctx.moveTo(cx,cy-hs);ctx.lineTo(cx+hs*0.75,cy);ctx.lineTo(cx,cy+hs);ctx.lineTo(cx-hs*0.75,cy);ctx.closePath();
         ctx.fillStyle='rgba(16,185,129,0.15)';ctx.fill();
         ctx.strokeStyle='rgba(16,185,129,0.6)';ctx.lineWidth=2;ctx.stroke();
-        ctx.fillStyle='#10B981';ctx.font='bold '+Math.round(13*scale)+'px "IBM Plex Mono",monospace';
+        ctx.fillStyle='#10B981';ctx.font='bold '+Math.round(13*scale*fontScale)+'px "IBM Plex Mono",monospace';
         ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('S', cx, cy);
-        ctx.fillStyle='rgba(16,185,129,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+        ctx.fillStyle='rgba(16,185,129,0.7)';ctx.font=Math.round(9*scale*fontScale)+'px Inter,system-ui';ctx.textBaseline='bottom';
         ctx.fillText(o.name, cx, cy-hs-4);
       }else{
         // Purple square — smaller, placed to the right of last real node
@@ -491,9 +501,9 @@ function draw(){
         var ss=r*1.0; ctx.beginPath();ctx.rect(cx-ss,cy-ss,ss*2,ss*2);
         ctx.fillStyle='rgba(139,92,246,0.15)';ctx.fill();
         ctx.strokeStyle='rgba(139,92,246,0.6)';ctx.lineWidth=2;ctx.stroke();
-        ctx.fillStyle='#8B5CF6';ctx.font='bold '+Math.round(12*scale)+'px "IBM Plex Mono",monospace';
+        ctx.fillStyle='#8B5CF6';ctx.font='bold '+Math.round(12*scale*fontScale)+'px "IBM Plex Mono",monospace';
         ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('F', cx, cy);
-        ctx.fillStyle='rgba(139,92,246,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+        ctx.fillStyle='rgba(139,92,246,0.7)';ctx.font=Math.round(9*scale*fontScale)+'px Inter,system-ui';ctx.textBaseline='bottom';
         ctx.fillText(o.name, cx, cy-ss-4);
       }
       continue;
@@ -501,10 +511,10 @@ function draw(){
     ctx.beginPath();ctx.arc(cx,cy,r+3,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.06)':'rgba(59,130,246,0.03)';ctx.fill();
     ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.08)':'rgba(96,165,250,0.08)';ctx.fill();
     ctx.strokeStyle=o.crit?'rgba(239,68,68,0.5)':'rgba(96,165,250,0.55)';ctx.lineWidth=o.crit?2:1.5;ctx.stroke();
-    ctx.fillStyle='#E8EEF5';ctx.font='bold '+Math.round(12*scale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.num,cx,cy);
-    ctx.fillStyle=o.crit?'#E8EEF5':'rgba(176,196,222,0.7)';ctx.font=Math.round(10*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+    ctx.fillStyle='#E8EEF5';ctx.font='bold '+Math.round(12*scale*fontScale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.num,cx,cy);
+    ctx.fillStyle=o.crit?'#E8EEF5':'rgba(176,196,222,0.7)';ctx.font=Math.round(10*scale*fontScale)+'px Inter,system-ui';ctx.textBaseline='bottom';
     var sn=o.name;if(sn.length>16)sn=sn.slice(0,15)+'\u2026';ctx.fillText(sn,cx,cy-r-6);
-    if(!o.crit&&o.tf>0){ctx.fillStyle='#F59E0B';ctx.font=Math.round(9*scale)+'px "IBM Plex Mono",monospace';ctx.textBaseline='top';ctx.fillText('+'+o.tf,cx,cy+r+4);}
+    if(!o.crit&&o.tf>0){ctx.fillStyle='#F59E0B';ctx.font=Math.round(9*scale*fontScale)+'px "IBM Plex Mono",monospace';ctx.textBaseline='top';ctx.fillText('+'+o.tf,cx,cy+r+4);}
   }
 }
 
@@ -569,9 +579,17 @@ document.getElementById('sprRange').addEventListener('input',function(){
   document.getElementById('sprCur').innerText=sprNames[vv];
   absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);fitToScreen();draw();
 });
+// Font scale slider: 0=standard, 1=large
+var fsNames=['станд','крупн'];
+document.getElementById('fsRange').addEventListener('input',function(){
+  var fv=parseInt(this.value);
+  fontScale=1+fv*0.5; // 1.0 or 1.5
+  document.getElementById('fsCur').innerText=fsNames[fv];
+  draw();
+});
 // Save defaults button
 document.getElementById('btnSaveDefaults').addEventListener('click',function(){
-  var defaults={unit:displayUnit,spr:sprMode,mode:viewMode};
+  var defaults={unit:displayUnit,spr:sprMode,mode:viewMode,fs:fontScale};
   localStorage.setItem('pp-network-defaults',JSON.stringify(defaults));
   var btn=this;btn.style.color='var(--success)';btn.style.borderColor='var(--success)';
   setTimeout(function(){btn.style.color='';btn.style.borderColor='';},1200);
@@ -579,12 +597,14 @@ document.getElementById('btnSaveDefaults').addEventListener('click',function(){
 // Load defaults on init
 (function(){
   var raw=localStorage.getItem('pp-network-defaults');
-  if(raw)try{var d=JSON.parse(raw);displayUnit=d.unit||'d';sprMode=d.spr!=null?d.spr:1;viewMode=d.mode||'absolute';}catch(e){}
+  if(raw)try{var d=JSON.parse(raw);displayUnit=d.unit||'d';sprMode=d.spr!=null?d.spr:1;viewMode=d.mode||'absolute';fontScale=d.fs||1.0;}catch(e){}
   document.getElementById('unitRange').value=unitNames.indexOf(displayUnit);
   document.getElementById('unitCur').innerText=unitLabels[unitNames.indexOf(displayUnit)];
   document.getElementById('sprRange').value=sprMode;
   var sprNames2=['сдерж','оптим','агрес'];
   document.getElementById('sprCur').innerText=sprNames2[sprMode];
+  document.getElementById('fsRange').value=fontScale===1.5?1:0;
+  document.getElementById('fsCur').innerText=fontScale===1.5?'крупн':'станд';
   if(displayUnit==='m')REL_SCALE=1200;else if(displayUnit==='h')REL_SCALE=500;else REL_SCALE=500;
   var tabs=document.querySelectorAll('.mode-btn');
   for(var i=0;i<tabs.length;i++){tabs[i].classList.remove('active');if(tabs[i].getAttribute('data-mode')===viewMode)tabs[i].classList.add('active');}
