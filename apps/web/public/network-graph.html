@@ -236,17 +236,22 @@ function hit(cx,cy,mx,my,id){var nr=getNodeR();if(id==='S'){var hs=nr+8;var dx=M
 function drawTimelineGrid(W,H){
   var totalDays=64,startX=30,endX=startX+totalDays*REL_SCALE;
   var dayPx=REL_SCALE*scale; // pixels per day at current scale
-  // Compute step so that grid lines are ~50-120px apart, and aligned to natural units
-  var step=0; // in days; 0 means compute
-  var stepPx=dayPx; // initial guess: 1 day
-  if(dayPx>250){step=0.125;} // ~3h, every line
-  else if(dayPx>120){step=0.5;} // 12h
-  else if(dayPx>65){step=1;} // 1 day
-  else if(dayPx>25){step=2;} // 2 days
-  else if(dayPx>12){step=4;} // 4 days
-  else if(dayPx>5){step=7;} // 1 week
-  else if(dayPx>2.5){step=14;} // 2 weeks
-  else step=30; // 1 month
+  // Compute primary grid step so lines are ~60-140px apart
+  var pStep=1;
+  if(dayPx>400)pStep=0.125; // ~3h
+  else if(dayPx>200)pStep=0.25; // 6h
+  else if(dayPx>100)pStep=0.5; // 12h
+  else if(dayPx>55)pStep=1; // 1 day
+  else if(dayPx>22)pStep=2;
+  else if(dayPx>11)pStep=4;
+  else if(dayPx>5)pStep=7;
+  else if(dayPx>2.5)pStep=14;
+  else if(dayPx>1)pStep=30;
+  else pStep=90;
+  // Sub-grid: finer lines at 1/4 the primary step for reference
+  var sStep=pStep/4;
+  if(pStep<1 && sStep<0.03125)sStep=0;
+
   var gridVTop=0,gridVBot=H;
   // Weekend/holiday highlighting — full-height strips
   for(var d=0;d<totalDays;d++){
@@ -258,10 +263,19 @@ function drawTimelineGrid(W,H){
       ctx.fillRect(Math.max(0,x1),gridVTop,Math.min(W,x2-x1),H);
     }
   }
-  for(var d=0;d<=totalDays;d+=step){
+  // Sub-grid: faint lines
+  if(sStep>0){
+    for(var d=0;d<=totalDays;d+=sStep){
+      var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
+      ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
+      ctx.strokeStyle='rgba(60,90,130,0.15)';ctx.lineWidth=0.3;ctx.stroke();
+    }
+  }
+  // Primary grid: bold lines
+  for(var d=0;d<=totalDays;d+=pStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
-    ctx.strokeStyle='rgba(60,90,130,0.45)';ctx.lineWidth=0.6;ctx.stroke();
+    ctx.strokeStyle='rgba(60,90,130,0.5)';ctx.lineWidth=0.7;ctx.stroke();
   }
   var barY=34,barH=22,lsx=sx(startX),rsx=sx(endX);
   ctx.fillStyle='rgba(15,30,54,0.7)';ctx.beginPath();
@@ -269,12 +283,12 @@ function drawTimelineGrid(W,H){
   ctx.beginPath();ctx.moveTo(Math.max(0,lsx),barY+barH/2);ctx.lineTo(Math.min(W,rsx),barY+barH/2);
   ctx.strokeStyle='rgba(96,165,250,0.35)';ctx.lineWidth=1;ctx.stroke();
   var prevLR=-999;
-  for(var d=0;d<=totalDays;d+=step){
+  for(var d=0;d<=totalDays;d+=pStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
     ctx.beginPath();ctx.moveTo(gx,barY+3);ctx.lineTo(gx,barY+barH-3);
     ctx.strokeStyle='rgba(90,112,144,0.5)';ctx.lineWidth=0.8;ctx.stroke();
     var label,isTime=false;
-    if(step<1){
+    if(pStep<1){
       // Sub-day: show time HH:MM
       isTime=true;
       var totalHours=d*24;
@@ -284,7 +298,7 @@ function drawTimelineGrid(W,H){
     }else{
       var dd=Math.floor(d);var date=addDays(PROJECT_START,dd);
       label=fmt(date);
-      if(step>=30){label+=' '+(date.getFullYear());}
+      if(pStep>=30){label+=' '+(date.getFullYear());}
     }
     // Font scales with zoom, but has min/max for readability
     var fsz=Math.round(isTime?11*scale:10*scale);
