@@ -16,39 +16,37 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--fg); overflow: hidden; height: 100vh; }
   .topbar {
-    padding: 14px 24px; background: var(--bg-2); border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center; z-index: 10; position: relative; gap: 16px;
+    padding: 12px 20px; background: var(--bg-2); border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; z-index: 10; position: relative; gap: 12px;
+    flex-wrap: wrap;
   }
-  .topbar-left { display: flex; align-items: center; gap: 16px; }
-  .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
   .badge {
-    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent-3);
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--accent-3);
     background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2);
-    padding: 3px 10px; border-radius: 100px;
+    padding: 2px 8px; border-radius: 100px; white-space: nowrap;
   }
-  .mode-tabs { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .mode-tabs { display: flex; gap: 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); }
   .mode-btn {
-    padding: 5px 12px; font-size: 11px; font-weight: 600; border: none; cursor: pointer;
+    padding: 4px 10px; font-size: 11px; font-weight: 600; border: none; cursor: pointer;
     background: transparent; color: var(--fg-3); font-family: inherit;
-    transition: all 0.12s;
+    transition: all 0.12s; white-space: nowrap;
   }
   .mode-btn:hover { color: var(--fg); }
-  .mode-btn.active {
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: white; box-shadow: 0 2px 8px rgba(59,130,246,0.35);
-  }
-  .legend { display: flex; gap: 16px; font-size: 11px; color: var(--fg-4); align-items: center; }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .legend-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; }
+  .mode-btn.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; box-shadow: 0 2px 8px rgba(59,130,246,0.35); }
+  .legend { display: flex; gap: 12px; font-size: 10px; color: var(--fg-4); align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
   .btn {
-    font-family: inherit; font-size: 12px; font-weight: 600;
-    padding: 6px 14px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.12s;
-    background: transparent; color: var(--fg-3); border-color: var(--border);
+    font-family: inherit; font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; transition: all 0.12s;
+    background: transparent; color: var(--fg-3); border-color: var(--border); white-space: nowrap;
   }
   .btn:hover { border-color: var(--accent); color: var(--accent-3); }
   .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border: none; box-shadow: 0 2px 8px rgba(59,130,246,0.35); }
 
-  .canvas-wrap { position: relative; width: 100%; height: calc(100vh - 57px); overflow: hidden; cursor: grab; }
+  .canvas-wrap { position: relative; width: 100%; height: calc(100vh - 53px); overflow: hidden; cursor: grab; }
   .canvas-wrap.panning { cursor: grabbing; }
   .canvas-wrap.dragging { cursor: grabbing; }
 
@@ -63,9 +61,9 @@
   .tooltip-row { display: flex; justify-content: space-between; padding: 2px 0; color: var(--fg-3); font-size: 12px; }
   .tooltip-row b { font-family: 'IBM Plex Mono', monospace; color: var(--fg); font-weight: 600; }
   .info-panel {
-    position: absolute; bottom: 20px; left: 20px;
-    background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 14px; font-size: 12px; color: var(--fg-3); pointer-events: none; z-index: 5;
+    position: absolute; bottom: 16px; left: 16px;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font-size: 11px; color: var(--fg-3); pointer-events: none; z-index: 5;
   }
   .info-panel strong { color: var(--fg); }
 </style>
@@ -90,13 +88,14 @@
 <div class="canvas-wrap" id="wrap">
   <canvas id="c"></canvas>
   <div class="tooltip" id="tip"></div>
-  <div class="info-panel">
+  <div class="info-panel" id="infoPanel">
     <strong>Критический путь:</strong> <span id="cpDur">64</span> дня · <span id="cpCount">12</span> операций<br>
-    <span style="color:var(--fg-4);margin-top:3px;display:inline-block;" id="modeLabel">Режим: Абсолютный</span>
+    <span style="color:var(--fg-4);margin-top:2px;display:inline-block;">Drag · Scroll · <span id="modeLabel">Режим: Абсолютный</span></span>
   </div>
 </div>
 <script>
 var NODE_R = 26, MIN_NODE_GAP = 60;
+var REL_SCALE = 20; // world pixels per day
 
 var ops = [
   { id:"1",  num:1,  name:"Подготовка производства",  dur:3,  es:0,  ef:3,  ls:0,  lf:3,  tf:0,  crit:1 },
@@ -106,7 +105,7 @@ var ops = [
   { id:"5",  num:5,  name:"Монтаж SMD",               dur:12, es:13, ef:25, ls:13, lf:25, tf:0,  crit:1 },
   { id:"6",  num:6,  name:"Монтаж DIP",               dur:4,  es:13, ef:17, ls:21, lf:25, tf:8,  crit:0 },
   { id:"7",  num:7,  name:"Пайка волной",             dur:6,  es:25, ef:31, ls:25, lf:31, tf:0,  crit:1 },
-  { id:"8",  num:8,  name:"Установка разъёмов",       dur:5,  es:31, ef:36, ls:31, lf:36, tf:0,  crit:1 },
+  { id:"8",  num:8,  name:"Установка разъемов",       dur:5,  es:31, ef:36, ls:31, lf:36, tf:0,  crit:1 },
   { id:"9",  num:9,  name:"Контроль пайки (AOI)",     dur:3,  es:36, ef:39, ls:36, lf:39, tf:0,  crit:1 },
   { id:"10", num:10, name:"Функциональный тест",      dur:8,  es:39, ef:47, ls:39, lf:47, tf:0,  crit:1 },
   { id:"11", num:11, name:"Термотренировка",          dur:12, es:47, ef:59, ls:47, lf:59, tf:0,  crit:1 },
@@ -126,441 +125,278 @@ var deps = [
   ["12","14"]
 ];
 
-var viewMode = 'absolute'; // 'absolute' | 'relative'
+var PROJECT_START = new Date(2026, 6, 29); // 29 июля 2026
+var viewMode = 'absolute';
 
-// --- Layout engines ---
-
+// --- Layout ---
 function buildAbsoluteLayout() {
   var LANE_ABOVE = 170, LANE_BELOW = 390, LANE_DEFAULT = 340;
   var layers = {};
   for (var i = 0; i < ops.length; i++) {
-    var key = ops[i].es;
-    if (!layers[key]) layers[key] = [];
+    var key = ops[i].es; if (!layers[key]) layers[key] = [];
     layers[key].push(ops[i].id);
   }
   var layerOrder = Object.keys(layers).map(Number).sort(function(a,b){return a-b;});
-  var LAYER_GAP = 150;
   var layout = {};
   for (var li = 0; li < layerOrder.length; li++) {
-    var lx = 30 + li * LAYER_GAP;
+    var lx = 30 + li * 150;
     var ids = layers[layerOrder[li]];
-    var vertGap = NODE_R * 3.2;
-    var startY = LANE_DEFAULT - ((ids.length - 1) * vertGap) / 2;
-    for (var i = 0; i < ids.length; i++) {
-      layout[ids[i]] = [lx, startY + i * vertGap];
-    }
+    var startY = 340 - ((ids.length - 1) * NODE_R * 3.2) / 2;
+    for (var i = 0; i < ids.length; i++) layout[ids[i]] = [lx, startY + i * NODE_R * 3.2];
   }
-  // Anti-crossing
-  var placedSegs = [];
-  for (var ei = 0; ei < deps.length; ei++) {
-    var a = deps[ei][0], b = deps[ei][1];
-    var pa = layout[a], pb = layout[b];
-    if (!pa || !pb) continue;
-    var curSeg = edgeToSeg(a, b, layout);
-    if (!crossesAny([a,b], layout, placedSegs)) {
-      placedSegs.push(curSeg); continue;
-    }
-    var oldY = pb[1];
-    var alts = [LANE_ABOVE, LANE_BELOW];
-    var found = false;
-    for (var ai = 0; ai < alts.length; ai++) {
-      if (alts[ai] === oldY) continue;
-      pb[1] = alts[ai];
-      if (!nodeOverlap(b, layout, a) && !crossesAny([a,b], layout, placedSegs)) {
-        found = true; break;
-      }
-    }
-    if (!found) pb[1] = oldY;
-    placedSegs.push(edgeToSeg(a, b, layout));
-  }
+  resolveCrossings(layout, [LANE_ABOVE, LANE_BELOW]);
   return layout;
 }
 
-var REL_SCALE = 20; // pixels per day in relative mode
-
 function buildRelativeLayout() {
-  // X = es * scale, Y = layered to avoid overlaps
-  // Scale: 1 day = 20 world-units, min gap between nodes = MIN_NODE_GAP
-  var SCALE = 20;
   var layout = {};
-  // Group by ES
   var layers = {};
   for (var i = 0; i < ops.length; i++) {
-    var key = ops[i].es;
-    if (!layers[key]) layers[key] = [];
+    var key = ops[i].es; if (!layers[key]) layers[key] = [];
     layers[key].push(ops[i].id);
   }
   var layerOrder = Object.keys(layers).map(Number).sort(function(a,b){return a-b;});
   for (var li = 0; li < layerOrder.length; li++) {
     var es = layerOrder[li];
-    var lx = 30 + es * SCALE;
+    var lx = 30 + es * REL_SCALE;
     var ids = layers[es];
-    // Spread vertically
-    var vertGap = NODE_R * 3.2;
-    var startY = 340 - ((ids.length - 1) * vertGap) / 2;
-    for (var i = 0; i < ids.length; i++) {
-      layout[ids[i]] = [lx, startY + i * vertGap];
-    }
+    var startY = 340 - ((ids.length - 1) * NODE_R * 3.2) / 2;
+    for (var i = 0; i < ids.length; i++) layout[ids[i]] = [lx, startY + i * NODE_R * 3.2];
   }
-  // Ensure min gap between consecutive layers (slide right if needed)
+  // Ensure min gap
   for (var li = 1; li < layerOrder.length; li++) {
     var prevEs = layerOrder[li-1], curEs = layerOrder[li];
-    var prevX = layout[layers[prevEs][0]][0];
-    var curX = layout[layers[curEs][0]][0];
+    var prevX = layout[layers[prevEs][0]][0], curX = layout[layers[curEs][0]][0];
     if (curX - prevX < MIN_NODE_GAP) {
-      // Slide this layer right by the needed delta
       var delta = MIN_NODE_GAP - (curX - prevX);
-      var ids = layers[curEs];
-      for (var i = 0; i < ids.length; i++) {
-        layout[ids[i]][0] += delta;
-      }
+      for (var i = 0; i < layers[curEs].length; i++) layout[layers[curEs][i]][0] += delta;
     }
   }
-  // Anti-crossing (same as absolute)
-  var placedSegs = [];
+  resolveCrossings(layout, [140, 200, 260, 320, 380, 440, 500]);
+  return layout;
+}
+
+function resolveCrossings(layout, alts) {
+  var placed = [];
   for (var ei = 0; ei < deps.length; ei++) {
     var a = deps[ei][0], b = deps[ei][1];
     var pa = layout[a], pb = layout[b];
     if (!pa || !pb) continue;
-    var curSeg = edgeToSeg(a, b, layout);
-    if (!crossesAny([a,b], layout, placedSegs)) {
-      placedSegs.push(curSeg); continue;
-    }
-    var oldY = pb[1];
-    var alts = [170, 400, 480, 260];
-    var found = false;
+    if (!crossesAny([a,b], layout, placed)) { placed.push(edgeToSeg(a,b,layout)); continue; }
+    var oldY = pb[1], found = false;
     for (var ai = 0; ai < alts.length; ai++) {
       if (alts[ai] === oldY) continue;
       pb[1] = alts[ai];
-      if (!nodeOverlap(b, layout, a) && !crossesAny([a,b], layout, placedSegs)) {
-        found = true; break;
-      }
+      if (!nodeOverlap(b, layout, a) && !crossesAny([a,b], layout, placed)) { found = true; break; }
     }
     if (!found) pb[1] = oldY;
-    placedSegs.push(edgeToSeg(a, b, layout));
+    placed.push(edgeToSeg(a,b,layout));
   }
-  return layout;
 }
 
-// --- Shared geometry functions ---
-function segCross(s1, s2) {
-  var ax=s1.ax, ay=s1.ay, bx=s1.bx, by=s1.by;
-  var cx=s2.ax, cy=s2.ay, dx=s2.bx, dy=s2.by;
-  var d1 = (dx-cx)*(ay-cy) - (dy-cy)*(ax-cx);
-  var d2 = (dx-cx)*(by-cy) - (dy-cy)*(bx-cx);
-  var d3 = (bx-ax)*(cy-ay) - (by-ay)*(cx-ax);
-  var d4 = (bx-ax)*(dy-ay) - (by-ay)*(dx-ax);
-  if (((d1>0 && d2<0)||(d1<0 && d2>0)) && ((d3>0 && d4<0)||(d3<0 && d4>0))) return true;
+function segCross(s1,s2) {
+  var ax=s1.ax,ay=s1.ay,bx=s1.bx,by=s1.by,cx=s2.ax,cy=s2.ay,dx=s2.bx,dy=s2.by;
+  var d1=(dx-cx)*(ay-cy)-(dy-cy)*(ax-cx), d2=(dx-cx)*(by-cy)-(dy-cy)*(bx-cx);
+  var d3=(bx-ax)*(cy-ay)-(by-ay)*(cx-ax), d4=(bx-ax)*(dy-ay)-(by-ay)*(dx-ax);
+  return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+}
+function edgeToSeg(a,b,lo) {
+  var pa=lo[a],pb=lo[b],ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]);
+  return {ax:pa[0]+Math.cos(ang)*NODE_R,ay:pa[1]+Math.sin(ang)*NODE_R,bx:pb[0]-Math.cos(ang)*NODE_R,by:pb[1]-Math.sin(ang)*NODE_R};
+}
+function crossesAny(key,lo,placed) {
+  var s=edgeToSeg(key[0],key[1],lo);
+  for (var i=0;i<placed.length;i++) if (segCross(s,placed[i])) return true;
   return false;
 }
-function edgeToSeg(a, b, layout) {
-  var pa = layout[a], pb = layout[b];
-  var ang = Math.atan2(pb[1]-pa[1], pb[0]-pa[0]);
-  return {
-    ax: pa[0] + Math.cos(ang)*NODE_R, ay: pa[1] + Math.sin(ang)*NODE_R,
-    bx: pb[0] - Math.cos(ang)*NODE_R, by: pb[1] - Math.sin(ang)*NODE_R
-  };
-}
-function crossesAny(key, layout, placedSegs) {
-  var seg = edgeToSeg(key[0], key[1], layout);
-  for (var i = 0; i < placedSegs.length; i++) {
-    if (segCross(seg, placedSegs[i])) return true;
-  }
-  return false;
-}
-function nodeOverlap(nodeId, layout, exceptId) {
-  var TEXT_ABOVE = 24, TEXT_BELOW = 20;
-  var pn = layout[nodeId];
-  if (!pn) return false;
-  var ids = Object.keys(layout);
-  for (var i = 0; i < ids.length; i++) {
-    var oid = ids[i];
-    if (oid === nodeId || oid === exceptId) continue;
-    var po = layout[oid];
-    var horizGap = Math.abs(pn[0] - po[0]);
-    if (horizGap > NODE_R * 3) continue;
-    var selfTop = pn[1] - NODE_R - TEXT_ABOVE;
-    var selfBot = pn[1] + NODE_R + TEXT_BELOW;
-    var otherTop = po[1] - NODE_R - TEXT_ABOVE;
-    var otherBot = po[1] + NODE_R + TEXT_BELOW;
-    if (selfTop < otherBot && selfBot > otherTop) return true;
-  }
-  return false;
+function nodeOverlap(nid,lo,ex) {
+  var TA=24,TB=20,pn=lo[nid];if(!pn)return false;
+  var ids=Object.keys(lo);
+  for (var i=0;i<ids.length;i++) {var oid=ids[i];if(oid===nid||oid===ex)continue;
+    var po=lo[oid],hg=Math.abs(pn[0]-po[0]);if(hg>NODE_R*3)continue;
+    var sT=pn[1]-NODE_R-TA,sB=pn[1]+NODE_R+TB,oT=po[1]-NODE_R-TA,oB=po[1]+NODE_R+TB;
+    if(sT<oB&&sB>oT)return true;}return false;
 }
 
-// --- Build initial layouts ---
 var absLayout = buildAbsoluteLayout();
 var relLayout = buildRelativeLayout();
+function clone(src){var o={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o;}
 var pos = clone(absLayout);
 
-function clone(src) {
-  var out = {};
-  for (var k in src) out[k] = [src[k][0], src[k][1]];
-  return out;
+var scale, ox, oy;
+function fitToScreen(){
+  var W=window.innerWidth,H=window.innerHeight-53;
+  // Fit 0..1500 world X into 80% of screen width
+  scale = (W*0.82)/1500;
+  if (scale < 0.22) scale = 0.22;
+  if (scale > 1.5) scale = 1.5;
+  ox = (W/scale - 1500)/2;
+  oy = (H/scale - 460)/2 - 20;
+  if (oy < -40) oy = -40;
 }
+fitToScreen();
 
-var REL_SCALE = 20; // world pixels per day in relative mode
+var panning=false,psx,psy,pox,poy,dragId=null,dragPos0,dragM0,critOnly=false,hoverId=null;
+var c=document.getElementById('c'),ctx=c.getContext('2d');
+var wrap=document.getElementById('wrap'),tip=document.getElementById('tip');
 
-function drawTimelineGrid(W, H) {
-  var totalDays = 64;
-  var startX = 30, endX = startX + totalDays * REL_SCALE;
+function sx(wx){return(wx+ox)*scale;}
+function sy(wy){return(wy+oy)*scale;}
+function hit(cx,cy,mx,my){var rr=(NODE_R*scale);return(mx-cx)*(mx-cx)+(my-cy)*(my-cy)<=rr*rr;}
 
-  // Dynamic grid step based on zoom
-  var step = 10;
-  var spx = REL_SCALE * step * scale;
-  if (spx < 35)  step = 20;
-  if (spx < 20)  step = 30;
-  if (spx > 90)  step = 5;
-  if (spx > 180) step = 2;
-  if (spx > 300) step = 1;
+// Date helpers
+function addDays(d, days) { var r = new Date(d); r.setDate(r.getDate()+days); return r; }
+function fmt(d) { return (d.getDate()<10?'0':'')+d.getDate()+'.'+(d.getMonth()<9?'0':'')+(d.getMonth()+1); }
 
-  var gridY = 510;
-  var gridH = H - gridY;
-  for (var d = 0; d <= totalDays; d += step) {
-    var gx = sx(startX + d * REL_SCALE);
-    if (gx < -50 || gx > W + 50) continue;
+function drawTimelineGrid(W,H) {
+  var totalDays=64, startX=30, endX=startX+totalDays*REL_SCALE;
 
-    ctx.beginPath();
-    ctx.moveTo(gx, gridY);
-    ctx.lineTo(gx, gridY + gridH);
-    ctx.strokeStyle = 'rgba(30,50,82,0.45)';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
+  // Dynamic step
+  var step=10,spx=REL_SCALE*step*scale;
+  if(spx<35)step=20;if(spx<20)step=30;if(spx>90)step=5;if(spx>180)step=2;
 
-    ctx.fillStyle = '#5A7090';
-    ctx.font = Math.round(10 * scale) + 'px "IBM Plex Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(d + '\u0434', gx, gridY + 4);
+  // Vertical grid lines ABOVE canvas
+  var gridVTop=0, gridVBot=Math.floor(sy(100)); // top of node area
+  if(gridVBot<0)gridVBot=H;
+  for(var d=0;d<=totalDays;d+=step){
+    var gx=sx(startX+d*REL_SCALE);
+    if(gx<-50||gx>W+50)continue;
+    ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
+    ctx.strokeStyle='rgba(30,50,82,0.25)';ctx.lineWidth=0.5;ctx.stroke();
   }
 
-  // Baseline
-  ctx.beginPath();
-  var lsx = sx(startX), rsx = sx(endX);
-  ctx.moveTo(Math.max(0, lsx), gridY);
-  ctx.lineTo(Math.min(W, rsx), gridY);
-  ctx.strokeStyle = 'rgba(96,165,250,0.35)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  // Horizontal timeline bar at top
+  var barY=34, barH=22, barRadius=6;
+  var lsx=sx(startX),rsx=sx(endX);
+  ctx.fillStyle='rgba(15,30,54,0.7)';ctx.beginPath();
+  ctx.roundRect(Math.max(0,lsx-8),barY,Math.min(W,rsx-lsx+16),barH,barRadius);ctx.fill();
 
-  // Label
-  ctx.fillStyle = '#60A5FA';
-  ctx.font = Math.round(10 * scale) + 'px Inter, system-ui';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText('\u0412\u0440\u0435\u043c\u044f, \u0434\u043d\u0438', sx(startX), gridY - 3);
-}
+  // Time axis baseline
+  ctx.beginPath();ctx.moveTo(Math.max(0,lsx),barY+barH/2);ctx.lineTo(Math.min(W,rsx),barY+barH/2);
+  ctx.strokeStyle='rgba(96,165,250,0.35)';ctx.lineWidth=1;ctx.stroke();
 
-var scale = 0.72, ox = 20, oy = 60;
-var panning = false, psx, psy, pox, poy;
-var dragId = null, dragPos0, dragM0;
-var critOnly = false;
-var hoverId = null;
+  // Tick marks + labels
+  var prevLabelRight=-999;
+  for(var d=0;d<=totalDays;d+=step){
+    var gx=sx(startX+d*REL_SCALE);
+    if(gx<-20||gx>W+20)continue;
+    // Tick
+    ctx.beginPath();ctx.moveTo(gx,barY+3);ctx.lineTo(gx,barY+barH-3);
+    ctx.strokeStyle='rgba(90,112,144,0.5)';ctx.lineWidth=0.8;ctx.stroke();
 
-var c = document.getElementById('c'), ctx = c.getContext('2d');
-var wrap = document.getElementById('wrap'), tip = document.getElementById('tip');
+    // Date label
+    var date=addDays(PROJECT_START,d);
+    var label=fmt(date);
+    // For day 0, add "Старт" prefix
+    if(d===0)label='Старт '+label;
 
-function sx(wx) { return (wx + ox) * scale; }
-function sy(wy) { return (wy + oy) * scale; }
-function hit(cx, cy, mx, my) {
-  var rr = (NODE_R * scale); return (mx-cx)*(mx-cx) + (my-cy)*(my-cy) <= rr * rr;
+    var fsz=Math.round(10*scale);if(fsz<8)fsz=8;
+    ctx.fillStyle='#B0C4DE';ctx.font=fsz+'px "IBM Plex Mono",monospace';
+    ctx.textAlign='center';ctx.textBaseline='top';
+
+    var lw=ctx.measureText(label).width;
+    if(gx-lw/2>prevLabelRight){ctx.fillText(label,gx,barY+barH+4);prevLabelRight=gx+lw/2;}
+  }
+
+  // Day counter on the same line
+  var dLabel;
+  for(var d=0;d<=totalDays;d+=step){
+    var gx=sx(startX+d*REL_SCALE);
+    // Place day number below date
+  }
 }
 
 function draw() {
-  var W = wrap.clientWidth, H = wrap.clientHeight;
-  c.width = W * devicePixelRatio; c.height = H * devicePixelRatio;
-  c.style.width = W + 'px'; c.style.height = H + 'px';
-  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-  ctx.fillStyle = '#0A1628'; ctx.fillRect(0, 0, W, H);
+  var W=wrap.clientWidth,H=wrap.clientHeight;
+  c.width=W*devicePixelRatio;c.height=H*devicePixelRatio;
+  c.style.width=W+'px';c.style.height=H+'px';
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.fillStyle='#0A1628';ctx.fillRect(0,0,W,H);
 
-  // --- Timeline grid (only in relative mode) ---
-  if (viewMode === 'relative') {
-    drawTimelineGrid(W, H);
-  }
+  if(viewMode==='relative') drawTimelineGrid(W,H);
 
-  var vis = critOnly ? ops.filter(function(o) { return o.crit; }) : ops;
-  var vs = {};
-  for (var i = 0; i < vis.length; i++) vs[vis[i].id] = true;
+  var vis=critOnly?ops.filter(function(o){return o.crit;}):ops;
+  var vs={};for(var i=0;i<vis.length;i++)vs[vis[i].id]=true;
 
   // Edges
-  for (var i = 0; i < deps.length; i++) {
-    var a = deps[i][0], b = deps[i][1];
-    if (!vs[a] || !vs[b]) continue;
-    var fa = om[a], fb = om[b];
-    var pa = pos[a], pb = pos[b];
-    var ang = Math.atan2(pb[1]-pa[1], pb[0]-pa[0]);
-    var nr = NODE_R;
-    var ax = pa[0] + Math.cos(ang)*nr, ay = pa[1] + Math.sin(ang)*nr;
-    var bx = pb[0] - Math.cos(ang)*nr, by = pb[1] - Math.sin(ang)*nr;
-    var both = (fa && fb) ? (fa.crit && fb.crit) : false;
-
-    ctx.beginPath(); ctx.moveTo(sx(ax), sy(ay)); ctx.lineTo(sx(bx), sy(by));
-    ctx.strokeStyle = both ? 'rgba(239,68,68,0.35)' : 'rgba(90,112,144,0.22)';
-    ctx.lineWidth = both ? 1.8 : 1;
-    ctx.stroke();
-
-    var ang2 = Math.atan2(sy(by)-sy(ay), sx(bx)-sx(ax));
-    var hl = 8;
-    ctx.beginPath();
-    ctx.moveTo(sx(bx), sy(by));
-    ctx.lineTo(sx(bx) - hl*Math.cos(ang2-0.45), sy(by) - hl*Math.sin(ang2-0.45));
-    ctx.lineTo(sx(bx) - hl*Math.cos(ang2+0.45), sy(by) - hl*Math.sin(ang2+0.45));
-    ctx.closePath();
-    ctx.fillStyle = both ? 'rgba(239,68,68,0.45)' : 'rgba(90,112,144,0.3)';
-    ctx.fill();
+  for(var i=0;i<deps.length;i++){
+    var a=deps[i][0],b=deps[i][1];if(!vs[a]||!vs[b])continue;
+    var fa=om[a],fb=om[b],pa=pos[a],pb=pos[b];
+    var ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]),nr=NODE_R;
+    var ax=pa[0]+Math.cos(ang)*nr,ay=pa[1]+Math.sin(ang)*nr;
+    var bx=pb[0]-Math.cos(ang)*nr,by=pb[1]-Math.sin(ang)*nr;
+    var both=(fa&&fb)?(fa.crit&&fb.crit):false;
+    ctx.beginPath();ctx.moveTo(sx(ax),sy(ay));ctx.lineTo(sx(bx),sy(by));
+    ctx.strokeStyle=both?'rgba(239,68,68,0.35)':'rgba(90,112,144,0.22)';ctx.lineWidth=both?1.8:1;ctx.stroke();
+    var ang2=Math.atan2(sy(by)-sy(ay),sx(bx)-sx(ax)),hl=8;
+    ctx.beginPath();ctx.moveTo(sx(bx),sy(by));
+    ctx.lineTo(sx(bx)-hl*Math.cos(ang2-0.45),sy(by)-hl*Math.sin(ang2-0.45));
+    ctx.lineTo(sx(bx)-hl*Math.cos(ang2+0.45),sy(by)-hl*Math.sin(ang2+0.45));ctx.closePath();
+    ctx.fillStyle=both?'rgba(239,68,68,0.45)':'rgba(90,112,144,0.3)';ctx.fill();
   }
 
   // Nodes
-  for (var i = 0; i < vis.length; i++) {
-    var o = vis[i];
-    var cx = sx(pos[o.id][0]), cy = sy(pos[o.id][1]);
-    var r = NODE_R * scale;
-
-    ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, 2*Math.PI);
-    ctx.fillStyle = o.crit ? 'rgba(239,68,68,0.06)' : 'rgba(59,130,246,0.03)';
-    ctx.fill();
-
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI);
-    ctx.fillStyle = o.crit ? 'rgba(239,68,68,0.08)' : 'rgba(59,130,246,0.04)';
-    ctx.fill();
-    ctx.strokeStyle = o.crit ? 'rgba(239,68,68,0.5)' : 'rgba(96,165,250,0.35)';
-    ctx.lineWidth = o.crit ? 2 : 1.3;
-    ctx.stroke();
-
-    ctx.fillStyle = '#E8EEF5';
-    ctx.font = 'bold ' + Math.round(12*scale) + 'px "IBM Plex Mono", monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(o.num, cx, cy - 2);
-
-    ctx.fillStyle = o.crit ? 'rgba(239,68,68,0.65)' : 'rgba(143,163,189,0.5)';
-    ctx.font = Math.round(9*scale) + 'px "IBM Plex Mono", monospace';
-    ctx.fillText(o.dur + '\u0434', cx, cy + 11);
-
-    ctx.fillStyle = o.crit ? '#E8EEF5' : 'rgba(176,196,222,0.7)';
-    ctx.font = Math.round(10*scale) + 'px Inter, system-ui';
-    ctx.textBaseline = 'bottom';
-    var sn = o.name; if (sn.length > 16) sn = sn.slice(0,15) + '\u2026';
-    ctx.fillText(sn, cx, cy - r - 6);
-
-    if (!o.crit && o.tf > 0) {
-      ctx.fillStyle = '#F59E0B';
-      ctx.font = Math.round(9*scale) + 'px "IBM Plex Mono", monospace';
-      ctx.textBaseline = 'top';
-      ctx.fillText('+' + o.tf, cx, cy + r + 4);
-    }
+  for(var i=0;i<vis.length;i++){
+    var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]),r=NODE_R*scale;
+    ctx.beginPath();ctx.arc(cx,cy,r+3,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.06)':'rgba(59,130,246,0.03)';ctx.fill();
+    ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.08)':'rgba(59,130,246,0.04)';ctx.fill();
+    ctx.strokeStyle=o.crit?'rgba(239,68,68,0.5)':'rgba(96,165,250,0.35)';ctx.lineWidth=o.crit?2:1.3;ctx.stroke();
+    ctx.fillStyle='#E8EEF5';ctx.font='bold '+Math.round(12*scale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.num,cx,cy-2);
+    ctx.fillStyle=o.crit?'rgba(239,68,68,0.65)':'rgba(143,163,189,0.5)';ctx.font=Math.round(9*scale)+'px "IBM Plex Mono",monospace';ctx.fillText(o.dur+'\u0434',cx,cy+11);
+    ctx.fillStyle=o.crit?'#E8EEF5':'rgba(176,196,222,0.7)';ctx.font=Math.round(10*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+    var sn=o.name;if(sn.length>16)sn=sn.slice(0,15)+'\u2026';ctx.fillText(sn,cx,cy-r-6);
+    if(!o.crit&&o.tf>0){ctx.fillStyle='#F59E0B';ctx.font=Math.round(9*scale)+'px "IBM Plex Mono",monospace';ctx.textBaseline='top';ctx.fillText('+'+o.tf,cx,cy+r+4);}
   }
 }
 
-// --- Mode switching ---
 function switchMode(mode) {
-  viewMode = mode;
-  // Preserve user-dragged positions for current mode
-  if (mode === 'absolute') {
-    absLayout = clone(pos);
-    pos = clone(relLayout || absLayout);
-    relLayout = clone(pos); // save relative state
-  } else {
-    relLayout = clone(pos);
-    pos = clone(absLayout || relLayout);
-    absLayout = clone(pos);
-  }
-  // Actually rebuild both layouts from scratch (clean)
-  absLayout = buildAbsoluteLayout();
-  relLayout = buildRelativeLayout();
-  pos = clone(mode === 'absolute' ? absLayout : relLayout);
-  draw();
+  viewMode=mode;
+  absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();
+  pos=clone(mode==='absolute'?absLayout:relLayout);draw();
 }
 
 // Events
-wrap.addEventListener('mousedown', function(e) {
-  var rect = wrap.getBoundingClientRect();
-  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
-  var vis = critOnly ? ops.filter(function(o) { return o.crit; }) : ops;
-  for (var i = 0; i < vis.length; i++) {
-    var o = vis[i];
-    var cx = sx(pos[o.id][0]), cy = sy(pos[o.id][1]);
-    if (hit(cx, cy, mx, my)) {
-      dragId = o.id; dragPos0 = [pos[o.id][0], pos[o.id][1]]; dragM0 = [mx, my];
-      wrap.classList.add('dragging'); return;
-    }
-  }
-  panning = true; psx = mx; psy = my; pox = ox; poy = oy;
-  wrap.classList.add('panning');
+wrap.addEventListener('mousedown',function(e){
+  var rect=wrap.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  var vis=critOnly?ops.filter(function(o){return o.crit;}):ops;
+  for(var i=0;i<vis.length;i++){var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my)){dragId=o.id;dragPos0=[pos[o.id][0],pos[o.id][1]];dragM0=[mx,my];wrap.classList.add('dragging');return;}}
+  panning=true;psx=mx;psy=my;pox=ox;poy=oy;wrap.classList.add('panning');
 });
-
-window.addEventListener('mousemove', function(e) {
-  var rect = wrap.getBoundingClientRect();
-  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
-  if (dragId) {
-    var dx = (mx - dragM0[0]) / scale, dy = (my - dragM0[1]) / scale;
-    pos[dragId][0] = dragPos0[0] + dx;
-    pos[dragId][1] = dragPos0[1] + dy;
-    draw(); return;
-  }
-  if (panning) {
-    ox = pox + (mx - psx) / scale; oy = poy + (my - psy) / scale;
-    draw();
-  }
-  var vis = critOnly ? ops.filter(function(o) { return o.crit; }) : ops;
-  var found = null;
-  for (var i = 0; i < vis.length; i++) {
-    var o = vis[i];
-    var cx = sx(pos[o.id][0]), cy = sy(pos[o.id][1]);
-    if (hit(cx, cy, mx, my)) { found = o; break; }
-  }
-  if (found && found.id !== hoverId) {
-    hoverId = found.id;
-    tip.innerHTML = '<div class="tooltip-title">\u2116' + found.num + ' \u00b7 ' + found.name + '</div>'
-      + '<div class="tooltip-row">\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c <b>' + found.dur + ' \u0434\u043d.</b></div>'
-      + '<div class="tooltip-row">ES <b>\u0434\u0435\u043d\u044c ' + found.es + '</b></div>'
-      + '<div class="tooltip-row">EF <b>\u0434\u0435\u043d\u044c ' + found.ef + '</b></div>'
-      + '<div class="tooltip-row">LS <b>\u0434\u0435\u043d\u044c ' + found.ls + '</b></div>'
-      + '<div class="tooltip-row">LF <b>\u0434\u0435\u043d\u044c ' + found.lf + '</b></div>'
-      + '<div class="tooltip-row">\u041f\u043e\u043b\u043d\u044b\u0439 \u0440\u0435\u0437\u0435\u0440\u0432 <b style="color:' + (found.crit ? 'var(--danger)' : 'var(--success)') + '">' + found.tf + ' \u0434\u043d.</b></div>'
-      + '<div class="tooltip-row" style="margin-top:4px;color:' + (found.crit ? 'var(--danger)' : 'var(--fg-4)') + ';">' + (found.crit ? '\u26a0 \u041a\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0443\u0442\u044c' : '\u0421 \u0440\u0435\u0437\u0435\u0440\u0432\u043e\u043c') + '</div>';
+window.addEventListener('mousemove',function(e){
+  var rect=wrap.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  if(dragId){var dx=(mx-dragM0[0])/scale,dy=(my-dragM0[1])/scale;pos[dragId][0]=dragPos0[0]+dx;pos[dragId][1]=dragPos0[1]+dy;draw();return;}
+  if(panning){ox=pox+(mx-psx)/scale;oy=poy+(my-psy)/scale;draw();}
+  var vis=critOnly?ops.filter(function(o){return o.crit;}):ops,found=null;
+  for(var i=0;i<vis.length;i++){var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my)){found=o;break;}}
+  if(found&&found.id!==hoverId){hoverId=found.id;
+    tip.innerHTML='<div class="tooltip-title">\u2116'+found.num+' \u00b7 '+found.name+'</div>'
+      +'<div class="tooltip-row">\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c <b>'+found.dur+' \u0434\u043d.</b></div>'
+      +'<div class="tooltip-row">ES <b>\u0434\u0435\u043d\u044c '+found.es+'</b></div>'
+      +'<div class="tooltip-row">EF <b>\u0434\u0435\u043d\u044c '+found.ef+'</b></div>'
+      +'<div class="tooltip-row">LS <b>\u0434\u0435\u043d\u044c '+found.ls+'</b></div>'
+      +'<div class="tooltip-row">LF <b>\u0434\u0435\u043d\u044c '+found.lf+'</b></div>'
+      +'<div class="tooltip-row">\u041f\u043e\u043b\u043d\u044b\u0439 \u0440\u0435\u0437\u0435\u0440\u0432 <b style="color:'+(found.crit?'var(--danger)':'var(--success)')+'">'+found.tf+' \u0434\u043d.</b></div>'
+      +'<div class="tooltip-row" style="margin-top:4px;color:'+(found.crit?'var(--danger)':'var(--fg-4)')+';">'+(found.crit?'\u26a0 \u041a\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0443\u0442\u044c':'\u0421 \u0440\u0435\u0437\u0435\u0440\u0432\u043e\u043c')+'</div>';
     tip.classList.add('on');
-  } else if (!found && hoverId !== null) { hoverId = null; tip.classList.remove('on'); }
-  if (found) {
-    var cx = sx(pos[found.id][0]), cy = sy(pos[found.id][1]), r = NODE_R * scale;
-    tip.style.left = Math.min(cx + r + 14, window.innerWidth - 280) + 'px';
-    tip.style.top = Math.max(4, cy - 80) + 'px';
-  }
+  }else if(!found&&hoverId!==null){hoverId=null;tip.classList.remove('on');}
+  if(found){var cx=sx(pos[found.id][0]),cy=sy(pos[found.id][1]),r=NODE_R*scale;
+    tip.style.left=Math.min(cx+r+14,window.innerWidth-280)+'px';tip.style.top=Math.max(4,cy-80)+'px';}
 });
+window.addEventListener('mouseup',function(){dragId=null;panning=false;wrap.classList.remove('dragging','panning');});
+wrap.addEventListener('wheel',function(e){e.preventDefault();scale=Math.max(0.15,Math.min(2.5,scale*(e.deltaY<0?1.08:0.92)));draw();},{passive:false});
+window.addEventListener('resize',function(){fitToScreen();draw();});
 
-window.addEventListener('mouseup', function() {
-  dragId = null; panning = false;
-  wrap.classList.remove('dragging','panning');
+document.getElementById('btnReset').addEventListener('click',function(){
+  absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();
+  pos=clone(viewMode==='absolute'?absLayout:relLayout);fitToScreen();draw();
 });
+document.getElementById('btnCritical').addEventListener('click',function(){critOnly=!critOnly;draw();});
 
-wrap.addEventListener('wheel', function(e) {
-  e.preventDefault();
-  scale = Math.max(0.2, Math.min(2.5, scale * (e.deltaY < 0 ? 1.08 : 0.92)));
-  draw();
-}, { passive: false });
-
-window.addEventListener('resize', draw);
-
-document.getElementById('btnReset').addEventListener('click', function() {
-  absLayout = buildAbsoluteLayout();
-  relLayout = buildRelativeLayout();
-  pos = clone(viewMode === 'absolute' ? absLayout : relLayout);
-  scale = 0.72; ox = 20; oy = 60; draw();
-});
-document.getElementById('btnCritical').addEventListener('click', function() {
-  critOnly = !critOnly; draw();
-});
-
-// Mode tabs
-document.getElementById('modeTabs').addEventListener('click', function(e) {
-  var btn = e.target;
-  if (!btn.classList.contains('mode-btn')) return;
-  var mode = btn.getAttribute('data-mode');
-  if (mode === viewMode) return;
-  // Update active
-  var btns = document.querySelectorAll('.mode-btn');
-  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
-  btn.classList.add('active');
-  document.getElementById('modeLabel').innerText = 'Режим: ' + (mode === 'absolute' ? 'Абсолютный' : 'Относительный');
+document.getElementById('modeTabs').addEventListener('click',function(e){
+  var btn=e.target;if(!btn.classList.contains('mode-btn'))return;
+  var mode=btn.getAttribute('data-mode');if(mode===viewMode)return;
+  var btns=document.querySelectorAll('.mode-btn');for(var i=0;i<btns.length;i++)btns[i].classList.remove('active');btn.classList.add('active');
+  document.getElementById('modeLabel').innerText='\u0420\u0435\u0436\u0438\u043c: '+(mode==='absolute'?'\u0410\u0431\u0441\u043e\u043b\u044e\u0442\u043d\u044b\u0439':'\u041e\u0442\u043d\u043e\u0441\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0439');
   switchMode(mode);
 });
 
