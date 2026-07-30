@@ -153,7 +153,6 @@ function isWeekend(d){var dow=d.getDay();return dow===0||dow===6;}
 function isHoliday(d){var s=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);return HOLIDAYS_2026.has(s);}
 
 function buildAbsoluteLayout() {
-  var LANE_ABOVE=170,LANE_BELOW=390,LANE_DEFAULT=340;
   var layers={}; for(var i=0;i<ops.length;i++){var k=ops[i].es;if(!layers[k])layers[k]=[];layers[k].push(ops[i].id);}
   var layerOrder=Object.keys(layers).map(Number).sort(function(a,b){return a-b;});
   var layout={};
@@ -162,14 +161,13 @@ function buildAbsoluteLayout() {
     var startY=340-((ids.length-1)*NODE_R*3.2)/2;
     for(var i=0;i<ids.length;i++) layout[ids[i]]=[lx,startY+i*NODE_R*3.2];
   }
-  spreadLayerVertically(layout);
-  resolveCrossings(layout,[LANE_ABOVE,LANE_BELOW]);
+  spreadLayersVertical(layout);
   return layout;
 }
 function buildRelativeLayout() {
-  var layout={},layers={};
-  for(var i=0;i<ops.length;i++){var k=ops[i].es;if(!layers[k])layers[k]=[];layers[k].push(ops[i].id);}
+  var layers={}; for(var i=0;i<ops.length;i++){var k=ops[i].es;if(!layers[k])layers[k]=[];layers[k].push(ops[i].id);}
   var layerOrder=Object.keys(layers).map(Number).sort(function(a,b){return a-b;});
+  var layout={};
   for(var li=0;li<layerOrder.length;li++){
     var es=layerOrder[li],lx=30+es*REL_SCALE,ids=layers[es];
     var startY=340-((ids.length-1)*NODE_R*3.2)/2;
@@ -180,48 +178,46 @@ function buildRelativeLayout() {
     var prevX=layout[layers[prevEs][0]][0],curX=layout[layers[curEs][0]][0];
     if(curX-prevX<MIN_NODE_GAP){var delta=MIN_NODE_GAP-(curX-prevX);for(var i=0;i<layers[curEs].length;i++)layout[layers[curEs][i]][0]+=delta;}
   }
-  spreadLayerVertically(layout);
-  resolveCrossings(layout,[140,200,260,320,380,440,500]);
+  spreadLayersVertical(layout);
   return layout;
 }
-function resolveCrossings(layout,alts){
-  var placed=[];
-  for(var ei=0;ei<deps.length;ei++){
-    var a=deps[ei][0],b=deps[ei][1],pa=layout[a],pb=layout[b];
-    if(!pa||!pb)continue;
-    if(!crossesAny([a,b],layout,placed)){placed.push(edgeToSeg(a,b,layout));continue;}
-    var oldY=pb[1],found=false;
-    for(var ai=0;ai<alts.length;ai++){if(alts[ai]===oldY)continue;pb[1]=alts[ai];if(!nodeOverlap(b,layout,a)&&!crossesAny([a,b],layout,placed)){found=true;break;}}
-    if(!found)pb[1]=oldY;
-    placed.push(edgeToSeg(a,b,layout));
-  }
-}
-function segCross(s1,s2){var ax=s1.ax,ay=s1.ay,bx=s1.bx,by=s1.by,cx=s2.ax,cy=s2.ay,dx=s2.bx,dy=s2.by;var d1=(dx-cx)*(ay-cy)-(dy-cy)*(ax-cx),d2=(dx-cx)*(by-cy)-(dy-cy)*(bx-cx),d3=(bx-ax)*(cy-ay)-(by-ay)*(cx-ax),d4=(bx-ax)*(dy-ay)-(by-ay)*(dx-ax);return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0));}
-function edgeToSeg(a,b,lo){var pa=lo[a],pb=lo[b],ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]);return {ax:pa[0]+Math.cos(ang)*NODE_R,ay:pa[1]+Math.sin(ang)*NODE_R,bx:pb[0]-Math.cos(ang)*NODE_R,by:pb[1]-Math.sin(ang)*NODE_R};}
-function crossesAny(key,lo,placed){var s=edgeToSeg(key[0],key[1],lo);for(var i=0;i<placed.length;i++)if(segCross(s,placed[i]))return true;return false;}
-function nodeOverlap(nid,lo,ex){var TA=24,TB=20,pn=lo[nid];if(!pn)return false;var ids=Object.keys(lo);for(var i=0;i<ids.length;i++){var oid=ids[i];if(oid===nid||oid===ex)continue;var po=lo[oid],hg=Math.abs(pn[0]-po[0]);if(hg>NODE_R*3)continue;var sT=pn[1]-NODE_R-TA,sB=pn[1]+NODE_R+TB,oT=po[1]-NODE_R-TA,oB=po[1]+NODE_R+TB;if(sT<oB&&sB>oT)return true;}return false;}
 
-function spreadLayerVertically(layout){
-  var TA=24;
-  var byX={};var ids=Object.keys(layout).sort(function(a,b){return layout[a][0]-layout[b][0];});
-  for(var i=0;i<ids.length;i++){var oid=ids[i];if(!byX[layout[oid][0]])byX[layout[oid][0]]=[];byX[layout[oid][0]].push(oid);}
-  var sortedX=Object.keys(byX).map(Number).sort(function(a,b){return a-b;});
-  // Within each layer
-  for(var xi=0;xi<sortedX.length;xi++){
-    var x=sortedX[xi],list=byX[x];if(list.length<2)continue;
-    for(var i=1;i<list.length;i++){
-      var prev=layout[list[i-1]],cur=layout[list[i]];
-      var prevTop=prev[1]-NODE_R-TA,curTop=cur[1]-NODE_R-TA,gap=curTop-prevTop;
-      if(gap<14){var shift=14-gap;layout[list[i]][1]+=shift;for(var j=i+1;j<list.length;j++)layout[list[j]][1]+=shift;}
+var ROW_MIN_Y=100,ROW_MAX_Y=580,EDGE_MARGIN=14;
+function spreadLayersVertical(layout){
+  var allIds=Object.keys(layout);
+  var adj={}; for(var i=0;i<allIds.length;i++)adj[allIds[i]]={in:[],out:[]};
+  for(var i=0;i<deps.length;i++){
+    var a=deps[i][0],b=deps[i][1];if(!adj[a]||!adj[b])continue;
+    adj[a].out.push(b);adj[b].in.push(a);
+  }
+  var visited={},queue=[];
+  for(var i=0;i<allIds.length;i++){
+    if(allIds[i]==='S'||adj[allIds[i]].in.length===0){visited[allIds[i]]=true;queue.push(allIds[i]);layout[allIds[i]][1]=340;}
+  }
+  while(queue.length>0){
+    var id=queue.shift();var kids=adj[id].out;
+    for(var i=0;i<kids.length;i++){
+      var kid=kids[i];if(visited[kid])continue;
+      var pYmin=layout[id][1],pYmax=layout[id][1];
+      for(var jj=0;jj<adj[kid].in.length;jj++){var p=adj[kid].in[jj];if(!layout[p])continue;pYmin=Math.min(pYmin,layout[p][1]);pYmax=Math.max(pYmax,layout[p][1]);}
+      var targetY=(pYmin+pYmax)/2;
+      if(kids.length>1)targetY+=((i/(kids.length-1))-0.5)*EDGE_MARGIN*3;
+      targetY=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,targetY));
+      layout[kid][1]=targetY;
+      visited[kid]=true;queue.push(kid);
     }
   }
-  // Between adjacent layers: check all pairs where |dx| < 100
-  for(var i=0;i<ids.length;i++){
-    for(var j=i+1;j<ids.length;j++){
-      var a=ids[i],b=ids[j],pa=layout[a],pb=layout[b];
-      var dx=Math.abs(pa[0]-pb[0]);if(dx>100)continue;
-      var aTop=pa[1]-NODE_R-TA,bTop=pb[1]-NODE_R-TA;
-      if(Math.abs(aTop-bTop)<16&&dx<100){pb[1]+=(16-Math.abs(aTop-bTop))*((pb[1]>=pa[1])?1:-1);}
+  for(var iter=0;iter<8;iter++){
+    for(var i=0;i<allIds.length;i++){
+      var pa=layout[allIds[i]];if(!pa)continue;
+      for(var j=i+1;j<allIds.length;j++){
+        var pb=layout[allIds[j]];if(!pb)continue;
+        var dx=Math.abs(pa[0]-pb[0]);if(dx>NODE_R*6)continue;
+        var dy=pa[1]-pb[1],minDY=NODE_R*3.2+(dx<NODE_R*2?EDGE_MARGIN:EDGE_MARGIN*0.7);
+        if(Math.abs(dy)<minDY){pa[1]+=((minDY-Math.abs(dy))/2)*Math.sign(dy||1);pb[1]-=((minDY-Math.abs(dy))/2)*Math.sign(dy||1);}
+        pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
+        pb[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pb[1]));
+      }
     }
   }
 }
