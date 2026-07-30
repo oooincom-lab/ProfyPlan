@@ -236,24 +236,37 @@ function hit(cx,cy,mx,my,id){var nr=getNodeR();if(id==='S'){var hs=nr+8;var dx=M
 function drawTimelineGrid(W,H){
   var totalDays=64,startX=30,endX=startX+totalDays*REL_SCALE;
   var dayPx=REL_SCALE*scale; // pixels per day at current scale
-  // Compute primary grid step so lines are ~60-140px apart
-  var pStep=1;
-  if(dayPx>400)pStep=0.125; // ~3h
-  else if(dayPx>200)pStep=0.25; // 6h
-  else if(dayPx>100)pStep=0.5; // 12h
-  else if(dayPx>55)pStep=1; // 1 day
-  else if(dayPx>22)pStep=2;
-  else if(dayPx>11)pStep=4;
-  else if(dayPx>5)pStep=7;
-  else if(dayPx>2.5)pStep=14;
-  else if(dayPx>1)pStep=30;
-  else pStep=90;
-  // Sub-grid: finer lines at 1/4 the primary step for reference
-  var sStep=pStep/4;
-  if(pStep<1 && sStep<0.03125)sStep=0;
+
+  // --- TIER 1: Label step (what text to show and at what interval) ---
+  var lStep,labelUnit; // labelUnit: 'y','mo','d','h','m'
+  if(dayPx>200){lStep=1/24;labelUnit='m';} // every hour -> show HH:MM
+  else if(dayPx>80){lStep=1/6;labelUnit='h';} // every 4h -> show HH:00
+  else if(dayPx>30){lStep=1;labelUnit='d';} // every day -> DD.MM
+  else if(dayPx>12){lStep=2;labelUnit='d';} // every 2 days
+  else if(dayPx>5){lStep=7;labelUnit='d';} // every week -> DD.MM
+  else if(dayPx>2.5){lStep=14;labelUnit='d';} // every 2 weeks
+  else if(dayPx>1){lStep=30;labelUnit='mo';} // every month -> MM.YYYY
+  else{lStep=90;labelUnit='y';} // every quarter -> YYYY
+
+  // --- TIER 2: Grid step (line spacing) ---
+  var gStep;
+  if(dayPx>400)gStep=1/1440; // every minute
+  else if(dayPx>200)gStep=1/24; // every hour
+  else if(dayPx>80)gStep=1/6; // every 4h
+  else if(dayPx>30)gStep=1; // every day
+  else if(dayPx>12)gStep=2;
+  else if(dayPx>5)gStep=7;
+  else if(dayPx>2.5)gStep=14;
+  else if(dayPx>1)gStep=30;
+  else gStep=90;
+
+  // --- TIER 3: Sub-grid (fainter lines between grid lines) ---
+  var sgStep=gStep/4;
+  if(gStep<1/6)sgStep=0; // too dense
 
   var gridVTop=0,gridVBot=H;
-  // Weekend/holiday highlighting — full-height strips
+
+  // Weekend/holiday strips
   for(var d=0;d<totalDays;d++){
     var date=addDays(PROJECT_START,d);
     if(isWeekend(date)||isHoliday(date)){
@@ -263,46 +276,57 @@ function drawTimelineGrid(W,H){
       ctx.fillRect(Math.max(0,x1),gridVTop,Math.min(W,x2-x1),H);
     }
   }
-  // Sub-grid: faint lines
-  if(sStep>0){
-    for(var d=0;d<=totalDays;d+=sStep){
+
+  // Sub-grid lines
+  if(sgStep>0){
+    for(var d=0;d<=totalDays;d+=sgStep){
       var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
       ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
-      ctx.strokeStyle='rgba(60,90,130,0.15)';ctx.lineWidth=0.3;ctx.stroke();
+      ctx.strokeStyle='rgba(60,90,130,0.12)';ctx.lineWidth=0.3;ctx.stroke();
     }
   }
-  // Primary grid: bold lines
-  for(var d=0;d<=totalDays;d+=pStep){
+
+  // Grid lines
+  for(var d=0;d<=totalDays;d+=gStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
-    ctx.strokeStyle='rgba(60,90,130,0.5)';ctx.lineWidth=0.7;ctx.stroke();
+    ctx.strokeStyle='rgba(60,90,130,0.45)';ctx.lineWidth=0.6;ctx.stroke();
   }
+
+  // Time-scale bar background
   var barY=34,barH=22,lsx=sx(startX),rsx=sx(endX);
   ctx.fillStyle='rgba(15,30,54,0.7)';ctx.beginPath();
   ctx.roundRect(Math.max(0,lsx-8),barY,Math.min(W,rsx-lsx+16),barH,6);ctx.fill();
   ctx.beginPath();ctx.moveTo(Math.max(0,lsx),barY+barH/2);ctx.lineTo(Math.min(W,rsx),barY+barH/2);
   ctx.strokeStyle='rgba(96,165,250,0.35)';ctx.lineWidth=1;ctx.stroke();
+
+  // Label ticks + text
   var prevLR=-999;
-  for(var d=0;d<=totalDays;d+=pStep){
+  for(var d=0;d<=totalDays;d+=lStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
     ctx.beginPath();ctx.moveTo(gx,barY+3);ctx.lineTo(gx,barY+barH-3);
     ctx.strokeStyle='rgba(90,112,144,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+
     var label,isTime=false;
-    if(pStep<1){
-      // Sub-day: show time HH:MM
-      isTime=true;
-      var totalHours=d*24;
-      var h=Math.floor(totalHours)%24,m=Math.round((totalHours-Math.floor(totalHours))*60);
-      if(m===60){h++;m=0;if(h===24)h=0;}
-      label=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+    if(labelUnit==='m'){isTime=true;
+      var th=d*24*60,tm=Math.round(th%60),thh=Math.floor(th/60)%24;
+      if(tm===60){thh++;tm=0;}label=(thh<10?'0':'')+thh+':'+(tm<10?'0':'')+tm;
+    }else if(labelUnit==='h'){isTime=true;
+      var th=d*24,hh=Math.round(th)%24;
+      label=(hh<10?'0':'')+hh+':00';
+    }else if(labelUnit==='d'){
+      var dd=Math.floor(d);label=fmt(addDays(PROJECT_START,dd));
+    }else if(labelUnit==='mo'){
+      var dd=Math.floor(d),dt=addDays(PROJECT_START,dd);
+      var mn=['\u044f\u043d\u0432','\u0444\u0435\u0432','\u043c\u0430\u0440','\u0430\u043f\u0440','\u043c\u0430\u0439','\u0438\u044e\u043d','\u0438\u044e\u043b','\u0430\u0432\u0433','\u0441\u0435\u043d','\u043e\u043a\u0442','\u043d\u043e\u044f','\u0434\u0435\u043a'];
+      label=mn[dt.getMonth()]+' '+dt.getFullYear();
     }else{
-      var dd=Math.floor(d);var date=addDays(PROJECT_START,dd);
-      label=fmt(date);
-      if(pStep>=30){label+=' '+(date.getFullYear());}
+      var dd=Math.floor(d),dt=addDays(PROJECT_START,dd);
+      label=''+dt.getFullYear();
     }
-    // Font scales with zoom, but has min/max for readability
+
     var fsz=Math.round(isTime?11*scale:10*scale);
-    if(fsz<8)fsz=8;if(fsz>14)fsz=14;
+    if(fsz<7)fsz=7;if(fsz>14)fsz=14;
     ctx.fillStyle=isTime?'rgba(96,165,250,0.8)':'#B0C4DE';
     ctx.font=(isTime?'bold ':'')+fsz+'px "IBM Plex Mono",monospace';
     ctx.textAlign='center';ctx.textBaseline='top';
