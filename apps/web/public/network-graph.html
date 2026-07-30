@@ -231,11 +231,18 @@ var pos = clone(absLayout);
 var scale, ox, oy;
 function fitToScreen(){
   var W=window.innerWidth,H=window.innerHeight-53;
-  // Fit 0..1500 world X into 80% of screen width
-  scale = (W*0.82)/1500;
-  if (scale < 0.22) scale = 0.22;
-  if (scale > 1.5) scale = 1.5;
-  ox = (W/scale - 1500)/2;
+  // Base scale on text readability: NODE_R=26 is optimal, scale so that 12px font stays ~12px screen pixels
+  // Node font in draw() is 12*scale pixels; keep it >= 10px
+  scale = 0.72; // default optimal
+  // If screen is too narrow to fit the graph at default scale, shrink proportionally (but not below 0.35)
+  var worldW = 1500; // approximate world width
+  if (W / scale < worldW) {
+    scale = W / worldW;
+    if (scale < 0.35) scale = 0.35;
+  }
+  // If screen is wider, just center
+  ox = (W/scale - worldW)/2;
+  if (ox < 20) ox = 20;
   oy = (H/scale - 460)/2 - 20;
   if (oy < -40) oy = -40;
 }
