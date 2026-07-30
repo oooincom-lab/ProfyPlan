@@ -285,10 +285,9 @@ function drawTimelineGrid(W,H){
   var sgStep=gStep/4;if(gStep<1/24)sgStep=0;
 
   var gridVTop=0,gridVBot=H;
-  // Extend grid full-width: compute visible world range in days
-  var worldDaysL=(-ox)/REL_SCALE,worldDaysR=((W/scale)-ox)/REL_SCALE;
-  var gridFirst=Math.floor(Math.min(0,worldDaysL)/Math.max(gStep,0.001))*Math.max(gStep,0.001);
-  var gridLast=Math.ceil(Math.max(totalDays,worldDaysR)/Math.max(gStep,0.001))*Math.max(gStep,0.001);
+  // Full-width grid coverage: extend left/right of timeline to screen edges
+  var fullStartD=Math.floor(Math.min(0,(-ox)/REL_SCALE)/Math.max(gStep,1e-9))*Math.max(gStep,1e-9);
+  var fullEndD=Math.ceil(Math.max(totalDays,((W/scale)-ox)/REL_SCALE)/Math.max(gStep,1e-9))*Math.max(gStep,1e-9);
 
   // Weekend/holiday strips
   for(var d=0;d<totalDays;d++){
@@ -301,28 +300,28 @@ function drawTimelineGrid(W,H){
     }
   }
 
-  // Sub-grid
-  if(sgStep>0)for(var d=gridFirst;d<=gridLast;d+=sgStep){
+  // Sub-grid — full width
+  if(sgStep>0)for(var d=fullStartD;d<=fullEndD;d+=sgStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
     ctx.strokeStyle='rgba(60,90,130,0.12)';ctx.lineWidth=0.3;ctx.stroke();
   }
 
-  // Grid
-  for(var d=gridFirst;d<=gridLast;d+=gStep){
+  // Grid — full width
+  for(var d=fullStartD;d<=fullEndD;d+=gStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
     ctx.strokeStyle='rgba(60,90,130,0.45)';ctx.lineWidth=0.6;ctx.stroke();
   }
 
-  // Time-scale bar
-  var barY=34,barH=22,lsx=sx(startX),rsx=sx(endX);
+  // Time-scale bar — full width
+  var barY=34,barH=22;
   ctx.fillStyle='rgba(15,30,54,0.7)';ctx.beginPath();
-  ctx.roundRect(Math.max(0,lsx-8),barY,Math.min(W,rsx-lsx+16),barH,6);ctx.fill();
-  ctx.beginPath();ctx.moveTo(Math.max(0,lsx),barY+barH/2);ctx.lineTo(Math.min(W,rsx),barY+barH/2);
+  ctx.roundRect(0,barY,W,barH,6);ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,barY+barH/2);ctx.lineTo(W,barY+barH/2);
   ctx.strokeStyle='rgba(96,165,250,0.35)';ctx.lineWidth=1;ctx.stroke();
 
-  // Context labels above time bar: coarser units
+  // Context labels above time bar — full width
   var ctxRows=[];
   if(displayUnit==='m'){ctxRows=[{step:1/24,fmt:'h',fs:10},{step:1,fmt:'d',fs:9},{step:30,fmt:'mo',fs:9},{step:365,fmt:'y',fs:9}];}
   else if(displayUnit==='h'){ctxRows=[{step:1,fmt:'d',fs:10},{step:30,fmt:'mo',fs:9},{step:365,fmt:'y',fs:9}];}
@@ -331,7 +330,7 @@ function drawTimelineGrid(W,H){
   for(var ci=0;ci<ctxRows.length;ci++){
     var cs=ctxRows[ci].step,cY=barY-4-(ci+1)*13;
     var prevCX=-999;
-    for(var d=0;d<=totalDays;d+=cs){
+    for(var d=fullStartD;d<=fullEndD;d+=cs){
       var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
       var dd=Math.floor(d),dt=addDays(PROJECT_START,dd),cl='';
       if(ctxRows[ci].fmt==='h'){var thh2=Math.floor(d*24)%24;cl=('0'+thh2).slice(-2)+':00';}
@@ -346,12 +345,13 @@ function drawTimelineGrid(W,H){
     }
   }
 
-  // Labels
+  // Labels — full width (ticks only for timeline range)
   var prevLR=-999;
-  for(var d=0;d<=totalDays;d+=lStep){
+  for(var d=fullStartD;d<=fullEndD;d+=lStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
     ctx.beginPath();ctx.moveTo(gx,barY+3);ctx.lineTo(gx,barY+barH-3);
     ctx.strokeStyle='rgba(90,112,144,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+    if(d<0||d>totalDays)continue; // text only within timeline
 
     var label,isTime=false;
     if(labelUnit==='m'){isTime=true;
