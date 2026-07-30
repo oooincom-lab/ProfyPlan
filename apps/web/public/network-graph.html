@@ -96,6 +96,13 @@
       <span class="unit-label" id="unitMax">дни</span>
       <span class="unit-label" id="unitCur" style="color:var(--accent-3);font-weight:700;">дни</span>
     </div>
+    <div class="unit-slider">
+      <span class="unit-label" style="font-size:10px;color:var(--fg-4);">Разброс:</span>
+      <span class="unit-label" id="sprMin">сдерж</span>
+      <input type="range" id="sprRange" min="0" max="2" value="1" step="1">
+      <span class="unit-label" id="sprMax">агрес</span>
+      <span class="unit-label" id="sprCur" style="color:var(--accent-3);font-weight:700;">оптим</span>
+    </div>
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--danger);background:rgba(239,68,68,0.18);box-shadow:0 0 8px rgba(239,68,68,0.5);"></div> Критический</div>
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(59,130,246,0.08);box-shadow:0 0 8px rgba(59,130,246,0.35);"></div> С резервом</div>
     <button class="btn" id="btnReset">Сброс</button>
@@ -138,7 +145,8 @@ var deps = [
 
 var PROJECT_START = new Date(2026, 6, 29);
 var viewMode = 'absolute';
-var displayUnit = 'd'; // 'm'=minutes, 'h'=hours, 'd'=days — controlled by slider
+var displayUnit = 'd';
+var sprMode = 1; // 0=сдержанно 1=оптимально 2=агрессивно — controls Y spread
 
 var UNITS={s:'\u0441\u0435\u043a',m:'\u043c\u0438\u043d',h:'\u0447',d:'\u0434\u043d',w:'\u043d\u0435\u0434',mo:'\u043c\u0435\u0441',y:'\u0433\u043e\u0434'};
 function toDays(dur,unit){if(unit==='h')return dur/24;if(unit==='m')return dur/1440;if(unit==='s')return dur/86400;return dur;}
@@ -185,38 +193,73 @@ function buildRelativeLayout() {
 var ROW_MIN_Y=100,ROW_MAX_Y=580,EDGE_MARGIN=14;
 function spreadLayersVertical(layout){
   var allIds=Object.keys(layout);
+  // Spread factor: 0=compact(close to 340), 1=balanced(use full range), 2=aggressive(wider Y, route around obstacles)
+  var spread=0.4+sprMode*0.4; // 0.4, 0.8, 1.2
+  var yCenter=340;
+
   var adj={}; for(var i=0;i<allIds.length;i++)adj[allIds[i]]={in:[],out:[]};
   for(var i=0;i<deps.length;i++){
     var a=deps[i][0],b=deps[i][1];if(!adj[a]||!adj[b])continue;
     adj[a].out.push(b);adj[b].in.push(a);
   }
-  var visited={},queue=[];
-  for(var i=0;i<allIds.length;i++){
-    if(allIds[i]==='S'||adj[allIds[i]].in.length===0){visited[allIds[i]]=true;queue.push(allIds[i]);layout[allIds[i]][1]=340;}
-  }
+
+  // BFS from roots: assign Y, spreading children upward/downward based on order
+  var visited={},queue=[],roots=[];
+  for(var i=0;i<allIds.length;i++)if(allIds[i]==='S'||adj[allIds[i]].in.length===0){roots.push(allIds[i]);visited[allIds[i]]=true;}
+  // Distribute roots vertically first
+  for(var i=0;i<roots.length;i++)layout[roots[i]][1]=yCenter-((i-(roots.length-1)/2)*60*spread);
+  for(var i=0;i<roots.length;i++)queue.push(roots[i]);
+
   while(queue.length>0){
-    var id=queue.shift();var kids=adj[id].out;
+    var id=queue.shift(),kids=adj[id].out;
+    if(kids.length===0)continue;
+    var py=layout[id][1];
     for(var i=0;i<kids.length;i++){
       var kid=kids[i];if(visited[kid])continue;
-      var pYmin=layout[id][1],pYmax=layout[id][1];
-      for(var jj=0;jj<adj[kid].in.length;jj++){var p=adj[kid].in[jj];if(!layout[p])continue;pYmin=Math.min(pYmin,layout[p][1]);pYmax=Math.max(pYmax,layout[p][1]);}
-      var targetY=(pYmin+pYmax)/2;
-      if(kids.length>1)targetY+=((i/(kids.length-1))-0.5)*EDGE_MARGIN*3;
+      // Target Y: spread children above/below parent in fan pattern
+      var targetY=py+((i-(kids.length-1)/2)*60*spread);
+      // If kid has other parents, average with them
+      var pCount=0;
+      for(var jj=0;jj<adj[kid].in.length;jj++){var p=adj[kid].in[jj];if(visited[p]&&layout[p]){targetY=(pCount===0?layout[p][1]:(targetY+layout[p][1])/2);pCount++;}}
       targetY=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,targetY));
       layout[kid][1]=targetY;
       visited[kid]=true;queue.push(kid);
     }
   }
-  for(var iter=0;iter<8;iter++){
+
+  // Force-directed relaxation: resolve overlap + edge crossing
+  for(var iter=0;iter<12;iter++){
     for(var i=0;i<allIds.length;i++){
-      var pa=layout[allIds[i]];if(!pa)continue;
+      var a=allIds[i],pa=layout[a];if(!pa)continue;
+      var fy=pa[1];
       for(var j=i+1;j<allIds.length;j++){
-        var pb=layout[allIds[j]];if(!pb)continue;
-        var dx=Math.abs(pa[0]-pb[0]);if(dx>NODE_R*6)continue;
-        var dy=pa[1]-pb[1],minDY=NODE_R*3.2+(dx<NODE_R*2?EDGE_MARGIN:EDGE_MARGIN*0.7);
-        if(Math.abs(dy)<minDY){pa[1]+=((minDY-Math.abs(dy))/2)*Math.sign(dy||1);pb[1]-=((minDY-Math.abs(dy))/2)*Math.sign(dy||1);}
-        pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
-        pb[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pb[1]));
+        var b=allIds[j],pb=layout[b];if(!pb)continue;
+        var dx=Math.abs(pa[0]-pb[0]);
+        if(dx>NODE_R*8)continue;
+        var dy=pa[1]-pb[1];
+        // Check if edge between them or they share parent/child
+        var connected=false;
+        for(var kk=0;kk<deps.length;kk++)if((deps[kk][0]===a&&deps[kk][1]===b)||(deps[kk][0]===b&&deps[kk][1]===a)){connected=true;break;}
+        var minDY=connected?NODE_R*3.5:(dx<NODE_R*2?NODE_R*4:NODE_R*2.5);
+        if(Math.abs(dy)<minDY){
+          var nudge=(minDY-Math.abs(dy)+1)/2;
+          fy=pa[1]+nudge*Math.sign(dy||1);
+          // Check edge crossing: if moving this node would cross an existing edge, push further
+          var crosses=false;
+          for(var kk=0;kk<deps.length;kk++){
+            var da=deps[kk][0],db=deps[kk][1];if(da===a||db===a||da===b||db===b)continue;
+            if(!layout[da]||!layout[db])continue;
+            var pda=layout[da],pdb=layout[db];
+            // Simple check: does horizontal span of edge overlap with node's new position?
+            var exMin=Math.min(pda[0],pdb[0]),exMax=Math.max(pda[0],pdb[0]);
+            if(pa[0]>=exMin&&pa[0]<=exMax){
+              var eyCenter=(pda[1]+pdb[1])/2;
+              if(Math.abs(fy-eyCenter)<NODE_R*2.5){crosses=true;break;}
+            }
+          }
+          if(!crosses){pa[1]=fy;}
+          pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
+        }
       }
     }
   }
@@ -506,6 +549,14 @@ document.getElementById('unitRange').addEventListener('input',function(){
   if(displayUnit==='m')REL_SCALE=1200; // 1200px/day, for minute detail
   else if(displayUnit==='h')REL_SCALE=500; // 500px/day
   else REL_SCALE=500; // 500px/day
+  absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);fitToScreen();draw();
+});
+// Spread slider: 0=compact, 1=balanced, 2=aggressive
+var sprNames=['сдерж','оптим','агрес'];
+document.getElementById('sprRange').addEventListener('input',function(){
+  var vv=parseInt(this.value);
+  sprMode=vv;
+  document.getElementById('sprCur').innerText=sprNames[vv];
   absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);fitToScreen();draw();
 });
 draw();
