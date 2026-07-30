@@ -16,7 +16,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.base import BaseModel  # noqa: F401
+from app.core.deps import get_current_token
 from app.models.tenant import Tenant, User, UserTenant
 from app.schemas.auth import (
     RefreshRequest,
@@ -125,10 +125,9 @@ async def logout():
 @router.get("/me", response_model=UserMe)
 async def me(
     db: AsyncSession = Depends(get_db),
-    token: dict = Depends(_get_current_token),  # TODO: добавить Depends
+    token: dict = Depends(get_current_token),
 ):
     """Текущий пользователь."""
-    # Заглушка — будет заменена после добавления auth-dependency
     user_id = token.get("sub")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -155,19 +154,4 @@ async def me(
     )
 
 
-# --- Auth Dependency (будет вынесена в отдельный файл) ---
-from fastapi import Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-security = HTTPBearer()
-
-
-async def _get_current_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
-    """Извлечь и проверить JWT из заголовка Authorization."""
-    token = credentials.credentials
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    return payload
