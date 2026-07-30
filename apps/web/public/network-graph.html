@@ -230,12 +230,12 @@ var pos = clone(absLayout);
 
 var scale, ox, oy;
 function fitToScreen(){
-  // Fixed standard scale — circles always readable, long graphs need horizontal pan
   var W=window.innerWidth,H=window.innerHeight-53;
-  scale = 0.72;
-  // Center vertically on node area
+  // Fit 0..1500 world X into 80% of screen width
+  scale = (W*0.82)/1500;
+  if (scale < 0.22) scale = 0.22;
+  if (scale > 1.5) scale = 1.5;
   ox = (W/scale - 1500)/2;
-  if (ox < 20) ox = 20;
   oy = (H/scale - 460)/2 - 20;
   if (oy < -40) oy = -40;
 }
