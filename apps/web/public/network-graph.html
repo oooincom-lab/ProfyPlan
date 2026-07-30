@@ -318,6 +318,30 @@ function drawTimelineGrid(W,H){
   ctx.beginPath();ctx.moveTo(Math.max(0,lsx),barY+barH/2);ctx.lineTo(Math.min(W,rsx),barY+barH/2);
   ctx.strokeStyle='rgba(96,165,250,0.35)';ctx.lineWidth=1;ctx.stroke();
 
+  // Context labels above time bar: coarser units
+  var ctxRows=[];
+  if(displayUnit==='m'){ctxRows=[{step:1/24,fmt:'h',fs:10},{step:1,fmt:'d',fs:9},{step:30,fmt:'mo',fs:9},{step:365,fmt:'y',fs:9}];}
+  else if(displayUnit==='h'){ctxRows=[{step:1,fmt:'d',fs:10},{step:30,fmt:'mo',fs:9},{step:365,fmt:'y',fs:9}];}
+  else{ctxRows=[{step:30,fmt:'mo',fs:10},{step:365,fmt:'y',fs:9}];}
+  var MNctx=['\u044f\u043d\u0432','\u0444\u0435\u0432','\u043c\u0430\u0440','\u0430\u043f\u0440','\u043c\u0430\u0439','\u0438\u044e\u043d','\u0438\u044e\u043b','\u0430\u0432\u0433','\u0441\u0435\u043d','\u043e\u043a\u0442','\u043d\u043e\u044f','\u0434\u0435\u043a'];
+  for(var ci=0;ci<ctxRows.length;ci++){
+    var cs=ctxRows[ci].step,cY=barY-4-(ci+1)*13;
+    var prevCX=-999;
+    for(var d=0;d<=totalDays;d+=cs){
+      var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
+      var dd=Math.floor(d),dt=addDays(PROJECT_START,dd),cl='';
+      if(ctxRows[ci].fmt==='h'){var thh2=Math.floor(d*24)%24;cl=('0'+thh2).slice(-2)+':00';}
+      else if(ctxRows[ci].fmt==='d'){cl=fmt(dt);}
+      else if(ctxRows[ci].fmt==='mo'){cl=MNctx[dt.getMonth()];}
+      else{cl=''+dt.getFullYear();}
+      var cfsz=Math.round(ctxRows[ci].fs*scale);if(cfsz<7)cfsz=7;if(cfsz>13)cfsz=13;
+      ctx.fillStyle='rgba(90,112,144,0.55)';ctx.font=cfsz+'px "IBM Plex Mono",monospace';
+      ctx.textAlign='center';ctx.textBaseline='top';
+      var lw=ctx.measureText(cl).width;
+      if(gx-lw/2>prevCX){ctx.fillText(cl,gx,cY);prevCX=gx+lw/2;}
+    }
+  }
+
   // Labels
   var prevLR=-999;
   for(var d=0;d<=totalDays;d+=lStep){
