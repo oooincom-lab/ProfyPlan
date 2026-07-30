@@ -64,6 +64,18 @@
     padding: 8px 12px; font-size: 11px; color: var(--fg-3); pointer-events: none; z-index: 5;
   }
   .info-panel strong { color: var(--fg); }
+  .unit-slider { display: flex; align-items: center; gap: 6px; }
+  .unit-slider label { font-size: 10px; color: var(--fg-4); font-weight: 600; }
+  .unit-slider input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 80px; height: 4px;
+    background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  .unit-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-2);
+    box-shadow: 0 0 6px rgba(59,130,246,0.4); cursor: pointer;
+  }
+  .unit-label { font-size: 9px; color: var(--fg-3); min-width: 28px; text-align: center; }
 </style>
 </head>
 <body>
@@ -77,6 +89,13 @@
     <button class="mode-btn" data-mode="relative">Относительный</button>
   </div>
   <div class="legend">
+    <div class="unit-slider">
+      <span class="unit-label" style="font-size:10px;color:var(--fg-4);">Масштаб:</span>
+      <span class="unit-label" id="unitMin">мин</span>
+      <input type="range" id="unitRange" min="0" max="2" value="0" step="1">
+      <span class="unit-label" id="unitMax">дни</span>
+      <span class="unit-label" id="unitCur" style="color:var(--accent-3);font-weight:700;">дни</span>
+    </div>
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--danger);background:rgba(239,68,68,0.18);box-shadow:0 0 8px rgba(239,68,68,0.5);"></div> Критический</div>
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(59,130,246,0.08);box-shadow:0 0 8px rgba(59,130,246,0.35);"></div> С резервом</div>
     <button class="btn" id="btnReset">Сброс</button>
@@ -119,8 +138,11 @@ var deps = [
 
 var PROJECT_START = new Date(2026, 6, 29);
 var viewMode = 'absolute';
+var displayUnit = 'd'; // 'm'=minutes, 'h'=hours, 'd'=days — controlled by slider
 
-var UNITS={s:'\u0441\u0435\u043a',m:'\u043c\u0438\u043d',h:'\u0447',d:'\u0434\u043d',w:'\u043d\u0435\u0434',mo:'\u043c\u0435\u0441',y:'\u0433\u043e\u0434'};function fmtDur(dur,unit){if(!unit)unit='d';if(dur<=0)return'-';return dur+' '+(UNITS[unit]||unit);}
+var UNITS={s:'\u0441\u0435\u043a',m:'\u043c\u0438\u043d',h:'\u0447',d:'\u0434\u043d',w:'\u043d\u0435\u0434',mo:'\u043c\u0435\u0441',y:'\u0433\u043e\u0434'};
+function toDays(dur,unit){if(unit==='h')return dur/24;if(unit==='m')return dur/1440;if(unit==='s')return dur/86400;return dur;}
+function fmtDur(dur,unit){if(!unit)unit='d';if(dur<=0)return'-';var td=toDays(dur,unit);if(displayUnit==='m')return Math.ceil(td*1440)+' '+UNITS.m;if(displayUnit==='h')return Math.ceil(td*24)+' '+UNITS.h;return Math.ceil(td)+' '+UNITS.d;}
 
 // Russian holidays 2026 + weekends (Sat/Sun)
 var HOLIDAYS_2026=new Set([
@@ -458,6 +480,18 @@ document.getElementById('modeTabs').addEventListener('click',function(e){
   var btns=document.querySelectorAll('.mode-btn');for(var i=0;i<btns.length;i++)btns[i].classList.remove('active');btn.classList.add('active');
   document.getElementById('modeLabel').innerText='\u0420\u0435\u0436\u0438\u043c: '+(mode==='absolute'?'\u0410\u0431\u0441\u043e\u043b\u044e\u0442\u043d\u044b\u0439':'\u041e\u0442\u043d\u043e\u0441\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0439');
   switchMode(mode);
+});
+// Unit slider: 0=m, 1=h, 2=d
+var unitNames=['m','h','d'],unitLabels=['\u043c\u0438\u043d','\u0447\u0430\u0441','\u0434\u043d\u0438'];
+document.getElementById('unitRange').addEventListener('input',function(){
+  var v=parseInt(this.value);
+  displayUnit=unitNames[v];
+  document.getElementById('unitCur').innerText=unitLabels[v];
+  // Adjust REL_SCALE for display unit
+  if(displayUnit==='m')REL_SCALE=20*60; // 20px per hour -> need more space
+  else if(displayUnit==='h')REL_SCALE=20; // 20px per hour
+  else REL_SCALE=20; // 20px per day
+  relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);draw();
 });
 draw();
 </script>
