@@ -107,6 +107,9 @@
     <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(59,130,246,0.08);box-shadow:0 0 8px rgba(59,130,246,0.35);"></div> С резервом</div>
     <button class="btn" id="btnReset">Сброс</button>
     <button class="btn btn-primary" id="btnCritical">Только крит. путь</button>
+    <div style="position:relative;display:inline-flex;">
+      <button class="btn" id="btnSaveDefaults" title="Сохранить текущие настройки по умолчанию для проекта" style="padding:4px 8px;font-size:16px;line-height:1;">&#9881;</button>
+    </div>
   </div>
 </div>
 <div class="canvas-wrap" id="wrap">
@@ -566,6 +569,26 @@ document.getElementById('sprRange').addEventListener('input',function(){
   document.getElementById('sprCur').innerText=sprNames[vv];
   absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);fitToScreen();draw();
 });
+// Save defaults button
+document.getElementById('btnSaveDefaults').addEventListener('click',function(){
+  var defaults={unit:displayUnit,spr:sprMode,mode:viewMode};
+  localStorage.setItem('pp-network-defaults',JSON.stringify(defaults));
+  var btn=this;btn.style.color='var(--success)';btn.style.borderColor='var(--success)';
+  setTimeout(function(){btn.style.color='';btn.style.borderColor='';},1200);
+});
+// Load defaults on init
+(function(){
+  var raw=localStorage.getItem('pp-network-defaults');
+  if(raw)try{var d=JSON.parse(raw);displayUnit=d.unit||'d';sprMode=d.spr!=null?d.spr:1;viewMode=d.mode||'absolute';}catch(e){}
+  document.getElementById('unitRange').value=unitNames.indexOf(displayUnit);
+  document.getElementById('unitCur').innerText=unitLabels[unitNames.indexOf(displayUnit)];
+  document.getElementById('sprRange').value=sprMode;
+  var sprNames2=['сдерж','оптим','агрес'];
+  document.getElementById('sprCur').innerText=sprNames2[sprMode];
+  if(displayUnit==='m')REL_SCALE=1200;else if(displayUnit==='h')REL_SCALE=500;else REL_SCALE=500;
+  var tabs=document.querySelectorAll('.mode-btn');
+  for(var i=0;i<tabs.length;i++){tabs[i].classList.remove('active');if(tabs[i].getAttribute('data-mode')===viewMode)tabs[i].classList.add('active');}
+})();
 draw();
 </script>
 </body>
