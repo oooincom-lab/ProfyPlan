@@ -221,13 +221,13 @@ var wrap=document.getElementById('wrap'),tip=document.getElementById('tip');
 
 function sx(wx){return(wx+ox)*scale;}
 function sy(wy){return(wy+oy)*scale;}
-function hit(cx,cy,mx,my){var nr=getNodeR(),rr=(nr*scale);return(mx-cx)*(mx-cx)+(my-cy)*(my-cy)<=rr*rr;}
+function hit(cx,cy,mx,my,id){var nr=getNodeR();if(id==='S'){var hs=nr+8;var dx=Math.abs(mx-cx)/(hs*0.75),dy=Math.abs(my-cy)/hs;return dx+dy<=1;}if(id==='F'){var ss=nr*1.0;return mx>=cx-ss*scale&&mx<=cx+ss*scale&&my>=cy-ss*scale&&my<=cy+ss*scale;}var rr=(nr*scale);return(mx-cx)*(mx-cx)+(my-cy)*(my-cy)<=rr*rr;}
 
 function drawTimelineGrid(W,H){
   var totalDays=64,startX=30,endX=startX+totalDays*REL_SCALE;
   var step=10,spx=REL_SCALE*step*scale;
   if(spx<35)step=20;if(spx<20)step=30;if(spx>90)step=5;if(spx>180)step=2;
-  var gridVTop=0,gridVBot=Math.floor(sy(520));if(gridVBot<0||gridVBot>H)gridVBot=H;
+  var gridVTop=0,gridVBot=H;
   for(var d=0;d<=totalDays;d+=step){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
@@ -346,7 +346,7 @@ function switchMode(mode){
 wrap.addEventListener('mousedown',function(e){
   var rect=wrap.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
   var vis=critOnly?ops.filter(function(o){return o.crit;}):ops;
-  for(var i=0;i<vis.length;i++){var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my)){dragId=o.id;dragPos0=[pos[o.id][0],pos[o.id][1]];dragM0=[mx,my];wrap.classList.add('dragging');return;}}
+  for(var i=0;i<vis.length;i++){var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my,o.id)){dragId=o.id;dragPos0=[pos[o.id][0],pos[o.id][1]];dragM0=[mx,my];wrap.classList.add('dragging');return;}}
   panning=true;psx=mx;psy=my;pox=ox;poy=oy;wrap.classList.add('panning');
 });
 window.addEventListener('mousemove',function(e){
@@ -354,7 +354,7 @@ window.addEventListener('mousemove',function(e){
   if(dragId){var dx=(mx-dragM0[0])/scale,dy=(my-dragM0[1])/scale;pos[dragId][0]=dragPos0[0]+dx;pos[dragId][1]=dragPos0[1]+dy;draw();return;}
   if(panning){ox=pox+(mx-psx)/scale;oy=poy+(my-psy)/scale;draw();}
   var vis=critOnly?ops.filter(function(o){return o.crit;}):ops,found=null;
-  for(var i=0;i<vis.length;i++){var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my)){found=o;break;}}
+  for(var i=0;i<vis.length;i++){var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my,o.id)){found=o;break;}}
   if(found&&found.id!==hoverId){hoverId=found.id;
     tip.innerHTML='<div class="tooltip-title">\u2116'+found.num+' \u00b7 '+found.name+'</div>'
       +'<div class="tooltip-row">\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c <b>'+found.dur+' \u0434\u043d.</b></div>'
