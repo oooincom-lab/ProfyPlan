@@ -273,34 +273,27 @@ function drawTimelineGrid(W,H){
     var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
     ctx.beginPath();ctx.moveTo(gx,barY+3);ctx.lineTo(gx,barY+barH-3);
     ctx.strokeStyle='rgba(90,112,144,0.5)';ctx.lineWidth=0.8;ctx.stroke();
-    var label;
+    var label,isTime=false;
     if(step<1){
-      // Sub-day: show hours
-      var totalHours=Math.floor(d*24);
-      var h=totalHours%24,m=Math.floor((d*24-totalHours)*60);
-      var dd=Math.floor(d);var date=addDays(PROJECT_START,dd);
-      label=(h<10?'0':'')+h+':'+(m<10?'0':'')+m+'\n'+fmt(date);
-    }else if(step>=30){
-      // Month/year scale
-      var dd=Math.floor(d);var date=addDays(PROJECT_START,dd);
-      label=fmt(date)+"\n"+(date.getFullYear());
-    }else if(step>=7){
-      var dd=Math.floor(d);var date=addDays(PROJECT_START,dd);
-      label=fmt(date);
+      // Sub-day: show time HH:MM
+      isTime=true;
+      var totalHours=d*24;
+      var h=Math.floor(totalHours)%24,m=Math.round((totalHours-Math.floor(totalHours))*60);
+      if(m===60){h++;m=0;if(h===24)h=0;}
+      label=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
     }else{
       var dd=Math.floor(d);var date=addDays(PROJECT_START,dd);
       label=fmt(date);
+      if(step>=30){label+=' '+(date.getFullYear());}
     }
-    var fsz=Math.round(10*scale);if(fsz<8)fsz=8;
-    if(step<1){fsz=Math.round(9*scale);if(fsz<7)fsz=7;}
-    ctx.fillStyle='#B0C4DE';ctx.font=fsz+'px "IBM Plex Mono",monospace';
+    // Font scales with zoom, but has min/max for readability
+    var fsz=Math.round(isTime?11*scale:10*scale);
+    if(fsz<8)fsz=8;if(fsz>14)fsz=14;
+    ctx.fillStyle=isTime?'rgba(96,165,250,0.8)':'#B0C4DE';
+    ctx.font=(isTime?'bold ':'')+fsz+'px "IBM Plex Mono",monospace';
     ctx.textAlign='center';ctx.textBaseline='top';
-    var lines=label.split('\n');
-    for(var li=0;li<lines.length;li++){
-      var lw=ctx.measureText(lines[li]).width;
-      if(gx-lw/2>prevLR||li>0){ctx.fillText(lines[li],gx,barY+barH+4+li*fsz);}
-    }
-    prevLR=gx+ctx.measureText(lines[0]).width/2;
+    var lw=ctx.measureText(label).width;
+    if(gx-lw/2>prevLR){ctx.fillText(label,gx,barY+barH+4);prevLR=gx+lw/2;}
   }
 }
 
