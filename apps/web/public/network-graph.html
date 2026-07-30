@@ -176,6 +176,8 @@ function buildAbsoluteLayout() {
   return layout;
 }
 
+var REL_SCALE = 20; // pixels per day in relative mode
+
 function buildRelativeLayout() {
   // X = es * scale, Y = layered to avoid overlaps
   // Scale: 1 day = 20 world-units, min gap between nodes = MIN_NODE_GAP
@@ -297,6 +299,58 @@ function clone(src) {
   return out;
 }
 
+var REL_SCALE = 20; // world pixels per day in relative mode
+
+function drawTimelineGrid(W, H) {
+  var totalDays = 64;
+  var startX = 30, endX = startX + totalDays * REL_SCALE;
+
+  // Dynamic grid step based on zoom
+  var step = 10;
+  var spx = REL_SCALE * step * scale;
+  if (spx < 35)  step = 20;
+  if (spx < 20)  step = 30;
+  if (spx > 90)  step = 5;
+  if (spx > 180) step = 2;
+  if (spx > 300) step = 1;
+
+  var gridY = 510;
+  var gridH = H - gridY;
+  for (var d = 0; d <= totalDays; d += step) {
+    var gx = sx(startX + d * REL_SCALE);
+    if (gx < -50 || gx > W + 50) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(gx, gridY);
+    ctx.lineTo(gx, gridY + gridH);
+    ctx.strokeStyle = 'rgba(30,50,82,0.45)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#5A7090';
+    ctx.font = Math.round(10 * scale) + 'px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(d + '\u0434', gx, gridY + 4);
+  }
+
+  // Baseline
+  ctx.beginPath();
+  var lsx = sx(startX), rsx = sx(endX);
+  ctx.moveTo(Math.max(0, lsx), gridY);
+  ctx.lineTo(Math.min(W, rsx), gridY);
+  ctx.strokeStyle = 'rgba(96,165,250,0.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Label
+  ctx.fillStyle = '#60A5FA';
+  ctx.font = Math.round(10 * scale) + 'px Inter, system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('\u0412\u0440\u0435\u043c\u044f, \u0434\u043d\u0438', sx(startX), gridY - 3);
+}
+
 var scale = 0.72, ox = 20, oy = 60;
 var panning = false, psx, psy, pox, poy;
 var dragId = null, dragPos0, dragM0;
@@ -318,6 +372,11 @@ function draw() {
   c.style.width = W + 'px'; c.style.height = H + 'px';
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.fillStyle = '#0A1628'; ctx.fillRect(0, 0, W, H);
+
+  // --- Timeline grid (only in relative mode) ---
+  if (viewMode === 'relative') {
+    drawTimelineGrid(W, H);
+  }
 
   var vis = critOnly ? ops.filter(function(o) { return o.crit; }) : ops;
   var vs = {};
