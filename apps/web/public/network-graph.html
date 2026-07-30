@@ -193,8 +193,11 @@ function buildRelativeLayout() {
 var ROW_MIN_Y=100,ROW_MAX_Y=580,EDGE_MARGIN=14;
 function spreadLayersVertical(layout){
   var allIds=Object.keys(layout);
-  // Spread factor: 0=compact(close to 340), 1=balanced(use full range), 2=aggressive(wider Y, route around obstacles)
-  var spread=0.4+sprMode*0.4; // 0.4, 0.8, 1.2
+  // sprMode: 0=compact, 1=balanced, 2=aggressive
+  // Wave amplitude: how far children fan out from parent
+  var waveAmp=[40,72,120][sprMode]; // vertical spread per child
+  var fanSpread=[0.4,0.8,1.4][sprMode]; // multiplier for fan pattern
+  var relaxIter=[6,12,20][sprMode]; // relaxation iterations
   var yCenter=340;
 
   var adj={}; for(var i=0;i<allIds.length;i++)adj[allIds[i]]={in:[],out:[]};
@@ -203,11 +206,10 @@ function spreadLayersVertical(layout){
     adj[a].out.push(b);adj[b].in.push(a);
   }
 
-  // BFS from roots: assign Y, spreading children upward/downward based on order
+  // BFS from roots
   var visited={},queue=[],roots=[];
   for(var i=0;i<allIds.length;i++)if(allIds[i]==='S'||adj[allIds[i]].in.length===0){roots.push(allIds[i]);visited[allIds[i]]=true;}
-  // Distribute roots vertically first
-  for(var i=0;i<roots.length;i++)layout[roots[i]][1]=yCenter-((i-(roots.length-1)/2)*60*spread);
+  for(var i=0;i<roots.length;i++)layout[roots[i]][1]=yCenter-((i-(roots.length-1)/2)*waveAmp*0.5);
   for(var i=0;i<roots.length;i++)queue.push(roots[i]);
 
   while(queue.length>0){
@@ -216,9 +218,8 @@ function spreadLayersVertical(layout){
     var py=layout[id][1];
     for(var i=0;i<kids.length;i++){
       var kid=kids[i];if(visited[kid])continue;
-      // Target Y: spread children above/below parent in fan pattern
-      var targetY=py+((i-(kids.length-1)/2)*60*spread);
-      // If kid has other parents, average with them
+      var targetY=py+((i-(kids.length-1)/2))*waveAmp*fanSpread;
+      // Average with other parents
       var pCount=0;
       for(var jj=0;jj<adj[kid].in.length;jj++){var p=adj[kid].in[jj];if(visited[p]&&layout[p]){targetY=(pCount===0?layout[p][1]:(targetY+layout[p][1])/2);pCount++;}}
       targetY=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,targetY));
@@ -227,26 +228,24 @@ function spreadLayersVertical(layout){
     }
   }
 
-  // Force-directed relaxation: resolve overlap + edge crossing
-  for(var iter=0;iter<15;iter++){
+  // Force-directed relaxation
+  var sepDist=[NODE_R*2.2,NODE_R*3.5,NODE_R*5][sprMode]; // minimum Y separation
+  for(var iter=0;iter<relaxIter;iter++){
     for(var i=0;i<allIds.length;i++){
       var a=allIds[i],pa=layout[a];if(!pa)continue;
-      // Non-critical leaf nodes: push far out in aggressive mode
       var isLeaf=adj[a].in.length+adj[a].out.length<=2;
       var isCrit=(om[a]&&om[a].crit);
-      var pushMult=isCrit?0.5:(isLeaf&&sprMode>=1?2.5:1.5);
-      var fy=pa[1];
+      var pushMult=isCrit?0.5:(isLeaf&&sprMode>=1?3:2);
       for(var j=i+1;j<allIds.length;j++){
         var b=allIds[j],pb=layout[b];if(!pb)continue;
         var dx=Math.abs(pa[0]-pb[0]);
-        if(dx>NODE_R*10)continue;
+        var maxDX=NODE_R*(7+sprMode*3);if(dx>maxDX)continue;
         var dy=pa[1]-pb[1];
-        var connected=false;
-        for(var kk=0;kk<deps.length;kk++)if((deps[kk][0]===a&&deps[kk][1]===b)||(deps[kk][0]===b&&deps[kk][1]===a)){connected=true;break;}
-        var minDY=connected?NODE_R*3.5:(dx<NODE_R*2?NODE_R*5:NODE_R*3);
+        var minDY=sepDist;
+        if(dx<NODE_R*2)minDY*=1.5; // vertically aligned: need more gap
         if(Math.abs(dy)<minDY){
           var nudge=(minDY-Math.abs(dy)+1)/2*pushMult;
-          fy=pa[1]+nudge*Math.sign(dy||1);
+          var newY=pa[1]+nudge*Math.sign(dy||1);
           // Edge crossing check
           var crosses=false;
           for(var kk=0;kk<deps.length;kk++){
@@ -256,17 +255,17 @@ function spreadLayersVertical(layout){
             var exMin=Math.min(pda[0],pdb[0]),exMax=Math.max(pda[0],pdb[0]);
             if(pa[0]>=exMin-NODE_R&&pa[0]<=exMax+NODE_R){
               var eyCenter=(pda[1]+pdb[1])/2;
-              if(Math.abs(fy-eyCenter)<NODE_R*2.5){crosses=true;break;}
+              if(Math.abs(newY-eyCenter)<sepDist*0.8){crosses=true;break;}
             }
           }
-          if(!crosses){pa[1]=fy;}
+          if(!crosses){pa[1]=newY;}
           pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
         }
       }
-      // Extra: in aggressive mode, push non-critical nodes towards edges
+      // Aggressive: push dead-end nodes to far edges
       if(sprMode>=1&&!isCrit&&isLeaf){
         var targetEdge=pa[1]<yCenter?ROW_MIN_Y+NODE_R+10:ROW_MAX_Y-NODE_R-10;
-        pa[1]+=(targetEdge-pa[1])*(0.05+sprMode*0.08);
+        pa[1]+=(targetEdge-pa[1])*([0,0.08,0.15][sprMode]);
         pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
       }
     }
