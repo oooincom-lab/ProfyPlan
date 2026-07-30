@@ -287,7 +287,7 @@ function draw(){
       ctx.textAlign='center';ctx.textBaseline='middle';
       // Background pill
       var txtW=ctx.measureText(fa.dur+'\u0434').width+8,txtH=Math.round(10*scale)+6;
-      ctx.globalAlpha=0.75;ctx.fillStyle=both?'#1a0a0a':'#0A1628';
+      ctx.globalAlpha=0.75;ctx.fillStyle=both?'rgba(10,22,40,0.6)':'#0A1628';
       ctx.beginPath();ctx.roundRect(sx(mx)-txtW/2,sy(my)-txtH/2,txtW,txtH,3);ctx.fill();
       ctx.globalAlpha=1;ctx.fillStyle=both?'rgba(239,68,68,1)':'rgba(176,196,222,0.9)';
       ctx.fillText(fa.dur+'\u0434',sx(mx),sy(my));
