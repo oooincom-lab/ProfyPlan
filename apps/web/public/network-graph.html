@@ -238,25 +238,26 @@ function drawTimelineGrid(W,H){
   var dayPx=REL_SCALE*scale; // pixels per day at current scale
 
   // --- TIER 1: Label step (what text to show and at what interval) ---
-  var lStep,labelUnit; // labelUnit: 'y','mo','d','h','m'
-  if(dayPx>200){lStep=1/24;labelUnit='m';} // every hour -> show HH:MM
-  else if(dayPx>80){lStep=1/6;labelUnit='h';} // every 4h -> show HH:00
+  var lStep,labelUnit; // labelUnit: 'm','h','d','mo','y'
+  if(dayPx>200){lStep=1/48;labelUnit='m';} // every 30 min -> HH:MM
+  else if(dayPx>80){lStep=1/12;labelUnit='h';} // every 2h -> HH:00
   else if(dayPx>30){lStep=1;labelUnit='d';} // every day -> DD.MM
-  else if(dayPx>12){lStep=2;labelUnit='d';} // every 2 days
-  else if(dayPx>5){lStep=7;labelUnit='d';} // every week -> DD.MM
-  else if(dayPx>2.5){lStep=14;labelUnit='d';} // every 2 weeks
-  else if(dayPx>1){lStep=30;labelUnit='mo';} // every month -> MM.YYYY
-  else{lStep=90;labelUnit='y';} // every quarter -> YYYY
+  else if(dayPx>12){lStep=2;labelUnit='d';}
+  else if(dayPx>5){lStep=7;labelUnit='d';}
+  else if(dayPx>2.5){lStep=14;labelUnit='d';}
+  else if(dayPx>1){lStep=30;labelUnit='mo';} // every month -> месяц ГГГГ
+  else{lStep=90;labelUnit='y';} // every quarter -> ГГГГ
 
   // --- TIER 2: Grid step (line spacing) ---
   var gStep;
-  if(dayPx>400)gStep=1/1440; // every minute
-  else if(dayPx>200)gStep=1/24; // every hour
-  else if(dayPx>80)gStep=1/6; // every 4h
-  else if(dayPx>30)gStep=1; // every day
-  else if(dayPx>12)gStep=2;
-  else if(dayPx>5)gStep=7;
-  else if(dayPx>2.5)gStep=14;
+  if(dayPx>600)gStep=1/1440; // every minute
+  else if(dayPx>300)gStep=1/288; // every 5 min
+  else if(dayPx>150)gStep=1/48; // every 30 min
+  else if(dayPx>80)gStep=1/12; // every 2h
+  else if(dayPx>40)gStep=1/3; // every 8h
+  else if(dayPx>25)gStep=1; // every day
+  else if(dayPx>10)gStep=3;
+  else if(dayPx>3)gStep=10;
   else if(dayPx>1)gStep=30;
   else gStep=90;
 
