@@ -262,6 +262,9 @@ function draw(){
   if(viewMode==='relative') drawTimelineGrid(W,H);
   var vis=critOnly?ops.filter(function(o){return o.crit;}):ops;
   var vs={};for(var i=0;i<vis.length;i++)vs[vis[i].id]=true;
+  // Position S next to first op, F next to last op
+  if(pos['S']&&pos[ops[1].id]){var refPos=pos[ops[1].id];pos['S']=[refPos[0]-NODE_R*2.8,refPos[1]];}
+  if(pos['F']&&pos[ops[ops.length-2].id]){var refPos2=pos[ops[ops.length-2].id];pos['F']=[refPos2[0]+NODE_R*2.8,refPos2[1]];}
   for(var i=0;i<deps.length;i++){
     var a=deps[i][0],b=deps[i][1];if(!vs[a]||!vs[b])continue;
     var fa=om[a],fb=om[b],pa=pos[a],pb=pos[b],ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]),nr=getNodeR();
@@ -296,7 +299,11 @@ function draw(){
     // Start — green diamond, Finish — purple square
     if(o.id==='S'||o.id==='F'){
       if(o.id==='S'){
-        // Green diamond
+        // Green diamond — placed to the left of first real node
+        var refPos=pos[ops[1].id]; // operation 1
+        var sx2=refPos[0]-NODE_R*2.8,sy2=refPos[1]; // left offset
+        pos['S']=[sx2,sy2]; // update layout
+        cx=sx(sx2);cy=sy(sy2);
         var hs=r+8; ctx.beginPath();ctx.moveTo(cx,cy-hs);ctx.lineTo(cx+hs*0.75,cy);ctx.lineTo(cx,cy+hs);ctx.lineTo(cx-hs*0.75,cy);ctx.closePath();
         ctx.fillStyle='rgba(16,185,129,0.15)';ctx.fill();
         ctx.strokeStyle='rgba(16,185,129,0.6)';ctx.lineWidth=2;ctx.stroke();
@@ -305,11 +312,16 @@ function draw(){
         ctx.fillStyle='rgba(16,185,129,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
         ctx.fillText(o.name, cx, cy-hs-4);
       }else{
-        // Purple square
-        var ss=r*1.4; ctx.beginPath();ctx.rect(cx-ss,cy-ss,ss*2,ss*2);
+        // Purple square — smaller, placed to the right of last real node
+        var lastOp=ops[ops.length-2]; // last real op before F
+        var refPos2=pos[lastOp.id];
+        var fx2=refPos2[0]+NODE_R*2.8,fy2=refPos2[1];
+        pos['F']=[fx2,fy2];
+        cx=sx(fx2);cy=sy(fy2);
+        var ss=r*1.0; ctx.beginPath();ctx.rect(cx-ss,cy-ss,ss*2,ss*2);
         ctx.fillStyle='rgba(139,92,246,0.15)';ctx.fill();
         ctx.strokeStyle='rgba(139,92,246,0.6)';ctx.lineWidth=2;ctx.stroke();
-        ctx.fillStyle='#8B5CF6';ctx.font='bold '+Math.round(13*scale)+'px "IBM Plex Mono",monospace';
+        ctx.fillStyle='#8B5CF6';ctx.font='bold '+Math.round(12*scale)+'px "IBM Plex Mono",monospace';
         ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('F', cx, cy);
         ctx.fillStyle='rgba(139,92,246,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
         ctx.fillText(o.name, cx, cy-ss-4);
