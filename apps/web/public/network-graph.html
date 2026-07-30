@@ -93,7 +93,7 @@
 </div>
 <script>
 var NODE_R = 26, MIN_NODE_GAP = 60, REL_SCALE = 20;
-function getNodeR() { var r = NODE_R * (0.72 / Math.max(scale, 0.18)); return Math.min(Math.max(r, 18), 40); }
+function getNodeR() { var r = NODE_R * (0.72 / Math.max(scale, 0.35)); return Math.min(Math.max(r, 22), 40); }
 
 var ops = [
   { id:"1",  num:1,  name:"\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u043a\u0430 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430", dur:3,  es:0,  ef:3,  ls:0,  lf:3,  tf:0,  crit:1 },
@@ -172,25 +172,26 @@ function crossesAny(key,lo,placed){var s=edgeToSeg(key[0],key[1],lo);for(var i=0
 function nodeOverlap(nid,lo,ex){var TA=24,TB=20,pn=lo[nid];if(!pn)return false;var ids=Object.keys(lo);for(var i=0;i<ids.length;i++){var oid=ids[i];if(oid===nid||oid===ex)continue;var po=lo[oid],hg=Math.abs(pn[0]-po[0]);if(hg>NODE_R*3)continue;var sT=pn[1]-NODE_R-TA,sB=pn[1]+NODE_R+TB,oT=po[1]-NODE_R-TA,oB=po[1]+NODE_R+TB;if(sT<oB&&sB>oT)return true;}return false;}
 
 function spreadLayerVertically(layout){
-  // For each layer (same X), if title overlaps, shift down by small amount
   var TA=24;
-  var byX={};var ids=Object.keys(layout).sort(function(a,b){return layout[a][1]-layout[b][1];});
+  var byX={};var ids=Object.keys(layout).sort(function(a,b){return layout[a][0]-layout[b][0];});
   for(var i=0;i<ids.length;i++){var oid=ids[i];if(!byX[layout[oid][0]])byX[layout[oid][0]]=[];byX[layout[oid][0]].push(oid);}
-  for(var x in byX){
-    var list=byX[x];if(list.length<2)continue;
+  var sortedX=Object.keys(byX).map(Number).sort(function(a,b){return a-b;});
+  // Within each layer
+  for(var xi=0;xi<sortedX.length;xi++){
+    var x=sortedX[xi],list=byX[x];if(list.length<2)continue;
     for(var i=1;i<list.length;i++){
       var prev=layout[list[i-1]],cur=layout[list[i]];
-      // Check if previous title (prev_y - R - TA) overlaps current title (cur_y - R - TA)
-      var prevTop=prev[1]-NODE_R-TA,curTop=cur[1]-NODE_R-TA;
-      var gap=curTop-prevTop;
-      if(gap<12){
-        // Shift current downward
-        layout[list[i]][1]+=(12-gap);
-        // Cascade: shift following nodes in same layer too
-        for(var j=i+1;j<list.length;j++){
-          layout[list[j]][1]+=(12-gap);
-        }
-      }
+      var prevTop=prev[1]-NODE_R-TA,curTop=cur[1]-NODE_R-TA,gap=curTop-prevTop;
+      if(gap<14){var shift=14-gap;layout[list[i]][1]+=shift;for(var j=i+1;j<list.length;j++)layout[list[j]][1]+=shift;}
+    }
+  }
+  // Between adjacent layers: check all pairs where |dx| < 100
+  for(var i=0;i<ids.length;i++){
+    for(var j=i+1;j<ids.length;j++){
+      var a=ids[i],b=ids[j],pa=layout[a],pb=layout[b];
+      var dx=Math.abs(pa[0]-pb[0]);if(dx>100)continue;
+      var aTop=pa[1]-NODE_R-TA,bTop=pb[1]-NODE_R-TA;
+      if(Math.abs(aTop-bTop)<16&&dx<100){pb[1]+=(16-Math.abs(aTop-bTop))*((pb[1]>=pa[1])?1:-1);}
     }
   }
 }
@@ -224,7 +225,7 @@ function drawTimelineGrid(W,H){
   var totalDays=64,startX=30,endX=startX+totalDays*REL_SCALE;
   var step=10,spx=REL_SCALE*step*scale;
   if(spx<35)step=20;if(spx<20)step=30;if(spx>90)step=5;if(spx>180)step=2;
-  var gridVTop=0,gridVBot=Math.floor(sy(100));if(gridVBot<0)gridVBot=H;
+  var gridVTop=0,gridVBot=Math.floor(sy(520));if(gridVBot<0||gridVBot>H)gridVBot=H;
   for(var d=0;d<=totalDays;d+=step){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
