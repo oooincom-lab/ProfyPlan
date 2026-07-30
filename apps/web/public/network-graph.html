@@ -126,6 +126,14 @@ var viewMode = 'absolute';
 
 var UNITS={s:'\u0441\u0435\u043a',m:'\u043c\u0438\u043d',h:'\u0447',d:'\u0434\u043d',w:'\u043d\u0435\u0434',mo:'\u043c\u0435\u0441',y:'\u0433\u043e\u0434'};function fmtDur(dur,unit){if(!unit)unit='d';if(dur<=0)return'-';return dur+' '+(UNITS[unit]||unit);}
 
+// Russian holidays 2026 + weekends (Sat/Sun)
+var HOLIDAYS_2026=new Set([
+  '2026-01-01','2026-01-02','2026-01-03','2026-01-04','2026-01-05','2026-01-06','2026-01-07','2026-01-08',
+  '2026-02-23','2026-03-08','2026-05-01','2026-05-09','2026-06-12','2026-11-04'
+]);
+function isWeekend(d){var dow=d.getDay();return dow===0||dow===6;}
+function isHoliday(d){var s=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);return HOLIDAYS_2026.has(s);}
+
 function buildAbsoluteLayout() {
   var LANE_ABOVE=170,LANE_BELOW=390,LANE_DEFAULT=340;
   var layers={}; for(var i=0;i<ops.length;i++){var k=ops[i].es;if(!layers[k])layers[k]=[];layers[k].push(ops[i].id);}
@@ -246,6 +254,16 @@ function drawTimelineGrid(W,H){
     else if(spx>320)step=Math.max(1,Math.floor(step/4));
   }
   var gridVTop=0,gridVBot=H;
+  // Weekend/holiday highlighting — full-height strips
+  for(var d=0;d<totalDays;d++){
+    var date=addDays(PROJECT_START,d);
+    if(isWeekend(date)||isHoliday(date)){
+      var x1=sx(startX+d*REL_SCALE),x2=sx(startX+(d+1)*REL_SCALE);
+      if(x2<0||x1>W)continue;
+      ctx.fillStyle='rgba(239,68,68,0.04)';
+      ctx.fillRect(Math.max(0,x1),gridVTop,Math.min(W,x2-x1),H);
+    }
+  }
   for(var d=0;d<=totalDays;d+=step){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
