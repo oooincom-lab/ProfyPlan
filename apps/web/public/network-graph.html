@@ -285,6 +285,10 @@ function drawTimelineGrid(W,H){
   var sgStep=gStep/4;if(gStep<1/24)sgStep=0;
 
   var gridVTop=0,gridVBot=H;
+  // Extend grid full-width: compute visible world range in days
+  var worldDaysL=(-ox)/REL_SCALE,worldDaysR=((W/scale)-ox)/REL_SCALE;
+  var gridFirst=Math.floor(Math.min(0,worldDaysL)/Math.max(gStep,0.001))*Math.max(gStep,0.001);
+  var gridLast=Math.ceil(Math.max(totalDays,worldDaysR)/Math.max(gStep,0.001))*Math.max(gStep,0.001);
 
   // Weekend/holiday strips
   for(var d=0;d<totalDays;d++){
@@ -298,14 +302,14 @@ function drawTimelineGrid(W,H){
   }
 
   // Sub-grid
-  if(sgStep>0)for(var d=0;d<=totalDays;d+=sgStep){
+  if(sgStep>0)for(var d=gridFirst;d<=gridLast;d+=sgStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
     ctx.strokeStyle='rgba(60,90,130,0.12)';ctx.lineWidth=0.3;ctx.stroke();
   }
 
   // Grid
-  for(var d=0;d<=totalDays;d+=gStep){
+  for(var d=gridFirst;d<=gridLast;d+=gStep){
     var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
     ctx.beginPath();ctx.moveTo(gx,gridVTop);ctx.lineTo(gx,gridVBot);
     ctx.strokeStyle='rgba(60,90,130,0.45)';ctx.lineWidth=0.6;ctx.stroke();
