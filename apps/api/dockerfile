@@ -1,0 +1,20 @@
+# Dockerfile — ProfyPlan FastAPI backend
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Зависимости
+RUN pip install --no-cache-dir uv
+COPY pyproject.toml .
+RUN uv pip install --system -r pyproject.toml
+
+# Код
+COPY app/ /app/app/
+
+# Непривилегированный пользователь
+RUN useradd -m -u 1000 api && chown -R api:api /app
+USER api
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--limit-max-requests", "1000"]
