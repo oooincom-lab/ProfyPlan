@@ -37,6 +37,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Подключаем роутеры
+    from app.routers import auth
+    app.include_router(auth.router)
+
     # Healthcheck
     @app.get("/v1/health")
     async def health():

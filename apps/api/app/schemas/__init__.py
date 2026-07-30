@@ -1,0 +1,1 @@
+# ProfyPlan API — schemas package
