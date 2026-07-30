@@ -228,31 +228,33 @@ function spreadLayersVertical(layout){
   }
 
   // Force-directed relaxation: resolve overlap + edge crossing
-  for(var iter=0;iter<12;iter++){
+  for(var iter=0;iter<15;iter++){
     for(var i=0;i<allIds.length;i++){
       var a=allIds[i],pa=layout[a];if(!pa)continue;
+      // Non-critical leaf nodes: push far out in aggressive mode
+      var isLeaf=adj[a].in.length+adj[a].out.length<=2;
+      var isCrit=(om[a]&&om[a].crit);
+      var pushMult=isCrit?0.5:(isLeaf&&sprMode>=1?2.5:1.5);
       var fy=pa[1];
       for(var j=i+1;j<allIds.length;j++){
         var b=allIds[j],pb=layout[b];if(!pb)continue;
         var dx=Math.abs(pa[0]-pb[0]);
-        if(dx>NODE_R*8)continue;
+        if(dx>NODE_R*10)continue;
         var dy=pa[1]-pb[1];
-        // Check if edge between them or they share parent/child
         var connected=false;
         for(var kk=0;kk<deps.length;kk++)if((deps[kk][0]===a&&deps[kk][1]===b)||(deps[kk][0]===b&&deps[kk][1]===a)){connected=true;break;}
-        var minDY=connected?NODE_R*3.5:(dx<NODE_R*2?NODE_R*4:NODE_R*2.5);
+        var minDY=connected?NODE_R*3.5:(dx<NODE_R*2?NODE_R*5:NODE_R*3);
         if(Math.abs(dy)<minDY){
-          var nudge=(minDY-Math.abs(dy)+1)/2;
+          var nudge=(minDY-Math.abs(dy)+1)/2*pushMult;
           fy=pa[1]+nudge*Math.sign(dy||1);
-          // Check edge crossing: if moving this node would cross an existing edge, push further
+          // Edge crossing check
           var crosses=false;
           for(var kk=0;kk<deps.length;kk++){
             var da=deps[kk][0],db=deps[kk][1];if(da===a||db===a||da===b||db===b)continue;
             if(!layout[da]||!layout[db])continue;
             var pda=layout[da],pdb=layout[db];
-            // Simple check: does horizontal span of edge overlap with node's new position?
             var exMin=Math.min(pda[0],pdb[0]),exMax=Math.max(pda[0],pdb[0]);
-            if(pa[0]>=exMin&&pa[0]<=exMax){
+            if(pa[0]>=exMin-NODE_R&&pa[0]<=exMax+NODE_R){
               var eyCenter=(pda[1]+pdb[1])/2;
               if(Math.abs(fy-eyCenter)<NODE_R*2.5){crosses=true;break;}
             }
@@ -260,6 +262,12 @@ function spreadLayersVertical(layout){
           if(!crosses){pa[1]=fy;}
           pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
         }
+      }
+      // Extra: in aggressive mode, push non-critical nodes towards edges
+      if(sprMode>=1&&!isCrit&&isLeaf){
+        var targetEdge=pa[1]<yCenter?ROW_MIN_Y+NODE_R+10:ROW_MAX_Y-NODE_R-10;
+        pa[1]+=(targetEdge-pa[1])*(0.05+sprMode*0.08);
+        pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
       }
     }
   }
