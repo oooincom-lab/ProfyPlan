@@ -132,6 +132,7 @@ function buildAbsoluteLayout() {
     var startY=340-((ids.length-1)*NODE_R*3.2)/2;
     for(var i=0;i<ids.length;i++) layout[ids[i]]=[lx,startY+i*NODE_R*3.2];
   }
+  spreadLayerVertically(layout);
   resolveCrossings(layout,[LANE_ABOVE,LANE_BELOW]);
   return layout;
 }
@@ -149,6 +150,7 @@ function buildRelativeLayout() {
     var prevX=layout[layers[prevEs][0]][0],curX=layout[layers[curEs][0]][0];
     if(curX-prevX<MIN_NODE_GAP){var delta=MIN_NODE_GAP-(curX-prevX);for(var i=0;i<layers[curEs].length;i++)layout[layers[curEs][i]][0]+=delta;}
   }
+  spreadLayerVertically(layout);
   resolveCrossings(layout,[140,200,260,320,380,440,500]);
   return layout;
 }
@@ -168,6 +170,30 @@ function segCross(s1,s2){var ax=s1.ax,ay=s1.ay,bx=s1.bx,by=s1.by,cx=s2.ax,cy=s2.
 function edgeToSeg(a,b,lo){var pa=lo[a],pb=lo[b],ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]);return {ax:pa[0]+Math.cos(ang)*NODE_R,ay:pa[1]+Math.sin(ang)*NODE_R,bx:pb[0]-Math.cos(ang)*NODE_R,by:pb[1]-Math.sin(ang)*NODE_R};}
 function crossesAny(key,lo,placed){var s=edgeToSeg(key[0],key[1],lo);for(var i=0;i<placed.length;i++)if(segCross(s,placed[i]))return true;return false;}
 function nodeOverlap(nid,lo,ex){var TA=24,TB=20,pn=lo[nid];if(!pn)return false;var ids=Object.keys(lo);for(var i=0;i<ids.length;i++){var oid=ids[i];if(oid===nid||oid===ex)continue;var po=lo[oid],hg=Math.abs(pn[0]-po[0]);if(hg>NODE_R*3)continue;var sT=pn[1]-NODE_R-TA,sB=pn[1]+NODE_R+TB,oT=po[1]-NODE_R-TA,oB=po[1]+NODE_R+TB;if(sT<oB&&sB>oT)return true;}return false;}
+
+function spreadLayerVertically(layout){
+  // For each layer (same X), if title overlaps, shift down by small amount
+  var TA=24;
+  var byX={};var ids=Object.keys(layout).sort(function(a,b){return layout[a][1]-layout[b][1];});
+  for(var i=0;i<ids.length;i++){var oid=ids[i];if(!byX[layout[oid][0]])byX[layout[oid][0]]=[];byX[layout[oid][0]].push(oid);}
+  for(var x in byX){
+    var list=byX[x];if(list.length<2)continue;
+    for(var i=1;i<list.length;i++){
+      var prev=layout[list[i-1]],cur=layout[list[i]];
+      // Check if previous title (prev_y - R - TA) overlaps current title (cur_y - R - TA)
+      var prevTop=prev[1]-NODE_R-TA,curTop=cur[1]-NODE_R-TA;
+      var gap=curTop-prevTop;
+      if(gap<12){
+        // Shift current downward
+        layout[list[i]][1]+=(12-gap);
+        // Cascade: shift following nodes in same layer too
+        for(var j=i+1;j<list.length;j++){
+          layout[list[j]][1]+=(12-gap);
+        }
+      }
+    }
+  }
+}
 
 var absLayout=buildAbsoluteLayout(),relLayout=buildRelativeLayout();
 function clone(src){var o={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o;}
