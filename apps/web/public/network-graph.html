@@ -281,6 +281,8 @@ function spreadLayersVertical(layout){
         pa[1]+=(targetEdge-pa[1])*([0.06,0.12,0.20][sprMode]);
         pa[1]=Math.max(ROW_MIN_Y+NODE_R+10,Math.min(ROW_MAX_Y-NODE_R-10,pa[1]));
       }
+    }
+  }
   // Final pass: resolve title + reserve label overlaps (title is ~14px above circle, reserve ~16px below)
   var TITLE_PAD=NODE_R+14,RESERVE_PAD=NODE_R+16;
   for(var iter=0;iter<6;iter++){
@@ -300,6 +302,7 @@ function spreadLayersVertical(layout){
       }
     }
   }
+}
 
 var absLayout=buildAbsoluteLayout(),relLayout=buildRelativeLayout();
 function clone(src){var o={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o;}
