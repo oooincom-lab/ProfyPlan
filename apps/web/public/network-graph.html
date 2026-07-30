@@ -487,11 +487,11 @@ document.getElementById('unitRange').addEventListener('input',function(){
   var v=parseInt(this.value);
   displayUnit=unitNames[v];
   document.getElementById('unitCur').innerText=unitLabels[v];
-  // Adjust REL_SCALE for display unit
-  if(displayUnit==='m')REL_SCALE=20*60; // 20px per hour -> need more space
-  else if(displayUnit==='h')REL_SCALE=20; // 20px per hour
-  else REL_SCALE=20; // 20px per day
-  relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);draw();
+  // Adjust REL_SCALE for display unit — enough pixels to be visible
+  if(displayUnit==='m')REL_SCALE=1200; // 1200px/day, for minute detail
+  else if(displayUnit==='h')REL_SCALE=500; // 500px/day
+  else REL_SCALE=500; // 500px/day
+  absLayout=buildAbsoluteLayout();relLayout=buildRelativeLayout();pos=clone(viewMode==='absolute'?absLayout:relLayout);fitToScreen();draw();
 });
 draw();
 </script>
