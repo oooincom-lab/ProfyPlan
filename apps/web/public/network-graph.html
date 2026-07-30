@@ -235,24 +235,18 @@ function hit(cx,cy,mx,my,id){var nr=getNodeR();if(id==='S'){var hs=nr+8;var dx=M
 
 function drawTimelineGrid(W,H){
   var totalDays=64,startX=30,endX=startX+totalDays*REL_SCALE;
-  // Adaptive step based on scale: zoom in -> hours/minutes, zoom out -> weeks/months/years
-  var step=1;
-  if(scale<0.03)step=365;else if(scale<0.06)step=180;else if(scale<0.12)step=90;else if(scale<0.18)step=30;
-  else if(scale<0.25)step=14;else if(scale<0.35)step=7;else if(scale<0.5)step=3;else if(scale<0.72)step=1;
-  else step=0.125; // 3 hours when zoomed in
-  // Time scale units: adapt REL_SCALE-like pixel-per-unit
-  var dayPx=REL_SCALE*scale; // pixels per day
-  if(step<1){ // sub-day
-    var hoursPerPx=dayPx/24,spx=hoursPerPx*step*24;
-    if(spx<25)step=0.5;if(spx<15)step=0.25;if(spx<8)step=0.125;
-    if(spx>80)step=1;
-  }else{
-    var spx=dayPx*step;
-    if(spx<25){if(step<=1)step=2;else step*=2;}
-    else if(spx<50)step*=2;
-    else if(spx>160)step=Math.max(1,Math.floor(step/2));
-    else if(spx>320)step=Math.max(1,Math.floor(step/4));
-  }
+  var dayPx=REL_SCALE*scale; // pixels per day at current scale
+  // Compute step so that grid lines are ~50-120px apart, and aligned to natural units
+  var step=0; // in days; 0 means compute
+  var stepPx=dayPx; // initial guess: 1 day
+  if(dayPx>250){step=0.125;} // ~3h, every line
+  else if(dayPx>120){step=0.5;} // 12h
+  else if(dayPx>65){step=1;} // 1 day
+  else if(dayPx>25){step=2;} // 2 days
+  else if(dayPx>12){step=4;} // 4 days
+  else if(dayPx>5){step=7;} // 1 week
+  else if(dayPx>2.5){step=14;} // 2 weeks
+  else step=30; // 1 month
   var gridVTop=0,gridVBot=H;
   // Weekend/holiday highlighting — full-height strips
   for(var d=0;d<totalDays;d++){
