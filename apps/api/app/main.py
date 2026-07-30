@@ -38,8 +38,9 @@ def create_app() -> FastAPI:
     )
 
     # Подключаем роутеры
-    from app.routers import auth
+    from app.routers import auth, projects
     app.include_router(auth.router)
+    app.include_router(projects.router)
 
     # Healthcheck
     @app.get("/v1/health")
