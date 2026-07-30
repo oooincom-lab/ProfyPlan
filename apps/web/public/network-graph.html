@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan — Сетевой график</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A1628; --bg-2: #0F1E36; --bg-3: #162844;
+    --fg: #E8EEF5; --fg-2: #B0C4DE; --fg-3: #8FA3BD; --fg-4: #5A7090;
+    --border: #1E3252; --accent: #3B82F6; --accent-2: #2563EB; --accent-3: #60A5FA;
+    --accent-glow: rgba(59,130,246,0.35);
+    --success: #10B981; --danger: #EF4444; --warning: #F59E0B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--fg); overflow: hidden; height: 100vh; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .topbar {
+    padding: 14px 24px; background: var(--bg-2); border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; z-index: 10; position: relative;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .topbar .badge {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent-3);
+    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2);
+    padding: 3px 10px; border-radius: 100px;
+  }
+  .legend { display: flex; gap: 16px; font-size: 11px; color: var(--fg-4); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+  .btn {
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.12s;
+    background: transparent; color: var(--fg-3); border-color: var(--border);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent-3); }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border: none; box-shadow: 0 2px 8px var(--accent-glow); }
+  .btn-primary:hover { box-shadow: 0 4px 14px var(--accent-glow); }
+
+  canvas { display: block; }
+  .canvas-wrap { position: relative; width: 100%; height: calc(100vh - 57px); overflow: hidden; }
+  .tooltip {
+    position: absolute; background: var(--bg-3); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; pointer-events: none; opacity: 0; transition: opacity 0.12s;
+    min-width: 220px; color: var(--fg); font-size: 13px; z-index: 20;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .tooltip-row { display: flex; justify-content: space-between; padding: 2px 0; color: var(--fg-3); }
+  .tooltip-row .val { font-family: 'IBM Plex Mono', monospace; color: var(--fg); font-weight: 600; }
+  .info-panel {
+    position: absolute; bottom: 20px; left: 20px;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; font-size: 12px; color: var(--fg-3);
+  }
+  .info-panel strong { color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>Сетевой график</h1>
+    <span class="badge">PCB-1421 · CPM</span>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--danger);box-shadow:0 0 6px var(--danger);"></div> Критический путь</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent);box-shadow:0 0 6px var(--accent-glow);"></div> С резервом</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--fg-4);"></div> Зависимость</div>
+    <button class="btn" onclick="resetView()" style="margin-left:8px;">Сброс</button>
+    <button class="btn btn-primary" onclick="toggleCritical()">Только крит. путь</button>
+  </div>
+</div>
+<div class="canvas-wrap" id="wrap">
+  <canvas id="canvas"></canvas>
+  <div class="tooltip" id="tooltip"></div>
+  <div class="info-panel">
+    <strong>Критический путь:</strong> 64 дня · 12 операций<br>
+    <span style="color:var(--fg-4);margin-top:4px;display:inline-block;">Перетаскивай холст · Колёсико = масштаб</span>
+  </div>
+</div>
+
+<script>
+  // ===== CPM-данные (печатная плата PCB-1421) =====
+  const operations = [
+    { id: "1", name: "Подготовка производства", duration: 3, es: 0, ef: 3, ls: 0, lf: 3, tf: 0, critical: true },
+    { id: "2", name: "Закупка компонентов", duration: 8, es: 3, ef: 11, ls: 3, lf: 11, tf: 0, critical: true },
+    { id: "3", name: "Входной контроль", duration: 2, es: 11, ef: 13, ls: 11, lf: 13, tf: 0, critical: true },
+    { id: "4", name: "Термопрофилирование", duration: 1, es: 11, ef: 12, ls: 12, lf: 13, tf: 1, critical: false },
+    { id: "5", name: "Монтаж SMD", duration: 12, es: 13, ef: 25, ls: 13, lf: 25, tf: 0, critical: true },
+    { id: "6", name: "Монтаж DIP", duration: 4, es: 13, ef: 17, ls: 21, lf: 25, tf: 8, critical: false },
+    { id: "7", name: "Пайка волной", duration: 6, es: 25, ef: 31, ls: 25, lf: 31, tf: 0, critical: true },
+    { id: "8", name: "Установка разъёмов", duration: 5, es: 31, ef: 36, ls: 31, lf: 36, tf: 0, critical: true },
+    { id: "9", name: "Контроль пайки (AOI)", duration: 3, es: 36, ef: 39, ls: 36, lf: 39, tf: 0, critical: true },
+    { id: "10", name: "Функциональный тест", duration: 8, es: 39, ef: 47, ls: 39, lf: 47, tf: 0, critical: true },
+    { id: "11", name: "Термотренировка", duration: 12, es: 47, ef: 59, ls: 47, lf: 59, tf: 0, critical: true },
+    { id: "12", name: "Выходной контроль", duration: 3, es: 59, ef: 62, ls: 59, lf: 62, tf: 0, critical: true },
+    { id: "13", name: "Маркировка", duration: 2, es: 62, ef: 64, ls: 62, lf: 64, tf: 0, critical: true },
+    { id: "14", name: "Упаковка", duration: 2, es: 62, ef: 64, ls: 62, lf: 64, tf: 0, critical: false },
+  ];
+
+  const dependencies = [
+    { from: "1", to: "2" }, { from: "2", to: "3" }, { from: "2", to: "4" },
+    { from: "3", to: "5" }, { from: "4", to: "5" },
+    { from: "3", to: "6" }, { from: "6", to: "7" },
+    { from: "5", to: "7" }, { from: "7", to: "8" },
+    { from: "8", to: "9" }, { from: "9", to: "10" },
+    { from: "10", to: "11" }, { from: "11", to: "12" },
+    { from: "12", to: "13" }, { from: "12", to: "14" },
+  ];
+
+  // Layout: позиции узлов в порядке топологии
+  const layout = {
+    "1":  { x: 60,  y: 280 },
+    "2":  { x: 180, y: 240 },
+    "3":  { x: 300, y: 180 },
+    "4":  { x: 300, y: 340 },
+    "5":  { x: 420, y: 120 },
+    "6":  { x: 420, y: 280 },
+    "7":  { x: 540, y: 160 },
+    "8":  { x: 660, y: 140 },
+    "9":  { x: 780, y: 120 },
+    "10": { x: 900, y: 100 },
+    "11": { x: 1020,y: 100 },
+    "12": { x: 1140,y: 130 },
+    "13": { x: 1260,y: 160 },
+    "14": { x: 1260,y: 270 },
+  };
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('wrap');
+  const tooltip = document.getElementById('tooltip');
+
+  let scale = 0.85, offsetX = -20, offsetY = 40;
+  let dragging = false, dragStartX = 0, dragStartY = 0, dragOffsetX = 0, dragOffsetY = 0;
+  let showOnlyCritical = false;
+  let hoveredNode = null;
+
+  function resetView() { scale = 0.85; offsetX = -20; offsetY = 40; draw(); }
+  function toggleCritical() { showOnlyCritical = !showOnlyCritical; draw(); }
+
+  function worldToScreen(wx, wy) {
+    return { x: (wx + offsetX) * scale + wrap.clientWidth / 2 - 640 * scale, y: (wy + offsetY) * scale };
+  }
+  function screenToWorld(sx, sy) {
+    return { x: (sx - wrap.clientWidth / 2 + 640 * scale) / scale - offsetX, y: sy / scale - offsetY };
+  }
+
+  function draw() {
+    const rect = wrap.getBoundingClientRect();
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const opMap = Object.fromEntries(operations.map(o => [o.id, o]));
+    const filteredOps = showOnlyCritical ? operations.filter(o => o.critical) : operations;
+
+    // Draw dependencies
+    for (const dep of dependencies) {
+      const from = opMap[dep.from], to = opMap[dep.to];
+      if (!from || !to) continue;
+      if (showOnlyCritical && (!from.critical || !to.critical)) continue;
+
+      const fp = layout[dep.from], tp = layout[dep.to];
+      if (!fp || !tp) continue;
+
+      const s = worldToScreen(fp.x, fp.y), e = worldToScreen(tp.x, tp.y);
+      ctx.beginPath();
+      ctx.moveTo(s.x + 55, s.y + 24);
+      ctx.lineTo(e.x, e.y + 24);
+      ctx.strokeStyle = from.critical && to.critical ? 'rgba(239,68,68,0.25)' : 'rgba(90,112,144,0.2)';
+      ctx.lineWidth = from.critical ? 2 : 1;
+      ctx.stroke();
+
+      // Arrowhead
+      const angle = Math.atan2(e.y + 24 - (s.y + 24), e.x - (s.x + 55));
+      const arrowLen = 8;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y + 24);
+      ctx.lineTo(e.x - arrowLen * Math.cos(angle - 0.5), e.y + 24 - arrowLen * Math.sin(angle - 0.5));
+      ctx.lineTo(e.x - arrowLen * Math.cos(angle + 0.5), e.y + 24 - arrowLen * Math.sin(angle + 0.5));
+      ctx.closePath();
+      ctx.fillStyle = from.critical ? 'rgba(239,68,68,0.4)' : 'rgba(90,112,144,0.3)';
+      ctx.fill();
+    }
+
+    // Draw nodes
+    for (const op of filteredOps) {
+      const pos = layout[op.id];
+      if (!pos) continue;
+      const s = worldToScreen(pos.x, pos.y);
+      const w = 110, h = 48;
+      const x = s.x, y = s.y;
+
+      // Node body
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 10);
+      ctx.fillStyle = op.critical
+        ? 'rgba(239,68,68,0.1)'
+        : 'rgba(59,130,246,0.06)';
+      ctx.fill();
+      ctx.strokeStyle = op.critical
+        ? 'rgba(239,68,68,0.4)'
+        : 'rgba(59,130,246,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      if (op.critical) {
+        ctx.shadowColor = 'rgba(239,68,68,0.25)';
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+      }
+
+      // Node label
+      ctx.fillStyle = '#E8EEF5';
+      ctx.font = '600 11px Inter, system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(op.name.length > 18 ? op.name.slice(0, 17) + '…' : op.name, x + w / 2, y + 7);
+
+      // Duration
+      ctx.fillStyle = op.critical ? 'rgba(239,68,68,0.8)' : '#8FA3BD';
+      ctx.font = '11px "IBM Plex Mono", monospace';
+      ctx.fillText(op.duration + ' дн.', x + w / 2, y + 28);
+
+      // Float badge
+      if (!op.critical && op.tf > 0) {
+        ctx.fillStyle = 'rgba(245,158,11,0.1)';
+        const bw = 30, bh = 16;
+        ctx.beginPath();
+        ctx.roundRect(x + w - bw - 6, y + h - bh - 4, bw, bh, 6);
+        ctx.fill();
+        ctx.fillStyle = '#F59E0B';
+        ctx.font = '10px "IBM Plex Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('+' + op.tf, x + w - bw / 2 - 6, y + h - bh - 1);
+      }
+    }
+  }
+
+  // Events
+  wrap.addEventListener('mousedown', e => {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragOffsetX = offsetX;
+    dragOffsetY = offsetY;
+  });
+  wrap.addEventListener('mousemove', e => {
+    if (dragging) {
+      offsetX = dragOffsetX + (e.clientX - dragStartX) / scale;
+      offsetY = dragOffsetY + (e.clientY - dragStartY) / scale;
+      draw();
+    }
+    // Hover detection
+    const world = screenToWorld(e.clientX, e.clientY);
+    let found = null;
+    for (const op of (showOnlyCritical ? operations.filter(o => o.critical) : operations)) {
+      const pos = layout[op.id];
+      if (!pos) continue;
+      const s = worldToScreen(pos.x, pos.y);
+      if (world.x >= pos.x && world.x <= pos.x + 110 / scale && world.y >= pos.y && world.y <= pos.y + 48 / scale) {
+        found = op; break;
+      }
+    }
+    if (found !== hoveredNode) {
+      hoveredNode = found;
+      if (found) {
+        tooltip.innerHTML = `<div class="tooltip-title">${found.name}</div>
+          <div class="tooltip-row">Длительность <span class="val">${found.duration} дн.</span></div>
+          <div class="tooltip-row">Раннее начало <span class="val">день ${found.es}</span></div>
+          <div class="tooltip-row">Ранний финиш <span class="val">день ${found.ef}</span></div>
+          <div class="tooltip-row">Позднее начало <span class="val">день ${found.ls}</span></div>
+          <div class="tooltip-row">Поздний финиш <span class="val">день ${found.lf}</span></div>
+          <div class="tooltip-row">Полный резерв <span class="val" style="color:${found.critical?'var(--danger)':'var(--success)'}">${found.tf} дн.</span></div>
+          <div class="tooltip-row" style="margin-top:4px;color:${found.critical?'var(--danger)':'var(--fg-4)'};">${found.critical ? '⚠ Критический путь' : 'С резервом'}</div>`;
+        tooltip.classList.add('visible');
+        tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 260) + 'px';
+        tooltip.style.top = Math.min(e.clientY - 10, window.innerHeight - 250) + 'px';
+      } else {
+        tooltip.classList.remove('visible');
+      }
+    }
+    if (found) {
+      tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 260) + 'px';
+      tooltip.style.top = Math.min(e.clientY - 10, window.innerHeight - 250) + 'px';
+    }
+  });
+  wrap.addEventListener('mouseup', () => { dragging = false; });
+  wrap.addEventListener('mouseleave', () => { dragging = false; tooltip.classList.remove('visible'); });
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    scale = Math.max(0.3, Math.min(2, scale * factor));
+    draw();
+  }, { passive: false });
+
+  window.addEventListener('resize', draw);
+  draw();
+</script>
+</body>
+</html>
