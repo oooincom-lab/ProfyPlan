@@ -293,16 +293,27 @@ function draw(){
   }
   for(var i=0;i<vis.length;i++){
     var o=vis[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]),nr=getNodeR(),r=nr*scale;
-    // Start/Finish — diamond shape
+    // Start — green diamond, Finish — purple square
     if(o.id==='S'||o.id==='F'){
-      var hs=r+8; ctx.beginPath();ctx.moveTo(cx,cy-hs);ctx.lineTo(cx+hs*0.75,cy);ctx.lineTo(cx,cy+hs);ctx.lineTo(cx-hs*0.75,cy);ctx.closePath();
-      ctx.fillStyle='rgba(16,185,129,0.15)';ctx.fill();
-      ctx.strokeStyle='rgba(16,185,129,0.6)';ctx.lineWidth=2;ctx.stroke();
-      ctx.fillStyle='#10B981';ctx.font='bold '+Math.round(13*scale)+'px "IBM Plex Mono",monospace';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(o.id, cx, cy);
-      ctx.fillStyle='rgba(16,185,129,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
-      ctx.fillText(o.name, cx, cy-hs-4);
+      if(o.id==='S'){
+        // Green diamond
+        var hs=r+8; ctx.beginPath();ctx.moveTo(cx,cy-hs);ctx.lineTo(cx+hs*0.75,cy);ctx.lineTo(cx,cy+hs);ctx.lineTo(cx-hs*0.75,cy);ctx.closePath();
+        ctx.fillStyle='rgba(16,185,129,0.15)';ctx.fill();
+        ctx.strokeStyle='rgba(16,185,129,0.6)';ctx.lineWidth=2;ctx.stroke();
+        ctx.fillStyle='#10B981';ctx.font='bold '+Math.round(13*scale)+'px "IBM Plex Mono",monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('S', cx, cy);
+        ctx.fillStyle='rgba(16,185,129,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+        ctx.fillText(o.name, cx, cy-hs-4);
+      }else{
+        // Purple square
+        var ss=r*1.4; ctx.beginPath();ctx.rect(cx-ss,cy-ss,ss*2,ss*2);
+        ctx.fillStyle='rgba(139,92,246,0.15)';ctx.fill();
+        ctx.strokeStyle='rgba(139,92,246,0.6)';ctx.lineWidth=2;ctx.stroke();
+        ctx.fillStyle='#8B5CF6';ctx.font='bold '+Math.round(13*scale)+'px "IBM Plex Mono",monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('F', cx, cy);
+        ctx.fillStyle='rgba(139,92,246,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+        ctx.fillText(o.name, cx, cy-ss-4);
+      }
       continue;
     }
     ctx.beginPath();ctx.arc(cx,cy,r+3,0,2*Math.PI);ctx.fillStyle=o.crit?'rgba(239,68,68,0.06)':'rgba(59,130,246,0.03)';ctx.fill();
