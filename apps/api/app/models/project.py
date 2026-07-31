@@ -2,9 +2,10 @@
 Модель проекта — корневая сущность ProfyPlan.
 """
 import uuid
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -33,6 +34,10 @@ class Project(BaseModel):
     country_code: Mapped[str] = mapped_column(
         String(2), default="RU"
     )
+    ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    customer: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

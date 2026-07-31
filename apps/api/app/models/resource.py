@@ -43,3 +43,4 @@ class Resource(BaseModel):
         String(20)
     )  # шт / кг / л (что производит)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)

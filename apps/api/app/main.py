@@ -38,13 +38,14 @@ def create_app() -> FastAPI:
     )
 
     # Подключаем роутеры
-    from app.routers import auth, projects, resources, operations, calculations
+    from app.routers import auth, projects, resources, operations, calculations, ccm
     app.include_router(auth.router)
     app.include_router(projects.router)
     app.include_router(resources.router)
     app.include_router(operations.router)
     app.include_router(operations.dep_router)
     app.include_router(calculations.calculator_router)
+    app.include_router(ccm.ccm_router)
 
     # Healthcheck
     @app.get("/v1/health")

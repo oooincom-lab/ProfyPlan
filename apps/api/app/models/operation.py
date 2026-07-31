@@ -2,10 +2,11 @@
 Модель операции — единица работы в производственном плане.
 """
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -47,6 +48,17 @@ class Operation(BaseModel):
     position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     catalog_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)
     is_critical: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # CCM-расширения
+    output_product: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    output_quantity: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    yield_rate: Mapped[Decimal] = mapped_column(Numeric(5, 3), default=1.0)
+    input_materials: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+    operation_type: Mapped[str] = mapped_column(String(20), default="production")
+    supplier_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_milestone: Mapped[bool] = mapped_column(Boolean, default=False)
+    expected_delivery: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
 
     # Связи
     dependencies_as_predecessor: Mapped[list["OperationDependency"]] = relationship(
