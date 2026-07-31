@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>ProfyPlan — Resource Leveling (2 проекта · общие станки)</title>
+<style>
+:root{--bg:#0A1628;--bg-2:#0F1E36;--bg-3:#162844;--fg:#E8EEF5;--fg-2:#B0C4DE;--fg-3:#8FA3BD;--fg-4:#5A7090;--border:#1E3252;--accent:#3B82F6;--accent-2:#2563EB;--accent-3:#60A5FA;--success:#10B981;--danger:#EF4444;--warning:#F59E0B}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);overflow:hidden;height:100vh;display:flex;flex-direction:column}
+.topbar{padding:10px 20px;background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;z-index:10;flex-shrink:0;flex-wrap:wrap}
+.topbar h1{font-size:15px;font-weight:700}
+.badge{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 10px;border-radius:100px;border:1px solid}
+.badge-a{color:var(--accent-3);border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.12)}
+.badge-b{color:var(--success);border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.12)}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:grab}
+.tooltip{position:absolute;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 16px;pointer-events:none;opacity:0;transition:opacity .1s;min-width:240px;color:var(--fg);font-size:12px;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.tooltip.on{opacity:1}
+.tooltip-title{font-weight:700;font-size:14px;margin-bottom:6px}
+.tooltip-row{display:flex;justify-content:space-between;padding:1px 0;color:var(--fg-3);font-size:11px}
+.info-panel{position:absolute;bottom:12px;left:12px;z-index:5;display:flex;gap:16px;font-size:10px;color:var(--fg-3);background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;pointer-events:none}
+.legend-spot{display:flex;align-items:center;gap:5px}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+.res-track{position:absolute;left:0;right:0;pointer-events:none;border-bottom:1px solid var(--border)}
+.res-track-label{position:absolute;left:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--fg-4);font-weight:600}
+.task-bar{position:absolute;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px;transition:all .15s;pointer-events:auto;cursor:pointer}
+.task-bar:hover{filter:brightness(1.3);z-index:5}
+.task-bar.crit{border:1.5px solid var(--danger);box-shadow:0 2px 6px rgba(239,68,68,0.3)}
+.task-bar.noncrit{border:1px solid rgba(255,255,255,0.1)}
+.task-bar-a{background:linear-gradient(135deg,rgba(59,130,246,0.7),rgba(37,99,235,0.7))}
+.task-bar-b{background:linear-gradient(135deg,rgba(16,185,129,0.7),rgba(5,150,105,0.7))}
+.dep-line{position:absolute;pointer-events:none;border:1px dashed rgba(96,165,250,0.15);z-index:1}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>Resource Leveling — 2 проекта, общие ресурсы</h1>
+  <span class="badge badge-a">Проект А · СибСтройМаш</span>
+  <span class="badge badge-b">Проект Б · МеталлТех</span>
+  <span style="font-size:10px;color:var(--fg-4);margin-left:auto">■ — операция (drag) · Drag/scroll область</span>
+</div>
+<div class="canvas-wrap" id="wrap">
+  <div id="container" style="position:relative;width:100%;min-height:100%"></div>
+</div>
+<script>
+var opsA=[
+  {id:"A1",name:"Подготовка",dur:4,unit:'h',preds:[],res:'CNC-01',crit:1,order:'A'},
+  {id:"A2",name:"Закупка",dur:8,unit:'h',preds:["A1"],res:'WELD-01',crit:1,order:'A'},
+  {id:"A3",name:"Монтаж SMD",dur:8,unit:'h',preds:["A2"],res:'CNC-01',crit:1,order:'A'},
+  {id:"A4",name:"Пайка",dur:6,unit:'h',preds:["A3"],res:'PAINT-01',crit:1,order:'A'},
+  {id:"A5",name:"AOI контроль",dur:15,unit:'m',preds:["A4"],res:'QC-STATION',crit:1,order:'A'},
+  {id:"A6",name:"Функц.тест",dur:3,unit:'h',preds:["A5"],res:'TEST-BENCH',crit:1,order:'A'},
+  {id:"A7",name:"Термотренир.",dur:12,unit:'h',preds:["A6"],res:'CNC-01',crit:1,order:'A'},
+  {id:"A8",name:"Калибровка",dur:1,unit:'h',preds:["A3"],res:'CALIB-RIG',crit:0,order:'A'},
+  {id:"A9",name:"Вых.контроль",dur:30,unit:'m',preds:["A7","A8"],res:'QC-STATION',crit:1,order:'A'},
+  {id:"A10",name:"Упаковка",dur:1,unit:'h',preds:["A9"],res:'PAINT-01',crit:1,order:'A'}
+];
+var opsB=[
+  {id:"B1",name:"Подготовка",dur:4,unit:'h',preds:[],res:'CNC-01',crit:1,order:'B'},
+  {id:"B2",name:"Закупка",dur:8,unit:'h',preds:["B1"],res:'WELD-01',crit:1,order:'B'},
+  {id:"B3",name:"Монтаж SMD",dur:8,unit:'h',preds:["B2"],res:'CNC-01',crit:1,order:'B'},
+  {id:"B4",name:"Пайка",dur:6,unit:'h',preds:["B3"],res:'PAINT-01',crit:1,order:'B'},
+  {id:"B5",name:"AOI контроль",dur:15,unit:'m',preds:["B4"],res:'QC-STATION',crit:1,order:'B'},
+  {id:"B6",name:"Функц.тест",dur:3,unit:'h',preds:["B5"],res:'TEST-BENCH',crit:1,order:'B'},
+  {id:"B7",name:"Термотренир.",dur:12,unit:'h',preds:["B6"],res:'CNC-01',crit:1,order:'B'},
+  {id:"B8",name:"Калибровка",dur:1,unit:'h',preds:["B3"],res:'CALIB-RIG',crit:0,order:'B'},
+  {id:"B9",name:"Вых.контроль",dur:30,unit:'m',preds:["B7","B8"],res:'QC-STATION',crit:1,order:'B'},
+  {id:"B10",name:"Упаковка",dur:1,unit:'h',preds:["B9"],res:'PAINT-01',crit:1,order:'B'}
+];
+function toH(dur,unit){if(unit==='m')return dur/60;if(unit==='d')return dur*24;return dur}
+
+// Phase 1: CPM (unconstrained) — compute ES/EF
+function cpmForward(ops){
+  var om={};for(var i=0;i<ops.length;i++)om[ops[i].id]=ops[i];
+  var es={},ef={};
+  function calc(id){
+    if(es[id]!==undefined)return;
+    var o=om[id],maxEF=0;
+    for(var i=0;i<o.preds.length;i++){calc(o.preds[i]);maxEF=Math.max(maxEF,ef[o.preds[i]])}
+    es[id]=maxEF;ef[id]=maxEF+toH(o.dur,o.unit);
+  }
+  for(var i=0;i<ops.length;i++)calc(ops[i].id);
+  return {es:es,ef:ef};
+}
+var cpmA=cpmForward(opsA),cpmB=cpmForward(opsB);
+
+// Serial SGS resource leveler
+function resourceLevel(opsA,opsB){
+  var all=opsA.concat(opsB),priorities=[];
+  // Priority: (LS asc, TF asc, -dur desc) — but we don't have LS yet from CPM
+  // Simple: order by project A first, then B, within each by dependency
+  var om={};for(var i=0;i<all.length;i++)om[all[i].id]=all[i];
+  // CPM on combined ops
+  var cpm=cpmForward(all);
+  var ls={},lf={},tf={};
+  var endTime=0;for(var k in cpm.ef)endTime=Math.max(endTime,cpm.ef[k]);
+  for(var k in cpm.es){lf[k]=endTime;ls[k]=endTime-toH(om[k].dur,om[k].unit);}
+  // Backward pass
+  var succ={};for(var i=0;i<all.length;i++){succ[all[i].id]=[];for(var j=0;j<all.length;j++)if(all[j].preds.indexOf(all[i].id)>=0)succ[all[i].id].push(all[j].id)}
+  var sorted=Object.keys(cpm.ef).sort(function(a,b){return cpm.ef[b]-cpm.ef[a]});
+  for(var si=0;si<sorted.length;si++){
+    var id=sorted[si];
+    for(var i=0;i<succ[id].length;i++){var s=succ[id][i];if(cpm.ef[s]>=cpm.ef[id]){ls[id]=Math.min(ls[id],ls[s]-toH(om[id].dur,om[id].unit));}}
+    lf[id]=ls[id]+toH(om[id].dur,om[id].unit);tf[id]=ls[id]-cpm.es[id];
+  }
+  // Priority queue: sort by LS asc, then by duration desc
+  all.sort(function(a,b){
+    if(ls[a.id]!==ls[b.id])return ls[a.id]-ls[b.id];
+    return toH(b.dur,b.unit)-toH(a.dur,b.unit);
+  });
+  // Serial SGS
+  var sched={},resFree={};
+  for(var i=0;i<all.length;i++){
+    var op=all[i],durH=toH(op.dur,op.unit);
+    // Earliest start = max(EF of predecessors)
+    var est=0;
+    for(var j=0;j<op.preds.length;j++)est=Math.max(est,sched[op.preds[j]]?sched[op.preds[j]].end:0);
+    if(!resFree[op.res])resFree[op.res]=0;
+    est=Math.max(est,resFree[op.res]);
+    sched[op.id]={start:est,end:est+durH,res:op.res,op:op};
+    resFree[op.res]=est+durH;
+  }
+  return {sched:sched,ls:ls,tf:tf,es:cpm.es};
+}
+var rl=resourceLevel(opsA,opsB);
+var totalHours=0;for(var k in rl.sched)totalHours=Math.max(totalHours,rl.sched[k].end);
+
+// Visualization
+var PX_PER_H=140,TOP_PAD=60,ROW_H=52,LEFT_MARGIN=10,scale=1.0,ox=0,oy=0;
+var resources=["CNC-01","WELD-01","PAINT-01","QC-STATION","TEST-BENCH","CALIB-RIG"];
+var container=document.getElementById('container'),wrap=document.getElementById('wrap');
+var panning=false,psx,psy,pox,poy;
+
+function draw(){
+  var W=wrap.clientWidth,fullW=LEFT_MARGIN+totalHours*PX_PER_H*scale+200;
+  container.style.width=fullW+'px';
+  container.style.height=(TOP_PAD+resources.length*ROW_H+80)+'px';
+  container.innerHTML='';
+  // Time grid
+  var svgNS="http://www.w3.org/2000/svg";
+  var svg=document.createElementNS(svgNS,"svg");
+  svg.setAttribute("width",fullW);svg.setAttribute("height",container.style.height);
+  svg.style.position='absolute';svg.style.top='0';svg.style.left='0';
+  container.appendChild(svg);
+  // Time labels
+  var gStep=scale>0.8?4:scale>0.4?8:16;
+  for(var t=0;t<=totalHours;t+=gStep){
+    var tx=LEFT_MARGIN+t*PX_PER_H*scale+ox*scale;
+    var line=document.createElementNS(svgNS,"line");
+    line.setAttribute("x1",tx);line.setAttribute("x2",tx);line.setAttribute("y1",0);line.setAttribute("y2",TOP_PAD+resources.length*ROW_H);
+    line.setAttribute("stroke","rgba(60,90,130,0.25)");line.setAttribute("stroke-width","0.5");
+    svg.appendChild(line);
+    var txt=document.createElementNS(svgNS,"text");
+    txt.setAttribute("x",tx);txt.setAttribute("y",22);
+    txt.setAttribute("fill","#B0C4DE");txt.setAttribute("font-size","10");txt.setAttribute("font-family","IBM Plex Mono,monospace");txt.setAttribute("text-anchor","middle");
+    txt.textContent=t+'ч';
+    svg.appendChild(txt);
+  }
+  // Resource tracks
+  for(var ri=0;ri<resources.length;ri++){
+    var ry=TOP_PAD+ri*ROW_H,rx=0;
+    var track=document.createElement("div");track.className="res-track";
+    track.style.top=ry+'px';track.style.left='0px';track.style.right='0px';
+    container.appendChild(track);
+    var label=document.createElement("div");label.className="res-track-label";
+    label.style.top=ry+'px';label.textContent=resources[ri];
+    container.appendChild(label);
+  }
+  // Dependency edges
+  for(var oi=0;oi<opsA.length+opsB.length;oi++){
+    var ops=oi<opsA.length?opsA:opsB;var op=ops[oi%opsA.length];
+    for(var pi=0;pi<op.preds.length;pi++){
+      var pred=op.preds[pi],ps=rl.sched[pred],os=rl.sched[op.id];
+      if(!ps||!os)continue;
+      var riPred=resources.indexOf(ps.res),riOp=resources.indexOf(os.res);
+      var x1=LEFT_MARGIN+ps.end*PX_PER_H*scale+ox*scale;
+      var y1=TOP_PAD+riPred*ROW_H+26;
+      var x2=LEFT_MARGIN+os.start*PX_PER_H*scale+ox*scale;
+      var y2=TOP_PAD+riOp*ROW_H+10;
+      var depEl=document.createElement("div");depEl.className="dep-line";
+      depEl.style.left=Math.min(x1,x2)+'px';depEl.style.top=Math.min(y1,y2)+'px';
+      depEl.style.width=Math.abs(x2-x1)+'px';depEl.style.height=Math.abs(y2-y1)+'px';
+      depEl.style.borderLeft=x1<x2?'none':'1px dashed rgba(96,165,250,0.12)';
+      depEl.style.borderTop=x1<x2?'1px dashed rgba(96,165,250,0.12)':'none';
+      depEl.style.borderBottom=x1>=x2?'1px dashed rgba(96,165,250,0.12)':'none';
+      container.appendChild(depEl);
+    }
+  }
+  // Task bars
+  for(var k in rl.sched){
+    var s=rl.sched[k],op=s.op,h=s.end-s.start;
+    var ri=resources.indexOf(s.res),rx=LEFT_MARGIN+s.start*PX_PER_H*scale+ox*scale;
+    var ry=TOP_PAD+ri*ROW_H+6,rw=Math.max(h*PX_PER_H*scale,14);
+    var bar=document.createElement("div");bar.className="task-bar";
+    bar.classList.add(op.order==='A'?'task-bar-a':'task-bar-b');
+    bar.classList.add(op.crit?'crit':'noncrit');
+    bar.style.left=rx+'px';bar.style.top=ry+'px';bar.style.width=rw+'px';
+    bar.textContent=op.order+'.'+op.name;
+    bar.setAttribute('data-op',op.id);
+    container.appendChild(bar);
+  }
+}
+
+// Panning
+wrap.addEventListener('mousedown',function(e){
+  if(e.target.classList.contains('task-bar'))return;
+  panning=true;psx=e.clientX;psy=e.clientY;pox=ox;poy=oy;
+});
+window.addEventListener('mousemove',function(e){
+  if(panning){ox=pox+(e.clientX-psx);oy=poy+(e.clientY-psy);draw()}
+});
+window.addEventListener('mouseup',function(){panning=false});
+wrap.addEventListener('wheel',function(e){e.preventDefault();scale=Math.max(0.3,Math.min(3,scale*(e.deltaY<0?1.08:0.92)));draw()},{passive:false});
+draw();
+</script>
+</body>
+</html>

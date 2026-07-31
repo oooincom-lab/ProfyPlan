@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>ProfyPlan — Сетевые графики (2 заказа · общая область)</title>
+<style>
+:root{--bg:#0A1628;--bg-2:#0F1E36;--bg-3:#162844;--fg:#E8EEF5;--fg-2:#B0C4DE;--fg-3:#8FA3BD;--fg-4:#5A7090;--border:#1E3252;--accent:#3B82F6;--accent-2:#2563EB;--accent-3:#60A5FA;--success:#10B981;--danger:#EF4444;--warning:#F59E0B}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);overflow:hidden;height:100vh;display:flex;flex-direction:column}
+.topbar{padding:10px 20px;background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;z-index:10;flex-shrink:0;flex-wrap:wrap}
+.topbar h1{font-size:15px;font-weight:700;white-space:nowrap}
+.badge{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:100px;white-space:nowrap;border:1px solid}
+.badge-a{color:var(--accent-3);border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.12)}
+.badge-b{color:var(--success);border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.12)}
+.badge-warn{color:var(--danger);border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.12)}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:grab}
+.tooltip{position:absolute;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 16px;pointer-events:none;opacity:0;transition:opacity .1s;min-width:220px;color:var(--fg);font-size:12px;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.tooltip.on{opacity:1}
+.tooltip-title{font-weight:700;font-size:14px;margin-bottom:6px}
+.tooltip-row{display:flex;justify-content:space-between;padding:1px 0;color:var(--fg-3);font-size:11px}
+.tooltip-row b{font-family:'IBM Plex Mono',monospace;color:var(--fg);font-weight:600}
+.info-panel{position:absolute;bottom:12px;left:12px;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:10px;color:var(--fg-3);pointer-events:none;z-index:5;display:flex;gap:18px}
+.legend-spot{display:flex;align-items:center;gap:5px}
+.legend-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>Сетевые графики</h1>
+  <span class="badge badge-a">Заказ #1421 · СибСтройМаш · старт 29.07</span>
+  <span class="badge badge-b">Заказ #1422 · МеталлТех · старт 31.07</span>
+  <span class="badge badge-warn">⚠ Конфликты: CNC-01, PAINT-01</span>
+  <span style="font-size:10px;color:var(--fg-4);margin-left:auto">Drag · Scroll — 2 процесса на одной шкале</span>
+</div>
+<div class="canvas-wrap" id="wrap">
+  <canvas id="c"></canvas>
+  <div class="tooltip" id="tip"></div>
+  <div class="info-panel">
+    <div class="legend-spot"><div class="legend-dot" style="border-color:var(--accent-3);background:rgba(96,165,250,0.3)"></div> Заказ А</div>
+    <div class="legend-spot"><div class="legend-dot" style="border-color:var(--success);background:rgba(16,185,129,0.3)"></div> Заказ Б</div>
+    <div class="legend-spot"><div class="legend-dot" style="border-color:var(--danger);background:rgba(239,68,68,0.3)"></div> Крит. путь</div>
+    <div class="legend-spot"><div class="legend-dot" style="border-color:var(--warning);background:rgba(245,158,11,0.15)"></div> Конфликт</div>
+  </div>
+</div>
+<script>
+var NODE_R=26,REL_SCALE=500;
+
+function getNodeR(s){var r=NODE_R*(0.72/Math.max(s,0.35));return Math.min(Math.max(r,18),40)}
+
+// Project A — starts 29.07, blue circles
+var opsA=[
+  {id:"SA",num:'S',name:"Старт · 1421",dur:0,unit:'d',es:0,ef:0,ls:0,lf:0,tf:0,crit:1,order:'A'},
+  {id:"A1",num:1,name:"Подготовка",dur:4,unit:'h',es:0,ef:0.1667,ls:0,lf:0.1667,tf:0,crit:1,order:'A',res:'CNC-01'},
+  {id:"A2",num:2,name:"Закупка",dur:8,unit:'h',es:0.1667,ef:0.5,ls:0.1667,lf:0.5,tf:0,crit:1,order:'A',res:'WELD-01'},
+  {id:"A3",num:3,name:"Монтаж SMD",dur:8,unit:'h',es:0.5,ef:0.8333,ls:0.5,lf:0.8333,tf:0,crit:1,order:'A',res:'CNC-01'},
+  {id:"A4",num:4,name:"Пайка",dur:6,unit:'h',es:0.8333,ef:1.0833,ls:0.8333,lf:1.0833,tf:0,crit:1,order:'A',res:'PAINT-01'},
+  {id:"A5",num:5,name:"AOI",dur:15,unit:'m',es:1.0833,ef:1.0938,ls:1.0833,lf:1.0938,tf:0,crit:1,order:'A',res:'QC-STATION'},
+  {id:"A6",num:6,name:"Функц.тест",dur:3,unit:'h',es:1.0938,ef:1.2188,ls:1.0938,lf:1.2188,tf:0,crit:1,order:'A',res:'TEST-BENCH'},
+  {id:"A7",num:7,name:"Термотренир.",dur:12,unit:'h',es:1.2188,ef:1.7188,ls:1.2188,lf:1.7188,tf:0,crit:1,order:'A',res:'CNC-01'},
+  {id:"A8",num:8,name:"Калибровка",dur:1,unit:'h',es:1.2188,ef:1.2604,ls:1.7188,lf:1.7604,tf:0.5,crit:0,order:'A',res:'CALIB-RIG'},
+  {id:"A9",num:9,name:"Вых.контроль",dur:30,unit:'m',es:1.7188,ef:1.7396,ls:1.7188,lf:1.7396,tf:0,crit:1,order:'A',res:'QC-STATION'},
+  {id:"A10",num:10,name:"Маркировка",dur:1,unit:'h',es:1.7396,ef:1.7813,ls:1.7396,lf:1.7813,tf:0,crit:1,order:'A',res:'PAINT-01'},
+  {id:"FA",num:'F',name:"Финиш A",dur:0,unit:'d',es:1.7813,ef:1.7813,ls:1.7813,lf:1.7813,tf:0,crit:1,order:'A'}
+];
+
+// Project B — starts 31.07 (+2 days), green circles, same resources
+var opsB=[
+  {id:"SB",num:'S',name:"Старт · 1422",dur:0,unit:'d',es:2,ef:2,ls:2,lf:2,tf:0,crit:1,order:'B'},
+  {id:"B1",num:1,name:"Подготовка",dur:4,unit:'h',es:2,ef:2.1667,ls:2,lf:2.1667,tf:0,crit:1,order:'B',res:'CNC-01'},
+  {id:"B2",num:2,name:"Закупка",dur:8,unit:'h',es:2.1667,ef:2.5,ls:2.1667,lf:2.5,tf:0,crit:1,order:'B',res:'WELD-01'},
+  {id:"B3",num:3,name:"Монтаж SMD",dur:8,unit:'h',es:2.5,ef:2.8333,ls:2.5,lf:2.8333,tf:0,crit:1,order:'B',res:'CNC-01'},
+  {id:"B4",num:4,name:"Пайка",dur:6,unit:'h',es:2.8333,ef:3.0833,ls:2.8333,lf:3.0833,tf:0,crit:1,order:'B',res:'PAINT-01'},
+  {id:"B5",num:5,name:"AOI",dur:15,unit:'m',es:3.0833,ef:3.0938,ls:3.0833,lf:3.0938,tf:0,crit:1,order:'B',res:'QC-STATION'},
+  {id:"B6",num:6,name:"Функц.тест",dur:3,unit:'h',es:3.0938,ef:3.2188,ls:3.0938,lf:3.2188,tf:0,crit:1,order:'B',res:'TEST-BENCH'},
+  {id:"B7",num:7,name:"Термотренир.",dur:12,unit:'h',es:3.2188,ef:3.7188,ls:3.2188,lf:3.7188,tf:0,crit:1,order:'B',res:'CNC-01'},
+  {id:"B8",num:8,name:"Калибровка",dur:1,unit:'h',es:3.2188,ef:3.2604,ls:3.7188,lf:3.7604,tf:0.5,crit:0,order:'B',res:'CALIB-RIG'},
+  {id:"B9",num:9,name:"Вых.контроль",dur:30,unit:'m',es:3.7188,ef:3.7396,ls:3.7188,lf:3.7396,tf:0,crit:1,order:'B',res:'QC-STATION'},
+  {id:"B10",num:10,name:"Маркировка",dur:1,unit:'h',es:3.7396,ef:3.7813,ls:3.7396,lf:3.7813,tf:0,crit:1,order:'B',res:'PAINT-01'},
+  {id:"FB",num:'F',name:"Финиш B",dur:0,unit:'d',es:3.7813,ef:3.7813,ls:3.7813,lf:3.7813,tf:0,crit:1,order:'B'}
+];
+
+var opsAll=opsA.concat(opsB),omAll={};
+for(var i=0;i<opsAll.length;i++)omAll[opsAll[i].id]=opsAll[i];
+var depsA=[["SA","A1"],["A1","A2"],["A2","A3"],["A3","A4"],["A4","A5"],["A5","A6"],["A6","A7"],["A7","A9"],["A9","A10"],["A10","FA"],["A3","A8"],["A8","A9"]];
+var depsB=[["SB","B1"],["B1","B2"],["B2","B3"],["B3","B4"],["B4","B5"],["B5","B6"],["B6","B7"],["B7","B9"],["B9","B10"],["B10","FB"],["B3","B8"],["B8","B9"]];
+var depsAll=depsA.concat(depsB);
+
+// Layout
+function makeLayout(){
+  var lo={},baseYA=200,baseYB=460;
+  for(var i=0;i<opsA.length;i++){var o=opsA[i];lo[o.id]=[30+o.es*REL_SCALE,baseYA]}
+  for(var i=0;i<opsB.length;i++){var o=opsB[i];lo[o.id]=[30+o.es*REL_SCALE,baseYB]}
+  lo['SA']=[5,baseYA];lo['FA']=[30+2*REL_SCALE,baseYA];
+  lo['SB']=[5,baseYB];lo['FB']=[30+4*REL_SCALE,baseYB];
+  var ids=Object.keys(lo);
+  for(var iter=0;iter<5;iter++){
+    for(var i=0;i<ids.length;i++){
+      for(var j=i+1;j<ids.length;j++){
+        var pa=lo[ids[i]],pb=lo[ids[j]];
+        if(omAll[ids[i]]&&omAll[ids[j]]&&omAll[ids[i]].order!==omAll[ids[j]].order)continue;
+        var dx=Math.abs(pa[0]-pb[0]);if(dx>NODE_R*5)continue;
+        var dy=pa[1]-pb[1],minDY=NODE_R*2.8;
+        if(Math.abs(dy)<minDY){pa[1]+=(minDY-Math.abs(dy))*0.5*(dy>0?1:-1);pb[1]-=(minDY-Math.abs(dy))*0.5*(dy>0?1:-1)}
+      }
+    }
+  }
+  var TPAD=NODE_R+14;
+  for(var iter=0;iter<4;iter++){
+    for(var i=0;i<ids.length;i++){
+      for(var j=i+1;j<ids.length;j++){
+        var a=ids[i],b=ids[j];if(!omAll[a]||!omAll[b]||omAll[a].order!==omAll[b].order)continue;
+        var pa=lo[a],pb=lo[b],dx=Math.abs(pa[0]-pb[0]);if(dx>NODE_R*4)continue;
+        var tY1=pa[1]-TPAD,tY2=pb[1]-TPAD;
+        if(Math.abs(tY1-tY2)<12){pa[1]+=(12-Math.abs(tY1-tY2))*0.5*(pa[1]>pb[1]?1:-1);pb[1]-=(12-Math.abs(tY1-tY2))*0.5*(pa[1]>pb[1]?1:-1)}
+      }
+    }
+  }
+  return lo
+}
+var layout=makeLayout(),pos=clone(layout);
+function clone(src){var o={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o}
+
+function getResourceConflicts(){
+  var c={};
+  for(var i=1;i<opsA.length-1;i++){var oa=opsA[i];if(!oa.res)continue;
+    for(var j=1;j<opsB.length-1;j++){var ob=opsB[j];if(!ob.res||ob.res!==oa.res)continue;
+      if(oa.es<ob.ef&&ob.es<oa.ef){if(!c[oa.res])c[oa.res]=[];c[oa.res].push([oa.id,ob.id])}
+    }
+  }
+  return c
+}
+var resConflicts=getResourceConflicts();if(Object.keys(resConflicts).length>0){
+  var cs=Object.keys(resConflicts).join(', ');
+  document.querySelector('.badge-warn').textContent='⚠ Конфликт: '+cs
+}
+
+var scale=0.55,ox=0,oy=70,pAN=false,psx,psy,pox,poy,dragId=null,dragPos0,dragM0,hoverId=null;
+var c=document.getElementById('c'),ctx=c.getContext('2d'),wrap=document.getElementById('wrap'),tip=document.getElementById('tip');
+
+function sx(wx){return(wx+ox)*scale}function sy(wy){return(wy+oy)*scale}
+function hit(cx,cy,mx,my,id){var nr=getNodeR(scale);if(id&&id[0]==='S'){var hs=nr+8;var dx=Math.abs(mx-cx)/(hs*0.75),dy=Math.abs(my-cy)/hs;return dx+dy<=1}if(id&&id[0]==='F'){var ss=nr*1.0;return mx>=cx-ss*scale&&mx<=cx+ss*scale&&my>=cy-ss*scale&&my<=cy+ss*scale}var rr=(nr*scale);return(mx-cx)*(cx-mx)+(my-cy)*(cy-my)<=rr*rr}
+
+function draw(){
+  var W=wrap.clientWidth,H=wrap.clientHeight;
+  c.width=W*devicePixelRatio;c.height=H*devicePixelRatio;
+  c.style.width=W+'px';c.style.height=H+'px';
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.fillStyle='#0A1628';ctx.fillRect(0,0,W,H);
+
+  var totalDays=5,startX=30,dp=REL_SCALE*scale,gStep=dp>60?1:dp>20?2:dp>8?7:14;
+  // Resource conflict zones
+  for(var r in resConflicts){
+    for(var pi=0;pi<resConflicts[r].length;pi++){
+      var oa=omAll[resConflicts[r][pi][0]],ob=omAll[resConflicts[r][pi][1]];
+      var xA1=sx(30+oa.es*REL_SCALE),xA2=sx(30+oa.ef*REL_SCALE),xB1=sx(30+ob.es*REL_SCALE),xB2=sx(30+ob.ef*REL_SCALE);
+      var cx1=Math.max(xA1-6,xB1-6),cx2=Math.min(xA2+6,xB2+6);
+      if(cx2>cx1){ctx.fillStyle='rgba(239,68,68,0.04)';ctx.fillRect(cx1,0,cx2-cx1,H);}
+      var midX=(x1=sx(30+oa.es*REL_SCALE),x2=sx(30+ob.ef*REL_SCALE),(x1+x2)/2);
+      ctx.fillStyle='rgba(239,68,68,0.45)';ctx.font='10px "IBM Plex Mono",monospace';ctx.textAlign='center';
+      ctx.fillText(r,(cx1+cx2)/2,40);
+    }
+  }
+  // Grid
+  for(var d=0;d<=totalDays;d+=gStep){
+    var gx=sx(startX+d*REL_SCALE);if(gx<-50||gx>W+50)continue;
+    ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);
+    ctx.strokeStyle='rgba(60,90,130,0.2)';ctx.lineWidth=0.4;ctx.stroke();
+  }
+  // Time bar
+  var barY=20,barH=16;
+  ctx.fillStyle='rgba(15,30,54,0.7)';ctx.beginPath();ctx.roundRect(0,barY,W,barH,6);ctx.fill();
+  for(var d=0;d<=totalDays;d+=gStep){
+    var gx=sx(startX+d*REL_SCALE);if(gx<-20||gx>W+20)continue;
+    var dt=new Date(2026,6,29+d),lbl=dt.getDate()+'.'+('0'+(dt.getMonth()+1)).slice(-2);
+    ctx.fillStyle='#B0C4DE';ctx.font=Math.round(9*scale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(lbl,gx,barY+barH+3);
+  }
+  // Zone labels
+  ctx.fillStyle='rgba(96,165,250,0.35)';ctx.font=Math.round(10*scale)+'px Inter,system-ui';ctx.textAlign='left';
+  ctx.fillText('Заказ #1421',10,60);
+  ctx.fillStyle='rgba(16,185,129,0.35)';ctx.fillText('Заказ #1422',10,340);
+
+  var vs={};for(var i=0;i<opsAll.length;i++)vs[opsAll[i].id]=true;
+
+  // Edges
+  for(var i=0;i<depsAll.length;i++){
+    var a=depsAll[i][0],b=depsAll[i][1];if(!vs[a]||!vs[b])continue;
+    var fa=omAll[a],fb=omAll[b],pa=pos[a],pb=pos[b],ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]),nr=getNodeR(scale);
+    var ax=pa[0]+Math.cos(ang)*nr,ay=pa[1]+Math.sin(ang)*nr,bx=pb[0]-Math.cos(ang)*nr,by=pb[1]-Math.sin(ang)*nr;
+    var both=(fa&&fb)?(fa.crit&&fb.crit):false,isA=fa.order==='A';
+    ctx.beginPath();ctx.moveTo(sx(ax),sy(ay));ctx.lineTo(sx(bx),sy(by));
+    ctx.strokeStyle=both?'rgba(239,68,68,0.3)':(isA?'rgba(96,165,250,0.22)':'rgba(16,185,129,0.22)');ctx.lineWidth=both?1.5:1;ctx.stroke();
+    var ang2=Math.atan2(sy(by)-sy(ay),sx(bx)-sx(ax)),hl=6;
+    ctx.beginPath();ctx.moveTo(sx(bx),sy(by));ctx.lineTo(sx(bx)-hl*Math.cos(ang2-0.45),sy(by)-hl*Math.sin(ang2-0.45));
+    ctx.lineTo(sx(bx)-hl*Math.cos(ang2+0.45),sy(by)-hl*Math.sin(ang2+0.45));ctx.closePath();
+    ctx.fillStyle=both?'rgba(239,68,68,0.35)':(isA?'rgba(96,165,250,0.3)':'rgba(16,185,129,0.3)');ctx.fill();
+    if(fa&&fa.dur>0){
+      var midX=(ax+bx)/2,midY=(ay+by)/2,perpAng=ang+Math.PI/2,loff=10;
+      var mx=midX+Math.cos(perpAng)*loff,my=midY+Math.sin(perpAng)*loff;
+      ctx.save();var lbl=fa.dur+(fa.unit==='m'?'мин':fa.unit==='h'?'ч':'дн');
+      ctx.font='bold '+Math.round(8*scale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+      var txtW=ctx.measureText(lbl).width+6,txtH=Math.round(8*scale)+4;
+      ctx.globalAlpha=0.65;ctx.fillStyle='#0A1628';ctx.beginPath();ctx.roundRect(sx(mx)-txtW/2,sy(my)-txtH/2,txtW,txtH,3);ctx.fill();
+      ctx.globalAlpha=1;ctx.fillStyle=both?'rgba(239,68,68,0.9)':'rgba(176,196,222,0.7)';ctx.fillText(lbl,sx(mx),sy(my));ctx.restore();
+    }
+  }
+
+  // Nodes
+  for(var i=0;i<opsAll.length;i++){
+    var o=opsAll[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]),nr=getNodeR(scale),r=nr*scale,isA=o.order==='A';
+    if(o.id==='S'+isA?'A':'B'||o.id==='F'+isA?'A':'B'){
+      var isS=o.id.indexOf('S')===0;
+      if(isS){var hs=r+8;ctx.beginPath();ctx.moveTo(cx,cy-hs);ctx.lineTo(cx+hs*0.75,cy);ctx.lineTo(cx,cy+hs);ctx.lineTo(cx-hs*0.75,cy);ctx.closePath();}
+      else{var ss=r*0.9;ctx.beginPath();ctx.rect(cx-ss,cy-ss,ss*2,ss*2);}
+      ctx.fillStyle=isA?'rgba(59,130,246,0.12)':'rgba(16,185,129,0.12)';ctx.fill();
+      ctx.strokeStyle=isA?'rgba(59,130,246,0.5)':'rgba(16,185,129,0.5)';ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle=isA?'#60A5FA':'#10B981';
+      ctx.font='bold '+Math.round(11*scale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.id.charAt(0),cx,cy);
+      ctx.fillStyle=isA?'rgba(96,165,250,0.6)':'rgba(16,185,129,0.6)';ctx.font=Math.round(8*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+      ctx.fillText(o.name,cx,cy-(isS?hs+4:ss+4));
+      continue;
+    }
+    var nFill=isA?'rgba(96,165,250,0.06)':'rgba(16,185,129,0.06)',nStroke=isA?'rgba(96,165,250,0.5)':'rgba(16,185,129,0.5)';
+    if(o.crit){nFill=isA?'rgba(239,68,68,0.06)':'rgba(239,68,68,0.06)';nStroke='rgba(239,68,68,0.45)';}
+    var inConflict=false;for(var rk in resConflicts)for(var pi=0;pi<resConflicts[rk].length;pi++)if(resConflicts[rk][pi][0]===o.id||resConflicts[rk][pi][1]===o.id){inConflict=true;break}
+    if(inConflict){ctx.beginPath();ctx.arc(cx,cy,r+5,0,2*Math.PI);ctx.fillStyle='rgba(239,68,68,0.06)';ctx.fill();ctx.strokeStyle='rgba(239,68,68,0.35)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([])}
+    ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle=nFill;ctx.fill();ctx.strokeStyle=nStroke;ctx.lineWidth=1.3;ctx.stroke();
+    ctx.fillStyle=o.crit?'#E8EEF5':(isA?'rgba(176,196,222,0.7)':'rgba(16,185,129,0.7)');
+    ctx.font='bold '+Math.round(11*scale)+'px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.num,cx,cy);
+    ctx.fillStyle=isA?'rgba(96,165,250,0.7)':'rgba(16,185,129,0.7)';ctx.font=Math.round(9*scale)+'px Inter,system-ui';ctx.textBaseline='bottom';
+    var sn=o.name;if(sn.length>14)sn=sn.slice(0,13)+'…';ctx.fillText(sn,cx,cy-r-6);
+    if(!o.crit&&o.tf>0){ctx.fillStyle='#F59E0B';ctx.font=Math.round(8*scale)+'px "IBM Plex Mono",monospace';ctx.textBaseline='top';ctx.fillText('+'+parseFloat(o.tf.toFixed(1)),cx,cy+r+3)}
+    if(o.res){ctx.fillStyle=isA?'rgba(96,165,250,0.45)':'rgba(16,185,129,0.45)';ctx.font=Math.round(7*scale)+'px "IBM Plex Mono",monospace';ctx.textBaseline='top';ctx.fillText(o.res,cx,cy+r-2)}
+  }
+}
+
+wrap.addEventListener('mousedown',function(e){
+  var rect=wrap.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  for(var i=0;i<opsAll.length;i++){var o=opsAll[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my,o.id)){dragId=o.id;dragPos0=[pos[o.id][0],pos[o.id][1]];dragM0=[mx,my];return}}
+  pAN=true;psx=mx;psy=my;pox=ox;poy=oy
+});
+window.addEventListener('mousemove',function(e){
+  var rect=wrap.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  if(dragId){var dx=(mx-dragM0[0])/scale,dy=(my-dragM0[1])/scale;pos[dragId][0]=dragPos0[0]+dx;pos[dragId][1]=dragPos0[1]+dy;draw();return}
+  if(pAN){ox=pox+(mx-psx)/scale;oy=poy+(my-psy)/scale;draw()}
+  var found=null;
+  for(var i=0;i<opsAll.length;i++){var o=opsAll[i],cx=sx(pos[o.id][0]),cy=sy(pos[o.id][1]);if(hit(cx,cy,mx,my,o.id)){found=o;break}}
+  if(found&&found.id!==hoverId){hoverId=found.id;
+    var isC=false;for(var rk in resConflicts)for(var pi=0;pi<resConflicts[rk].length;pi++)if(resConflicts[rk][pi][0]===found.id||resConflicts[rk][pi][1]===found.id){isC=true;break}
+    tip.innerHTML='<div class="tooltip-title">№'+found.num+' · '+found.name+'</div>'
+      +'<div class="tooltip-row">Заказ <b>'+(found.order==='A'?'#1421 СибСтройМаш':'#1422 МеталлТех')+'</b></div>'
+      +'<div class="tooltip-row">Длит. <b>'+found.dur+' '+(found.unit==='m'?'мин':found.unit==='h'?'ч':'дн')+'</b></div>'
+      +(found.res?'<div class="tooltip-row">Ресурс <b>'+found.res+'</b></div>':'')
+      +(isC?'<div class="tooltip-row" style="color:var(--danger);">⚠ <b>Конфликт ресурса</b></div>':'')
+      +'<div class="tooltip-row" style="margin-top:4px;color:'+(found.crit?'var(--danger)':'var(--fg-4)')+';">'+(found.crit?'⚠ Критический путь':'С резервом')+'</div>';
+    tip.classList.add('on');
+  }else if(!found&&hoverId!==null){hoverId=null;tip.classList.remove('on')}
+  if(found){var cx=sx(pos[found.id][0]),cy=sy(pos[found.id][1]),nr=getNodeR(scale),r=nr*scale;tip.style.left=Math.min(cx+r+14,window.innerWidth-240)+'px';tip.style.top=Math.max(4,cy-80)+'px'}
+});
+window.addEventListener('mouseup',function(){dragId=null;pAN=false});
+wrap.addEventListener('wheel',function(e){e.preventDefault();scale=Math.max(0.1,Math.min(2.5,scale*(e.deltaY<0?1.08:0.92)));draw()},{passive:false});
+draw();
+</script>
+</body>
+</html>
