@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan — Производственное планирование нового поколения</title>
+<style>
+:root {
+  --bg: #0A1628;
+  --bg-2: #0F1E36;
+  --bg-3: #162844;
+  --fg: #E8EEF5;
+  --fg-2: #B0C4DE;
+  --fg-3: #8FA3BD;
+  --fg-4: #5A7090;
+  --border: #1E3252;
+  --accent: #3B82F6;
+  --accent-2: #2563EB;
+  --accent-3: #60A5FA;
+  --success: #10B981;
+  --warning: #F59E0B;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* Grid overlay */
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(30, 50, 82, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 50, 82, 0.3) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
+}
+.grid-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.08) 0%, transparent 70%);
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  z-index: 1;
+  padding: 80px 24px 60px;
+  text-align: center;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.logo {
+  width: 64px; height: 64px;
+  margin: 0 auto 32px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 32px rgba(59,130,246,0.35);
+}
+
+.badge-row {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  margin: 24px 0 12px;
+}
+
+.badge {
+  font-size: 10px; font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 100px;
+  border: 1px solid;
+  letter-spacing: 0.02em;
+}
+.badge-blue  { color: var(--accent-3); border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.1); }
+.badge-green { color: var(--success);  border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1); }
+.badge-amber { color: var(--warning);  border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.1); }
+
+h1 {
+  font-size: clamp(32px, 6vw, 52px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 20px;
+}
+h1 span { color: var(--accent-3); }
+
+.subtitle {
+  font-size: clamp(15px, 2.5vw, 18px);
+  color: var(--fg-3);
+  line-height: 1.6;
+  max-width: 560px;
+  margin: 0 auto 40px;
+}
+
+/* Cards */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  max-width: 740px;
+  margin: 0 auto 48px;
+  padding: 0 8px;
+}
+
+.tool-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+.tool-card:hover { border-color: var(--accent); }
+
+.tool-card h3 {
+  font-size: 14px; font-weight: 700;
+  margin-bottom: 6px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.tool-card .icon {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+}
+
+.tool-card p {
+  font-size: 12px; color: var(--fg-3);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.tool-card .status {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 100px;
+  display: inline-block;
+}
+.status-done  { color: var(--success); background: rgba(16,185,129,0.1); }
+.status-alpha { color: var(--accent-3); background: rgba(59,130,246,0.12); }
+.status-soon  { color: var(--fg-4); background: rgba(90,112,144,0.1); }
+
+/* CTA */
+.cta-section {
+  position: relative; z-index: 1;
+  padding: 40px 24px 80px;
+  text-align: center;
+  max-width: 480px; margin: 0 auto;
+}
+
+.email-box {
+  display: flex; gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap; justify-content: center;
+}
+
+.email-box input {
+  flex: 1; min-width: 220px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.email-box input:focus { border-color: var(--accent); }
+.email-box input::placeholder { color: var(--fg-4); }
+
+.email-box button {
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.email-box button:hover { background: var(--accent-2); }
+
+/* Footer */
+footer {
+  position: relative; z-index: 1;
+  text-align: center;
+  padding: 24px;
+  color: var(--fg-4);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+/* Announcement banner */
+.announce {
+  position: relative; z-index: 1;
+  max-width: 640px;
+  margin: 0 auto 48px;
+  padding: 18px 24px;
+  border-radius: 10px;
+  background: rgba(59,130,246,0.06);
+  border: 1px solid rgba(59,130,246,0.2);
+  text-align: left;
+  font-size: 13px;
+  color: var(--fg-2);
+  line-height: 1.6;
+}
+
+.announce strong { color: var(--accent-3); }
+.announce .date {
+  font-size: 11px; color: var(--fg-4);
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .hero { padding: 50px 16px 40px; }
+  .tools-grid { grid-template-columns: 1fr; }
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<section class="hero">
+  <div class="logo">
+    <svg viewBox="0 0 30 30" fill="none" width="30" height="30">
+      <circle cx="7.5" cy="7.5" r="3.5" fill="white"/>
+      <circle cx="22.5" cy="7.5" r="3.5" fill="white"/>
+      <circle cx="7.5" cy="22.5" r="3.5" fill="white"/>
+      <circle cx="22.5" cy="22.5" r="3.5" fill="white"/>
+      <line x1="11" y1="7.5" x2="19" y2="7.5" stroke="white" stroke-width="1.5"/>
+      <line x1="7.5" y1="11" x2="7.5" y2="19" stroke="white" stroke-width="1.5"/>
+      <line x1="22.5" y1="11" x2="22.5" y2="19" stroke="white" stroke-width="1.5"/>
+      <line x1="11" y1="22.5" x2="19" y2="22.5" stroke="white" stroke-width="1.5"/>
+    </svg>
+  </div>
+
+  <h1>Profy<span>Plan</span></h1>
+  <p class="subtitle">
+    Облачный сервис производственного планирования под заказ. CPM, PERT и CCM в одном инструменте.
+    Загрузите данные — получите точный план с критическим путём, оценкой рисков и ресурсным выравниванием за 5 минут.
+  </p>
+
+  <div class="badge-row">
+    <span class="badge badge-blue">Make-to-Order</span>
+    <span class="badge badge-green">SaaS</span>
+    <span class="badge badge-amber">Без внедрения</span>
+  </div>
+</section>
+
+<div class="announce">
+  <div class="date">1 августа 2026</div>
+  <strong>Запуск закрытого альфа-тестирования.</strong>
+  Мы завершили ядро CPM-движка и приступили к multi-project планированию с ресурсным выравниванием (CCM).
+  Первым тестерам — бесплатный доступ на 3 месяца после запуска.
+</div>
+
+<div class="tools-grid" style="position:relative;z-index:1">
+
+  <div class="tool-card">
+    <h3>
+      <span class="icon" style="background:rgba(59,130,246,0.15);color:var(--accent-3)">C</span>
+      CPM
+    </h3>
+    <p>Критический путь, ранние и поздние сроки, резервы времени. Сетевой график и диаграмма Ганта в реальном времени.</p>
+    <span class="status status-done">Готово</span>
+  </div>
+
+  <div class="tool-card" style="border-color:rgba(16,185,129,0.25)">
+    <h3>
+      <span class="icon" style="background:rgba(16,185,129,0.15);color:var(--success)">M</span>
+      CCM
+    </h3>
+    <p>Multi-Project планирование с общими ресурсами. Resource Leveling, критическая цепь, буферы по Голдратту.</p>
+    <span class="status status-alpha">Альфа</span>
+  </div>
+
+  <div class="tool-card">
+    <h3>
+      <span class="icon" style="background:rgba(245,158,11,0.12);color:var(--warning)">P</span>
+      PERT
+    </h3>
+    <p>Вероятностная оценка длительности, анализ рисков, Monte-Carlo симуляции. Точная дата завершения с доверительным интервалом.</p>
+    <span class="status status-soon">Скоро</span>
+  </div>
+
+</div>
+
+<section class="cta-section">
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Ранний доступ</h2>
+  <p style="font-size:14px;color:var(--fg-3);line-height:1.6">
+    Оставьте email, и мы сообщим о запуске закрытого тестирования.
+    Первым 50 участникам — бесплатный тариф «Про» на 3 месяца.
+  </p>
+  <form class="email-box" id="subscribe-form" onsubmit="handleSubmit(event)">
+    <input type="email" id="email" placeholder="you@company.ru" required>
+    <button type="submit">Сообщить о запуске</button>
+  </form>
+  <p id="form-msg" style="margin-top:12px;font-size:13px;display:none"></p>
+</section>
+
+<footer>
+  &copy; 2026 ProfyPlan. Инструмент производственного планирования для средних предприятий.
+  <br><span style="color:var(--fg-4)">Машиностроение · Металлообработка · Электроника · Пищевое производство</span>
+</footer>
+
+<script>
+function handleSubmit(e) {
+  e.preventDefault();
+  var email = document.getElementById('email').value;
+  var msg = document.getElementById('form-msg');
+  // In production: POST to backend
+  localStorage.setItem('profyplan_early_access', email);
+  msg.style.display = 'block';
+  msg.style.color = 'var(--success)';
+  msg.textContent = 'Спасибо! ' + email + ' — сообщим о запуске.';
+  document.getElementById('email').value = '';
+  setTimeout(function() { msg.style.display = 'none'; }, 5000);
+  return false;
+}
+
+// Subtle parallax on grid
+window.addEventListener('scroll', function() {
+  var grid = document.querySelector('.grid-bg');
+  if (grid) grid.style.transform = 'translateY(' + (window.scrollY * 0.15) + 'px)';
+});
+</script>
+
+</body>
+</html>
