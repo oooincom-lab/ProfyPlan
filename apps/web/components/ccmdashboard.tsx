@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import GanttChart from './GanttChart';
 import ResourceLoadChart from './ResourceLoadChart';
+import NetworkGraph from './NetworkGraph';
 import { getProjects, mergeProjects, resourceLeveling } from '@/lib/api';
 
 type Tab = 'gantt' | 'network-graph' | 'resource-load';
@@ -256,12 +257,8 @@ export default function CCMDashboard() {
         )}
 
         {activeTab === 'network-graph' && (
-          <div style={{
-            height: 'calc(100vh - 140px)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            color: 'var(--fg-3)', fontSize: 14,
-          }}>
-            Сетевой график — откроется в отдельном окне (React Flow)
+          <div style={{ height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
+            <NetworkGraph cpmResult={ccmResult} levelResult={levelResult} />
           </div>
         )}
 
