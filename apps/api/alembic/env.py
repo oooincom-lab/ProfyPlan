@@ -12,6 +12,12 @@ from app.core.database import Base
 # Импорт всех моделей для autogenerate
 from app.models.base import BaseModel  # noqa: F401
 from app.models.tenant import Tenant, User, UserTenant  # noqa: F401
+from app.models.project import Project  # noqa: F401
+from app.models.resource import Resource  # noqa: F401
+from app.models.operation import Operation, OperationDependency, OperationResource  # noqa: F401
+from app.models.product_structure import ProductStructure  # noqa: F401
+from app.models.routing import Routing, RoutingOperation  # noqa: F401
+from app.models.plan_version import PlanBaseline, ActualExecution, InterProjectDependency  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
