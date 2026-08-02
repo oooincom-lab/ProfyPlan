@@ -10,6 +10,10 @@ RUN uv pip install --system -r pyproject.toml
 
 # Код
 COPY app/ /app/app/
+COPY alembic/ /app/alembic/
+COPY alembic.ini /app/
+COPY scripts/ /app/scripts/
+COPY pyproject.toml /app/
 
 # Непривилегированный пользователь
 RUN useradd -m -u 1000 api && chown -R api:api /app
