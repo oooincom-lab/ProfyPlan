@@ -1,6 +1,9 @@
 """
 Конфигурация Alembic для миграций БД.
 """
+import sys
+sys.path.insert(0, '/app')
+
 from logging.config import fileConfig
 from pathlib import Path
 from alembic import context

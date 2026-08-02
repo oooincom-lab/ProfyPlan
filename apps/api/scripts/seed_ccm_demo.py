@@ -19,6 +19,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 # Добавляем путь к приложению
+sys.path.insert(0, '/app')
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -36,7 +37,7 @@ from app.models.plan_version import PlanBaseline, InterProjectDependency
 
 async def seed_demo(db: AsyncSession):
     """Основная функция заполнения демо-данными."""
-    print("🌱 Seed CCM Demo — запуск...")
+    print("Seed CCM Demo — запуск...")
 
     # === 1. Tenant + User ===
     tenant = Tenant(
