@@ -71,7 +71,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_routings_tenant_id", "routings", ["tenant_id"])
 
-    # FK от product_structures к routings (после создания routings)
+    # FK от product_structures к routings
     op.create_foreign_key(
         "fk_product_structures_routing",
         "product_structures", "routings",
@@ -91,16 +91,10 @@ def upgrade() -> None:
                   nullable=False),
         sa.Column("sequence_number", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("duration_hours", sa.Numeric(8, 2), default=0),
+        sa.Column("work_center_code", sa.String(50), nullable=True),
         sa.Column("setup_hours", sa.Numeric(8, 2), default=0),
-        sa.Column("teardown_hours", sa.Numeric(8, 2), default=0),
-        sa.Column("resource_type_id", sa.String(100), nullable=True),
-        sa.Column("alternative_resource_types", sa.String(500), nullable=True),
-        sa.Column("output_product", sa.String(100), nullable=True),
-        sa.Column("output_quantity", sa.Numeric(12, 2), default=1.0),
-        sa.Column("yield_rate", sa.Numeric(5, 3), default=1.0),
-        sa.Column("predecessors", sa.String(200), nullable=True),
-        sa.Column("input_materials", sa.Text(), nullable=True),
+        sa.Column("run_hours_per_unit", sa.Numeric(8, 2), default=0),
+        sa.Column("overlap_percent", sa.Numeric(5, 2), default=0),
         sa.Column("notes", sa.Text(), nullable=True),
     )
     op.create_index("ix_routing_ops_routing_id", "routing_operations", ["routing_id"])
@@ -116,12 +110,10 @@ def upgrade() -> None:
                   sa.ForeignKey("projects.id", ondelete="CASCADE"),
                   nullable=False),
         sa.Column("version", sa.Integer(), default=1),
-        sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("created_by", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="SET NULL"),
-                  nullable=True),
-        sa.Column("snapshot_data", postgresql.JSONB(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), default=False),
+        sa.Column("name", sa.String(255), nullable=True),
+        sa.Column("frozen_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("total_duration", sa.Numeric(10, 2), nullable=True),
+        sa.Column("critical_path_length", sa.Numeric(10, 2), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
     )
     op.create_index("ix_plan_baselines_project_id", "plan_baselines", ["project_id"])
@@ -136,21 +128,13 @@ def upgrade() -> None:
         sa.Column("operation_id", postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("operations.id", ondelete="CASCADE"),
                   nullable=False),
-        sa.Column("fact_start", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("fact_end", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("quantity_completed", sa.Numeric(12, 2), nullable=True),
-        sa.Column("quantity_defect", sa.Numeric(12, 2), nullable=True),
-        sa.Column("status", sa.String(20), default="not_started"),
-        sa.Column("deviation_reason", sa.Text(), nullable=True),
-        sa.Column("comment", sa.Text(), nullable=True),
-        sa.Column("recorded_by", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="SET NULL"),
-                  nullable=True),
-        sa.Column("recorded_at", sa.DateTime(timezone=True),
-                  server_default=sa.func.now(), nullable=False),
-        sa.Column("source", sa.String(20), default="manual"),
+        sa.Column("actual_start", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("actual_end", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("actual_duration", sa.Numeric(10, 2), nullable=True),
+        sa.Column("status", sa.String(20), default="pending"),
+        sa.Column("progress_percent", sa.Numeric(5, 2), default=0),
+        sa.Column("notes", sa.Text(), nullable=True),
     )
-    op.create_index("ix_actual_executions_op_id", "actual_executions", ["operation_id"])
 
     # --- inter_project_dependencies ---
     op.create_table(
@@ -159,104 +143,47 @@ def upgrade() -> None:
                   server_default=sa.text("gen_random_uuid()")),
         sa.Column("created_at", sa.DateTime(timezone=True),
                   server_default=sa.func.now(), nullable=False),
-        sa.Column("source_project_id", postgresql.UUID(as_uuid=True),
+        sa.Column("predecessor_project_id", postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("projects.id", ondelete="CASCADE"),
                   nullable=False),
-        sa.Column("source_operation_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("operations.id", ondelete="CASCADE"),
-                  nullable=True),
-        sa.Column("target_project_id", postgresql.UUID(as_uuid=True),
+        sa.Column("successor_project_id", postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("projects.id", ondelete="CASCADE"),
                   nullable=False),
-        sa.Column("target_operation_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("operations.id", ondelete="CASCADE"),
-                  nullable=True),
-        sa.Column("dependency_type", sa.String(10), default="FS"),
-        sa.Column("lag_hours", sa.Numeric(10, 2), default=0),
-        sa.Column("lag_unit", sa.String(10), default="hour"),
-        sa.Column("created_by", sa.String(20), default="manual"),
+        sa.Column("dependency_type", sa.String(20), default="FS"),
+        sa.Column("lag_days", sa.Numeric(8, 2), default=0),
         sa.Column("notes", sa.Text(), nullable=True),
     )
 
-    # --- Расширение existing таблиц ---
+    # --- resource.calendar_id (NOT ext_id — that's in 0001_initial) ---
+    # (calendar_id is already in 0001_initial — skip duplicate alter)
+    # --- Add columns to operations that do NOT exist in 0001_initial ---
+    # bom_node_code, routing_operation_code, parent_operation_id — already in 0001_initial
+    # ext_id — already in resources 0001_initial
+    # inter_project_dep_id — NOT in 0001, add it
+    try:
+        op.add_column("operations", sa.Column(
+            "inter_project_dep_id", postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("inter_project_dependencies.id", ondelete="SET NULL"),
+            nullable=True,
+        ))
+    except Exception:
+        pass
 
-    # operations — новые поля
-    op.add_column("operations", sa.Column(
-        "output_product", sa.String(100), nullable=True
-    ))
-    op.add_column("operations", sa.Column(
-        "output_quantity", sa.Numeric(12, 2), nullable=True
-    ))
-    op.add_column("operations", sa.Column(
-        "yield_rate", sa.Numeric(5, 3),
-        server_default=sa.text("1.0"), nullable=False
-    ))
-    op.add_column("operations", sa.Column(
-        "input_materials", sa.Text(), nullable=True
-    ))
-    op.add_column("operations", sa.Column(
-        "operation_type", sa.String(20),
-        server_default=sa.text("'production'"), nullable=False
-    ))
-    op.add_column("operations", sa.Column(
-        "supplier_id", sa.String(100), nullable=True
-    ))
-    op.add_column("operations", sa.Column(
-        "is_milestone", sa.Boolean(),
-        server_default=sa.text("false"), nullable=False
-    ))
-    op.add_column("operations", sa.Column(
-        "expected_delivery", sa.DateTime(timezone=True), nullable=True
-    ))
-    op.add_column("operations", sa.Column(
-        "ext_id", sa.String(100), nullable=True
-    ))
-    op.create_index("ix_operations_ext_id", "operations", ["ext_id"])
-
-    # projects — ext_id, due_date, priority, customer
-    op.add_column("projects", sa.Column(
-        "ext_id", sa.String(100), nullable=True
-    ))
-    op.create_index("ix_projects_ext_id", "projects", ["ext_id"])
-    op.add_column("projects", sa.Column(
-        "due_date", sa.DateTime(timezone=True), nullable=True
-    ))
-    op.add_column("projects", sa.Column(
-        "priority", sa.String(20),
-        server_default=sa.text("'normal'"), nullable=False
-    ))
-    op.add_column("projects", sa.Column(
-        "customer", sa.String(255), nullable=True
-    ))
-
-    # resources — ext_id
-    op.add_column("resources", sa.Column(
-        "ext_id", sa.String(100), nullable=True
-    ))
-    op.create_index("ix_resources_ext_id", "resources", ["ext_id"])
+    # Add columns NOT in 0001_initial
+    cols_to_add = [
+        ("product_structure_node_id", postgresql.UUID(as_uuid=True)),
+    ]
+    for col_name, col_type in cols_to_add:
+        try:
+            # Check if column exists
+            op.add_column("operations", sa.Column(col_name, col_type, nullable=True))
+        except Exception:
+            pass
 
 
 def downgrade() -> None:
-    op.drop_index("ix_resources_ext_id", table_name="resources")
-    op.drop_column("resources", "ext_id")
-
-    op.drop_column("projects", "customer")
-    op.drop_column("projects", "priority")
-    op.drop_column("projects", "due_date")
-    op.drop_index("ix_projects_ext_id", table_name="projects")
-    op.drop_column("projects", "ext_id")
-
-    op.drop_index("ix_operations_ext_id", table_name="operations")
-    op.drop_column("operations", "ext_id")
-    op.drop_column("operations", "expected_delivery")
-    op.drop_column("operations", "is_milestone")
-    op.drop_column("operations", "supplier_id")
-    op.drop_column("operations", "operation_type")
-    op.drop_column("operations", "input_materials")
-    op.drop_column("operations", "yield_rate")
-    op.drop_column("operations", "output_quantity")
-    op.drop_column("operations", "output_product")
-
+    op.drop_column("operations", "inter_project_dep_id")
+    op.drop_column("operations", "product_structure_node_id")
     op.drop_table("inter_project_dependencies")
     op.drop_table("actual_executions")
     op.drop_index("ix_plan_baselines_project_id", table_name="plan_baselines")
