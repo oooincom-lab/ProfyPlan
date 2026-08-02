@@ -42,7 +42,6 @@ async def seed_demo(db: AsyncSession):
     tenant = Tenant(
         id=uuid4(),
         name="Демо-завод «СибСтройМаш»",
-        slug="demo",
     )
     db.add(tenant)
     await db.flush()

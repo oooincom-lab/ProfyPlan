@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProfyPlan Logo v2 — Part 2 (Variants 26‑50) · CPM/Gantt × 3D/Isometry</title>
+<style>
+body{background:#0A1628;color:#E8EEF5;font-family:Inter,sans-serif;margin:0;padding:24px}
+h1{font-size:22px;font-weight:800;margin-bottom:4px;letter-spacing:-0.02em}
+h1 span{color:#60A5FA}
+.sub{color:#8FA3BD;font-size:13px;margin-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.card{background:#0F1E36;border:1px solid #1E3252;border-radius:12px;padding:14px;transition:border-color .2s}
+.card:hover{border-color:#3B82F6}
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.card-num{width:26px;height:26px;background:#3B82F6;color:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0}
+.card-title{font-size:12px;font-weight:700;color:#E8EEF5;line-height:1.3}
+.card-preview{display:flex;justify-content:center;margin:8px 0}
+.card-tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:8px;padding:2px 7px;border-radius:100px;font-family:'IBM Plex Mono',monospace;font-weight:600}
+.tag-blue{color:#60A5FA;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.1)}
+.tag-amber{color:#F59E0B;border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.1)}
+.tag-red{color:#EF4444;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.08)}
+.tag-green{color:#10B981;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.1)}
+.tag-purple{color:#8B5CF6;border:1px solid rgba(139,92,246,0.3);background:rgba(139,92,246,0.1)}
+</style>
+</head>
+<body>
+<h1>ProfyPlan Logo <span>v2 — Part 2</span></h1>
+<p class="sub">Variants 26–50 · CPM / Gantt × 3D Isometry · Industrial Graph Dark</p>
+
+<div class="grid">
+
+<!-- 26: ISOMETRIC GRID FLOOR -->
+<div class="card">
+  <div class="card-header"><div class="card-num">26</div><div class="card-title">Изометрическая сетка пола</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <polygon points="90,10 170,55 90,100 10,55" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="90,20 150,52 90,84 30,52" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="90,30 130,49 90,68 50,49" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <line x1="10" y1="55" x2="170" y2="55" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="30" y1="52" x2="150" y2="52" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="50" y1="49" x2="130" y2="49" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="30" y1="60" x2="150" y2="60" stroke="#1E3252" stroke-width="0.5" transform="rotate(180 90 60)"/>
+      <circle cx="90" cy="55" r="3" fill="#3B82F6"/>
+      <circle cx="130" cy="49" r="3" fill="#F59E0B"/>
+      <circle cx="150" cy="52" r="3" fill="#10B981"/>
+      <circle cx="50" cy="49" r="3" fill="#8B5CF6"/>
+      <circle cx="30" cy="52" r="3" fill="#EF4444"/>
+      <polygon points="130,49 139,43 139,55" fill="rgba(245,158,11,0.15)"/>
+      <polygon points="130,49 139,55 130,61" fill="rgba(245,158,11,0.08)"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-amber">GRID</span><span class="tag tag-purple">NODES</span></div>
+</div>
+
+<!-- 27: 3D GRIDDED TIMELINE -->
+<div class="card">
+  <div class="card-header"><div class="card-num">27</div><div class="card-title">3D-решётка с путём</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <line x1="20" y1="95" x2="160" y2="95" stroke="#1E3252" stroke-width="1"/>
+      <line x1="15" y1="90" x2="155" y2="45" stroke="#1E3252" stroke-width="0.6"/>
+      <line x1="25" y1="100" x2="165" y2="55" stroke="#1E3252" stroke-width="0.6"/>
+      <line x1="30" y1="95" x2="30" y2="40" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="60" y1="95" x2="60" y2="40" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="90" y1="95" x2="90" y2="40" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="120" y1="95" x2="120" y2="40" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="150" y1="95" x2="150" y2="40" stroke="#1E3252" stroke-width="0.5"/>
+      <polyline points="30,95 60,68 90,55 120,68 150,55" fill="none" stroke="#3B82F6" stroke-width="2"/>
+      <circle cx="30" cy="95" r="4" fill="#3B82F6"/>
+      <circle cx="60" cy="68" r="4" fill="#F59E0B"/>
+      <circle cx="90" cy="55" r="4" fill="#10B981"/>
+      <circle cx="120" cy="68" r="4" fill="#8B5CF6"/>
+      <circle cx="150" cy="55" r="4" fill="#EF4444"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-amber">TIMELINE</span><span class="tag tag-green">PATH</span></div>
+</div>
+
+<!-- 28: ISOMETRIC TERRAIN -->
+<div class="card">
+  <div class="card-header"><div class="card-num">28</div><div class="card-title">Изометрический ландшафт</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <polygon points="10,100 90,55 170,100" fill="rgba(30,50,80,0.5)" stroke="#1E3252" stroke-width="1"/>
+      <polygon points="10,100 50,75 50,100" fill="rgba(59,130,246,0.15)"/>
+      <polygon points="50,100 50,75 70,63 70,100" fill="rgba(59,130,246,0.08)"/>
+      <polygon points="70,100 70,63 110,63 110,100" fill="rgba(59,130,246,0.12)"/>
+      <polygon points="110,100 110,63 130,75 130,100" fill="rgba(59,130,246,0.06)"/>
+      <polygon points="50,75 90,55 130,75 70,63" fill="none" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="70,63 90,55 110,63" fill="rgba(59,130,246,0.2)"/>
+      <circle cx="70" cy="63" r="3" fill="#3B82F6"/>
+      <circle cx="110" cy="63" r="3" fill="#F59E0B"/>
+      <circle cx="90" cy="55" r="3.5" fill="#10B981"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-green">TERRAIN</span><span class="tag tag-amber">ELEVATED</span></div>
+</div>
+
+<!-- 29: WIREFRAME CUBE GRID -->
+<div class="card">
+  <div class="card-header"><div class="card-num">29</div><div class="card-title">Каркасная решётка кубов</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- back cubes -->
+      <polygon points="50,25 80,10 80,35 50,50" fill="none" stroke="#0F2A50" stroke-width="0.8"/>
+      <polygon points="80,10 110,25 110,50 80,35" fill="none" stroke="#0F2A50" stroke-width="0.8"/>
+      <polygon points="50,25 80,10 110,25" fill="none" stroke="#0F2A50" stroke-width="0.8"/>
+      <!-- mid cubes -->
+      <polygon points="80,40 110,25 110,55 80,70" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="110,25 140,40 140,70 110,55" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="80,40 110,25 140,40" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- front cube highlight -->
+      <polygon points="95,55 125,40 125,70 95,85" fill="none" stroke="#3B82F6" stroke-width="1.2"/>
+      <polygon points="125,40 155,55 155,85 125,70" fill="none" stroke="#3B82F6" stroke-width="1.2"/>
+      <polygon points="95,55 125,40 155,55" fill="rgba(59,130,246,0.08)"/>
+      <polygon points="95,55 95,85 125,70" fill="rgba(59,130,246,0.05)"/>
+      <circle cx="141" cy="55" r="3" fill="#F59E0B"/>
+      <circle cx="95" cy="70" r="3" fill="#3B82F6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-purple">WIREFRAME</span><span class="tag tag-amber">CUBES</span></div>
+</div>
+
+<!-- 30: FLOATING ISOMETRIC PLATFORMS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">30</div><div class="card-title">Парящие платформы</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- platform 1 -->
+      <polygon points="20,70 50,55 80,70 50,85" fill="rgba(59,130,246,0.12)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="20,70 20,85 50,100 50,85" fill="rgba(59,130,246,0.06)"/>
+      <polygon points="50,85 50,100 80,85 80,70" fill="rgba(59,130,246,0.04)"/>
+      <!-- platform 2 -->
+      <polygon points="100,40 130,25 160,40 130,55" fill="rgba(245,158,11,0.12)" stroke="#F59E0B" stroke-width="1"/>
+      <polygon points="100,40 100,55 130,70 130,55" fill="rgba(245,158,11,0.06)"/>
+      <!-- platform 3 -->
+      <polygon points="55,15 85,0 115,15 85,30" fill="rgba(16,185,129,0.12)" stroke="#10B981" stroke-width="1"/>
+      <polygon points="55,15 55,30 85,45 85,30" fill="rgba(16,185,129,0.06)"/>
+      <!-- connector lines -->
+      <line x1="80" y1="85" x2="100" y2="55" stroke="#3B82F6" stroke-width="0.6" stroke-dasharray="3,2"/>
+      <line x1="80" y1="85" x2="85" y2="45" stroke="#3B82F6" stroke-width="0.6" stroke-dasharray="3,2"/>
+      <circle cx="80" cy="85" r="3" fill="#3B82F6"/>
+      <circle cx="100" cy="55" r="3" fill="#F59E0B"/>
+      <circle cx="85" cy="45" r="3" fill="#10B981"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-amber">FLOATING</span><span class="tag tag-green">GRAPH</span></div>
+</div>
+
+<!-- 31: ISOMETRIC HEXAGONAL GRID -->
+<div class="card">
+  <div class="card-header"><div class="card-num">31</div><div class="card-title">Гексагональная изосетка</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- hexagonal column 1 -->
+      <ellipse cx="45" cy="30" rx="18" ry="10" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <rect x="27" y="30" width="36" height="25" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <ellipse cx="45" cy="55" rx="18" ry="10" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- hexagonal column 2 -->
+      <ellipse cx="90" cy="20" rx="18" ry="10" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <rect x="72" y="20" width="36" height="30" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <ellipse cx="90" cy="50" rx="18" ry="10" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- hexagonal column 3 highlight -->
+      <ellipse cx="135" cy="35" rx="18" ry="10" fill="none" stroke="#3B82F6" stroke-width="1.2"/>
+      <rect x="117" y="35" width="36" height="30" fill="none" stroke="#3B82F6" stroke-width="1.2"/>
+      <ellipse cx="135" cy="65" rx="18" ry="10" fill="none" stroke="#3B82F6" stroke-width="1.2"/>
+      <ellipse cx="135" cy="35" rx="10" ry="5" fill="rgba(59,130,246,0.12)"/>
+      <!-- connector hex -->
+      <line x1="54" y1="40" x2="72" y2="30" stroke="#F59E0B" stroke-width="0.8"/>
+      <line x1="99" y1="40" x2="117" y2="45" stroke="#F59E0B" stroke-width="0.8"/>
+      <circle cx="54" cy="40" r="2.5" fill="#3B82F6"/>
+      <circle cx="99" cy="40" r="2.5" fill="#10B981"/>
+      <circle cx="135" cy="50" r="3" fill="#F59E0B"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-purple">HEX</span><span class="tag tag-amber">COLUMNS</span></div>
+</div>
+
+<!-- 32: GLOWING INTERSECTION GRID -->
+<div class="card">
+  <div class="card-header"><div class="card-num">32</div><div class="card-title">Сетка со светящимися узлами</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- isometric grid lines -->
+      <line x1="90" y1="8" x2="10" y2="55" stroke="#0F2A50" stroke-width="0.5"/>
+      <line x1="90" y1="8" x2="90" y2="100" stroke="#0F2A50" stroke-width="0.5"/>
+      <line x1="90" y1="8" x2="170" y2="55" stroke="#0F2A50" stroke-width="0.5"/>
+      <line x1="10" y1="55" x2="90" y2="100" stroke="#0F2A50" stroke-width="0.5"/>
+      <line x1="90" y1="100" x2="170" y2="55" stroke="#0F2A50" stroke-width="0.5"/>
+      <line x1="130" y1="30" x2="50" y2="75" stroke="#0F2A50" stroke-width="0.5"/>
+      <line x1="50" y1="30" x2="130" y2="75" stroke="#0F2A50" stroke-width="0.5"/>
+      <!-- glowing nodes -->
+      <circle cx="90" cy="8" r="4" fill="#3B82F6" opacity="0.9"/>
+      <circle cx="90" cy="8" r="8" fill="#3B82F6" opacity="0.15"/>
+      <circle cx="50" cy="30" r="3.5" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="50" cy="30" r="7" fill="#F59E0B" opacity="0.12"/>
+      <circle cx="130" cy="30" r="3.5" fill="#10B981" opacity="0.9"/>
+      <circle cx="130" cy="30" r="7" fill="#10B981" opacity="0.12"/>
+      <circle cx="10" cy="55" r="3.5" fill="#8B5CF6" opacity="0.9"/>
+      <circle cx="10" cy="55" r="7" fill="#8B5CF6" opacity="0.12"/>
+      <circle cx="90" cy="55" r="4" fill="#EF4444" opacity="0.9"/>
+      <circle cx="90" cy="55" r="8" fill="#EF4444" opacity="0.12"/>
+      <circle cx="170" cy="55" r="3.5" fill="#3B82F6" opacity="0.9"/>
+      <circle cx="170" cy="55" r="7" fill="#3B82F6" opacity="0.12"/>
+      <circle cx="50" cy="75" r="3" fill="#F59E0B" opacity="0.8"/>
+      <circle cx="130" cy="75" r="3" fill="#10B981" opacity="0.8"/>
+      <circle cx="90" cy="100" r="3.5" fill="#8B5CF6" opacity="0.9"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-amber">GLOW</span><span class="tag tag-purple">NODES</span></div>
+</div>
+
+<!-- 33: CUBE MILESTONES ON TIMELINE -->
+<div class="card">
+  <div class="card-header"><div class="card-num">33</div><div class="card-title">Кубы-вехи на оси</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <line x1="15" y1="90" x2="165" y2="90" stroke="#1E3252" stroke-width="1.5"/>
+      <!-- cube 1 -->
+      <polygon points="25,78 45,68 45,88 25,98" fill="rgba(59,130,246,0.15)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="45,68 65,78 65,98 45,88" fill="rgba(59,130,246,0.08)" stroke="#3B82F6" stroke-width="0.5"/>
+      <polygon points="25,78 45,68 65,78" fill="rgba(59,130,246,0.2)"/>
+      <!-- cube 2 -->
+      <polygon points="65,70 85,60 85,80 65,90" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1"/>
+      <polygon points="85,60 105,70 105,90 85,80" fill="rgba(245,158,11,0.08)" stroke="#F59E0B" stroke-width="0.5"/>
+      <polygon points="65,70 85,60 105,70" fill="rgba(245,158,11,0.2)"/>
+      <!-- cube 3 -->
+      <polygon points="105,78 125,68 125,88 105,98" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="1"/>
+      <polygon points="125,68 145,78 145,98 125,88" fill="rgba(16,185,129,0.08)" stroke="#10B981" stroke-width="0.5"/>
+      <polygon points="105,78 125,68 145,78" fill="rgba(16,185,129,0.2)"/>
+      <!-- tick marks -->
+      <line x1="45" y1="88" x2="45" y2="105" stroke="#1E3252" stroke-width="0.6"/>
+      <line x1="85" y1="80" x2="85" y2="105" stroke="#1E3252" stroke-width="0.6"/>
+      <line x1="125" y1="88" x2="125" y2="105" stroke="#1E3252" stroke-width="0.6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-amber">MILESTONE</span><span class="tag tag-green">TIMELINE</span></div>
+</div>
+
+<!-- 34: DIAMOND MILESTONES -->
+<div class="card">
+  <div class="card-header"><div class="card-num">34</div><div class="card-title">Ромбовидные вехи</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <line x1="20" y1="85" x2="160" y2="85" stroke="#1E3252" stroke-width="1.2"/>
+      <!-- diamond 1 -->
+      <polygon points="35,72 50,60 65,72 50,84" fill="rgba(59,130,246,0.15)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="50,84 65,72 65,88 50,100" fill="rgba(59,130,246,0.06)"/>
+      <!-- diamond 2 -->
+      <polygon points="75,63 90,50 105,63 90,76" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6" stroke-width="1"/>
+      <polygon points="90,76 105,63 105,80 90,93" fill="rgba(139,92,246,0.06)"/>
+      <!-- diamond 3 -->
+      <polygon points="115,72 130,60 145,72 130,84" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1"/>
+      <polygon points="130,84 145,72 145,88 130,100" fill="rgba(245,158,11,0.06)"/>
+      <!-- ticks -->
+      <line x1="50" y1="84" x2="50" y2="100" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="90" y1="76" x2="90" y2="100" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="130" y1="84" x2="130" y2="100" stroke="#1E3252" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-purple">DIAMOND</span><span class="tag tag-amber">MILESTONE</span></div>
+</div>
+
+<!-- 35: MILESTONE TOWER STACK -->
+<div class="card">
+  <div class="card-header"><div class="card-num">35</div><div class="card-title">Башня вех</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- shadow -->
+      <polygon points="60,100 110,100 130,90 80,90" fill="rgba(0,0,0,0.2)"/>
+      <!-- level 3 (top) -->
+      <polygon points="78,40 98,30 118,40 98,50" fill="rgba(16,185,129,0.2)" stroke="#10B981" stroke-width="1"/>
+      <polygon points="78,40 98,50 98,60 78,50" fill="rgba(16,185,129,0.08)"/>
+      <polygon points="98,50 118,40 118,50 98,60" fill="rgba(16,185,129,0.05)"/>
+      <!-- level 2 -->
+      <polygon points="68,55 88,45 108,55 88,65" fill="rgba(245,158,11,0.2)" stroke="#F59E0B" stroke-width="1"/>
+      <polygon points="68,55 88,65 88,75 68,65" fill="rgba(245,158,11,0.08)"/>
+      <polygon points="88,65 108,55 108,65 88,75" fill="rgba(245,158,11,0.05)"/>
+      <!-- level 1 -->
+      <polygon points="58,70 88,55 118,70 88,85" fill="rgba(59,130,246,0.2)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="58,70 88,85 88,95 58,80" fill="rgba(59,130,246,0.08)"/>
+      <polygon points="88,85 118,70 118,80 88,95" fill="rgba(59,130,246,0.05)"/>
+      <!-- vertical axis -->
+      <line x1="88" y1="30" x2="88" y2="95" stroke="#1E3252" stroke-width="0.5" stroke-dasharray="2,3"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-green">TOWER</span><span class="tag tag-amber">STACK</span></div>
+</div>
+
+<!-- 36: FLOATING CUBES WITH CONNECTORS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">36</div><div class="card-title">Парящие кубы-вехи</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- connector lines -->
+      <line x1="40" y1="95" x2="90" y2="55" stroke="#1E3252" stroke-width="0.6" stroke-dasharray="3,3"/>
+      <line x1="90" y1="55" x2="145" y2="75" stroke="#1E3252" stroke-width="0.6" stroke-dasharray="3,3"/>
+      <line x1="90" y1="55" x2="50" y2="30" stroke="#1E3252" stroke-width="0.6" stroke-dasharray="3,3"/>
+      <!-- cube 1 (bottom-left) -->
+      <polygon points="20,85 40,75 40,95 20,105" fill="rgba(59,130,246,0.18)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="40,75 60,85 60,105 40,95" fill="rgba(59,130,246,0.08)" stroke="#3B82F6" stroke-width="0.5"/>
+      <polygon points="20,85 40,75 60,85" fill="rgba(59,130,246,0.22)"/>
+      <!-- cube 2 (center) -->
+      <polygon points="78,45 98,35 98,55 78,65" fill="rgba(245,158,11,0.18)" stroke="#F59E0B" stroke-width="1"/>
+      <polygon points="98,35 118,45 118,65 98,55" fill="rgba(245,158,11,0.08)" stroke="#F59E0B" stroke-width="0.5"/>
+      <polygon points="78,45 98,35 118,45" fill="rgba(245,158,11,0.22)"/>
+      <!-- cube 3 (top-left) -->
+      <polygon points="32,20 52,10 52,35 32,45" fill="rgba(139,92,246,0.18)" stroke="#8B5CF6" stroke-width="1"/>
+      <polygon points="52,10 72,20 72,45 52,35" fill="rgba(139,92,246,0.08)" stroke="#8B5CF6" stroke-width="0.5"/>
+      <polygon points="32,20 52,10 72,20" fill="rgba(139,92,246,0.22)"/>
+      <!-- cube 4 (bottom-right) -->
+      <polygon points="130,70 150,60 150,80 130,90" fill="rgba(16,185,129,0.18)" stroke="#10B981" stroke-width="1"/>
+      <polygon points="150,60 170,70 170,90 150,80" fill="rgba(16,185,129,0.08)" stroke="#10B981" stroke-width="0.5"/>
+      <polygon points="130,70 150,60 170,70" fill="rgba(16,185,129,0.22)"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-purple">FLOATING</span><span class="tag tag-amber">NETWORK</span></div>
+</div>
+
+<!-- 37: MILESTONE WITH FLAG -->
+<div class="card">
+  <div class="card-header"><div class="card-num">37</div><div class="card-title">Веха с флагом</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- shadow -->
+      <polygon points="60,105 100,105 120,95 80,95" fill="rgba(0,0,0,0.15)"/>
+      <!-- base cube -->
+      <polygon points="70,70 90,60 90,85 70,95" fill="rgba(59,130,246,0.18)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="90,60 110,70 110,95 90,85" fill="rgba(59,130,246,0.08)" stroke="#3B82F6" stroke-width="0.6"/>
+      <polygon points="70,70 90,60 110,70" fill="rgba(59,130,246,0.22)"/>
+      <!-- pole -->
+      <line x1="90" y1="60" x2="90" y2="15" stroke="#E8EEF5" stroke-width="1.5"/>
+      <!-- flag -->
+      <polygon points="90,15 130,22 90,30" fill="rgba(239,68,68,0.6)" stroke="#EF4444" stroke-width="0.8"/>
+      <!-- milestone dot -->
+      <circle cx="90" cy="77" r="2.5" fill="#F59E0B"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-red">FLAG</span><span class="tag tag-amber">MILESTONE</span></div>
+</div>
+
+<!-- 38: STAGGERED CUBE MILESTONES -->
+<div class="card">
+  <div class="card-header"><div class="card-num">38</div><div class="card-title">Ступенчатые кубы-вехи</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <line x1="10" y1="95" x2="170" y2="95" stroke="#1E3252" stroke-width="1"/>
+      <!-- cube 1 low -->
+      <polygon points="20,85 40,77 40,93 20,101" fill="rgba(16,185,129,0.18)" stroke="#10B981" stroke-width="0.8"/>
+      <polygon points="40,77 60,85 60,101 40,93" fill="rgba(16,185,129,0.08)"/>
+      <polygon points="20,85 40,77 60,85" fill="rgba(16,185,129,0.2)"/>
+      <!-- cube 2 mid -->
+      <polygon points="60,72 80,62 80,82 60,92" fill="rgba(245,158,11,0.18)" stroke="#F59E0B" stroke-width="0.8"/>
+      <polygon points="80,62 100,72 100,92 80,82" fill="rgba(245,158,11,0.08)"/>
+      <polygon points="60,72 80,62 100,72" fill="rgba(245,158,11,0.2)"/>
+      <!-- cube 3 high -->
+      <polygon points="100,58 120,48 120,68 100,78" fill="rgba(59,130,246,0.18)" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="120,48 140,58 140,78 120,68" fill="rgba(59,130,246,0.08)"/>
+      <polygon points="100,58 120,48 140,58" fill="rgba(59,130,246,0.2)"/>
+      <!-- cube 4 highest -->
+      <polygon points="135,40 155,30 155,55 135,65" fill="rgba(139,92,246,0.18)" stroke="#8B5CF6" stroke-width="0.8"/>
+      <polygon points="155,30 175,40 175,65 155,55" fill="rgba(139,92,246,0.08)"/>
+      <polygon points="135,40 155,30 175,40" fill="rgba(139,92,246,0.2)"/>
+      <!-- stagger connectors -->
+      <line x1="40" y1="89" x2="60" y2="82" stroke="#3B82F6" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="80" y1="77" x2="100" y2="68" stroke="#3B82F6" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="120" y1="63" x2="135" y2="52" stroke="#3B82F6" stroke-width="0.5" stroke-dasharray="2,2"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-amber">STAGGERED</span><span class="tag tag-green">ASCENDING</span></div>
+</div>
+
+<!-- 39: CRYSTALLINE MILESTONES -->
+<div class="card">
+  <div class="card-header"><div class="card-num">39</div><div class="card-title">Кристаллические вехи</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <line x1="15" y1="90" x2="165" y2="90" stroke="#1E3252" stroke-width="1.2"/>
+      <!-- crystal 1 -->
+      <polygon points="30,55 45,40 45,65 30,80" fill="rgba(59,130,246,0.15)" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="45,40 60,55 60,80 45,65" fill="rgba(59,130,246,0.08)"/>
+      <polygon points="30,55 45,65 60,55" fill="rgba(59,130,246,0.2)"/>
+      <!-- crystal 2 -->
+      <polygon points="70,45 85,30 85,55 70,70" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6" stroke-width="0.8"/>
+      <polygon points="85,30 100,45 100,70 85,55" fill="rgba(139,92,246,0.08)"/>
+      <polygon points="70,45 85,55 100,45" fill="rgba(139,92,246,0.2)"/>
+      <!-- crystal 3 -->
+      <polygon points="110,55 125,40 125,65 110,80" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="0.8"/>
+      <polygon points="125,40 140,55 140,80 125,65" fill="rgba(16,185,129,0.08)"/>
+      <polygon points="110,55 125,65 140,55" fill="rgba(16,185,129,0.2)"/>
+      <!-- axis ticks -->
+      <line x1="45" y1="65" x2="45" y2="100" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="85" y1="55" x2="85" y2="100" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="125" y1="65" x2="125" y2="100" stroke="#1E3252" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-purple">CRYSTAL</span><span class="tag tag-amber">MILESTONE</span></div>
+</div>
+
+<!-- 40: STACKED ISOMETRIC PLATFORMS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">40</div><div class="card-title">Слоёные платформы</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- platform 1 bottom -->
+      <polygon points="30,95 90,62 150,95 90,110" fill="rgba(59,130,246,0.08)" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="30,95 90,110 90,110 30,95" fill="none"/>
+      <!-- platform 1 front -->
+      <polygon points="30,95 30,105 90,115 90,110" fill="rgba(59,130,246,0.05)"/>
+      <polygon points="90,110 90,115 150,105 150,95" fill="rgba(59,130,246,0.03)"/>
+      <!-- platform 2 mid -->
+      <polygon points="50,72 90,50 130,72 90,84" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="0.8"/>
+      <polygon points="50,72 90,84 90,94 50,82" fill="rgba(245,158,11,0.06)"/>
+      <polygon points="90,84 130,72 130,82 90,94" fill="rgba(245,158,11,0.04)"/>
+      <!-- platform 3 top -->
+      <polygon points="70,38 90,28 110,38 90,48" fill="rgba(16,185,129,0.12)" stroke="#10B981" stroke-width="0.8"/>
+      <polygon points="70,38 90,48 90,58 70,48" fill="rgba(16,185,129,0.06)"/>
+      <!-- graph nodes -->
+      <circle cx="90" cy="28" r="3" fill="#10B981"/>
+      <circle cx="90" cy="50" r="3" fill="#F59E0B"/>
+      <circle cx="90" cy="72" r="3.5" fill="#3B82F6"/>
+      <line x1="90" y1="31" x2="90" y2="47" stroke="#10B981" stroke-width="0.6"/>
+      <line x1="90" y1="53" x2="90" y2="69" stroke="#F59E0B" stroke-width="0.6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-green">LAYERS</span><span class="tag tag-amber">GRAPH</span></div>
+</div>
+
+<!-- 41: THREE-TIER PLATFORM GRAPH -->
+<div class="card">
+  <div class="card-header"><div class="card-num">41</div><div class="card-title">Трёхуровневая платформа-граф</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- level 1 -->
+      <polygon points="15,90 75,55 135,90 75,110" fill="rgba(30,50,80,0.4)" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="75,55 135,90 135,100 75,65" fill="rgba(30,50,80,0.2)"/>
+      <!-- level 2 -->
+      <polygon points="40,58 75,35 110,58 75,72" fill="rgba(59,130,246,0.12)" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="40,58 75,72 75,80 40,66" fill="rgba(59,130,246,0.06)"/>
+      <!-- level 3 -->
+      <polygon points="60,30 80,17 100,30 80,43" fill="rgba(245,158,11,0.14)" stroke="#F59E0B" stroke-width="0.8"/>
+      <polygon points="60,30 80,43 80,50 60,37" fill="rgba(245,158,11,0.07)"/>
+      <!-- graph connections -->
+      <circle cx="75" cy="55" r="3.5" fill="#3B82F6"/>
+      <circle cx="80" cy="35" r="3" fill="#F59E0B"/>
+      <circle cx="80" cy="17" r="3" fill="#10B981"/>
+      <circle cx="110" cy="58" r="2.5" fill="#8B5CF6"/>
+      <line x1="75" y1="52" x2="80" y2="38" stroke="#3B82F6" stroke-width="0.6"/>
+      <line x1="80" y1="32" x2="80" y2="20" stroke="#F59E0B" stroke-width="0.6"/>
+      <line x1="78" y1="55" x2="108" y2="58" stroke="#8B5CF6" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-purple">TIERS</span><span class="tag tag-amber">GRAPH</span></div>
+</div>
+
+<!-- 42: HEXAGONAL LAYERED PLATFORMS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">42</div><div class="card-title">Гексагональные слои</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- hex platform 1 (bottom) -->
+      <ellipse cx="90" cy="90" rx="55" ry="18" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <rect x="35" y="72" width="110" height="18" fill="none" stroke="#1E3252" stroke-width="0.8"/>
+      <ellipse cx="90" cy="72" rx="55" ry="18" fill="rgba(30,50,80,0.3)" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- hex platform 2 (mid) -->
+      <ellipse cx="90" cy="52" rx="38" ry="13" fill="rgba(59,130,246,0.08)" stroke="#3B82F6" stroke-width="0.8"/>
+      <rect x="52" y="39" width="76" height="13" fill="none" stroke="#3B82F6" stroke-width="0.8"/>
+      <ellipse cx="90" cy="39" rx="38" ry="13" fill="rgba(59,130,246,0.12)" stroke="#3B82F6" stroke-width="0.8"/>
+      <!-- hex platform 3 (top) -->
+      <ellipse cx="90" cy="18" rx="22" ry="8" fill="none" stroke="#F59E0B" stroke-width="0.8"/>
+      <rect x="68" y="10" width="44" height="8" fill="none" stroke="#F59E0B" stroke-width="0.8"/>
+      <ellipse cx="90" cy="10" rx="22" ry="8" fill="rgba(245,158,11,0.12)" stroke="#F59E0B" stroke-width="0.8"/>
+      <!-- nodes -->
+      <circle cx="90" cy="10" r="3" fill="#F59E0B"/>
+      <circle cx="90" cy="39" r="3" fill="#3B82F6"/>
+      <circle cx="90" cy="90" r="3.5" fill="#10B981"/>
+      <line x1="90" y1="13" x2="90" y2="36" stroke="#F59E0B" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="90" y1="42" x2="90" y2="87" stroke="#3B82F6" stroke-width="0.5" stroke-dasharray="2,2"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-purple">HEX</span><span class="tag tag-green">LAYERS</span></div>
+</div>
+
+<!-- 43: STEPPED ISOMETRIC PLATFORMS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">43</div><div class="card-title">Ступенчатые платформы</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- step 1 -->
+      <polygon points="10,95 50,72 90,95 50,105" fill="rgba(59,130,246,0.1)" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- step 2 -->
+      <polygon points="40,75 80,52 120,75 80,88" fill="rgba(16,185,129,0.1)" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- step 3 -->
+      <polygon points="75,55 115,32 155,55 115,68" fill="rgba(245,158,11,0.1)" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- step 4 top -->
+      <polygon points="105,35 135,18 165,35 135,48" fill="rgba(139,92,246,0.12)" stroke="#8B5CF6" stroke-width="0.8"/>
+      <!-- path line -->
+      <polyline points="50,95 50,72 40,75 80,88 115,55 105,48 135,35 135,18" fill="none" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="4,2"/>
+      <!-- nodes -->
+      <circle cx="50" cy="95" r="3" fill="#3B82F6"/>
+      <circle cx="80" cy="88" r="3" fill="#10B981"/>
+      <circle cx="115" cy="68" r="3" fill="#F59E0B"/>
+      <circle cx="135" cy="48" r="3" fill="#8B5CF6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-green">STEPS</span><span class="tag tag-amber">PATH</span></div>
+</div>
+
+<!-- 44: FLOATING PLATFORM ISLANDS WITH BRIDGE -->
+<div class="card">
+  <div class="card-header"><div class="card-num">44</div><div class="card-title">Парящие острова с мостом</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- island left -->
+      <polygon points="15,80 50,60 85,80 50,95" fill="rgba(59,130,246,0.12)" stroke="#3B82F6" stroke-width="1"/>
+      <polygon points="15,80 15,92 50,107 50,95" fill="rgba(59,130,246,0.06)"/>
+      <!-- island right -->
+      <polygon points="100,55 140,32 175,55 140,72" fill="rgba(245,158,11,0.12)" stroke="#F59E0B" stroke-width="1"/>
+      <polygon points="100,55 100,67 140,84 140,72" fill="rgba(245,158,11,0.06)"/>
+      <polygon points="140,72 175,55 175,67 140,84" fill="rgba(245,158,11,0.04)"/>
+      <!-- bridge -->
+      <line x1="85" y1="80" x2="100" y2="55" stroke="#E8EEF5" stroke-width="1.2"/>
+      <line x1="85" y1="82" x2="100" y2="57" stroke="#E8EEF5" stroke-width="0.4"/>
+      <!-- nodes -->
+      <circle cx="50" cy="60" r="3.5" fill="#3B82F6"/>
+      <circle cx="85" cy="80" r="3" fill="#10B981"/>
+      <circle cx="100" cy="55" r="3" fill="#F59E0B"/>
+      <circle cx="140" cy="32" r="3.5" fill="#EF4444"/>
+      <!-- internal conn -->
+      <line x1="53" y1="60" x2="82" y2="78" stroke="#3B82F6" stroke-width="0.6" stroke-dasharray="2,2"/>
+      <line x1="103" y1="55" x2="137" y2="35" stroke="#F59E0B" stroke-width="0.6" stroke-dasharray="2,2"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-amber">ISLANDS</span><span class="tag tag-red">BRIDGE</span></div>
+</div>
+
+<!-- 45: BUILDING BLOCKS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">45</div><div class="card-title">Строительные блоки</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <polygon points="98,100 128,100 138,94 108,94" fill="rgba(0,0,0,0.15)"/>
+      <!-- block A large -->
+      <polygon points="60,70 110,42 160,70 110,85" fill="rgba(59,130,246,0.12)" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="60,70 110,85 110,98 60,83" fill="rgba(59,130,246,0.06)"/>
+      <!-- block B left -->
+      <polygon points="30,55 60,38 90,55 60,70" fill="rgba(16,185,129,0.14)" stroke="#10B981" stroke-width="0.8"/>
+      <polygon points="30,55 60,70 60,83 30,68" fill="rgba(16,185,129,0.07)"/>
+      <!-- block C top -->
+      <polygon points="70,30 100,14 130,30 100,46" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="0.8"/>
+      <polygon points="70,30 100,46 100,58 70,42" fill="rgba(245,158,11,0.07)"/>
+      <polygon points="100,46 130,30 130,42 100,58" fill="rgba(245,158,11,0.04)"/>
+      <!-- connections -->
+      <circle cx="110" cy="42" r="3" fill="#3B82F6"/>
+      <circle cx="100" cy="14" r="3" fill="#F59E0B"/>
+      <circle cx="60" cy="38" r="3" fill="#10B981"/>
+      <line x1="107" y1="39" x2="103" y2="17" stroke="#3B82F6" stroke-width="0.5"/>
+      <line x1="63" y1="38" x2="107" y2="39" stroke="#3B82F6" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-green">BLOCKS</span><span class="tag tag-amber">STACK</span></div>
+</div>
+
+<!-- 46: MULTI-LEVEL WITH VERTICAL CONNECTORS -->
+<div class="card">
+  <div class="card-header"><div class="card-num">46</div><div class="card-title">Многоуровневые вертикали</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- level 0 ground -->
+      <line x1="20" y1="108" x2="160" y2="108" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- level 1 platform -->
+      <polygon points="25,92 90,55 155,92 90,112" fill="rgba(30,50,80,0.3)" stroke="#1E3252" stroke-width="0.8"/>
+      <!-- level 2a -->
+      <polygon points="30,68 60,50 90,68 60,82" fill="rgba(59,130,246,0.12)" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="30,68 60,82 60,92 30,78" fill="rgba(59,130,246,0.06)"/>
+      <!-- level 2b -->
+      <polygon points="95,55 125,38 155,55 125,68" fill="rgba(16,185,129,0.12)" stroke="#10B981" stroke-width="0.8"/>
+      <polygon points="95,55 125,68 125,78 95,65" fill="rgba(16,185,129,0.06)"/>
+      <polygon points="125,68 155,55 155,65 125,78" fill="rgba(16,185,129,0.04)"/>
+      <!-- level 3 top -->
+      <polygon points="80,20 100,8 120,20 100,32" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="0.8"/>
+      <polygon points="80,20 100,32 100,42 80,30" fill="rgba(245,158,11,0.07)"/>
+      <!-- vertical connectors -->
+      <line x1="60" y1="50" x2="60" y2="82" stroke="#3B82F6" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="125" y1="38" x2="125" y2="68" stroke="#10B981" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="100" y1="8" x2="100" y2="32" stroke="#F59E0B" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <circle cx="60" cy="50" r="3" fill="#3B82F6"/>
+      <circle cx="125" cy="38" r="3" fill="#10B981"/>
+      <circle cx="100" cy="8" r="3.5" fill="#F59E0B"/>
+      <circle cx="60" cy="92" r="2.5" fill="#3B82F6" opacity="0.6"/>
+      <circle cx="125" cy="78" r="2.5" fill="#10B981" opacity="0.6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">ISO</span><span class="tag tag-purple">MULTI-LVL</span><span class="tag tag-green">VERTICAL</span></div>
+</div>
+
+<!-- 47: 3D SPIRAL STAIRCASE -->
+<div class="card">
+  <div class="card-header"><div class="card-num">47</div><div class="card-title">3D-спираль</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- center pole -->
+      <line x1="90" y1="15" x2="90" y2="108" stroke="#1E3252" stroke-width="1.2"/>
+      <!-- spiral steps - bottom to top -->
+      <ellipse cx="90" cy="100" rx="40" ry="10" fill="none" stroke="#3B82F6" stroke-width="0.8"/>
+      <line x1="50" y1="100" x2="130" y2="100" stroke="#3B82F6" stroke-width="0.8"/>
+      <!-- step 2 -->
+      <ellipse cx="90" cy="88" rx="36" ry="9" fill="none" stroke="#3B82F6" stroke-width="0.7"/>
+      <line x1="54" y1="86" x2="126" y2="90" stroke="#3B82F6" stroke-width="0.7"/>
+      <!-- step 3 -->
+      <ellipse cx="90" cy="76" rx="32" ry="8" fill="none" stroke="#F59E0B" stroke-width="0.7"/>
+      <line x1="58" y1="73" x2="122" y2="79" stroke="#F59E0B" stroke-width="0.7"/>
+      <!-- step 4 -->
+      <ellipse cx="90" cy="64" rx="28" ry="7" fill="none" stroke="#F59E0B" stroke-width="0.7"/>
+      <line x1="62" y1="62" x2="118" y2="66" stroke="#F59E0B" stroke-width="0.7"/>
+      <!-- step 5 -->
+      <ellipse cx="90" cy="52" rx="24" ry="6" fill="none" stroke="#10B981" stroke-width="0.7"/>
+      <line x1="66" y1="50" x2="114" y2="54" stroke="#10B981" stroke-width="0.7"/>
+      <!-- step 6 -->
+      <ellipse cx="90" cy="40" rx="18" ry="5" fill="none" stroke="#10B981" stroke-width="0.7"/>
+      <line x1="72" y1="38" x2="108" y2="42" stroke="#10B981" stroke-width="0.7"/>
+      <!-- step 7 top -->
+      <ellipse cx="90" cy="28" rx="12" ry="3.5" fill="none" stroke="#8B5CF6" stroke-width="0.7"/>
+      <line x1="78" y1="27" x2="102" y2="29" stroke="#8B5CF6" stroke-width="0.7"/>
+      <!-- spiral trace -->
+      <path d="M130,100 C130,86 126,88 130,76 C134,64 126,64 125,52 C124,40 114,40 108,28 C102,16 90,15 90,15" fill="none" stroke="#3B82F6" stroke-width="1" opacity="0.5"/>
+      <!-- nodes -->
+      <circle cx="130" cy="100" r="3" fill="#3B82F6"/>
+      <circle cx="125" cy="88" r="2.5" fill="#F59E0B"/>
+      <circle cx="118" cy="76" r="2.5" fill="#10B981"/>
+      <circle cx="108" cy="64" r="2.5" fill="#8B5CF6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-purple">SPIRAL</span><span class="tag tag-amber">ABSTRACT</span></div>
+</div>
+
+<!-- 48: ISOMETRIC ARCH BRIDGE -->
+<div class="card">
+  <div class="card-header"><div class="card-num">48</div><div class="card-title">Изометрическая арка</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- left pillar -->
+      <polygon points="20,90 35,82 35,105 20,113" fill="rgba(30,50,80,0.5)" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="35,82 50,90 50,113 35,105" fill="rgba(30,50,80,0.3)" stroke="#1E3252" stroke-width="0.5"/>
+      <polygon points="20,90 35,82 50,90" fill="rgba(59,130,246,0.08)"/>
+      <!-- right pillar -->
+      <polygon points="130,75 145,67 145,90 130,98" fill="rgba(30,50,80,0.5)" stroke="#1E3252" stroke-width="0.8"/>
+      <polygon points="145,67 160,75 160,98 145,90" fill="rgba(30,50,80,0.3)" stroke="#1E3252" stroke-width="0.5"/>
+      <polygon points="130,75 145,67 160,75" fill="rgba(245,158,11,0.08)"/>
+      <!-- arch deck -->
+      <line x1="50" y1="90" x2="130" y2="75" stroke="#E8EEF5" stroke-width="1.5"/>
+      <!-- arch curve -->
+      <path d="M35,82 Q80,30 130,75" fill="none" stroke="#3B82F6" stroke-width="1.8"/>
+      <path d="M20,90 Q80,40 145,67" fill="none" stroke="#3B82F6" stroke-width="0.6" opacity="0.4"/>
+      <!-- nodes -->
+      <circle cx="50" cy="90" r="3" fill="#3B82F6"/>
+      <circle cx="90" cy="62" r="3.5" fill="#F59E0B"/>
+      <circle cx="130" cy="75" r="3" fill="#10B981"/>
+      <circle cx="35" cy="82" r="2.5" fill="#8B5CF6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-amber">ARCH</span><span class="tag tag-red">BRIDGE</span></div>
+</div>
+
+<!-- 49: ABSTRACT 3D HELIX -->
+<div class="card">
+  <div class="card-header"><div class="card-num">49</div><div class="card-title">3D-спираль (хеликс)</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- helix strand 1 (front) -->
+      <path d="M90,15 C130,35 130,55 90,75 C50,95 50,110 90,108" fill="none" stroke="#3B82F6" stroke-width="1.5"/>
+      <!-- helix strand 2 (front) -->
+      <path d="M90,15 C50,35 50,55 90,75 C130,95 130,110 90,108" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+      <!-- cross bars -->
+      <line x1="90" y1="15" x2="90" y2="15" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="78" y1="38" x2="102" y2="38" stroke="#3B82F6" stroke-width="0.7"/>
+      <line x1="70" y1="55" x2="110" y2="55" stroke="#3B82F6" stroke-width="0.7"/>
+      <line x1="78" y1="72" x2="102" y2="72" stroke="#F59E0B" stroke-width="0.7"/>
+      <line x1="90" y1="88" x2="90" y2="88" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="78" y1="100" x2="102" y2="100" stroke="#3B82F6" stroke-width="0.5"/>
+      <!-- nodes -->
+      <circle cx="90" cy="15" r="3.5" fill="#10B981"/>
+      <circle cx="78" cy="38" r="3" fill="#3B82F6"/>
+      <circle cx="102" cy="38" r="3" fill="#F59E0B"/>
+      <circle cx="70" cy="55" r="2.5" fill="#3B82F6"/>
+      <circle cx="110" cy="55" r="2.5" fill="#8B5CF6"/>
+      <circle cx="78" cy="72" r="3" fill="#F59E0B"/>
+      <circle cx="102" cy="72" r="3" fill="#3B82F6"/>
+      <circle cx="90" cy="108" r="3.5" fill="#EF4444"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-purple">HELIX</span><span class="tag tag-amber">ABSTRACT</span></div>
+</div>
+
+<!-- 50: ABSTRACT 3D SCULPTURE -->
+<div class="card">
+  <div class="card-header"><div class="card-num">50</div><div class="card-title">Абстрактная 3D-композиция</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 180 120" width="180" height="120">
+      <!-- shadow -->
+      <polygon points="55,105 125,105 145,95 75,95" fill="rgba(0,0,0,0.15)"/>
+      <!-- base pyramid -->
+      <polygon points="90,35 60,52 90,70 120,52" fill="rgba(59,130,246,0.1)" stroke="#3B82F6" stroke-width="0.8"/>
+      <polygon points="60,52 90,70 90,95 60,77" fill="rgba(59,130,246,0.06)"/>
+      <polygon points="90,70 120,52 120,77 90,95" fill="rgba(59,130,246,0.04)"/>
+      <!-- floating ring left -->
+      <ellipse cx="40" cy="40" rx="20" ry="8" fill="none" stroke="#F59E0B" stroke-width="1.2" transform="rotate(-15,40,40)"/>
+      <ellipse cx="40" cy="40" rx="14" ry="5" fill="none" stroke="#F59E0B" stroke-width="0.5" opacity="0.4" transform="rotate(-15,40,40)"/>
+      <!-- floating ring right -->
+      <ellipse cx="145" cy="50" rx="18" ry="7" fill="none" stroke="#10B981" stroke-width="1.2" transform="rotate(10,145,50)"/>
+      <!-- connecting rods -->
+      <line x1="60" y1="45" x2="40" y2="40" stroke="#F59E0B" stroke-width="0.6" stroke-dasharray="3,2"/>
+      <line x1="110" y1="48" x2="145" y2="50" stroke="#10B981" stroke-width="0.6" stroke-dasharray="3,2"/>
+      <!-- top spire -->
+      <polygon points="85,20 95,20 95,35 85,35" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6" stroke-width="0.8"/>
+      <polygon points="85,20 90,8 95,20" fill="rgba(139,92,246,0.2)" stroke="#8B5CF6" stroke-width="0.8"/>
+      <!-- nodes -->
+      <circle cx="90" cy="35" r="3" fill="#3B82F6"/>
+      <circle cx="90" cy="70" r="3" fill="#10B981"/>
+      <circle cx="40" cy="40" r="2.5" fill="#F59E0B"/>
+      <circle cx="145" cy="50" r="2.5" fill="#10B981"/>
+      <circle cx="90" cy="8" r="2.5" fill="#8B5CF6"/>
+      <!-- dotted connections -->
+      <line x1="90" y1="38" x2="90" y2="67" stroke="#3B82F6" stroke-width="0.4" stroke-dasharray="1,3"/>
+      <line x1="87" y1="20" x2="90" y2="32" stroke="#8B5CF6" stroke-width="0.4" stroke-dasharray="1,3"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">3D</span><span class="tag tag-purple">SCULPTURE</span><span class="tag tag-amber">ABSTRACT</span></div>
+</div>
+
+</div>
+
+</body>
+</html>

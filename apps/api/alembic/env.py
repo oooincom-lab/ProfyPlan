@@ -28,7 +28,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Для офлайн-миграций (без подключения к БД)."""
-    url = settin…_url.replace("+asyncpg", "+psycopg2")
+    url = settings.database_url.replace("+asyncpg", "+psycopg2")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -42,7 +42,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Для онлайн-миграций."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settin…_url.replace("+asyncpg", "+psycopg2")
+    configuration["sqlalchemy.url"] = settings.database_url.replace("+asyncpg", "+psycopg2")
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

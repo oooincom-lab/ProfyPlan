@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProfyPlan Logo v2 · Part 4 (76–100) · CPM/Gantt × 3D/Isometric</title>
+<style>
+body{background:#0A1628;color:#E8EEF5;font-family:Inter,sans-serif;margin:0;padding:24px}
+h1{font-size:22px;font-weight:800}h1 span{color:#60A5FA}
+.sub{color:#8FA3BD;font-size:13px;margin-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.card{background:#0F1E36;border:1px solid #1E3252;border-radius:12px;padding:14px}
+.card:hover{border-color:#3B82F6}
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.card-num{width:26px;height:26px;background:#3B82F6;color:#fff;border-radius:7px;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-title{font-size:12px;font-weight:700;color:#E8EEF5}
+.card-preview{display:flex;justify-content:center;margin:8px 0}
+.card-tags{display:flex;gap:5px}
+.tag{font-size:8px;padding:2px 7px;border-radius:100px;font-family:'IBM Plex Mono',monospace;font-weight:600}
+.tag-blue{color:#60A5FA;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.1)}
+.tag-amber{color:#F59E0B;border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.1)}
+.tag-red{color:#EF4444;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.08)}
+.tag-green{color:#10B981;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.1)}
+.tag-purple{color:#8B5CF6;border:1px solid rgba(139,92,246,0.3);background:rgba(139,92,246,0.1)}
+</style>
+</head>
+<body>
+<h1>ProfyPlan Logo · <span>Часть 4</span></h1>
+<p class="sub">Варианты 76–100 · CPM / Гант × 3D Изометрия · Industrial Graph Dark · 25 SVG</p>
+<div class="grid">
+
+<!-- ===== 76 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">76</div><div class="card-title">Гант с разрывами</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g76a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g76b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+      </defs>
+      <!-- isometric grid plane -->
+      <polygon points="10,95 60,65 110,95 60,125" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="35" y1="80" x2="35" y2="110" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="60" y1="65" x2="60" y2="95" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="85" y1="80" x2="85" y2="110" stroke="#1E3252" stroke-width="0.3"/>
+      <!-- bar 1: split in two segments with gap -->
+      <polygon points="25,82 28,79 48,79 45,82" fill="url(#g76a)" opacity="0.9"/>
+      <polygon points="25,82 45,82 45,86 25,86" fill="#1D4ED8" opacity="0.8"/>
+      <polygon points="45,82 48,79 48,83 45,86" fill="#1E3A6E" opacity="0.7"/>
+      <!-- gap -->
+      <!-- second segment of bar 1 -->
+      <polygon points="58,82 61,79 81,79 78,82" fill="url(#g76a)" opacity="0.9"/>
+      <polygon points="58,82 78,82 78,86 58,86" fill="#1D4ED8" opacity="0.8"/>
+      <polygon points="78,82 81,79 81,83 78,86" fill="#1E3A6E" opacity="0.7"/>
+      <!-- bar 2: continuous but with a small break gap visible -->
+      <polygon points="25,92 28,89 68,89 65,92" fill="url(#g76b)" opacity="0.85"/>
+      <polygon points="25,92 65,92 65,96 25,96" fill="#D97706" opacity="0.75"/>
+      <polygon points="65,92 68,89 68,93 65,96" fill="#92400E" opacity="0.65"/>
+      <!-- gap marker -->
+      <line x1="51" y1="79" x2="55" y2="79" stroke="#EF4444" stroke-width="1" stroke-dasharray="2,1"/>
+      <!-- milestone diamond -->
+      <polygon points="84,80 87,82 84,84 81,82" fill="#F59E0B"/>
+      <!-- axis label -->
+      <text x="5" y="90" font-size="5" fill="#8FA3BD">t</text>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">gap</span></div>
+</div>
+
+<!-- ===== 77 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">77</div><div class="card-title">Ресурсный конфликт</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g77a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#EF4444"/><stop offset="100%" stop-color="#B91C1C"/></linearGradient>
+        <linearGradient id="g77b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+      </defs>
+      <!-- platform -->
+      <polygon points="5,105 60,73 115,105 60,137" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- bar A bottom -->
+      <polygon points="20,88 24,85 72,85 68,88" fill="url(#g77a)" opacity="0.8"/>
+      <polygon points="20,88 68,88 68,93 20,93" fill="#B91C1C" opacity="0.7"/>
+      <polygon points="68,88 72,85 72,90 68,93" fill="#7F1D1D" opacity="0.6"/>
+      <!-- bar B top - overlapping -->
+      <polygon points="40,76 44,73 92,73 88,76" fill="url(#g77b)" opacity="0.8"/>
+      <polygon points="40,76 88,76 88,81 40,81" fill="#1D4ED8" opacity="0.7"/>
+      <polygon points="88,76 92,73 92,78 88,81" fill="#1E3A6E" opacity="0.6"/>
+      <!-- conflict zone highlight -->
+      <rect x="40" y="75" width="28" height="5" fill="#F59E0B" opacity="0.25" rx="1"/>
+      <text x="47" y="85" font-size="4.5" fill="#F59E0B" font-weight="700">⚠</text>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">overlap</span></div>
+</div>
+
+<!-- ===== 78 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">78</div><div class="card-title">WBS Grouped Bars</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g78a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+        <linearGradient id="g78b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#60A5FA"/><stop offset="100%" stop-color="#3B82F6"/></linearGradient>
+      </defs>
+      <polygon points="10,100 60,72 112,100 60,128" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- WBS group bracket -->
+      <line x1="22" y1="95" x2="22" y2="68" stroke="#1E3252" stroke-width="0.6"/>
+      <line x1="22" y1="68" x2="105" y2="68" stroke="#1E3252" stroke-width="0.6"/>
+      <line x1="105" y1="68" x2="105" y2="95" stroke="#1E3252" stroke-width="0.6"/>
+      <text x="50" y="66" font-size="4.5" fill="#8B5CF6" font-weight="700" text-anchor="middle">WBS 1.0</text>
+      <!-- sub-bars inside WBS group -->
+      <polygon points="25,80 28,78 55,78 52,80" fill="url(#g78a)" opacity="0.85"/>
+      <polygon points="25,80 52,80 52,83 25,83" fill="#6D28D9" opacity="0.75"/>
+      <polygon points="52,80 55,78 55,81 52,83" fill="#4C1D95" opacity="0.6"/>
+      <polygon points="25,87 28,85 65,85 62,87" fill="url(#g78b)" opacity="0.85"/>
+      <polygon points="25,87 62,87 62,90 25,90" fill="#3B82F6" opacity="0.75"/>
+      <polygon points="62,87 65,85 65,88 62,90" fill="#1E3A6E" opacity="0.6"/>
+      <polygon points="25,94 28,92 48,92 45,94" fill="url(#g78a)" opacity="0.7"/>
+      <polygon points="25,94 45,94 45,97 25,97" fill="#6D28D9" opacity="0.6"/>
+      <polygon points="45,94 48,92 48,95 45,97" fill="#4C1D95" opacity="0.5"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">WBS</span></div>
+</div>
+
+<!-- ===== 79 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">79</div><div class="card-title">CCPM Буфер питания</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g79a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g79b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#10B981"/><stop offset="100%" stop-color="#059669"/></linearGradient>
+      </defs>
+      <polygon points="8,105 60,76 114,105 60,134" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- task bar -->
+      <polygon points="18,85 22,82 68,82 64,85" fill="url(#g79a)" opacity="0.85"/>
+      <polygon points="18,85 64,85 64,90 18,90" fill="#1D4ED8" opacity="0.75"/>
+      <polygon points="64,85 68,82 68,87 64,90" fill="#1E3A6E" opacity="0.6"/>
+      <!-- feeding buffer (dashed pattern side face) -->
+      <polygon points="72,85 76,82 98,82 94,85" fill="url(#g79b)" opacity="0.7"/>
+      <polygon points="72,85 94,85 94,90 72,90" fill="#059669" opacity="0.55"/>
+      <polygon points="94,85 98,82 98,87 94,90" fill="#047857" opacity="0.5"/>
+      <!-- buffer connection line -->
+      <line x1="68" y1="84" x2="72" y2="84" stroke="#10B981" stroke-width="1.5" stroke-dasharray="2,1"/>
+      <!-- FB label -->
+      <text x="86" y="83" font-size="4.5" fill="#10B981" font-weight="700" text-anchor="middle">FB</text>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">CCPM</span></div>
+</div>
+
+<!-- ===== 80 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">80</div><div class="card-title">CCPM Проектный буфер</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g80a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+        <linearGradient id="g80b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+      </defs>
+      <polygon points="5,108 60,78 116,108 60,138" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- chain of task bars -->
+      <polygon points="14,92 17,90 35,90 32,92" fill="url(#g80a)" opacity="0.8"/>
+      <polygon points="14,92 32,92 32,96 14,96" fill="#6D28D9" opacity="0.7"/>
+      <polygon points="32,92 35,90 35,94 32,96" fill="#4C1D95" opacity="0.55"/>
+      <polygon points="38,92 41,90 62,90 59,92" fill="url(#g80a)" opacity="0.8"/>
+      <polygon points="38,92 59,92 59,96 38,96" fill="#6D28D9" opacity="0.7"/>
+      <polygon points="59,92 62,90 62,94 59,96" fill="#4C1D95" opacity="0.55"/>
+      <polygon points="65,92 68,90 86,90 83,92" fill="url(#g80a)" opacity="0.8"/>
+      <polygon points="65,92 83,92 83,96 65,96" fill="#6D28D9" opacity="0.7"/>
+      <polygon points="83,92 86,90 86,94 83,96" fill="#4C1D95" opacity="0.55"/>
+      <!-- project buffer at end -->
+      <polygon points="89,92 92,90 108,90 105,92" fill="url(#g80b)" opacity="0.65"/>
+      <polygon points="89,92 105,92 105,96 89,96" fill="#D97706" opacity="0.55"/>
+      <polygon points="105,92 108,90 108,94 105,96" fill="#92400E" opacity="0.5"/>
+      <text x="99" y="90" font-size="4" fill="#F59E0B" font-weight="700" text-anchor="middle">PB</text>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-amber">CCPM</span></div>
+</div>
+
+<!-- ===== 81 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">81</div><div class="card-title">Градиентные Milestones</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g81a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#60A5FA"/><stop offset="50%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g81b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#EA580C"/></linearGradient>
+        <linearGradient id="g81c" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#10B981"/><stop offset="100%" stop-color="#059669"/></linearGradient>
+      </defs>
+      <polygon points="6,98 60,68 114,98 60,128" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- bar with gradient and milestone diamonds -->
+      <polygon points="14,85 17,82 80,82 77,85" fill="url(#g81a)" opacity="0.85"/>
+      <polygon points="14,85 77,85 77,89 14,89" fill="#1D4ED8" opacity="0.7"/>
+      <polygon points="77,85 80,82 80,86 77,89" fill="#1E3A6E" opacity="0.6"/>
+      <!-- milestone 1 -->
+      <polygon points="32,82 34,80 36,82 34,84" fill="#F59E0B"/>
+      <!-- milestone 2 -->
+      <polygon points="56,82 58,80 60,82 58,84" fill="#10B981"/>
+      <!-- milestone 3 -->
+      <polygon points="74,82 76,80 78,82 76,84" fill="#F59E0B"/>
+      <!-- thin connector line -->
+      <line x1="34" y1="80" x2="58" y2="80" stroke="#F59E0B" stroke-width="0.4"/>
+      <line x1="60" y1="80" x2="76" y2="80" stroke="#10B981" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">milestone</span></div>
+</div>
+
+<!-- ===== 82 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">82</div><div class="card-title">Гант-Комбо v2</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g82a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g82b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#EF4444"/><stop offset="100%" stop-color="#B91C1C"/></linearGradient>
+        <linearGradient id="g82c" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+      </defs>
+      <polygon points="4,102 60,72 118,102 60,132" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- bar 1: continuous -->
+      <polygon points="14,88 17,86 55,86 52,88" fill="url(#g82a)" opacity="0.8"/>
+      <polygon points="14,88 52,88 52,92 14,92" fill="#1D4ED8" opacity="0.7"/>
+      <polygon points="52,88 55,86 55,90 52,92" fill="#1E3A6E" opacity="0.55"/>
+      <!-- bar 2: split with gap + overlap -->
+      <polygon points="30,78 33,75 55,75 52,78" fill="url(#g82b)" opacity="0.75"/>
+      <polygon points="30,78 52,78 52,82 30,82" fill="#B91C1C" opacity="0.65"/>
+      <polygon points="52,78 55,75 55,79 52,82" fill="#7F1D1D" opacity="0.5"/>
+      <polygon points="62,78 65,75 88,75 85,78" fill="url(#g82b)" opacity="0.75"/>
+      <polygon points="62,78 85,78 85,82 62,82" fill="#B91C1C" opacity="0.65"/>
+      <polygon points="85,78 88,75 88,79 85,82" fill="#7F1D1D" opacity="0.5"/>
+      <!-- bar 3: with buffer -->
+      <polygon points="20,96 23,94 58,94 55,96" fill="url(#g82c)" opacity="0.75"/>
+      <polygon points="20,96 55,96 55,100 20,100" fill="#6D28D9" opacity="0.65"/>
+      <polygon points="55,96 58,94 58,98 55,100" fill="#4C1D95" opacity="0.5"/>
+      <polygon points="61,96 64,94 78,94 75,96" fill="#8B5CF6" opacity="0.4" stroke="#8B5CF6" stroke-width="0.4" stroke-dasharray="2,2"/>
+      <polygon points="61,96 75,96 75,100 61,100" fill="#6D28D9" opacity="0.35"/>
+      <polygon points="75,96 78,94 78,98 75,100" fill="#4C1D95" opacity="0.3"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">combo</span></div>
+</div>
+
+<!-- ===== 83 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">83</div><div class="card-title">Цех с графом</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g83w" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+      </defs>
+      <!-- isometric building -->
+      <!-- roof left face -->
+      <polygon points="60,20 78,30 60,40 42,30" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.4"/>
+      <!-- roof right face -->
+      <polygon points="60,20 78,30 96,22 78,12" fill="#1E3A6E" stroke="#3B82F6" stroke-width="0.4"/>
+      <!-- front wall -->
+      <polygon points="42,30 60,40 60,62 42,52" fill="url(#g83w)" opacity="0.7" stroke="#3B82F6" stroke-width="0.3"/>
+      <!-- side wall -->
+      <polygon points="60,40 78,30 78,52 60,62" fill="#1E3A6E" opacity="0.6" stroke="#3B82F6" stroke-width="0.3"/>
+      <!-- door -->
+      <polygon points="45,37 54,42 54,52 45,47" fill="#0F1E36" stroke="#60A5FA" stroke-width="0.3"/>
+      <!-- graph nodes above building -->
+      <circle cx="52" cy="25" r="3" fill="#10B981" opacity="0.9"/>
+      <circle cx="68" cy="22" r="3" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="60" cy="15" r="3" fill="#EF4444" opacity="0.9"/>
+      <!-- graph edges -->
+      <line x1="52" y1="25" x2="68" y2="22" stroke="#60A5FA" stroke-width="0.6"/>
+      <line x1="52" y1="25" x2="60" y2="15" stroke="#60A5FA" stroke-width="0.6"/>
+      <line x1="68" y1="22" x2="60" y2="15" stroke="#60A5FA" stroke-width="0.6"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">factory</span></div>
+</div>
+
+<!-- ===== 84 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">84</div><div class="card-title">Два цеха + конвейер</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g84a" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g84b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+      </defs>
+      <!-- building 1 -->
+      <polygon points="25,55 35,49 25,43 15,49" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.3"/>
+      <polygon points="25,55 42,47 32,41 15,49" fill="#1E3A6E" stroke="#2D5AB0" stroke-width="0.3"/>
+      <polygon points="15,49 25,55 25,72 15,66" fill="url(#g84a)" opacity="0.6" stroke="#3B82F6" stroke-width="0.3"/>
+      <polygon points="25,55 42,47 42,64 25,72" fill="#1E3A6E" opacity="0.5" stroke="#2D5AB0" stroke-width="0.3"/>
+      <!-- conveyor belt between buildings -->
+      <line x1="42" y1="52" x2="78" y2="70" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,1"/>
+      <line x1="42" y1="54" x2="78" y2="72" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,1"/>
+      <!-- building 2 -->
+      <polygon points="62,75 72,69 62,63 52,69" fill="#6D28D9" stroke="#8B5CF6" stroke-width="0.3"/>
+      <polygon points="62,75 82,65 72,59 52,69" fill="#5B21B6" stroke="#7C3AED" stroke-width="0.3"/>
+      <polygon points="52,69 62,75 62,88 52,82" fill="url(#g84b)" opacity="0.6" stroke="#8B5CF6" stroke-width="0.3"/>
+      <polygon points="62,75 82,65 82,78 62,88" fill="#5B21B6" opacity="0.5" stroke="#7C3AED" stroke-width="0.3"/>
+      <!-- nodes atop building 2 -->
+      <circle cx="62" cy="59" r="2.5" fill="#10B981" opacity="0.85"/>
+      <circle cx="72" cy="58" r="2.5" fill="#F59E0B" opacity="0.85"/>
+      <line x1="62" y1="59" x2="72" y2="58" stroke="#60A5FA" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">factory</span></div>
+</div>
+
+<!-- ===== 85 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">85</div><div class="card-title">Три цеха · Digital Twin</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g85a" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g85b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+        <linearGradient id="g85c" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10B981"/><stop offset="100%" stop-color="#059669"/></linearGradient>
+      </defs>
+      <!-- b1: main factory -->
+      <polygon points="30,42 42,36 30,30 18,36" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.3"/>
+      <polygon points="30,42 52,31 40,25 18,36" fill="#1E3A6E" stroke="#2D5AB0" stroke-width="0.3"/>
+      <polygon points="18,36 30,42 30,58 18,52" fill="url(#g85a)" opacity="0.6" stroke="#3B82F6" stroke-width="0.25"/>
+      <polygon points="30,42 52,31 52,47 30,58" fill="#1E3A6E" opacity="0.45" stroke="#2D5AB0" stroke-width="0.25"/>
+      <!-- b2: storage -->
+      <polygon points="52,50 63,44 52,38 41,44" fill="#D97706" stroke="#F59E0B" stroke-width="0.3"/>
+      <polygon points="52,50 70,40 59,34 41,44" fill="#A16207" stroke="#D97706" stroke-width="0.3"/>
+      <polygon points="41,44 52,50 52,62 41,56" fill="url(#g85b)" opacity="0.55" stroke="#F59E0B" stroke-width="0.25"/>
+      <polygon points="52,50 70,40 70,52 52,62" fill="#A16207" opacity="0.4" stroke="#D97706" stroke-width="0.25"/>
+      <!-- b3: small operations -->
+      <polygon points="12,58 22,53 12,48 2,53" fill="#059669" stroke="#10B981" stroke-width="0.3"/>
+      <polygon points="12,58 30,49 20,44 2,53" fill="#047857" stroke="#059669" stroke-width="0.3"/>
+      <polygon points="2,53 12,58 12,72 2,67" fill="url(#g85c)" opacity="0.55" stroke="#10B981" stroke-width="0.25"/>
+      <polygon points="12,58 30,49 30,63 12,72" fill="#047857" opacity="0.4" stroke="#059669" stroke-width="0.25"/>
+      <!-- pipes between buildings -->
+      <line x1="46" y1="42" x2="52" y2="39" stroke="#EF4444" stroke-width="0.8"/>
+      <line x1="28" y1="50" x2="28" y2="55" stroke="#60A5FA" stroke-width="0.8"/>
+      <!-- graph nodes -->
+      <circle cx="38" cy="22" r="2.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="55" cy="28" r="2.5" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="18" cy="30" r="2.5" fill="#10B981" opacity="0.9"/>
+      <line x1="38" y1="22" x2="55" y2="28" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="38" y1="22" x2="18" y2="30" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="18" y1="30" x2="55" y2="28" stroke="#60A5FA" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">twin</span></div>
+</div>
+
+<!-- ===== 86 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">86</div><div class="card-title">Цех с трубами</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g86w" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+      </defs>
+      <!-- main factory building -->
+      <polygon points="38,45 50,38 38,31 26,38" fill="#6D28D9" stroke="#8B5CF6" stroke-width="0.3"/>
+      <polygon points="38,45 60,34 48,27 26,38" fill="#5B21B6" stroke="#7C3AED" stroke-width="0.3"/>
+      <polygon points="26,38 38,45 38,65 26,58" fill="url(#g86w)" opacity="0.6" stroke="#8B5CF6" stroke-width="0.25"/>
+      <polygon points="38,45 60,34 60,54 38,65" fill="#5B21B6" opacity="0.45" stroke="#7C3AED" stroke-width="0.25"/>
+      <!-- chimney/pipes -->
+      <rect x="44" y="12" width="4" height="15" fill="#3B82F6" opacity="0.7" rx="1"/>
+      <rect x="56" y="8" width="4" height="19" fill="#F59E0B" opacity="0.7" rx="1"/>
+      <line x1="46" y1="27" x2="58" y2="27" stroke="#60A5FA" stroke-width="0.6"/>
+      <!-- horizontal pipe between buildings -->
+      <line x1="16" y1="48" x2="26" y2="52" stroke="#10B981" stroke-width="1.5"/>
+      <line x1="16" y1="50" x2="26" y2="54" stroke="#059669" stroke-width="1"/>
+      <!-- small tank -->
+      <ellipse cx="12" cy="46" rx="5" ry="3" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.3"/>
+      <rect x="7" y="46" width="10" height="8" fill="url(#g86w)" opacity="0.5" stroke="#3B82F6" stroke-width="0.25"/>
+      <ellipse cx="12" cy="54" rx="5" ry="3" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.3"/>
+      <!-- graph node -->
+      <circle cx="48" cy="24" r="2.5" fill="#EF4444" opacity="0.85"/>
+      <circle cx="62" cy="30" r="2" fill="#10B981" opacity="0.8"/>
+      <line x1="48" y1="24" x2="62" y2="30" stroke="#60A5FA" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">pipes</span></div>
+</div>
+
+<!-- ===== 87 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">87</div><div class="card-title">Фабрика + граф</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g87a" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+      </defs>
+      <!-- large factory -->
+      <polygon points="42,34 56,27 42,20 28,27" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.3"/>
+      <polygon points="42,34 72,20 58,13 28,27" fill="#1E3A6E" stroke="#2D5AB0" stroke-width="0.3"/>
+      <polygon points="28,27 42,34 42,58 28,51" fill="url(#g87a)" opacity="0.55" stroke="#3B82F6" stroke-width="0.25"/>
+      <polygon points="42,34 72,20 72,44 42,58" fill="#1E3A6E" opacity="0.4" stroke="#2D5AB0" stroke-width="0.25"/>
+      <!-- grid/floor -->
+      <line x1="28" y1="58" x2="72" y2="58" stroke="#1E3252" stroke-width="0.4"/>
+      <line x1="28" y1="64" x2="72" y2="64" stroke="#1E3252" stroke-width="0.4"/>
+      <!-- graph network on top of factory -->
+      <circle cx="42" cy="7" r="3" fill="#EF4444" opacity="0.9"/>
+      <circle cx="58" cy="9" r="3" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="70" cy="5" r="3" fill="#10B981" opacity="0.9"/>
+      <circle cx="52" cy="2" r="3" fill="#8B5CF6" opacity="0.9"/>
+      <line x1="42" y1="7" x2="58" y2="9" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="42" y1="7" x2="52" y2="2" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="58" y1="9" x2="70" y2="5" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="52" y1="2" x2="70" y2="5" stroke="#60A5FA" stroke-width="0.5"/>
+      <!-- critical path highlight -->
+      <line x1="52" y1="2" x2="58" y2="9" stroke="#EF4444" stroke-width="0.8"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">graph</span></div>
+</div>
+
+<!-- ===== 88 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">88</div><div class="card-title">Многоэтажный цех</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g88a" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g88b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+      </defs>
+      <!-- floor platform -->
+      <polygon points="25,76 45,66 25,56 5,66" fill="#1E3A6E" opacity="0.4" stroke="#1E3252" stroke-width="0.3"/>
+      <!-- level 1 -->
+      <polygon points="25,56 45,46 25,36 5,46" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.25"/>
+      <polygon points="5,46 25,56 25,76 5,66" fill="url(#g88a)" opacity="0.45" stroke="#3B82F6" stroke-width="0.2"/>
+      <polygon points="25,56 45,46 45,66 25,76" fill="#1E3A6E" opacity="0.35" stroke="#2D5AB0" stroke-width="0.2"/>
+      <!-- level 2 -->
+      <polygon points="25,40 45,30 25,20 5,30" fill="#D97706" stroke="#F59E0B" stroke-width="0.25"/>
+      <polygon points="5,30 25,40 25,56 5,46" fill="url(#g88b)" opacity="0.45" stroke="#F59E0B" stroke-width="0.2"/>
+      <polygon points="25,40 45,30 45,46 25,56" fill="#A16207" opacity="0.35" stroke="#EAB308" stroke-width="0.2"/>
+      <!-- graph nodes between floors -->
+      <circle cx="25" cy="15" r="2.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="35" cy="24" r="2" fill="#10B981" opacity="0.85"/>
+      <circle cx="20" cy="35" r="2" fill="#F59E0B" opacity="0.85"/>
+      <circle cx="30" cy="48" r="2" fill="#60A5FA" opacity="0.85"/>
+      <line x1="25" y1="15" x2="35" y2="24" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="35" y1="24" x2="20" y2="35" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="20" y1="35" x2="30" y2="48" stroke="#60A5FA" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-amber">multifloor</span></div>
+</div>
+
+<!-- ===== 89 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">89</div><div class="card-title">Digital Twin Завода</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g89x" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g89y" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10B981"/><stop offset="100%" stop-color="#059669"/></linearGradient>
+        <linearGradient id="g89z" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+      </defs>
+      <!-- ground grid -->
+      <polygon points="2,100 60,68 120,100 60,132" fill="none" stroke="#1E3252" stroke-width="0.4"/>
+      <line x1="60" y1="68" x2="60" y2="100" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="14" y1="84" x2="60" y2="108" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="105" y1="84" x2="60" y2="108" stroke="#1E3252" stroke-width="0.2"/>
+      <!-- b1: HQ -->
+      <polygon points="38,50 48,45 38,40 28,45" fill="#1D4ED8" stroke="#3B82F6" stroke-width="0.25"/>
+      <polygon points="38,50 56,41 46,36 28,45" fill="#1E3A6E" stroke="#2D5AB0" stroke-width="0.25"/>
+      <polygon points="28,45 38,50 38,64 28,59" fill="url(#g89x)" opacity="0.55" stroke="#3B82F6" stroke-width="0.2"/>
+      <polygon points="38,50 56,41 56,55 38,64" fill="#1E3A6E" opacity="0.4" stroke="#2D5AB0" stroke-width="0.2"/>
+      <!-- b2: production -->
+      <polygon points="56,58 68,52 56,46 44,52" fill="#059669" stroke="#10B981" stroke-width="0.25"/>
+      <polygon points="56,58 78,47 66,41 44,52" fill="#047857" stroke="#059669" stroke-width="0.25"/>
+      <polygon points="44,52 56,58 56,72 44,66" fill="url(#g89y)" opacity="0.5" stroke="#10B981" stroke-width="0.2"/>
+      <polygon points="56,58 78,47 78,61 56,72" fill="#047857" opacity="0.35" stroke="#059669" stroke-width="0.2"/>
+      <!-- b3: storage -->
+      <polygon points="15,66 26,60 15,54 4,60" fill="#6D28D9" stroke="#8B5CF6" stroke-width="0.25"/>
+      <polygon points="15,66 36,55 25,49 4,60" fill="#5B21B6" stroke="#7C3AED" stroke-width="0.25"/>
+      <polygon points="4,60 15,66 15,80 4,74" fill="url(#g89z)" opacity="0.5" stroke="#8B5CF6" stroke-width="0.2"/>
+      <polygon points="15,66 36,55 36,69 15,80" fill="#5B21B6" opacity="0.35" stroke="#7C3AED" stroke-width="0.2"/>
+      <!-- connections -->
+      <line x1="48" y1="49" x2="56" y2="51" stroke="#F59E0B" stroke-width="0.8" stroke-dasharray="2,1"/>
+      <line x1="28" y1="57" x2="25" y2="60" stroke="#60A5FA" stroke-width="0.8"/>
+      <!-- complex graph floating above -->
+      <circle cx="38" cy="34" r="2.5" fill="#EF4444"/>
+      <circle cx="50" cy="32" r="2.5" fill="#F59E0B"/>
+      <circle cx="63" cy="36" r="2.5" fill="#10B981"/>
+      <circle cx="52" cy="26" r="2.5" fill="#8B5CF6"/>
+      <circle cx="28" cy="38" r="2" fill="#60A5FA"/>
+      <line x1="38" y1="34" x2="50" y2="32" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="50" y1="32" x2="63" y2="36" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="38" y1="34" x2="28" y2="38" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="50" y1="32" x2="52" y2="26" stroke="#EF4444" stroke-width="0.6"/>
+      <line x1="52" y1="26" x2="63" y2="36" stroke="#60A5FA" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">twin</span></div>
+</div>
+
+<!-- ===== 90 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">90</div><div class="card-title">Спираль зависимостей</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- isometric platform -->
+      <polygon points="10,105 60,75 112,105 60,135" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- spiral dependency nodes rising in isometric -->
+      <circle cx="60" cy="70" r="4" fill="#3B82F6" opacity="0.9"/>
+      <circle cx="48" cy="62" r="4" fill="#8B5CF6" opacity="0.9"/>
+      <circle cx="60" cy="54" r="4" fill="#EF4444" opacity="0.9"/>
+      <circle cx="72" cy="46" r="4" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="60" cy="38" r="4" fill="#10B981" opacity="0.9"/>
+      <circle cx="48" cy="30" r="4" fill="#60A5FA" opacity="0.9"/>
+      <!-- spiral connections -->
+      <line x1="60" y1="70" x2="48" y2="62" stroke="#60A5FA" stroke-width="0.6"/>
+      <line x1="48" y1="62" x2="60" y2="54" stroke="#8B5CF6" stroke-width="0.6"/>
+      <line x1="60" y1="54" x2="72" y2="46" stroke="#EF4444" stroke-width="0.6"/>
+      <line x1="72" y1="46" x2="60" y2="38" stroke="#F59E0B" stroke-width="0.6"/>
+      <line x1="60" y1="38" x2="48" y2="30" stroke="#10B981" stroke-width="0.6"/>
+      <!-- vertical drop lines to platform -->
+      <line x1="60" y1="70" x2="60" y2="100" stroke="#1E3252" stroke-width="0.3" stroke-dasharray="1,1"/>
+      <line x1="48" y1="30" x2="48" y2="85" stroke="#1E3252" stroke-width="0.3" stroke-dasharray="1,1"/>
+      <line x1="72" y1="46" x2="72" y2="90" stroke="#1E3252" stroke-width="0.3" stroke-dasharray="1,1"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">spiral</span></div>
+</div>
+
+<!-- ===== 91 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">91</div><div class="card-title">Лестница успеха</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- isometric staircase with milestone steps -->
+      <polygon points="10,88 60,60 112,88 60,116" fill="none" stroke="#1E3252" stroke-width="0.4"/>
+      <!-- step 1 -->
+      <polygon points="30,78 34,75 54,75 50,78" fill="#1D4ED8" opacity="0.7"/>
+      <polygon points="30,78 50,78 50,82 30,82" fill="#1E3A6E" opacity="0.5"/>
+      <polygon points="50,78 54,75 54,79 50,82" fill="#152B4A" opacity="0.4"/>
+      <!-- step 2 -->
+      <polygon points="38,68 42,65 62,65 58,68" fill="#6D28D9" opacity="0.7"/>
+      <polygon points="38,68 58,68 58,72 38,72" fill="#5B21B6" opacity="0.5"/>
+      <polygon points="58,68 62,65 62,69 58,72" fill="#3B1F7A" opacity="0.4"/>
+      <!-- step 3 -->
+      <polygon points="46,58 50,55 70,55 66,58" fill="#059669" opacity="0.7"/>
+      <polygon points="46,58 66,58 66,62 46,62" fill="#047857" opacity="0.5"/>
+      <polygon points="66,58 70,55 70,59 66,62" fill="#065F46" opacity="0.4"/>
+      <!-- step 4 -->
+      <polygon points="54,48 58,45 78,45 74,48" fill="#D97706" opacity="0.7"/>
+      <polygon points="54,48 74,48 74,52 54,52" fill="#B45309" opacity="0.5"/>
+      <polygon points="74,48 78,45 78,49 74,52" fill="#92400E" opacity="0.4"/>
+      <!-- flag at top -->
+      <line x1="66" y1="45" x2="66" y2="32" stroke="#EF4444" stroke-width="1"/>
+      <polygon points="66,32 76,35 66,38" fill="#EF4444"/>
+      <!-- milestone labels -->
+      <circle cx="40" cy="80" r="1.5" fill="#60A5FA"/>
+      <circle cx="50" cy="70" r="1.5" fill="#8B5CF6"/>
+      <circle cx="58" cy="60" r="1.5" fill="#10B981"/>
+      <circle cx="66" cy="50" r="1.5" fill="#F59E0B"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">stairs</span></div>
+</div>
+
+<!-- ===== 92 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">92</div><div class="card-title">Арка критического пути</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- platform -->
+      <polygon points="5,95 60,65 115,95 60,125" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- left pillar -->
+      <polygon points="20,75 24,73 28,75 24,77" fill="#3B82F6" opacity="0.8"/>
+      <polygon points="20,75 24,77 24,92 20,90" fill="#1D4ED8" opacity="0.6"/>
+      <polygon points="24,77 28,75 28,90 24,92" fill="#1E3A6E" opacity="0.5"/>
+      <!-- right pillar -->
+      <polygon points="92,75 96,73 100,75 96,77" fill="#3B82F6" opacity="0.8"/>
+      <polygon points="92,75 96,77 96,92 92,90" fill="#1D4ED8" opacity="0.6"/>
+      <polygon points="96,77 100,75 100,90 96,92" fill="#1E3A6E" opacity="0.5"/>
+      <!-- arch curve (critical path) -->
+      <path d="M22,72 Q60,28 98,72" fill="none" stroke="#EF4444" stroke-width="1.5"/>
+      <path d="M22,69 Q60,25 98,69" fill="none" stroke="#F59E0B" stroke-width="0.8" opacity="0.5"/>
+      <!-- nodes on arch -->
+      <circle cx="38" cy="58" r="2.5" fill="#10B981"/>
+      <circle cx="60" cy="45" r="3" fill="#F59E0B"/>
+      <circle cx="82" cy="58" r="2.5" fill="#10B981"/>
+      <!-- connecting lines to platform -->
+      <line x1="38" y1="58" x2="38" y2="85" stroke="#1E3252" stroke-width="0.3" stroke-dasharray="1,1"/>
+      <line x1="60" y1="45" x2="60" y2="80" stroke="#1E3252" stroke-width="0.3" stroke-dasharray="1,1"/>
+      <line x1="82" y1="58" x2="82" y2="85" stroke="#1E3252" stroke-width="0.3" stroke-dasharray="1,1"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">arch</span></div>
+</div>
+
+<!-- ===== 93 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">93</div><div class="card-title">Изометрическое созвездие</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- ground -->
+      <polygon points="8,100 60,72 114,100 60,128" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- constellation nodes floating in 3D -->
+      <circle cx="60" cy="20" r="3.5" fill="#F59E0B" opacity="0.95"/>
+      <circle cx="38" cy="35" r="3" fill="#8B5CF6" opacity="0.9"/>
+      <circle cx="82" cy="32" r="3" fill="#10B981" opacity="0.9"/>
+      <circle cx="30" cy="55" r="2.5" fill="#3B82F6" opacity="0.85"/>
+      <circle cx="90" cy="52" r="2.5" fill="#EF4444" opacity="0.85"/>
+      <circle cx="52" cy="48" r="2.5" fill="#60A5FA" opacity="0.85"/>
+      <circle cx="68" cy="45" r="2.5" fill="#F59E0B" opacity="0.85"/>
+      <!-- constellation edges -->
+      <line x1="60" y1="20" x2="38" y2="35" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="60" y1="20" x2="82" y2="32" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="38" y1="35" x2="30" y2="55" stroke="#8B5CF6" stroke-width="0.5"/>
+      <line x1="38" y1="35" x2="52" y2="48" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="82" y1="32" x2="90" y2="52" stroke="#10B981" stroke-width="0.5"/>
+      <line x1="82" y1="32" x2="68" y2="45" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="52" y1="48" x2="68" y2="45" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="30" y1="55" x2="52" y2="48" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="68" y1="45" x2="90" y2="52" stroke="#60A5FA" stroke-width="0.5"/>
+      <!-- vertical drops -->
+      <line x1="60" y1="20" x2="60" y2="86" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="38" y1="35" x2="38" y2="87" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="82" y1="32" x2="82" y2="86" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="30" y1="55" x2="30" y2="92" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="90" y1="52" x2="90" y2="92" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">stars</span></div>
+</div>
+
+<!-- ===== 94 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">94</div><div class="card-title">3D Радар</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- isometric radar base -->
+      <ellipse cx="60" cy="85" rx="55" ry="35" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <ellipse cx="60" cy="85" rx="40" ry="25" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <ellipse cx="60" cy="85" rx="25" ry="15" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- radar tower -->
+      <line x1="60" y1="85" x2="60" y2="20" stroke="#3B82F6" stroke-width="0.8"/>
+      <!-- radar dish (ellipse angled) -->
+      <ellipse cx="60" cy="25" rx="18" ry="6" fill="none" stroke="#60A5FA" stroke-width="0.6" transform="rotate(-20,60,25)"/>
+      <!-- nodes at radar intersections -->
+      <circle cx="42" cy="72" r="2.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="60" cy="62" r="2.5" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="78" cy="72" r="2.5" fill="#10B981" opacity="0.9"/>
+      <circle cx="55" cy="78" r="2" fill="#8B5CF6" opacity="0.85"/>
+      <circle cx="65" cy="78" r="2" fill="#60A5FA" opacity="0.85"/>
+      <!-- connections to tower -->
+      <line x1="42" y1="72" x2="55" y2="78" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="60" y1="62" x2="55" y2="78" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="60" y1="62" x2="65" y2="78" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="78" y1="72" x2="65" y2="78" stroke="#60A5FA" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">radar</span></div>
+</div>
+
+<!-- ===== 95 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">95</div><div class="card-title">Радиальная 3D-диаграмма</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- base ellipses -->
+      <ellipse cx="60" cy="88" rx="58" ry="32" fill="none" stroke="#1E3252" stroke-width="0.4"/>
+      <ellipse cx="60" cy="88" rx="42" ry="22" fill="none" stroke="#1E3252" stroke-width="0.35"/>
+      <ellipse cx="60" cy="88" rx="26" ry="13" fill="none" stroke="#1E3252" stroke-width="0.3"/>
+      <!-- radial spokes -->
+      <line x1="60" y1="88" x2="5" y2="88" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="60" y1="88" x2="30" y2="65" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="60" y1="88" x2="90" y2="65" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="60" y1="88" x2="115" y2="88" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="60" y1="88" x2="30" y2="108" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="60" y1="88" x2="90" y2="108" stroke="#1E3252" stroke-width="0.3"/>
+      <!-- nodes on this radial web -->
+      <circle cx="36" cy="75" r="3" fill="#EF4444" opacity="0.9"/>
+      <circle cx="55" cy="68" r="3" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="78" cy="78" r="3" fill="#10B981" opacity="0.9"/>
+      <circle cx="60" cy="78" r="2.5" fill="#8B5CF6" opacity="0.85"/>
+      <circle cx="48" cy="80" r="2.5" fill="#3B82F6" opacity="0.85"/>
+      <circle cx="68" cy="82" r="2" fill="#60A5FA" opacity="0.8"/>
+      <!-- edges connecting nodes -->
+      <line x1="36" y1="75" x2="55" y2="68" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="55" y1="68" x2="78" y2="78" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="36" y1="75" x2="48" y2="80" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="78" y1="78" x2="68" y2="82" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="48" y1="80" x2="60" y2="78" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="60" y1="78" x2="68" y2="82" stroke="#60A5FA" stroke-width="0.4"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-amber">radial</span></div>
+</div>
+
+<!-- ===== 96 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">96</div><div class="card-title">3D Лабиринт CPM</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <!-- base grid -->
+      <polygon points="8,96 60,66 114,96 60,126" fill="none" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- isometric maze paths (lines forming a 3D maze) -->
+      <line x1="30" y1="88" x2="30" y2="78" stroke="#3B82F6" stroke-width="0.6"/>
+      <line x1="30" y1="78" x2="45" y2="70" stroke="#3B82F6" stroke-width="0.6"/>
+      <line x1="45" y1="70" x2="45" y2="60" stroke="#3B82F6" stroke-width="0.6"/>
+      <line x1="45" y1="60" x2="60" y2="52" stroke="#3B82F6" stroke-width="0.6"/>
+      <line x1="60" y1="52" x2="60" y2="40" stroke="#3B82F6" stroke-width="0.6"/>
+      <line x1="60" y1="40" x2="75" y2="32" stroke="#EF4444" stroke-width="0.8"/>
+      <line x1="75" y1="32" x2="75" y2="48" stroke="#EF4444" stroke-width="0.8"/>
+      <line x1="75" y1="48" x2="90" y2="40" stroke="#EF4444" stroke-width="0.8"/>
+      <line x1="90" y1="40" x2="90" y2="55" stroke="#EF4444" stroke-width="0.8"/>
+      <!-- dead-end branches -->
+      <line x1="45" y1="60" x2="55" y2="65" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="55" y1="65" x2="55" y2="70" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="60" y1="52" x2="70" y2="57" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="70" y1="57" x2="70" y2="62" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="30" y1="78" x2="20" y2="83" stroke="#1E3252" stroke-width="0.5"/>
+      <line x1="20" y1="83" x2="20" y2="90" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- nodes -->
+      <circle cx="30" cy="88" r="2" fill="#10B981"/>
+      <circle cx="45" cy="70" r="2" fill="#F59E0B"/>
+      <circle cx="60" cy="40" r="2.5" fill="#8B5CF6"/>
+      <circle cx="90" cy="55" r="2.5" fill="#EF4444"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">maze</span></div>
+</div>
+
+<!-- ===== 97 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">97</div><div class="card-title">Платформа + Граф + Гант</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g97a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g97b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+      </defs>
+      <!-- isometric platform -->
+      <polygon points="4,104 60,72 118,104 60,136" fill="#0F1E36" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- gantt bars on platform front -->
+      <polygon points="18,94 21,92 52,92 49,94" fill="url(#g97a)" opacity="0.7"/>
+      <polygon points="18,94 49,94 49,98 18,98" fill="#1D4ED8" opacity="0.6"/>
+      <polygon points="49,94 52,92 52,96 49,98" fill="#1E3A6E" opacity="0.45"/>
+      <polygon points="55,94 58,92 80,92 77,94" fill="url(#g97b)" opacity="0.7"/>
+      <polygon points="55,94 77,94 77,98 55,98" fill="#D97706" opacity="0.6"/>
+      <polygon points="77,94 80,92 80,96 77,98" fill="#92400E" opacity="0.45"/>
+      <!-- graph floating above platform -->
+      <circle cx="36" cy="52" r="3.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="56" cy="40" r="3.5" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="76" cy="48" r="3.5" fill="#10B981" opacity="0.9"/>
+      <circle cx="60" cy="30" r="3" fill="#8B5CF6" opacity="0.85"/>
+      <circle cx="46" cy="35" r="2.5" fill="#60A5FA" opacity="0.8"/>
+      <line x1="36" y1="52" x2="56" y2="40" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="56" y1="40" x2="76" y2="48" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="56" y1="40" x2="60" y2="30" stroke="#EF4444" stroke-width="0.7"/>
+      <line x1="36" y1="52" x2="46" y2="35" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="60" y1="30" x2="76" y2="48" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="46" y1="35" x2="60" y2="30" stroke="#8B5CF6" stroke-width="0.4"/>
+      <!-- vertical drops -->
+      <line x1="36" y1="52" x2="36" y2="76" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,1"/>
+      <line x1="56" y1="40" x2="56" y2="72" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,1"/>
+      <line x1="76" y1="48" x2="76" y2="76" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,1"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-purple">combo</span></div>
+</div>
+
+<!-- ===== 98 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">98</div><div class="card-title">Платформа + Граф + Вехи</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g98a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+        <linearGradient id="g98b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#10B981"/><stop offset="100%" stop-color="#059669"/></linearGradient>
+      </defs>
+      <!-- platform -->
+      <polygon points="3,106 60,73 118,106 60,139" fill="#0A1628" stroke="#1E3252" stroke-width="0.5"/>
+      <!-- platform grid lines -->
+      <line x1="30" y1="82" x2="30" y2="113" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="60" y1="73" x2="60" y2="106" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="90" y1="82" x2="90" y2="113" stroke="#1E3252" stroke-width="0.2"/>
+      <!-- gantt bar with milestones -->
+      <polygon points="20,92 23,89 70,89 67,92" fill="url(#g98a)" opacity="0.65"/>
+      <polygon points="20,92 67,92 67,97 20,97" fill="#6D28D9" opacity="0.55"/>
+      <polygon points="67,92 70,89 70,94 67,97" fill="#4C1D95" opacity="0.4"/>
+      <!-- milestones on bar -->
+      <polygon points="32,89 34,87 36,89 34,91" fill="#F59E0B"/>
+      <polygon points="54,89 56,87 58,89 56,91" fill="#10B981"/>
+      <polygon points="68,89 70,87 72,89 70,91" fill="#F59E0B"/>
+      <!-- graph nodes floating above -->
+      <circle cx="40" cy="35" r="3.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="60" cy="45" r="3.5" fill="#F59E0B" opacity="0.9"/>
+      <circle cx="80" cy="35" r="3.5" fill="#10B981" opacity="0.9"/>
+      <circle cx="60" cy="25" r="3" fill="#8B5CF6" opacity="0.85"/>
+      <circle cx="50" cy="55" r="2.5" fill="#3B82F6" opacity="0.8"/>
+      <line x1="40" y1="35" x2="60" y2="45" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="60" y1="45" x2="80" y2="35" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="60" y1="45" x2="60" y2="25" stroke="#EF4444" stroke-width="0.7"/>
+      <line x1="40" y1="35" x2="50" y2="55" stroke="#60A5FA" stroke-width="0.5"/>
+      <line x1="80" y1="35" x2="50" y2="55" stroke="#10B981" stroke-width="0.5"/>
+      <line x1="60" y1="25" x2="80" y2="35" stroke="#60A5FA" stroke-width="0.5"/>
+      <!-- drops -->
+      <line x1="40" y1="35" x2="34" y2="78" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="60" y1="45" x2="56" y2="78" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="80" y1="35" x2="76" y2="78" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-green">milestones</span></div>
+</div>
+
+<!-- ===== 99 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">99</div><div class="card-title">Комбинация + Крит.Путь</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g99a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+      </defs>
+      <!-- isometric platform -->
+      <polygon points="2,106 60,72 118,106 60,140" fill="#0A1628" stroke="#1E3252" stroke-width="0.6"/>
+      <!-- gantt bars -->
+      <polygon points="14,94 17,91 48,91 45,94" fill="url(#g99a)" opacity="0.6"/>
+      <polygon points="14,94 45,94 45,99 14,99" fill="#1D4ED8" opacity="0.5"/>
+      <polygon points="45,94 48,91 48,96 45,99" fill="#1E3A6E" opacity="0.4"/>
+      <polygon points="52,88 55,85 70,85 67,88" fill="url(#g99a)" opacity="0.6"/>
+      <polygon points="52,88 67,88 67,93 52,93" fill="#1D4ED8" opacity="0.5"/>
+      <polygon points="67,88 70,85 70,90 67,93" fill="#1E3A6E" opacity="0.4"/>
+      <!-- platform grid shadow -->
+      <line x1="30" y1="83" x2="30" y2="114" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="60" y1="72" x2="60" y2="106" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="90" y1="83" x2="90" y2="114" stroke="#1E3252" stroke-width="0.2"/>
+      <!-- complex graph network floating -->
+      <!-- critical path chain (red) -->
+      <circle cx="28" cy="50" r="3.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="48" cy="38" r="3.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="68" cy="42" r="3.5" fill="#EF4444" opacity="0.9"/>
+      <circle cx="82" cy="30" r="3.5" fill="#EF4444" opacity="0.9"/>
+      <line x1="28" y1="50" x2="48" y2="38" stroke="#EF4444" stroke-width="0.8"/>
+      <line x1="48" y1="38" x2="68" y2="42" stroke="#EF4444" stroke-width="0.8"/>
+      <line x1="68" y1="42" x2="82" y2="30" stroke="#EF4444" stroke-width="0.8"/>
+      <!-- non-critical nodes -->
+      <circle cx="38" cy="62" r="2.5" fill="#60A5FA" opacity="0.8"/>
+      <circle cx="58" cy="58" r="2.5" fill="#60A5FA" opacity="0.8"/>
+      <circle cx="78" cy="52" r="2.5" fill="#60A5FA" opacity="0.8"/>
+      <!-- non-critical edges -->
+      <line x1="38" y1="62" x2="58" y2="58" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="58" y1="58" x2="78" y2="52" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="28" y1="50" x2="38" y2="62" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="48" y1="38" x2="58" y2="58" stroke="#60A5FA" stroke-width="0.4"/>
+      <line x1="68" y1="42" x2="78" y2="52" stroke="#60A5FA" stroke-width="0.4"/>
+      <!-- vertical drops -->
+      <line x1="28" y1="50" x2="22" y2="82" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="48" y1="38" x2="42" y2="78" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="68" y1="42" x2="65" y2="80" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+      <line x1="82" y1="30" x2="82" y2="78" stroke="#1E3252" stroke-width="0.25" stroke-dasharray="1,2"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">critical</span></div>
+</div>
+
+<!-- ===== 100 ===== -->
+<div class="card">
+  <div class="card-header"><div class="card-num">100</div><div class="card-title">Ultimate Combo · Финал</div></div>
+  <div class="card-preview">
+    <svg viewBox="0 0 120 120" width="90" height="90">
+      <defs>
+        <linearGradient id="g100a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
+        <linearGradient id="g100b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+        <linearGradient id="g100c" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#6D28D9"/></linearGradient>
+      </defs>
+      <!-- grand isometric platform -->
+      <polygon points="2,108 60,74 118,108 60,142" fill="#0A1628" stroke="#1E3252" stroke-width="0.6"/>
+      <!-- platform fine grid -->
+      <line x1="20" y1="86" x2="20" y2="115" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="40" y1="80" x2="40" y2="113" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="60" y1="74" x2="60" y2="108" stroke="#1E3252" stroke-width="0.3"/>
+      <line x1="80" y1="80" x2="80" y2="113" stroke="#1E3252" stroke-width="0.2"/>
+      <line x1="100" y1="86" x2="100" y2="115" stroke="#1E3252" stroke-width="0.2"/>
+      <!-- gantt bars on platform -->
+      <polygon points="14,96 17,93 46,93 43,96" fill="url(#g100a)" opacity="0.65"/>
+      <polygon points="14,96 43,96 43,100 14,100" fill="#1D4ED8" opacity="0.55"/>
+      <polygon points="43,96 46,93 46,97 43,100" fill="#1E3A6E" opacity="0.4"/>
+      <polygon points="50,92 53,89 74,89 71,92" fill="url(#g100b)" opacity="0.65"/>
+      <polygon points="50,92 71,92 71,96 50,96" fill="#D97706" opacity="0.55"/>
+      <polygon points="71,92 74,89 74,93 71,96" fill="#92400E" opacity="0.4"/>
+      <polygon points="78,96 81,93 104,93 101,96" fill="url(#g100c)" opacity="0.65"/>
+      <polygon points="78,96 101,96 101,100 78,100" fill="#6D28D9" opacity="0.55"/>
+      <polygon points="101,96 104,93 104,97 101,100" fill="#4C1D95" opacity="0.4"/>
+      <!-- milestones on bars -->
+      <polygon points="28,93 30,91 32,93 30,95" fill="#10B981"/>
+      <polygon points="58,89 60,87 62,89 60,91" fill="#F59E0B"/>
+      <polygon points="90,93 92,91 94,93 92,95" fill="#EF4444"/>
+      <!-- complex graph floating above -->
+      <!-- critical path (red chain) -->
+      <circle cx="28" cy="44" r="3" fill="#EF4444" opacity="0.9"/>
+      <circle cx="44" cy="34" r="3" fill="#EF4444" opacity="0.9"/>
+      <circle cx="64" cy="38" r="3" fill="#EF4444" opacity="0.9"/>
+      <circle cx="78" cy="28" r="3" fill="#EF4444" opacity="0.9"/>
+      <line x1="28" y1="44" x2="44" y2="34" stroke="#EF4444" stroke-width="0.7"/>
+      <line x1="44" y1="34" x2="64" y2="38" stroke="#EF4444" stroke-width="0.7"/>
+      <line x1="64" y1="38" x2="78" y2="28" stroke="#EF4444" stroke-width="0.7"/>
+      <!-- non-critical nodes in graph -->
+      <circle cx="38" cy="56" r="2.5" fill="#60A5FA" opacity="0.8"/>
+      <circle cx="56" cy="52" r="2.5" fill="#10B981" opacity="0.8"/>
+      <circle cx="72" cy="48" r="2.5" fill="#F59E0B" opacity="0.8"/>
+      <circle cx="54" cy="42" r="2" fill="#8B5CF6" opacity="0.8"/>
+      <circle cx="70" cy="55" r="2" fill="#3B82F6" opacity="0.7"/>
+      <!-- non-critical edges -->
+      <line x1="28" y1="44" x2="38" y2="56" stroke="#60A5FA" stroke-width="0.35"/>
+      <line x1="38" y1="56" x2="56" y2="52" stroke="#60A5FA" stroke-width="0.35"/>
+      <line x1="56" y1="52" x2="64" y2="38" stroke="#60A5FA" stroke-width="0.35"/>
+      <line x1="44" y1="34" x2="54" y2="42" stroke="#8B5CF6" stroke-width="0.35"/>
+      <line x1="64" y1="38" x2="72" y2="48" stroke="#60A5FA" stroke-width="0.35"/>
+      <line x1="72" y1="48" x2="78" y2="28" stroke="#60A5FA" stroke-width="0.35"/>
+      <line x1="70" y1="55" x2="56" y2="52" stroke="#60A5FA" stroke-width="0.35"/>
+      <line x1="70" y1="55" x2="72" y2="48" stroke="#3B82F6" stroke-width="0.35"/>
+      <!-- vertical drops to platform -->
+      <line x1="28" y1="44" x2="24" y2="82" stroke="#1E3252" stroke-width="0.2" stroke-dasharray="1,2"/>
+      <line x1="44" y1="34" x2="40" y2="78" stroke="#1E3252" stroke-width="0.2" stroke-dasharray="1,2"/>
+      <line x1="64" y1="38" x2="62" y2="80" stroke="#1E3252" stroke-width="0.2" stroke-dasharray="1,2"/>
+      <line x1="78" y1="28" x2="78" y2="78" stroke="#1E3252" stroke-width="0.2" stroke-dasharray="1,2"/>
+      <!-- tiny factory silhouette on platform edge -->
+      <polygon points="104,70 110,67 104,64 98,67" fill="#1D4ED8" opacity="0.5" stroke="#3B82F6" stroke-width="0.2"/>
+      <polygon points="98,67 104,70 104,82 98,79" fill="#1D4ED8" opacity="0.3"/>
+      <polygon points="104,70 110,67 110,79 104,82" fill="#1E3A6E" opacity="0.25"/>
+    </svg>
+  </div>
+  <div class="card-tags"><span class="tag tag-blue">CPM</span><span class="tag tag-amber">3D</span><span class="tag tag-red">ultimate</span></div>
+</div>
+
+</div><!-- /grid -->
+
+<script>/* NO JS - static only */</script>
+</body>
+</html>
