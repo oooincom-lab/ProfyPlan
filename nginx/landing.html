@@ -251,30 +251,34 @@ footer {
 <section class="hero">
   <div class="logo">
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <!-- БЛОК 1 (верхний, синий) -->
-      <polygon points="50,10 78,28 50,46 22,28" fill="rgba(255,255,255,0.12)" stroke="#60A5FA" stroke-width="2"/>
-      <polygon points="50,10 78,28 78,46 50,64" fill="rgba(255,255,255,0.06)" stroke="#3B82F6" stroke-width="1.5"/>
-      <polygon points="50,10 22,28 22,46 50,64" fill="rgba(255,255,255,0.03)" stroke="#2563EB" stroke-width="1.5"/>
+      <!-- БЛОК 1 (верхний, синий) — тёмная заливка + яркая рамка -->
+      <polygon points="50,10 78,28 50,46 22,28" fill="#0A2540" stroke="#60A5FA" stroke-width="2"/>
+      <polygon points="50,10 78,28 78,46 50,64" fill="#061428" stroke="#3B82F6" stroke-width="2"/>
+      <polygon points="50,10 22,28 22,46 50,64" fill="#020C1A" stroke="#1D4ED8" stroke-width="1.5"/>
+      <!-- Блик для 3D (светлая полоска на переднем ребре) -->
+      <polygon points="50,10 78,28 78,30 50,12" fill="rgba(255,255,255,0.08)"/>
 
-      <!-- БЛОК 3 (правый, янтарный) -->
-      <polygon points="70,38 98,56 70,74 42,56" fill="rgba(255,255,255,0.10)" stroke="#FCD34D" stroke-width="2"/>
-      <polygon points="70,38 98,56 98,74 70,92" fill="rgba(255,255,255,0.06)" stroke="#F59E0B" stroke-width="1.5"/>
-      <polygon points="70,38 42,56 42,74 70,92" fill="rgba(255,255,255,0.03)" stroke="#D97706" stroke-width="1.5"/>
-      <polygon points="70,56 98,74 70,92 42,74" fill="rgba(255,255,255,0.02)" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,3" opacity="0.4"/>
+      <!-- БЛОК 3 (правый, янтарный) — тёмная заливка + яркая рамка -->
+      <polygon points="70,38 98,56 70,74 42,56" fill="#2A1A00" stroke="#FCD34D" stroke-width="2"/>
+      <polygon points="70,38 98,56 98,74 70,92" fill="#1A0E00" stroke="#F59E0B" stroke-width="2"/>
+      <polygon points="70,38 42,56 42,74 70,92" fill="#0D0700" stroke="#D97706" stroke-width="1.5"/>
+      <polygon points="70,56 98,74 70,92 42,74" fill="#0A0500" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,3" opacity="0.3"/>
+      <polygon points="70,38 98,56 98,58 70,40" fill="rgba(255,255,255,0.06)"/>
 
-      <!-- БЛОК 2 (нижний-левый, голубой) -->
-      <polygon points="30,38 58,56 30,74 2,56" fill="rgba(255,255,255,0.10)" stroke="#93C5FD" stroke-width="2"/>
-      <polygon points="30,38 58,56 58,74 30,92" fill="rgba(255,255,255,0.06)" stroke="#60A5FA" stroke-width="1.5"/>
-      <polygon points="30,38 2,56 2,74 30,92" fill="rgba(255,255,255,0.03)" stroke="#3B82F6" stroke-width="1.5"/>
+      <!-- БЛОК 2 (нижний-левый, голубой) — тёмная заливка + яркая рамка -->
+      <polygon points="30,38 58,56 30,74 2,56" fill="#0A2540" stroke="#93C5FD" stroke-width="2"/>
+      <polygon points="30,38 58,56 58,74 30,92" fill="#061428" stroke="#60A5FA" stroke-width="2"/>
+      <polygon points="30,38 2,56 2,74 30,92" fill="#020C1A" stroke="#3B82F6" stroke-width="1.5"/>
+      <polygon points="30,38 58,56 58,58 30,40" fill="rgba(255,255,255,0.06)"/>
 
-      <!-- 3 УЗЛА -->
-      <circle cx="50" cy="28" r="5.5" fill="white" stroke="#60A5FA" stroke-width="3"/>
-      <circle cx="70" cy="56" r="5.5" fill="white" stroke="#FCD34D" stroke-width="3"/>
-      <circle cx="30" cy="56" r="5.5" fill="white" stroke="#93C5FD" stroke-width="3"/>
+      <!-- 3 УЗЛА (яркие, контрастные) -->
+      <circle cx="50" cy="28" r="5" fill="white" stroke="#60A5FA" stroke-width="2.5"/>
+      <circle cx="70" cy="56" r="5" fill="white" stroke="#FCD34D" stroke-width="2.5"/>
+      <circle cx="30" cy="56" r="5" fill="white" stroke="#93C5FD" stroke-width="2.5"/>
 
-      <!-- CPM ПУТЬ: верхний → левый → правый -->
-      <line x1="50" y1="28" x2="30" y2="56" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round"/>
-      <line x1="30" y1="56" x2="70" y2="56" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round"/>
+      <!-- CPM ПУТЬ -->
+      <line x1="50" y1="28" x2="30" y2="56" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
+      <line x1="30" y1="56" x2="70" y2="56" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
       <polygon points="33,50 30,56 33,62" fill="#F59E0B"/>
       <polygon points="67,50 70,56 67,62" fill="#F59E0B"/>
     </svg>
