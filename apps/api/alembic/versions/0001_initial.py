@@ -44,6 +44,8 @@ def upgrade() -> None:
         sa.Column('tenant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False),
         sa.Column('role', sa.String(20), server_default='member'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column('invited_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('joined_at', sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint('user_id', 'tenant_id'),
     )
 
