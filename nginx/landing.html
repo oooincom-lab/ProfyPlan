@@ -70,17 +70,17 @@ body {
 }
 
 .logo {
-  width: 64px; height: 64px;
-  margin: 0 auto 32px;
+  width: 80px; height: 80px;
+  margin: 0 auto 36px;
   background: linear-gradient(135deg, #060F1E 0%, #0A1628 40%, #0F1E36 100%);
   border: 1.5px solid #3B82F6;
-  border-radius: 16px;
+  border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 24px rgba(59,130,246,0.25), 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow: 0 0 28px rgba(59,130,246,0.25), 0 6px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
 .logo svg {
-  width: 52px;
+  width: 64px;
   height: auto;
   display: block;
 }
@@ -251,19 +251,19 @@ footer {
 <section class="hero">
   <div class="logo">
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <!-- БЛОК 1 (верхний, синий) — левая → правая → верх (правильный z-order) -->
-      <polygon points="50,10 22,28 22,46 50,64" fill="#020C1A" stroke="#1D4ED8" stroke-width="2"/>
-      <polygon points="50,10 78,28 78,46 50,64" fill="#061428" stroke="#3B82F6" stroke-width="2"/>
-      <polygon points="50,10 78,28 50,46 22,28" fill="#0A3050" stroke="#60A5FA" stroke-width="2"/>
-      <polygon points="50,10 78,28 78,30 50,12" fill="rgba(255,255,255,0.1)"/>
+      <!-- БЛОК 1 (верхний задний, синий) — самый тёмный -->
+      <polygon points="50,10 22,28 22,46 50,64" fill="#02101E" stroke="#1D4ED8" stroke-width="2"/>
+      <polygon points="50,10 78,28 78,46 50,64" fill="#041830" stroke="#2563EB" stroke-width="2"/>
+      <polygon points="50,10 78,28 50,46 22,28" fill="#082040" stroke="#3B82F6" stroke-width="2"/>
+      <polygon points="50,10 78,28 78,30 50,12" fill="rgba(255,255,255,0.06)"/>
 
-      <!-- БЛОК 2 (нижний-левый, голубой) — левая → правая → верх -->
-      <polygon points="30,38 2,56 2,74 30,92" fill="#020C1A" stroke="#3B82F6" stroke-width="2"/>
-      <polygon points="30,38 58,56 58,74 30,92" fill="#061428" stroke="#60A5FA" stroke-width="2"/>
-      <polygon points="30,38 58,56 30,74 2,56" fill="#0A3050" stroke="#93C5FD" stroke-width="2"/>
+      <!-- БЛОК 2 (нижний-левый, голубой) — светлее верхнего -->
+      <polygon points="30,38 2,56 2,74 30,92" fill="#041830" stroke="#3B82F6" stroke-width="2"/>
+      <polygon points="30,38 58,56 58,74 30,92" fill="#082040" stroke="#60A5FA" stroke-width="2"/>
+      <polygon points="30,38 58,56 30,74 2,56" fill="#0E3060" stroke="#93C5FD" stroke-width="2"/>
       <polygon points="30,38 58,56 58,58 30,40" fill="rgba(255,255,255,0.08)"/>
 
-      <!-- БЛОК 3 (правый, янтарный) — над всеми, левая → правая → верх -->
+      <!-- БЛОК 3 (правый, янтарный) — над всеми -->
       <polygon points="70,38 42,56 42,74 70,92" fill="#0D0700" stroke="#D97706" stroke-width="2"/>
       <polygon points="70,38 98,56 98,74 70,92" fill="#1A0E00" stroke="#F59E0B" stroke-width="2"/>
       <polygon points="70,38 98,56 70,74 42,56" fill="#2F1A00" stroke="#FCD34D" stroke-width="2"/>
