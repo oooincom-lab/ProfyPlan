@@ -49,13 +49,21 @@ async def seed_demo(db: AsyncSession):
 
     user = User(
         id=uuid4(),
-        tenant_id=tenant.id,
         email="planner@demo.ru",
-        hashed_password="demo_hash",
-        full_name="Планировщик Иван",
-        role="Planner",
+        password_hash="demo_hash",
+        name="Планировщик Иван",
     )
     db.add(user)
+    await db.flush()
+
+    # Связь user -> tenant
+    user_tenant = UserTenant(
+        id=uuid4(),
+        user_id=user.id,
+        tenant_id=tenant.id,
+        role="Planner",
+    )
+    db.add(user_tenant)
     await db.flush()
 
     print(f"  [OK] Tenant: {tenant.name}")
