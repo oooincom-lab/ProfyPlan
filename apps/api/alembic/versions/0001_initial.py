@@ -71,7 +71,7 @@ def upgrade() -> None:
         'resources',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('tenant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('project_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('project_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('projects.id', ondelete='CASCADE'), nullable=True),
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('parent_id', postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column('resource_type', sa.String(20), nullable=False, server_default='equipment'),
