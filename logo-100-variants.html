@@ -561,47 +561,56 @@ h1{
 <div class="icon-wrap"><svg viewBox="0 0 100 100"><polygon points="50,18 82,38 50,58 18,38" fill="rgba(59,130,246,.2)" stroke="#3B82F6" stroke-width="2"/><polygon points="50,18 82,38 82,60 50,80" fill="rgba(59,130,246,.15)" stroke="#3B82F6" stroke-width="2"/><polygon points="50,18 18,38 18,60 50,80" fill="rgba(96,165,250,.1)" stroke="#60A5FA" stroke-width="2"/></svg></div>
 <div class="name">Изометрический куб</div><div class="tags"><span class="tag">3D</span><span class="tag">куб</span></div></div>
 
-<!-- 82: Изометрические блоки + CPM-путь -->
+<!-- 82: Изометрические блоки + CPM-путь (3 точки) -->
 <div class="card"><div class="badge">82</div>
 <div class="icon-wrap"><svg viewBox="0 0 100 100">
-  <!-- Блок 1 (верхний, синий) — исходная геометрия -->
-  <polygon points="50,10 78,28 50,46 22,28" fill="rgba(59,130,246,.2)" stroke="#3B82F6" stroke-width="1.5"/>
-  <polygon points="50,10 78,28 78,46 50,64" fill="rgba(59,130,246,.15)" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- ===== БЛОК 1 (верхний, синий) — полный изокуб (3 грани) ===== -->
+  <!-- Верхняя грань -->
+  <polygon points="50,10 78,28 50,46 22,28" fill="rgba(59,130,246,.25)" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- Правая грань -->
+  <polygon points="50,10 78,28 78,46 50,64" fill="rgba(59,130,246,.18)" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- Левая грань -->
+  <polygon points="50,10 22,28 22,46 50,64" fill="rgba(37,99,235,.12)" stroke="#2563EB" stroke-width="1.5"/>
+  <!-- Тень -->
+  <polygon points="22,46 50,64 50,68 22,50" fill="rgba(0,0,0,.15)"/>
   
-  <!-- Блок 2 (нижний-левый, голубой) — исходная геометрия -->
-  <polygon points="30,38 58,56 30,74 2,56" fill="rgba(96,165,250,.15)" stroke="#60A5FA" stroke-width="1.5"/>
-  <polygon points="30,38 58,56 58,74 30,92" fill="rgba(96,165,250,.1)" stroke="#60A5FA" stroke-width="1.5"/>
+  <!-- ===== БЛОК 3 (правый, янтарный) — полный изокуб (3 грани) ===== -->
+  <!-- Верхняя грань -->
+  <polygon points="70,38 98,56 70,74 42,56" fill="rgba(245,158,11,.18)" stroke="#F59E0B" stroke-width="1.5"/>
+  <!-- Правая грань -->
+  <polygon points="70,38 98,56 98,74 70,56" fill="rgba(245,158,11,.12)" stroke="#F59E0B" stroke-width="1.5"/>
+  <!-- Левая грань -->
+  <polygon points="70,38 42,56 42,74 70,56" fill="rgba(217,119,6,.08)" stroke="#D97706" stroke-width="1.5"/>
+  <!-- Тень -->
+  <polygon points="42,74 70,56 70,60 42,78" fill="rgba(0,0,0,.15)"/>
   
-  <!-- Блок 3 (правый, янтарный) — исходная геометрия -->
-  <polygon points="70,38 98,56 70,74 42,56" fill="rgba(245,158,11,.12)" stroke="#F59E0B" stroke-width="1.5"/>
+  <!-- ===== БЛОК 2 (нижний-левый, голубой) — полный изокуб (3 грани) ===== -->
+  <!-- Верхняя грань -->
+  <polygon points="30,38 58,56 30,74 2,56" fill="rgba(96,165,250,.2)" stroke="#60A5FA" stroke-width="1.5"/>
+  <!-- Правая грань -->
+  <polygon points="30,38 58,56 58,74 30,92" fill="rgba(96,165,250,.14)" stroke="#60A5FA" stroke-width="1.5"/>
+  <!-- Левая грань -->
+  <polygon points="30,38 2,56 2,74 30,92" fill="rgba(59,130,246,.08)" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- Тень -->
+  <polygon points="2,74 30,92 30,96 2,78" fill="rgba(0,0,0,.15)"/>
   
-  <!-- ===== УЗЛЫ на верхних гранях ===== -->
-  <!-- Блок 1: 3 узла на верхней грани -->
-  <circle cx="50" cy="28" r="4.5" fill="white" stroke="#3B82F6" stroke-width="2.5"/>
-  <circle cx="36" cy="28" r="3" fill="white" stroke="#3B82F6" stroke-width="1.5"/>
-  <circle cx="64" cy="28" r="3" fill="white" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- ===== 3 УЗЛА (центры верхних граней) ===== -->
+  <!-- Блок 1: центр (50,28) -->
+  <circle cx="50" cy="28" r="5.5" fill="white" stroke="#3B82F6" stroke-width="3"/>
+  <!-- Блок 3: центр (70,56) -->
+  <circle cx="70" cy="56" r="5.5" fill="white" stroke="#F59E0B" stroke-width="3"/>
+  <!-- Блок 2: центр (30,56) -->
+  <circle cx="30" cy="56" r="5.5" fill="white" stroke="#60A5FA" stroke-width="3"/>
   
-  <!-- Блок 3: 2 узла на верхней грани -->
-  <circle cx="70" cy="56" r="4.5" fill="white" stroke="#F59E0B" stroke-width="2.5"/>
-  <circle cx="84" cy="56" r="3" fill="white" stroke="#F59E0B" stroke-width="1.5"/>
+  <!-- ===== CPM ПУТЬ: 3 точки ===== -->
+  <!-- Критический путь: Блок1 → Блок3 (диагональ) -->
+  <line x1="50" y1="28" x2="70" y2="56" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Критический путь: Блок3 → Блок2 (горизонталь) -->
+  <line x1="70" y1="56" x2="30" y2="56" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round"/>
   
-  <!-- Блок 2: 2 узла на верхней грани -->
-  <circle cx="30" cy="56" r="4.5" fill="white" stroke="#60A5FA" stroke-width="2.5"/>
-  <circle cx="44" cy="56" r="3" fill="white" stroke="#60A5FA" stroke-width="1.5"/>
-  
-  <!-- ===== CPM ПУТЬ (сетевой граф) ===== -->
-  <!-- Критический путь: Блок1 → Блок3 → Блок2 (янтарный, толстый) -->
-  <line x1="50" y1="28" x2="70" y2="56" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
-  <line x1="70" y1="56" x2="30" y2="56" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
-  
-  <!-- Побочные связи (тонкие, пунктир) -->
-  <line x1="36" y1="28" x2="30" y2="56" stroke="#60A5FA" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.6"/>
-  <line x1="64" y1="28" x2="84" y2="56" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.6"/>
-  <line x1="44" y1="56" x2="44" y2="56" stroke="#60A5FA" stroke-width="1"/>
-  
-  <!-- Стрелки направления на критическом пути -->
-  <polygon points="68,52 70,56 68,60 66,56" fill="#F59E0B"/>
-  <polygon points="32,52 30,56 32,60 34,56" fill="#F59E0B"/>
+  <!-- Стрелки направления -->
+  <polygon points="68,50 71,56 68,62" fill="#F59E0B"/>
+  <polygon points="34,50 30,56 34,62" fill="#F59E0B"/>
 </svg></div>
 <div class="name">Изо-блоки + CPM-путь</div><div class="tags"><span class="tag">3D</span><span class="tag amber">модули</span><span class="tag blue">CPM</span></div></div>
 
