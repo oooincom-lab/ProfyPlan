@@ -244,32 +244,32 @@ footer {
 
 <section class="hero">
   <div class="logo">
-    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Regular hexagon — flat top/bottom (30° rotation), r=48 -->
-      <polygon
-        points="101.6,84 60,108 18.4,84 18.4,36 60,12 101.6,36"
-        fill="#3B82F6"
-      />
-      <!-- 5 nodes: START → A → B → C → FINISH (classic CPM chain) -->
-      <g fill="white">
-        <!-- Left column: START -->
-        <circle cx="34" cy="36" r="8"/>
-        <!-- Middle column: chain A → B → C -->
-        <circle cx="60" cy="36" r="8"/>
-        <circle cx="60" cy="60" r="8"/>
-        <circle cx="60" cy="84" r="8"/>
-        <!-- Right column: FINISH -->
-        <circle cx="86" cy="84" r="8"/>
-      </g>
-      <!-- Edges — main chain + feed-in -->
-      <g stroke="white" stroke-width="2" stroke-linecap="round">
-        <line x1="42" y1="36" x2="52" y2="36"/>
-        <line x1="60" y1="44" x2="60" y2="52"/>
-        <line x1="60" y1="68" x2="60" y2="76"/>
-        <line x1="68" y1="84" x2="78" y2="84"/>
-        <!-- Crossing diagonal feed-in -->
-        <line x1="52" y1="44" x2="68" y2="76"/>
-      </g>
+    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- БЛОК 1 (верхний, синий) — полный изокуб -->
+      <polygon points="50,10 78,28 50,46 22,28" fill="rgba(59,130,246,.25)" stroke="#3B82F6" stroke-width="1.5"/>
+      <polygon points="50,10 78,28 78,46 50,64" fill="rgba(59,130,246,.18)" stroke="#3B82F6" stroke-width="1.5"/>
+      <polygon points="50,10 22,28 22,46 50,64" fill="rgba(37,99,235,.12)" stroke="#2563EB" stroke-width="1.5"/>
+      <polygon points="22,46 50,64 50,68 22,50" fill="rgba(0,0,0,.15)"/>
+      <!-- БЛОК 3 (правый, янтарный) — полный изокуб -->
+      <polygon points="70,38 98,56 70,74 42,56" fill="rgba(245,158,11,.18)" stroke="#F59E0B" stroke-width="1.5"/>
+      <polygon points="70,38 98,56 98,74 70,92" fill="rgba(245,158,11,.14)" stroke="#F59E0B" stroke-width="1.5"/>
+      <polygon points="70,38 42,56 42,74 70,92" fill="rgba(217,119,6,.09)" stroke="#D97706" stroke-width="1.5"/>
+      <polygon points="70,56 98,74 70,92 42,74" fill="rgba(245,158,11,.06)" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,3" opacity="0.5"/>
+      <polygon points="42,92 70,92 70,96 42,96" fill="rgba(0,0,0,.15)"/>
+      <!-- БЛОК 2 (нижний-левый, голубой) — полный изокуб -->
+      <polygon points="30,38 58,56 30,74 2,56" fill="rgba(96,165,250,.2)" stroke="#60A5FA" stroke-width="1.5"/>
+      <polygon points="30,38 58,56 58,74 30,92" fill="rgba(96,165,250,.14)" stroke="#60A5FA" stroke-width="1.5"/>
+      <polygon points="30,38 2,56 2,74 30,92" fill="rgba(59,130,246,.08)" stroke="#3B82F6" stroke-width="1.5"/>
+      <polygon points="2,74 30,92 30,96 2,78" fill="rgba(0,0,0,.15)"/>
+      <!-- 3 УЗЛА -->
+      <circle cx="50" cy="28" r="5.5" fill="white" stroke="#3B82F6" stroke-width="3"/>
+      <circle cx="70" cy="56" r="5.5" fill="white" stroke="#F59E0B" stroke-width="3"/>
+      <circle cx="30" cy="56" r="5.5" fill="white" stroke="#60A5FA" stroke-width="3"/>
+      <!-- CPM ПУТЬ: верхний → левый → правый -->
+      <line x1="50" y1="28" x2="30" y2="56" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="30" y1="56" x2="70" y2="56" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round"/>
+      <polygon points="33,50 30,56 33,62" fill="#F59E0B"/>
+      <polygon points="67,50 70,56 67,62" fill="#F59E0B"/>
     </svg>
   </div>
 
