@@ -16,8 +16,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ======= NEW TABLES =======
-    
     op.create_table(
         "product_structures",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
@@ -89,10 +87,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("project_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
         sa.Column("version", sa.Integer(), default=1),
-        sa.Column("name", sa.String(255), nullable=True),
-        sa.Column("frozen_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("total_duration", sa.Numeric(10, 2), nullable=True),
-        sa.Column("critical_path_length", sa.Numeric(10, 2), nullable=True),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("snapshot_data", postgresql.JSONB, nullable=True),
+        sa.Column("is_active", sa.Boolean(), default=False),
         sa.Column("notes", sa.Text(), nullable=True),
     )
     op.create_index("ix_plan_baselines_project_id", "plan_baselines", ["project_id"])
@@ -102,35 +100,35 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("operation_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("operations.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("actual_start", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("actual_end", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("actual_duration", sa.Numeric(10, 2), nullable=True),
-        sa.Column("status", sa.String(20), default="pending"),
-        sa.Column("progress_percent", sa.Numeric(5, 2), default=0),
-        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("fact_start", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("fact_end", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("quantity_completed", sa.Numeric(12, 2), nullable=True),
+        sa.Column("quantity_defect", sa.Numeric(12, 2), nullable=True),
+        sa.Column("status", sa.String(20), default="not_started"),
+        sa.Column("deviation_reason", sa.Text(), nullable=True),
+        sa.Column("comment", sa.Text(), nullable=True),
+        sa.Column("recorded_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("source", sa.String(20), default="manual"),
     )
 
     op.create_table(
         "inter_project_dependencies",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("predecessor_project_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("successor_project_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("dependency_type", sa.String(20), default="FS"),
-        sa.Column("lag_days", sa.Numeric(8, 2), default=0),
+        sa.Column("source_project_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("source_operation_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("operations.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("target_project_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("target_operation_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("operations.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("dependency_type", sa.String(10), default="FS"),
+        sa.Column("lag_hours", sa.Numeric(10, 2), default=0),
+        sa.Column("lag_unit", sa.String(10), default="hour"),
+        sa.Column("created_by", sa.String(20), default="manual"),
         sa.Column("notes", sa.Text(), nullable=True),
     )
 
-    # ======= NEW COLUMNS (not in 0001_initial) =======
-    op.add_column("operations", sa.Column("product_structure_node_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.add_column("operations", sa.Column("inter_project_dep_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_foreign_key(None, "operations", "inter_project_dependencies", ["inter_project_dep_id"], ["id"], ondelete="SET NULL")
-
 
 def downgrade() -> None:
-    op.drop_constraint(None, "operations", type_="foreignkey")  
-    op.drop_column("operations", "inter_project_dep_id")
-    op.drop_column("operations", "product_structure_node_id")
     op.drop_table("inter_project_dependencies")
     op.drop_table("actual_executions")
     op.drop_index("ix_plan_baselines_project_id", table_name="plan_baselines")
