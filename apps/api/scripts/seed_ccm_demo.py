@@ -58,7 +58,7 @@ async def seed_demo(db: AsyncSession):
     db.add(user)
     await db.flush()
 
-    print(f"  ✅ Tenant: {tenant.name}")
+    print(f"  [OK] Tenant: {tenant.name}")
 
     # === 2. Ресурсы (общие для всех проектов) ===
     res_defs = [
@@ -86,7 +86,7 @@ async def seed_demo(db: AsyncSession):
         db.add(res)
         resources[ext_id] = res
     await db.flush()
-    print(f"  ✅ Ресурсов: {len(resources)}")
+    print(f"  [OK] Ресурсов: {len(resources)}")
 
     # === 3. Создаём проекты ===
     project_ids = []
@@ -110,7 +110,7 @@ async def seed_demo(db: AsyncSession):
         db.add(proj)
         project_ids.append(proj)
     await db.flush()
-    print(f"  ✅ Проектов: {len(project_ids)}")
+    print(f"  [OK] Проектов: {len(project_ids)}")
 
     # === 4. BOM-деревья ===
     # SPEC-001: Редуктор Р-200 (для P1 и P2)
@@ -212,7 +212,7 @@ async def seed_demo(db: AsyncSession):
     db.add(bearing)
 
     await db.flush()
-    print(f"  ✅ BOM-узлов SPEC-001: 6")
+    print(f"  [OK] BOM-узлов SPEC-001: 6")
 
     # SPEC-002: Привод П-100 (для P3)
     drive_root = ProductStructure(
@@ -259,7 +259,7 @@ async def seed_demo(db: AsyncSession):
     db.add(drive_steel)
 
     await db.flush()
-    print(f"  ✅ BOM-узлов SPEC-002: 3")
+    print(f"  [OK] BOM-узлов SPEC-002: 3")
 
     # === 5. Техмаршруты ===
     # Маршрут 1: Вал-шестерня
@@ -371,7 +371,7 @@ async def seed_demo(db: AsyncSession):
         db.add(op)
 
     await db.flush()
-    print(f"  ✅ Маршрутов: 4, операций маршрута: 9")
+    print(f"  [OK] Маршрутов: 4, операций маршрута: 9")
 
     # Привязываем routing_id к BOM-узлам
     shaft.routing_id = r_shaft.id
@@ -480,7 +480,7 @@ async def seed_demo(db: AsyncSession):
     link_deps(p1_ops["assembly"], p1_ops["test"])
 
     await db.flush()
-    print(f"  ✅ P1: {len(p1_ops)} операций")
+    print(f"  [OK] P1: {len(p1_ops)} операций")
 
     # --- P2: Редуктор Р-200 × 50 ---
     p2 = project_ids[1]
@@ -533,7 +533,7 @@ async def seed_demo(db: AsyncSession):
     link_deps(p2_ops["assembly"], p2_ops["test"])
 
     await db.flush()
-    print(f"  ✅ P2: {len(p2_ops)} операций")
+    print(f"  [OK] P2: {len(p2_ops)} операций")
 
     # --- P3: Привод П-100 × 30 ---
     p3 = project_ids[2]
@@ -570,7 +570,7 @@ async def seed_demo(db: AsyncSession):
     link_deps(p3_ops["assembly"], p3_ops["test"])
 
     await db.flush()
-    print(f"  ✅ P3: {len(p3_ops)} операций")
+    print(f"  [OK] P3: {len(p3_ops)} операций")
 
     # === 7. Межпроектные зависимости ===
     # P1 и P2 используют общую закупку стали (можно объединить)
@@ -616,7 +616,7 @@ async def seed_demo(db: AsyncSession):
     db.add(res_dep)
 
     await db.flush()
-    print(f"  ✅ Межпроектных зависимостей: 3")
+    print(f"  [OK] Межпроектных зависимостей: 3")
 
     # === 8. Создаём baseline для P1 ===
     baseline = PlanBaseline(
@@ -637,7 +637,7 @@ async def seed_demo(db: AsyncSession):
         },
     )
     db.add(baseline)
-    print(f"  ✅ Baseline P1 создан")
+    print(f"  [OK] Baseline P1 создан")
 
     await db.commit()
     print("\n🎉 Seed CCM Demo завершён!")
@@ -670,12 +670,12 @@ async def main():
     async with async_session() as session:
         try:
             tenant_id, project_ids = await seed_demo(session)
-            print(f"\n📋 Для тестирования CCM:")
+            print(f"\n[list] Для тестирования CCM:")
             print(f"  POST /v1/ccm/merge  body: {{'project_ids': {project_ids}}}")
             print(f"  POST /v1/ccm/projects/{project_ids[0]}/resource-leveling")
         except Exception as e:
             await session.rollback()
-            print(f"❌ Ошибка: {e}")
+            print(f"[ERR] Ошибка: {e}")
             raise
 
 
