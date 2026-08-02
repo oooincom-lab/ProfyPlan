@@ -72,10 +72,11 @@ body {
 .logo {
   width: 64px; height: 64px;
   margin: 0 auto 32px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 16px;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 8px 32px rgba(59,130,246,0.35);
+  box-shadow: 0 8px 32px rgba(59,130,246,0.25);
 }
 
 .logo svg {
@@ -250,68 +251,17 @@ footer {
 <section class="hero">
   <div class="logo">
     <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <!-- Градиенты для объёма -->
-        <linearGradient id="top-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#60A5FA"/><stop offset="100%" stop-color="#3B82F6"/></linearGradient>
-        <linearGradient id="right-blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2563EB"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient>
-        <linearGradient id="left-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1E40AF"/><stop offset="100%" stop-color="#1E3A8A"/></linearGradient>
+      <!-- Тени --><polygon points="22,46 50,64 50,70 22,52" fill="rgba(0,0,0,.3)"/><polygon points="42,92 70,92 70,98 42,98" fill="rgba(0,0,0,.3)"/><polygon points="2,74 30,92 30,98 2,80" fill="rgba(0,0,0,.3)"/>
 
-        <linearGradient id="top-cyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#93C5FD"/><stop offset="100%" stop-color="#60A5FA"/></linearGradient>
-        <linearGradient id="right-cyan" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#2563EB"/></linearGradient>
-        <linearGradient id="left-cyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1D4ED8"/><stop offset="100%" stop-color="#1E40AF"/></linearGradient>
+      <!-- БЛОК 1 (верхний, синий) --><polygon points="50,10 78,28 50,46 22,28" fill="#3B82F6" stroke="#60A5FA" stroke-width="2"/><polygon points="50,10 78,28 78,46 50,64" fill="#2563EB" stroke="#3B82F6" stroke-width="2"/><polygon points="50,10 22,28 22,46 50,64" fill="#1D4ED8" stroke="#2563EB" stroke-width="2"/>
 
-        <linearGradient id="top-amber" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FCD34D"/><stop offset="100%" stop-color="#F59E0B"/></linearGradient>
-        <linearGradient id="right-amber" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D97706"/><stop offset="100%" stop-color="#B45309"/></linearGradient>
-        <linearGradient id="left-amber" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#92400E"/><stop offset="100%" stop-color="#78350F"/></linearGradient>
+      <!-- БЛОК 3 (правый, янтарный) --><polygon points="70,38 98,56 70,74 42,56" fill="#F59E0B" stroke="#FCD34D" stroke-width="2"/><polygon points="70,38 98,56 98,74 70,92" fill="#D97706" stroke="#F59E0B" stroke-width="2"/><polygon points="70,38 42,56 42,74 70,92" fill="#B45309" stroke="#D97706" stroke-width="2"/>
 
-        <!-- Блик верхней грани -->
-        <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(255,255,255,0.35)"/><stop offset="50%" stop-color="rgba(255,255,255,0.05)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/></linearGradient>
-      </defs>
+      <!-- БЛОК 2 (нижний-левый, голубой) --><polygon points="30,38 58,56 30,74 2,56" fill="#60A5FA" stroke="#93C5FD" stroke-width="2"/><polygon points="30,38 58,56 58,74 30,92" fill="#3B82F6" stroke="#60A5FA" stroke-width="2"/><polygon points="30,38 2,56 2,74 30,92" fill="#2563EB" stroke="#3B82F6" stroke-width="2"/>
 
-      <!-- Тени всех блоков (мягкие) -->
-      <polygon points="22,46 50,64 50,70 22,52" fill="rgba(0,0,0,0.25)"/>
-      <polygon points="42,92 70,92 70,98 42,98" fill="rgba(0,0,0,0.25)"/>
-      <polygon points="2,74 30,92 30,98 2,80" fill="rgba(0,0,0,0.25)"/>
+      <!-- УЗЛЫ --><circle cx="50" cy="28" r="4.5" fill="white" stroke="#3B82F6" stroke-width="2.5"/><circle cx="70" cy="56" r="4.5" fill="white" stroke="#F59E0B" stroke-width="2.5"/><circle cx="30" cy="56" r="4.5" fill="white" stroke="#60A5FA" stroke-width="2.5"/>
 
-      <!-- БЛОК 1 (верхний, синий) — 3 грани + блик -->
-      <polygon points="50,10 78,28 50,46 22,28" fill="url(#top-blue)"/>
-      <polygon points="50,10 78,28 78,46 50,64" fill="url(#right-blue)"/>
-      <polygon points="50,10 22,28 22,46 50,64" fill="url(#left-blue)"/>
-      <!-- Блик на верхней грани -->
-      <polygon points="50,10 78,28 50,46 22,28" fill="url(#gloss)"/>
-
-      <!-- БЛОК 3 (правый, янтарный) — 3 грани + блик -->
-      <polygon points="70,38 98,56 70,74 42,56" fill="url(#top-amber)"/>
-      <polygon points="70,38 98,56 98,74 70,92" fill="url(#right-amber)"/>
-      <polygon points="70,38 42,56 42,74 70,92" fill="url(#left-amber)"/>
-      <polygon points="70,38 98,56 70,74 42,56" fill="url(#gloss)"/>
-
-      <!-- БЛОК 2 (нижний-левый, голубой) — 3 грани + блик -->
-      <polygon points="30,38 58,56 30,74 2,56" fill="url(#top-cyan)"/>
-      <polygon points="30,38 58,56 58,74 30,92" fill="url(#right-cyan)"/>
-      <polygon points="30,38 2,56 2,74 30,92" fill="url(#left-cyan)"/>
-      <polygon points="30,38 58,56 30,74 2,56" fill="url(#gloss)"/>
-
-      <!-- Рёбра блоков (чёткие контуры) -->
-      <polygon points="50,10 78,28 50,46 22,28" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-      <polygon points="70,38 98,56 70,74 42,56" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-      <polygon points="30,38 58,56 30,74 2,56" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-
-      <!-- 3 УЗЛА (контрастные) -->
-      <circle cx="50" cy="28" r="4" fill="white" stroke="#3B82F6" stroke-width="2"/>
-      <circle cx="50" cy="28" r="1.5" fill="#3B82F6"/>
-      <circle cx="70" cy="56" r="4" fill="white" stroke="#F59E0B" stroke-width="2"/>
-      <circle cx="70" cy="56" r="1.5" fill="#F59E0B"/>
-      <circle cx="30" cy="56" r="4" fill="white" stroke="#60A5FA" stroke-width="2"/>
-      <circle cx="30" cy="56" r="1.5" fill="#60A5FA"/>
-
-      <!-- CPM ПУТЬ: верхний → левый → правый (жирный) -->
-      <line x1="50" y1="28" x2="30" y2="56" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"/>
-      <line x1="30" y1="56" x2="70" y2="56" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"/>
-
-      <!-- Стрелки -->
-      <polygon points="34,49 30,56 34,63" fill="#F59E0B"/>
-      <polygon points="66,49 70,56 66,63" fill="#F59E0B"/>
+      <!-- CPM ПУТЬ --><line x1="50" y1="28" x2="30" y2="56" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"/><line x1="30" y1="56" x2="70" y2="56" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"/><polygon points="34,49 30,56 34,63" fill="#F59E0B"/><polygon points="66,49 70,56 66,63" fill="#F59E0B"/>
     </svg>
   </div>
 
