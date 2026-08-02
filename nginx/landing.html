@@ -245,27 +245,35 @@ footer {
 <section class="hero">
   <div class="logo">
     <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Hexagon background -->
-      <polygon points="60,15 103.9,40 103.9,80 60,105 16.1,80 16.1,40" fill="#3B82F6"/>
-      <!-- Network graph inside hexagon (white) -->
-      <g stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="60" y1="35" x2="60" y2="85"/>
-        <line x1="60" y1="35" x2="30" y2="55"/>
-        <line x1="60" y1="35" x2="80" y2="75"/>
-        <line x1="60" y1="85" x2="30" y2="55"/>
-        <line x1="60" y1="85" x2="85" y2="45"/>
-        <line x1="30" y1="55" x2="80" y2="75"/>
-        <line x1="30" y1="55" x2="25" y2="82"/>
-        <line x1="85" y1="45" x2="80" y2="75"/>
-        <line x1="80" y1="75" x2="25" y2="82"/>
-      </g>
+      <!-- Regular hexagon — flat top/bottom (30° rotation), r=48 -->
+      <polygon
+        points="101.6,84 60,108 18.4,84 18.4,36 60,12 101.6,36"
+        fill="#3B82F6"
+      />
+      <!-- 6 nodes in symmetric grid -->
       <g fill="white">
-        <circle cx="60" cy="35" r="7"/>
-        <circle cx="60" cy="85" r="7"/>
-        <circle cx="30" cy="55" r="7"/>
-        <circle cx="85" cy="45" r="7"/>
-        <circle cx="80" cy="75" r="7"/>
-        <circle cx="25" cy="82" r="7"/>
+        <circle cx="60" cy="30" r="8"/>
+        <circle cx="60" cy="90" r="8"/>
+        <circle cx="34" cy="50" r="8"/>
+        <circle cx="86" cy="50" r="8"/>
+        <circle cx="34" cy="70" r="8"/>
+        <circle cx="86" cy="70" r="8"/>
+      </g>
+      <!-- Clean edges — horizontal + vertical + crossing -->
+      <g stroke="white" stroke-width="2" stroke-linecap="round">
+        <line x1="60" y1="38" x2="60" y2="82"/>
+        <line x1="42" y1="50" x2="78" y2="50"/>
+        <line x1="34" y1="62" x2="34" y2="78"/>
+        <line x1="86" y1="62" x2="86" y2="78"/>
+        <line x1="42" y1="30" x2="42" y2="42"/>
+        <line x1="78" y1="30" x2="78" y2="42"/>
+        <line x1="42" y1="78" x2="42" y2="90"/>
+        <line x1="78" y1="78" x2="78" y2="90"/>
+        <!-- Diagonals -->
+        <line x1="42" y1="42" x2="52" y2="50"/>
+        <line x1="78" y1="42" x2="68" y2="50"/>
+        <line x1="42" y1="78" x2="52" y2="70"/>
+        <line x1="78" y1="78" x2="68" y2="70"/>
       </g>
     </svg>
   </div>
