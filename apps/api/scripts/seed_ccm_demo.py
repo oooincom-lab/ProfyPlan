@@ -50,7 +50,7 @@ async def seed_demo(db: AsyncSession):
     user = User(
         id=uuid4(),
         email="planner@demo.ru",
-        password_hash="demo_hash",
+        hashed_password="demo_hash",
         name="Планировщик Иван",
     )
     db.add(user)
