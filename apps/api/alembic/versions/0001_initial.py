@@ -31,7 +31,9 @@ def upgrade() -> None:
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('email', sa.String(255), nullable=False, unique=True),
         sa.Column('hashed_password', sa.String(255), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
         sa.Column('is_active', sa.Boolean(), server_default='true'),
+        sa.Column('last_login_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
 
