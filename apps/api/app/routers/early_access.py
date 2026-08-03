@@ -42,8 +42,8 @@ async def early_access(req: EarlyAccessRequest):
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user,
-            password=settings.smtp_password,
-            use_tls=True,
+            password=settin…ord,
+            start_tls=True,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
