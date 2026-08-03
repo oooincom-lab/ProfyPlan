@@ -43,6 +43,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://profyplan:${DB_PASSWORD:-profyplan}@postgres:5432/profyplan
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-profyplan.ai@gmail.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-profyplan.ai@gmail.com}
     ports:
       - "127.0.0.1:8000:8000"
 

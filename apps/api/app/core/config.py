@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     yookassa_shop_id: str = ""
     yookassa_secret_key: str = ""
 
+    # SMTP (Gmail)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = "profyplan.ai@gmail.com"
+    smtp_password: str = ""
+    admin_email: str = "profyplan.ai@gmail.com"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
