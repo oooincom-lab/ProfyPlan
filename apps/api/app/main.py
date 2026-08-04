@@ -1,6 +1,4 @@
-"""
-ProfyPlan API — главная точка входа.
-"""
+"""ProfyPlan API — главная точка входа."""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,9 +10,7 @@ from app.core.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Стартап: проверка подключения к БД
     yield
-    # Шатдаун: закрытие соединений
     await engine.dispose()
 
 
@@ -28,16 +24,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — разрешён только фронтенд
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.cors_origins + ["http://localhost:3002"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # Подключаем роутеры
     from app.routers import auth, projects, resources, operations, calculations, ccm, early_access, actual
     app.include_router(auth.router)
     app.include_router(projects.router)
@@ -49,15 +43,9 @@ def create_app() -> FastAPI:
     app.include_router(early_access.router)
     app.include_router(actual.router)
 
-    # Healthcheck
     @app.get("/v1/health")
     async def health():
-        return {
-            "status": "ok",
-            "version": "0.1.0",
-            "db": "ok",
-            "redis": "ok",
-        }
+        return {"status": "ok", "version": "0.1.0", "db": "ok", "redis": "ok"}
 
     return app
 

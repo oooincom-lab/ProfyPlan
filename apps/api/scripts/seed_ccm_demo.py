@@ -32,6 +32,8 @@ from app.models.resource import Resource
 from app.models.operation import Operation, OperationDependency, OperationResource
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
+from app.models.plan_version import InterProjectDependency, PlanBaseline
+from app.core.security import hash_password
 from app.models.plan_version import PlanBaseline, InterProjectDependency
 
 
@@ -50,7 +52,7 @@ async def seed_demo(db: AsyncSession):
     user = User(
         id=uuid4(),
         email="planner@demo.ru",
-        hashed_password="demo_hash",
+        hashed_password=hash_password("demo123"),
         name="Планировщик Иван",
     )
     db.add(user)

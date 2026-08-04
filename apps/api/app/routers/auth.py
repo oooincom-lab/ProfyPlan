@@ -49,7 +49,7 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     # Создать пользователя
     user = User(
         email=body.email,
-        password_hash=hash_password(body.password),
+        hashed_password=hash_password(body.password),
         name=body.name,
     )
     db.add(user)
@@ -77,7 +77,7 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     """Вход — возвращает JWT-токены."""
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(body.password, user.password_hash):
+    if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.is_active:
