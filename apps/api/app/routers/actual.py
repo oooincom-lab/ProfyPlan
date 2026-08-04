@@ -193,15 +193,22 @@ async def auto_close_predecessors(operation_id: uuid.UUID, db: AsyncSession = De
         for succ_id in succ_of.get(op_id, []):
             dfs_forward(succ_id)
 
-    # Start from nodes with no predecessors
+    # Start from nodes with no predecessors and DFS to target
     starts = [op.id for op in all_ops if not pred_of.get(op.id)]
     for sid in starts:
         dfs_forward(sid)
         if operation_id in visited:
             break
 
+    # Fallback: if DFS didn't reach target (disconnected graph), use position order
+    if operation_id not in visited:
+        path_ops = sorted(all_ops, key=lambda o: o.position or 0)
+
     # Sort by position
     path_ops.sort(key=lambda o: o.position or 0)
+
+    if not path_ops:
+        return AutoCloseResponse(closed=0, closed_operation_ids=[])
 
     # Find last closed
     last_closed_idx = -1
