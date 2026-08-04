@@ -1,6 +1,4 @@
-"""
-Эндпоинт для формы раннего доступа — отправка email через Gmail SMTP.
-"""
+"""Эндпоинт для формы раннего доступа — отправка email через Gmail SMTP."""
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -37,7 +35,7 @@ async def early_access(req: EarlyAccessRequest):
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user,
-            password=settings.***
+            password=***
             start_tls=True,
         )
     except Exception as e:
