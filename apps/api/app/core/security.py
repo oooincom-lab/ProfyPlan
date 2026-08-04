@@ -4,25 +4,23 @@ JWT-аутентификация: создание, проверка токен�
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 ALGORITHM = settings.jwt_algorithm
-SECRET_KEY = settings.jwt_secret_key
+SECRET_KEY = settin…_key
 
 
 def hash_password(password: str) -> str:
-    """bcrypt-хеш пароля (cost=12)."""
-    return pwd_context.hash(password)
+    """bcrypt-хеш пароля."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверка пароля против хеша."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 def create_access_token(
