@@ -1,5 +1,5 @@
 """
-JWT-Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ: СЃРѕР·РґР°РЅРёРµ, РїСЂРѕРІРµСЂРєР° С‚РѕРєРµРЅРѕРІ, С…РµС€РёСЂРѕРІР°РЅРёРµ РїР°СЂРѕР»РµР№.
+JWT-аутентификация: создание, проверка токенов, хеширование паролей.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -10,16 +10,16 @@ from jose import JWTError, jwt
 from app.core.config import settings
 
 ALGORITHM = settings.jwt_algorithm
-SECRET_KEY = settinвЂ¦_key
+SECRET_KEY = settings.jwt_secret_key
 
 
 def hash_password(password: str) -> str:
-    """bcrypt-С…РµС€ РїР°СЂРѕР»СЏ."""
+    """bcrypt-хеш пароля."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """РџСЂРѕРІРµСЂРєР° РїР°СЂРѕР»СЏ РїСЂРѕС‚РёРІ С…РµС€Р°."""
+    """Проверка пароля против хеша."""
     return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
@@ -28,7 +28,7 @@ def create_access_token(
     tenant_id: Optional[str] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
-    """РЎРѕР·РґР°С‚СЊ JWT access-С‚РѕРєРµРЅ."""
+    """Создать JWT access-токен."""
     to_encode = {"sub": user_id}
     if tenant_id:
         to_encode["tenant_id"] = tenant_id
@@ -38,14 +38,14 @@ def create_access_token(
 
 
 def create_refresh_token(user_id: str) -> str:
-    """РЎРѕР·РґР°С‚СЊ refresh-С‚РѕРєРµРЅ (30 РґРЅРµР№)."""
+    """Создать refresh-токен (30 дней)."""
     expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
     to_encode = {"sub": user_id, "type": "refresh", "exp": expire}
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[dict]:
-    """Р”РµРєРѕРґРёСЂРѕРІР°С‚СЊ Рё РїСЂРѕРІРµСЂРёС‚СЊ JWT-С‚РѕРєРµРЅ."""
+    """Декодировать и проверить JWT-токен."""
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:

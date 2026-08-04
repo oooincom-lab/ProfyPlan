@@ -19,7 +19,6 @@ class EarlyAccessRequest(BaseModel):
 
 @router.post("/early-access")
 async def early_access(req: EarlyAccessRequest):
-    """Принимает email из формы лендинга и отправляет уведомление администратору."""
     if not settings.smtp_host:
         raise HTTPException(status_code=500, detail="SMTP not configured")
 
@@ -28,11 +27,7 @@ async def early_access(req: EarlyAccessRequest):
     admin_msg["To"] = settings.admin_email
     admin_msg["Subject"] = f"[ProfyPlan] Новая заявка на ранний доступ: {req.email}"
     admin_msg.attach(MIMEText(
-        f"""ProfyPlan — Новая заявка на ранний доступ.
-
-Email: {req.email}
-
-Время: не зафиксировано.""",
+        f"Новая заявка на ранний доступ: {req.email}",
         "plain", "utf-8",
     ))
 
@@ -42,7 +37,7 @@ Email: {req.email}
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user,
-            password=settings.smtp_password,
+            password=settings.***
             start_tls=True,
         )
     except Exception as e:
