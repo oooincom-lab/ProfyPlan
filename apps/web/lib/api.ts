@@ -132,3 +132,29 @@ export function importFacts(projectId: string, facts: ActualFact[]) {
     }
   );
 }
+
+// --- Actual Execution (факт) ---
+export function getActual(operationId: string) {
+  return request<ActualFact | null>(`/v1/operations/${operationId}/actual`);
+}
+
+export function saveActual(operationId: string, data: ActualFact) {
+  return request<ActualFact>(`/v1/operations/${operationId}/actual`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export function autoClosePredecessors(operationId: string) {
+  return request<{ closed: number; closed_operation_ids: string[] }>(
+    `/v1/operations/${operationId}/auto-close`,
+    { method: 'POST' }
+  );
+}
+
+export function uncloseChain(operationId: string) {
+  return request<{ removed: number; removed_operation_ids: string[] }>(
+    `/v1/operations/${operationId}/unclose`,
+    { method: 'POST' }
+  );
+}

@@ -137,5 +137,7 @@ export interface ActualFact {
   quantity_defect?: number;
   deviation_reason?: string;
   comment?: string;
-  source?: 'manual' | 'google_sheets' | 'erp_sync';
+  source?: 'manual' | 'auto_closed' | 'google_sheets' | 'erp_sync';
+  updated_at?: string;
+  edit_count?: number;
 }

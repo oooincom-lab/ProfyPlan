@@ -79,7 +79,13 @@ class ActualExecution(BaseModel):
     )
     source: Mapped[str] = mapped_column(
         String(20), default="manual"
-    )  # manual / google_sheets / erp_sync
+    )  # manual / auto_closed / google_sheets / erp_sync
+
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        onupdate=func.now(),
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class InterProjectDependency(BaseModel):

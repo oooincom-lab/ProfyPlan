@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan CCM V2 — Прототип сетевого графика с фактом</title>
+<style>
+:root {
+  --bg: #0A1628; --bg-2: #0F1E36; --bg-3: #162844;
+  --fg: #E8EEF5; --fg-2: #B0C4DE; --fg-3: #8FA3BD; --fg-4: #5A7090;
+  --border: #1E3252; --accent: #3B82F6; --accent-3: #60A5FA;
+  --success: #10B981; --warning: #F59E0B; --danger: #EF4444; --amber: #F59E0B;
+  --amber-dark: #B45309;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg); color: var(--fg);
+  height: 100vh; overflow: hidden;
+}
+
+.app {
+  display: flex; height: 100vh;
+}
+
+/* Граф слева */
+.graph-area {
+  flex: 1; position: relative; overflow: hidden;
+}
+canvas { display: block; }
+
+.toolbar {
+  position: absolute; top: 12px; left: 12px; z-index: 5;
+  display: flex; gap: 8px; align-items: center;
+}
+.toolbar button, .toolbar .btn {
+  padding: 5px 14px; border-radius: 6px;
+  background: var(--bg-3); border: 1px solid var(--border);
+  color: var(--fg-2); font-size: 11px; cursor: pointer;
+  font-family: inherit;
+}
+.toolbar button:hover { border-color: var(--accent-3); }
+.toolbar .pct {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; color: var(--fg-4);
+  padding: 5px 10px; background: var(--bg-2); border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* Легенда */
+.legend {
+  position: absolute; bottom: 12px; left: 12px; z-index: 5;
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 10px; color: var(--fg-3);
+}
+.legend span {
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* Панель справа */
+.side-panel {
+  width: 380px; background: var(--bg-2);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  transition: transform 0.25s ease;
+}
+.side-panel.hidden { display: none; }
+
+.panel-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.panel-header h3 { font-size: 15px; font-weight: 700; }
+.panel-header .close-btn {
+  background: none; border: none; color: var(--fg-4);
+  font-size: 20px; cursor: pointer; padding: 0; line-height: 1;
+}
+.panel-header .close-btn:hover { color: var(--fg); }
+
+.panel-body { padding: 16px 20px; }
+
+.field { margin-bottom: 16px; }
+.field label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--fg-3); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.field input, .field select, .field textarea {
+  width: 100%; padding: 8px 12px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--fg); font-size: 13px; font-family: inherit;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.field textarea { resize: vertical; min-height: 60px; }
+
+.status-row {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.status-chip {
+  padding: 5px 12px; border-radius: 100px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border); color: var(--fg-3);
+  background: var(--bg); transition: all 0.15s;
+}
+.status-chip:hover { border-color: var(--accent-3); }
+.status-chip.active-not_started { background: rgba(140,160,190,0.2); border-color: #5A7090; color: #B0C4DE; }
+.status-chip.active-in_progress  { background: rgba(59,130,246,0.2); border-color: #3B82F6; color: #60A5FA; }
+.status-chip.active-completed   { background: rgba(16,185,129,0.2); border-color: #10B981; color: #34D399; }
+.status-chip.active-delayed     { background: rgba(245,158,11,0.2); border-color: #F59E0B; color: #FBBF24; }
+.status-chip.active-cancelled   { background: rgba(239,68,68,0.2); border-color: #EF4444; color: #F87171; }
+
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+
+.auto-duration {
+  font-size: 11px; color: var(--fg-4); margin-top: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.btn-row {
+  display: flex; gap: 8px; margin-top: 8px;
+}
+.btn-primary {
+  flex: 1; padding: 10px; border-radius: 6px; border: none;
+  background: var(--accent); color: #fff;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.btn-primary:hover { background: #2563EB; }
+.btn-secondary {
+  flex: 1; padding: 10px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--fg-2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.btn-secondary:hover { border-color: var(--fg-3); }
+
+.audit-bar {
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--fg-4);
+  line-height: 1.5;
+}
+.audit-bar strong { color: var(--fg-3); }
+
+/* Модальное окно (диалог автозакрытия) */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  z-index: 100; display: flex; align-items: center; justify-content: center;
+}
+.modal-overlay.hidden { display: none; }
+
+.modal {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: 12px; width: 480px; max-height: 80vh;
+  overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.modal-header .icon {
+  font-size: 22px;
+}
+.modal-header h3 { font-size: 15px; font-weight: 700; }
+.modal-body { padding: 16px 20px; font-size: 13px; color: var(--fg-2); line-height: 1.6; }
+.modal-body .warning { color: var(--warning); font-size: 12px; margin-top: 12px; }
+.modal-body table {
+  width: 100%; border-collapse: collapse; margin: 12px 0;
+}
+.modal-body th {
+  text-align: left; font-size: 10px; text-transform: uppercase;
+  color: var(--fg-4); padding: 6px 8px; border-bottom: 1px solid var(--border);
+  letter-spacing: 0.04em;
+}
+.modal-body td {
+  font-size: 12px; padding: 6px 8px; border-bottom: 1px solid rgba(30,50,82,0.5);
+}
+.modal-footer {
+  padding: 12px 20px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.modal-footer button {
+  padding: 8px 16px; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.modal-footer .btn-auto {
+  background: var(--accent); color: #fff; border: none;
+}
+.modal-footer .btn-auto:hover { background: #2563EB; }
+.modal-footer .btn-manual {
+  background: var(--bg-3); color: var(--fg-2); border: 1px solid var(--border);
+}
+.modal-footer .btn-cancel {
+  background: none; color: var(--fg-3); border: none;
+}
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%;
+  color: var(--fg-4); font-size: 14px; text-align: center;
+  padding: 40px;
+}
+.empty-state .hint {
+  font-size: 12px; color: var(--fg-3); margin-top: 8px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Граф -->
+  <div class="graph-area">
+    <div class="toolbar">
+      <button onclick="resetView()">Сброс</button>
+      <span class="pct" id="zoom-pct">85%</span>
+    </div>
+    <div class="legend">
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="rgba(140,160,190,0.3)" stroke="#5A7090" stroke-width="1"/></svg> Не начато</span>
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="rgba(59,130,246,0.3)" stroke="#3B82F6" stroke-width="2" stroke-dasharray="3,2"/></svg> В процессе</span>
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="rgba(16,185,129,0.3)" stroke="#F59E0B" stroke-width="2"/><circle cx="7" cy="7" r="3" fill="rgba(16,185,129,0.5)"/></svg> Выполнено</span>
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="rgba(239,68,68,0.25)" stroke="#EF4444" stroke-width="2"/></svg> Отклонение</span>
+      <span style="color:#F59E0B">▬▬</span><span>Путь выполнения</span>
+    </div>
+    <canvas id="graph"></canvas>
+  </div>
+
+  <!-- Боковая панель -->
+  <div class="side-panel hidden" id="panel">
+    <div class="panel-header">
+      <div>
+        <h3 id="panel-title">Операция</h3>
+        <span style="font-size:11px;color:var(--fg-4)" id="panel-subtitle"></span>
+      </div>
+      <button class="close-btn" onclick="closePanel()">&times;</button>
+    </div>
+    <div class="panel-body" id="panel-body">
+      <!-- Заполняется JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно автозакрытия -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="icon">&#x26A1;</span>
+      <h3>Автозакрытие предшествующих операций</h3>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+      <button class="btn-manual" onclick="doManualClose()">Закрыть только №<span id="modal-op-num"></span></button>
+      <button class="btn-auto" onclick="doAutoClose()">Закрыть <span id="modal-auto-count"></span> + перейти к №<span id="modal-op-num2"></span></button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// DEMO DATA — 8 узлов, упрощённый граф проекта "Вал С-200"
+// ================================================================
+const NODE_R = 22;
+const PX_PER_HOUR = 10;
+const LEFT_MARGIN = 60;
+const BASE_Y = 60;
+const ROW_H = 90;
+
+// Статусы узлов: 0=not_started, 1=in_progress, 2=completed, 3=delayed, 4=cancelled
+const STATUS = {
+  not_started: { color: 'rgba(140,160,190,0.3)', stroke: '#5A7090', lw: 1.5, inner: false },
+  in_progress: { color: 'rgba(59,130,246,0.3)', stroke: '#3B82F6', lw: 2, inner: false, dash: [3,2] },
+  completed: { color: 'rgba(16,185,129,0.35)', stroke: '#F59E0B', lw: 2, inner: true, double: true },
+  delayed: { color: 'rgba(239,68,68,0.25)', stroke: '#EF4444', lw: 2, inner: false },
+  cancelled: { color: 'rgba(239,68,68,0.15)', stroke: '#EF4444', lw: 1.5, inner: false, dash: [4,3] },
+};
+
+let nodes = [
+  { id: 'op1', name: 'Закупка металла', es: 0, dur: 8, ef: 8, critical: true, status: 'completed', source: 'auto_closed', row: 0, factStart: '01.08 08:00', factEnd: '01.08 16:00' },
+  { id: 'op2', name: 'Токарная обр. вала', es: 8, dur: 4, ef: 12, critical: true, status: 'completed', source: 'auto_closed', row: 0, factStart: '01.08 16:00', factEnd: '02.08 10:00' },
+  { id: 'op3', name: 'Термообработка', es: 12, dur: 6, ef: 18, critical: true, status: 'completed', source: 'auto_closed', row: 0, factStart: '02.08 10:00', factEnd: '03.08 00:00' },
+  { id: 'op4', name: 'Шлифовка', es: 18, dur: 3, ef: 21, critical: true, status: 'in_progress', source: 'manual', row: 0, factStart: '03.08 01:00', factEnd: '' },
+  { id: 'op5', name: 'Контроль ОТК', es: 21, dur: 1, ef: 22, critical: true, status: 'not_started', source: '', row: 0, factStart: '', factEnd: '' },
+  { id: 'op6', name: 'Фрезеровка корпуса', es: 0, dur: 5, ef: 5, critical: false, status: 'completed', source: 'manual', row: 1, factStart: '01.08 08:00', factEnd: '01.08 13:00' },
+  { id: 'op7', name: 'Сварка корпуса', es: 5, dur: 5, ef: 10, critical: false, status: 'completed', source: 'auto_closed', row: 1, factStart: '01.08 14:00', factEnd: '02.08 14:00' },
+  { id: 'op8', name: 'Сборка готового изд.', es: 22, dur: 3, ef: 25, critical: true, status: 'not_started', source: '', row: 1, factStart: '', factEnd: '' },
+];
+
+// Ребра
+let edges = [
+  { from: 'op1', to: 'op2' },
+  { from: 'op2', to: 'op3' },
+  { from: 'op3', to: 'op4' },
+  { from: 'op4', to: 'op5' },
+  { from: 'op5', to: 'op8' },
+  { from: 'op6', to: 'op7' },
+  { from: 'op7', to: 'op8' },
+];
+
+// ================================================================
+// RENDER
+// ================================================================
+const canvas = document.getElementById('graph');
+const ctx = canvas.getContext('2d');
+let scale = 0.85, offsetX = 0, offsetY = 0;
+let dragging = false, dragSX = 0, dragSY = 0;
+let hoverNode = null, selectedNode = null;
+
+function computePositions() {
+  nodes.forEach(n => {
+    n.x = LEFT_MARGIN + n.es * PX_PER_HOUR;
+    n.y = BASE_Y + n.row * ROW_H;
+  });
+  edges.forEach(e => {
+    const fromN = nodes.find(n => n.id === e.from);
+    const toN = nodes.find(n => n.id === e.to);
+    if (fromN && toN) {
+      e.fromX = fromN.x; e.fromY = fromN.y;
+      e.toX = toN.x; e.toY = toN.y;
+    }
+  });
+}
+
+function drawGraph() {
+  computePositions();
+  const W = canvas.parentElement.clientWidth;
+  const maxTime = Math.max(...nodes.map(n => n.ef));
+  const fullW = Math.max(W, (LEFT_MARGIN + (maxTime + 2) * PX_PER_HOUR + 80) * scale);
+  const fullH = (BASE_Y + 3 * ROW_H + 60) * scale;
+
+  canvas.width = fullW; canvas.height = Math.max(canvas.parentElement.clientHeight, fullH);
+  canvas.style.width = fullW + 'px'; canvas.style.height = canvas.height + 'px';
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0A1628'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY); ctx.scale(scale, scale);
+
+  // Resource tracks
+  for (let r = 0; r < 2; r++) {
+    const y = BASE_Y + r * ROW_H - 16;
+    ctx.fillStyle = 'rgba(30,50,82,0.3)';
+    ctx.fillRect(0, y, LEFT_MARGIN + (maxTime + 2) * PX_PER_HOUR + 80, ROW_H - 8);
+    ctx.fillStyle = '#5A7090'; ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(r === 0 ? 'Линия А (токарная)' : 'Линия Б (сварочная)', LEFT_MARGIN - 8, y + 18);
+  }
+
+  // Time grid
+  const gridStep = maxTime > 30 ? 4 : 2;
+  for (let t = 0; t <= maxTime + 2; t += gridStep) {
+    const x = LEFT_MARGIN + t * PX_PER_HOUR;
+    ctx.strokeStyle = 'rgba(60,90,130,0.12)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, BASE_Y + 3 * ROW_H); ctx.stroke();
+    ctx.fillStyle = '#5A7090'; ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.textAlign = 'center'; ctx.fillText(t + 'ч', x, BASE_Y - 22);
+  }
+
+  // Edges
+  edges.forEach(e => {
+    const fromN = nodes.find(n => n.id === e.from);
+    const toN = nodes.find(n => n.id === e.to);
+    if (!fromN || !toN) return;
+
+    const bothDone = fromN.status === 'completed' && toN.status === 'completed';
+    const fromDone = fromN.status === 'completed';
+
+    if (bothDone) {
+      // Янтарная двойная линия — выполненный путь
+      const dx = (toN.x - fromN.x), dy = (toN.y - fromN.y);
+      const len = Math.sqrt(dx*dx + dy*dy);
+      const nx = -dy/len, ny = dx/len;
+
+      ctx.strokeStyle = 'rgba(245,158,11,0.7)'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(fromN.x + NODE_R + nx*3, fromN.y - ny*3);
+      ctx.lineTo(toN.x - NODE_R + nx*3, toN.y - ny*3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(fromN.x + NODE_R - nx*3, fromN.y + ny*3);
+      ctx.lineTo(toN.x - NODE_R - nx*3, toN.y + ny*3);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(60,90,130,0.25)'; ctx.lineWidth = 1;
+      if (fromDone) ctx.strokeStyle = 'rgba(245,158,11,0.4)';
+      ctx.beginPath();
+      ctx.moveTo(fromN.x + (fromDone ? NODE_R : NODE_R), fromN.y);
+      ctx.lineTo(toN.x - NODE_R, toN.y);
+      ctx.stroke();
+    }
+  });
+
+  // Nodes
+  nodes.forEach((n, idx) => {
+    const st = STATUS[n.status];
+    const x = n.x, y = n.y;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.arc(x + 2, y + 2, NODE_R, 0, Math.PI*2); ctx.fill();
+
+    // Main circle
+    ctx.beginPath(); ctx.arc(x, y, NODE_R, 0, Math.PI*2);
+    ctx.fillStyle = st.color; ctx.fill();
+
+    ctx.strokeStyle = st.stroke; ctx.lineWidth = st.lw;
+    if (st.dash) ctx.setLineDash(st.dash); else ctx.setLineDash([]);
+    ctx.stroke();
+
+    // Double outline (amber for completed)
+    if (st.double) {
+      ctx.strokeStyle = '#B45309'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, NODE_R + 4, 0, Math.PI*2); ctx.stroke();
+    }
+
+    ctx.setLineDash([]);
+
+    // Inner dot for completed
+    if (st.inner) {
+      ctx.fillStyle = '#10B981'; ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI*2); ctx.fill();
+    }
+
+    // Number
+    ctx.fillStyle = '#E8EEF5'; ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle'; ctx.font = 'bold 11px IBM Plex Mono, monospace';
+    ctx.fillText(idx + 1, x, y);
+
+    // Label
+    ctx.font = '9px Inter, sans-serif'; ctx.fillStyle = '#8FA3BD';
+    ctx.fillText(n.name.length > 16 ? n.name.slice(0, 14) + '...' : n.name, x, y + NODE_R + 12);
+
+    // Duration bar below
+    const barW = n.dur * PX_PER_HOUR;
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(x - barW/2, y + NODE_R + 16, barW, 4);
+  });
+
+  ctx.restore();
+
+  // Hover tooltip
+  if (hoverNode) {
+    const n = hoverNode;
+    ctx.fillStyle = '#162844'; ctx.strokeStyle = '#1E3252'; ctx.lineWidth = 1;
+    const tx = 16, ty = canvas.height - 120;
+    ctx.beginPath(); ctx.roundRect(tx, ty, 240, 100, 8); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#E8EEF5'; ctx.textAlign = 'left';
+    ctx.font = 'bold 12px Inter, sans-serif'; ctx.fillText(n.name, tx+12, ty+22);
+
+    const statusMap = { not_started: 'Не начато', in_progress: 'В процессе', completed: 'Завершено', delayed: 'Задержано', cancelled: 'Отменено' };
+    const lines = [
+      `Статус: ${statusMap[n.status]}`,
+      `План: ${n.es}ч – ${n.ef}ч (${n.dur}ч)`,
+      n.critical ? 'Критический путь' : 'Некритический',
+      n.source === 'auto_closed' ? 'Закрыто автоматически' : n.source === 'manual' ? 'Закрыто вручную' : '',
+    ];
+    ctx.fillStyle = '#8FA3BD'; ctx.font = '10px IBM Plex Mono, monospace';
+    lines.forEach((l, i) => { if (l) ctx.fillText(l, tx+12, ty+42+i*16); });
+
+    ctx.fillStyle = '#60A5FA'; ctx.font = '9px Inter, sans-serif';
+    ctx.fillText('Двойной клик — редактировать', tx+12, ty+90);
+  }
+}
+
+// ================================================================
+// PANEL
+// ================================================================
+function openPanel(node) {
+  selectedNode = node;
+  panel.classList.remove('hidden');
+  document.getElementById('panel-title').textContent = '⚙ ' + node.name;
+  document.getElementById('panel-subtitle').textContent =
+    `План: ${node.es}ч – ${node.ef}ч (${node.dur}ч) | ${node.critical ? 'Критический путь' : 'Некритический'}`;
+
+  const statusMap = ['not_started','in_progress','completed','delayed','cancelled'];
+  const statusLabels = { not_started: 'Не начата', in_progress: 'В процессе', completed: 'Завершена', delayed: 'Задержана', cancelled: 'Отменена' };
+
+  const stHTML = statusMap.map(s =>
+    `<span class="status-chip ${node.status === s ? 'active-' + s : ''}" onclick="setStatus('${s}')">${statusLabels[s]}</span>`
+  ).join('');
+
+  document.getElementById('panel-body').innerHTML = `
+    <div class="field">
+      <label>Статус</label>
+      <div class="status-row">${stHTML}</div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Факт. начало</label>
+        <input type="text" id="fact-start" value="${node.factStart || ''}" placeholder="01.08 08:00">
+      </div>
+      <div class="field">
+        <label>Факт. завершение</label>
+        <input type="text" id="fact-end" value="${node.factEnd || ''}" placeholder="03.08 14:30">
+      </div>
+    </div>
+    <div class="auto-duration" id="auto-dur"></div>
+    <div class="field-row">
+      <div class="field">
+        <label>Выполнено, шт</label>
+        <input type="number" id="qty-done" value="100" placeholder="100">
+      </div>
+      <div class="field">
+        <label>Брак, шт</label>
+        <input type="number" id="qty-defect" value="0" placeholder="0">
+      </div>
+    </div>
+    <div class="field">
+      <label>Причина отклонения</label>
+      <select id="reason">
+        <option value="">— нет отклонений —</option>
+        <option value="machine">Простой станка</option>
+        <option value="material">Отсутствие материала</option>
+        <option value="tool">Брак инструмента</option>
+        <option value="quality">Качество сырья</option>
+        <option value="plan_error">Ошибка планирования</option>
+        <option value="other">Другое</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Комментарий</label>
+      <textarea id="comment" placeholder="Детали выполнения..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="closePanel()">Отмена</button>
+      <button class="btn-primary" onclick="saveNode()">Сохранить</button>
+    </div>
+    <div class="audit-bar" id="audit-bar"></div>
+  `;
+
+  updateAudit(node);
+}
+
+function updateAudit(node) {
+  const bar = document.getElementById('audit-bar');
+  if (!bar) return;
+  if (node.status === 'not_started') {
+    bar.innerHTML = '<span style="color:var(--fg-4);">Операция ещё не закрывалась</span>';
+  } else {
+    const src = node.source === 'auto_closed' ? 'автоматически' : 'вручную';
+    bar.innerHTML = `
+      Создано: 02.08.2026 14:15 (${src})<br>
+      <strong>Последнее изменение: сегодня, 10:30</strong> &middot; правок: 2
+    `;
+  }
+}
+
+function setStatus(s) {
+  if (!selectedNode) return;
+  const oldStatus = selectedNode.status;
+
+  // If closing and there are unclosed predecessors → show modal
+  if (s === 'completed' && oldStatus !== 'completed') {
+    const predecessors = findUnclosedPredecessors(selectedNode);
+    if (predecessors.length > 0) {
+      showAutoCloseModal(predecessors);
+      return;
+    }
+  }
+
+  selectedNode.status = s;
+  selectedNode.source = selectedNode.source || 'manual';
+  refreshUI();
+}
+
+function closePanel() {
+  panel.classList.add('hidden');
+  selectedNode = null;
+  drawGraph();
+}
+
+function saveNode() {
+  if (!selectedNode) return;
+  selectedNode.factStart = document.getElementById('fact-start').value;
+  selectedNode.factEnd = document.getElementById('fact-end').value;
+  selectedNode.source = 'manual';
+  updateAudit(selectedNode);
+  drawGraph();
+}
+
+// ================================================================
+// AUTO-CLOSE LOGIC
+// ================================================================
+function findUnclosedPredecessors(node) {
+  // Find all nodes on any path from start to this node that are not completed
+  const visited = new Set();
+  const unclosed = [];
+
+  function walk(current) {
+    if (visited.has(current.id)) return;
+    visited.add(current.id);
+    if (current.id === node.id) return; // stop at target
+    if (current.status !== 'completed') unclosed.push(current);
+    // Follow edges where current is predecessor of someone
+    edges.forEach(e => {
+      if (e.from === current.id) {
+        const next = nodes.find(n => n.id === e.to);
+        if (next) walk(next);
+      }
+    });
+  }
+
+  // Start from nodes with no incoming edges (or all nodes on the path)
+  // Simplified: find last completed node, collect all between it and target
+  const pathNodes = findDirectPath(node);
+  const lastCompletedIdx = pathNodes.map((n, i) => n.status === 'completed' ? i : -1).filter(i => i >= 0).pop() || -1;
+
+  for (let i = lastCompletedIdx + 1; i < pathNodes.length; i++) {
+    if (pathNodes[i].id === node.id) break;
+    if (pathNodes[i].status !== 'completed') unclosed.push(pathNodes[i]);
+  }
+  return unclosed;
+}
+
+function findDirectPath(node) {
+  // BFS from start to this node
+  const startNodes = nodes.filter(n => !edges.some(e => e.to === n.id));
+  // Simple: traverse forward collecting nodes until we hit target
+  const result = [];
+  const visited = new Set();
+
+  // Find all nodes that must precede this one (any path)
+  function collectPredecessors(n) {
+    edges.filter(e => e.to === n.id).forEach(e => {
+      const pred = nodes.find(p => p.id === e.from);
+      if (pred && !visited.has(pred.id)) {
+        visited.add(pred.id);
+        collectPredecessors(pred);
+        result.push(pred);
+      }
+    });
+  }
+  collectPredecessors(node);
+  result.push(node);
+
+  // Sort by early start
+  result.sort((a, b) => a.es - b.es);
+  return result;
+}
+
+let pendingPredecessors = [];
+
+function showAutoCloseModal(predecessors) {
+  pendingPredecessors = predecessors;
+  const modal = document.getElementById('modal-overlay');
+  const opNum = nodes.indexOf(selectedNode) + 1;
+
+  document.getElementById('modal-op-num').textContent = opNum;
+  document.getElementById('modal-op-num2').textContent = opNum;
+  document.getElementById('modal-auto-count').textContent = predecessors.length + ' оп.';
+
+  let html = `<p>Операция <strong>«${selectedNode.name}» (№${opNum})</strong> не может быть завершена раньше, чем операции на пути к ней.</p>`;
+  html += `<p>Следующие операции будут закрыты автоматически по плановым данным:</p>`;
+  html += `<table>
+    <tr><th>№</th><th>Операция</th><th>По плану</th></tr>`;
+  predecessors.forEach(n => {
+    const idx = nodes.indexOf(n) + 1;
+    html += `<tr><td>${idx}</td><td>${n.name}</td><td>${n.dur}ч, 100%</td></tr>`;
+  });
+  html += `</table>`;
+
+  // Check for skipped manual ones
+  const manualOnPath = findDirectPath(selectedNode).filter(n =>
+    n.status === 'completed' && n.source === 'manual' && !predecessors.includes(n)
+  );
+  if (manualOnPath.length > 0) {
+    html += `<p class="warning">Операции с ручным вводом (${manualOnPath.map(n => nodes.indexOf(n)+1).join(', ')}) пропущены и не будут перезаписаны.</p>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = html;
+  modal.classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  pendingPredecessors = [];
+}
+
+function doAutoClose() {
+  pendingPredecessors.forEach(n => {
+    n.status = 'completed';
+    n.source = 'auto_closed';
+    n.factStart = n.factStart || `План: ${n.es}ч`;
+    n.factEnd = n.factEnd || `План: ${n.ef}ч`;
+  });
+
+  // Also close the target
+  selectedNode.status = 'completed';
+  selectedNode.source = 'manual';
+
+  closeModal();
+  refreshUI();
+}
+
+function doManualClose() {
+  selectedNode.status = 'completed';
+  selectedNode.source = 'manual';
+  closeModal();
+  refreshUI();
+}
+
+function refreshUI() {
+  if (selectedNode && !panel.classList.contains('hidden')) {
+    openPanel(selectedNode);
+  }
+  drawGraph();
+}
+
+// ================================================================
+// MOUSE / INTERACTION
+// ================================================================
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  scale = Math.max(0.3, Math.min(2.5, scale * (e.deltaY < 0 ? 1.08 : 0.92)));
+  document.getElementById('zoom-pct').textContent = Math.round(scale * 100) + '%';
+  drawGraph();
+});
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true; dragSX = e.clientX - offsetX; dragSY = e.clientY - offsetY;
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (dragging) {
+    offsetX = e.clientX - dragSX; offsetY = e.clientY - dragSY;
+    drawGraph();
+  }
+
+  const mx = (e.offsetX - offsetX) / scale;
+  const my = (e.offsetY - offsetY) / scale;
+  const prev = hoverNode;
+  hoverNode = nodes.find(n => Math.hypot(n.x - mx, n.y - my) < NODE_R + 4) || null;
+  if (hoverNode !== prev) drawGraph();
+});
+
+canvas.addEventListener('mouseup', () => { dragging = false; });
+
+canvas.addEventListener('dblclick', e => {
+  const mx = (e.offsetX - offsetX) / scale;
+  const my = (e.offsetY - offsetY) / scale;
+  const n = nodes.find(n => Math.hypot(n.x - mx, n.y - my) < NODE_R + 4);
+  if (n) openPanel(n);
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const mx = (e.offsetX - offsetX) / scale;
+  const my = (e.offsetY - offsetY) / scale;
+  const n = nodes.find(n => Math.hypot(n.x - mx, n.y - my) < NODE_R + 4);
+  if (n && n.status === 'completed' && n.source === 'auto_closed') {
+    if (confirm(`Отменить закрытие операций до «${n.name}» (включительно)?\nБудут сняты только автоматически закрытые операции.`)) {
+      // Un-close this and all auto_closed predecessors
+      const path = findDirectPath(n);
+      let found = false;
+      for (let i = path.length - 1; i >= 0; i--) {
+        if (path[i].id === n.id) found = true;
+        if (found && path[i].source === 'auto_closed') {
+          path[i].status = 'not_started';
+          path[i].source = '';
+          path[i].factStart = ''; path[i].factEnd = '';
+        }
+      }
+      if (selectedNode) closePanel();
+      drawGraph();
+    }
+  }
+});
+
+function resetView() {
+  scale = 0.85; offsetX = 0; offsetY = 0;
+  document.getElementById('zoom-pct').textContent = '85%';
+  closePanel();
+  drawGraph();
+}
+
+// ================================================================
+// INIT
+// ================================================================
+computePositions();
+drawGraph();
+</script>
+</body>
+</html>
