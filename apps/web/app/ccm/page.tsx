@@ -1,8 +1,8 @@
 /**
- * CCM Dashboard page — Multi-Project планирование.
+ * CCM page — редирект на V2 с авторизацией и фактическим выполнением.
  */
-import CCMDashboard from '@/components/CCMDashboard';
+import { redirect } from 'next/navigation';
 
 export default function CCMPage() {
-  return <CCMDashboard />;
+  redirect('/ccm-v2');
 }

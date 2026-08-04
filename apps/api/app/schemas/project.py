@@ -4,7 +4,9 @@ Pydantic-схемы для проектов.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectCreate(BaseModel):
@@ -24,20 +26,19 @@ class ProjectUpdate(BaseModel):
 
 
 class ProjectOut(BaseModel):
-    id: str
-    tenant_id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
     name: str
     description: Optional[str] = None
     status: str
     mode: str
     default_method: str
     country_code: str
-    created_by: Optional[str] = None
+    created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ProjectList(BaseModel):

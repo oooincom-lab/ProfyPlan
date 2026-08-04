@@ -6,8 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
-import { getProjects, mergeProjects, resourceLeveling, createBaseline } from '@/lib/api';
-import { runCPM } from '@/lib/api';
+import { login, isAuthenticated, getProjects, mergeProjects, resourceLeveling, createBaseline } from '@/lib/api';
 
 type Tab = 'network-graph';
 
@@ -21,10 +20,22 @@ export default function CCMV2Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [showBaseline, setShowBaseline] = useState(false);
   const [baselineNodes, setBaselineNodes] = useState<any>(null);
+  const [authed, setAuthed] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('planner@demo.ru');
+  const [loginPass, setLoginPass] = useState('demo123');
+  const [loginErr, setLoginErr] = useState<string | null>(null);
 
   useEffect(() => {
-    getProjects().then(setProjects).catch(() => {});
+    if (isAuthenticated()) {
+      setAuthed(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (authed) {
+      getProjects().then((res: any) => setProjects(res.items || res || [])).catch(() => {});
+    }
+  }, [authed]);
 
   const toggleProject = (id: string) => {
     setSelectedIds(prev =>
@@ -72,6 +83,58 @@ export default function CCMV2Dashboard() {
       setLoading(false);
     }
   }, [selectedIds, ccmResult]);
+
+  const handleLogin = async () => {
+    setLoginErr(null);
+    try {
+      await login(loginEmail, loginPass);
+      setAuthed(true);
+    } catch (e: any) {
+      setLoginErr(e.message);
+    }
+  };
+
+  // --- Login screen
+  if (!authed) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', background: '#0A1628', fontFamily: 'Inter, sans-serif',
+      }}>
+        <div style={{
+          background: '#0F1E36', padding: '32px 40px', borderRadius: 12,
+          border: '1px solid #1E3252', width: 360,
+        }}>
+          <h2 style={{ color: '#E8EEF5', fontSize: 18, margin: '0 0 4px' }}>ProfyPlan CCM V2</h2>
+          <p style={{ color: '#5A7090', fontSize: 13, margin: '0 0 20px' }}>Войдите для работы с графом</p>
+          <input
+            value={loginEmail}
+            onChange={e => setLoginEmail(e.target.value)}
+            placeholder="Email"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            value={loginPass}
+            onChange={e => setLoginPass(e.target.value)}
+            placeholder="Пароль"
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            style={{ ...inputStyle, marginTop: 8 }}
+          />
+          <button onClick={handleLogin} style={{
+            width: '100%', marginTop: 16, padding: '10px', borderRadius: 8,
+            border: 'none', background: '#3B82F6', color: '#fff',
+            fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          }}>
+            Войти
+          </button>
+          {loginErr && (
+            <div style={{ marginTop: 10, color: '#EF4444', fontSize: 12 }}>{loginErr}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -152,3 +215,10 @@ export default function CCMV2Dashboard() {
     </div>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '10px 12px', borderRadius: 6,
+  border: '1px solid #1E3252', background: '#0A1628',
+  color: '#E8EEF5', fontSize: 14, outline: 'none',
+  boxSizing: 'border-box',
+};
