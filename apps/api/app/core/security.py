@@ -1,52 +1,52 @@
-"""
-JWT-àóòåíòèôèêàöèÿ: ñîçäàíèå, ïðîâåðêà òîêåíîâ, õåøèðîâàíèå ïàðîëåé.
-"""
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
-import bcrypt
-from jose import JWTError, jwt
-
-from app.core.config import settings
-
-ALGORITHM = settings.jwt_algorithm
-SECRET_KEY = settings.jwt_secret_key
-
-
-def hash_password(password: str) -> str:
-    """bcrypt-õåø ïàðîëÿ."""
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Ïðîâåðêà ïàðîëÿ ïðîòèâ õåøà."""
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
-
-
-def create_access_token(
-    user_id: str,
-    tenant_id: Optional[str] = None,
-    expires_delta: Optional[timedelta] = None,
-) -> str:
-    """Ñîçäàòü JWT access-òîêåí."""
-    to_encode = {"sub": user_id}
-    if tenant_id:
-        to_encode["tenant_id"] = tenant_id
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
-    to_encode["exp"] = expire
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def create_refresh_token(user_id: str) -> str:
-    """Ñîçäàòü refresh-òîêåí (30 äíåé)."""
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
-    to_encode = {"sub": user_id, "type": "refresh", "exp": expire}
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_token(token: str) -> Optional[dict]:
-    """Äåêîäèðîâàòü è ïðîâåðèòü JWT-òîêåí."""
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        return None
+"""
+JWT-Ð°ÑƒÑ‚ÐµÐ½Ñ‚Ð¸Ñ„Ð¸ÐºÐ°Ñ†Ð¸Ñ: ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ðµ, Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ° Ñ‚Ð¾ÐºÐµÐ½Ð¾Ð², Ñ…ÐµÑˆÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ðµ Ð¿Ð°Ñ€Ð¾Ð»ÐµÐ¹.
+"""
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+import bcrypt
+from jose import JWTError, jwt
+
+from app.core.config import settings
+
+ALGORITHM = settings.jwt_algorithm
+SECRET_KEY = settings.jwt_secret_key
+
+
+def hash_password(password: str) -> str:
+    """bcrypt-Ñ…ÐµÑˆ Ð¿Ð°Ñ€Ð¾Ð»Ñ."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð¿Ð°Ñ€Ð¾Ð»Ñ Ð¿Ñ€Ð¾Ñ‚Ð¸Ð² Ñ…ÐµÑˆÐ°."""
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+
+
+def create_access_token(
+    user_id: str,
+    tenant_id: Optional[str] = None,
+    expires_delta: Optional[timedelta] = None,
+) -> str:
+    """Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ JWT access-Ñ‚Ð¾ÐºÐµÐ½."""
+    to_encode = {"sub": user_id}
+    if tenant_id:
+        to_encode["tenant_id"] = tenant_id
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
+    to_encode["exp"] = expire
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(user_id: str) -> str:
+    """Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ refresh-Ñ‚Ð¾ÐºÐµÐ½ (30 Ð´Ð½ÐµÐ¹)."""
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days)
+    to_encode = {"sub": user_id, "type": "refresh", "exp": expire}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> Optional[dict]:
+    """Ð”ÐµÐºÐ¾Ð´Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ Ð¸ Ð¿Ñ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ JWT-Ñ‚Ð¾ÐºÐµÐ½."""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
