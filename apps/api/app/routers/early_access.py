@@ -35,7 +35,7 @@ async def early_access(req: EarlyAccessRequest):
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user,
-            password=***
+            password=settin…ord
             start_tls=True,
         )
     except Exception as e:
