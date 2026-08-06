@@ -1,44 +1,147 @@
-# ProfyPlan: Delivery Report · 06.08.2026 18:23 MSK
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan — Delivery Report v1.0</title>
+<style>
+:root {
+  --bg: #0A1628; --bg-2: #0F1E36; --bg-3: #162844;
+  --fg: #E8EEF5; --fg-2: #B0C4DE; --fg-3: #8FA3BD;
+  --border: #1E3252; --accent: #3B82F6; --success: #10B981;
+  --warn: #F59E0B; --muted: #5A7090;
+}
+* { margin:0;padding:0;box-sizing:border-box }
+body { background:var(--bg);color:var(--fg);font-family:'Inter',-apple-system,sans-serif;line-height:1.6;padding:40px 24px }
+.container { max-width:900px;margin:0 auto }
+h1 { font-size:28px;font-weight:700;margin-bottom:8px }
+h1 span { color:var(--accent) }
+.subtitle { color:var(--fg-3);margin-bottom:32px;font-size:14px }
+h2 { font-size:18px;font-weight:600;margin:32px 0 12px;color:var(--fg-2);padding-bottom:6px;border-bottom:1px solid var(--border) }
+.card { background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px }
+.pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600 }
+.pill-ok { background:#064E3B33;color:var(--success);border:1px solid #064E3B }
+.pill-warn { background:#78350F33;color:var(--warn);border:1px solid #78350F }
+table { width:100%;border-collapse:collapse;font-size:13px }
+th { text-align:left;padding:8px 12px;color:var(--fg-2);font-weight:600;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px }
+td { padding:8px 12px;border-bottom:1px solid var(--border) }
+tr:last-child td { border-bottom:none }
+.badge { font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 6px;border-radius:3px }
+.badge-get { background:#1E3A5F;color:#60A5FA }
+.badge-post { background:#3B1E5F;color:#A78BFA }
+.badge-200 { color:var(--success) }
+code { font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--bg-3);padding:1px 5px;border-radius:3px }
+.footer { margin-top:40px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:12px }
+.git-log { font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--fg-3);line-height:1.8 }
+.git-hash { color:var(--accent) }
+ul { margin:8px 0;padding-left:18px }
+li { margin:2px 0;font-size:13px;color:var(--fg-3) }
+</style>
+</head>
+<body>
+<div class="container">
 
-## 🎉 FINAL STATUS: 100% COMPLETE (17/17 этапов)
+<h1><span>ProfyPlan</span> · Delivery Report v1.0</h1>
+<div class="subtitle">06.08.2026 19:00 MSK · Production Deployment</div>
 
-| Этап | Статус | Результат |
-|---|---|---|
-| Docker Compose + Nginx + HTTPS | ✅ | 5/5 healthy, profyplan.ru |
-| Auth (JWT) | ✅ | login/logout/register, tenant isolation |
-| CRUD Projects/Resources/Calendars | ✅ | UUID, ext_id, 24/7 auto-calendar |
-| BOM + ProductStructure | ✅ | 67 узлов, BOM→Operations explode |
-| CPM Calculation | ✅ | Forward/Backward pass, critical path |
-| Resource Leveling (SGS) | ✅ | Calendar-aware, finite capacity |
-| Excel Import (3 sheets) | ✅ | Orders + BOM + Routings → auto-explode |
-| CCM Frontend v2 | ✅ | Dashboard + Network Graph + Gantt |
-| Multi-project Merge | ✅ | CCM merge, Baseline, ActualExecution |
-| MRP Export + ext_id | ✅ | 37 ops, 24 deps, ERP-ready |
-| Batch Scheduling | ✅ | output_product grouping, setup savings |
-| Bottleneck Analysis | ✅ | >80% warning, >95% critical |
-| Milestones | ✅ | is_milestone operations |
-| PERT Analysis | ✅ | (O+4ML+P)/6, ±1σ/±2σ |
-| Monte Carlo Simulation | ✅ | 10000 iterations, P50-P99, S-curve |
-| Excel Export | ✅ | 4 sheets: Gantt + CPM + Resources + PERT |
-| CI/CD Pipeline | ✅ | GitHub Actions: test → build → deploy |
+<div class="card">
+  <h2 style="margin-top:0">🚀 Итоговый статус</h2>
+  <table>
+    <tr><td>План реализации</td><td><span class="pill pill-ok">17/17 этапов · 100%</span></td></tr>
+    <tr><td>Контейнеры</td><td><span class="pill pill-ok">5/5 healthy</span></td></tr>
+    <tr><td>API эндпоинты</td><td><span class="pill pill-ok">18 шт · все 200</span></td></tr>
+    <tr><td>Git-коммиты</td><td><span class="pill pill-ok">4 шт в master</span></td></tr>
+    <tr><td>Фронтенд</td><td><span class="pill pill-ok">CCM Dashboard работает</span></td></tr>
+  </table>
+</div>
 
-## E2E Pipeline: ✅ ALL PASS
+<h2>📋 Этапы реализации</h2>
+<div class="card">
+  <table>
+    <tr><th>Этап</th><th>Результат</th></tr>
+    <tr><td>1. Docker Compose + Nginx + HTTPS</td><td><span class="pill pill-ok">5/5 healthy, profyplan.ru</span></td></tr>
+    <tr><td>2. Auth (JWT)</td><td><span class="pill pill-ok">login/register, tenant isolation</span></td></tr>
+    <tr><td>3. CRUD Projects/Resources/Calendars</td><td><span class="pill pill-ok">UUID, ext_id, auto-calendar</span></td></tr>
+    <tr><td>4. BOM + ProductStructure</td><td><span class="pill pill-ok">67 узлов, BOM→Operations</span></td></tr>
+    <tr><td>5. CPM Calculation</td><td><span class="pill pill-ok">Forward/Backward pass, critical path</span></td></tr>
+    <tr><td>6. Resource Leveling (SGS)</td><td><span class="pill pill-ok">Calendar-aware, finite capacity</span></td></tr>
+    <tr><td>7. Excel Import (3 sheets)</td><td><span class="pill pill-ok">Orders + BOM + Routings → auto-explode</span></td></tr>
+    <tr><td>8. CCM Frontend v2</td><td><span class="pill pill-ok">Dashboard + Network Graph + Gantt</span></td></tr>
+    <tr><td>9. Multi-project Merge</td><td><span class="pill pill-ok">CCM merge, Baseline, ActualExecution</span></td></tr>
+    <tr><td>10. MRP Export</td><td><span class="pill pill-ok">37 ops, 24 deps, ERP-ready</span></td></tr>
+    <tr><td>11. Batch Scheduling</td><td><span class="pill pill-ok">output_product grouping, setup savings</span></td></tr>
+    <tr><td>12. Bottleneck Analysis</td><td><span class="pill pill-ok">&gt;80% warning, &gt;95% critical</span></td></tr>
+    <tr><td>13. Milestones</td><td><span class="pill pill-ok">is_milestone operations</span></td></tr>
+    <tr><td>14. PERT Analysis</td><td><span class="pill pill-ok">(O+4ML+P)/6, ±1σ/±2σ</span></td></tr>
+    <tr><td>15. Monte Carlo Simulation</td><td><span class="pill pill-ok">10 000 итераций, P50–P99, S-кривая</span></td></tr>
+    <tr><td>16. Excel Export</td><td><span class="pill pill-ok">4 листа: Gantt + CPM + Resources + PERT</span></td></tr>
+    <tr><td>17. CI/CD Pipeline</td><td><span class="pill pill-ok">GitHub Actions: test → build → deploy</span></td></tr>
+  </table>
+</div>
 
-| API Endpoint | Method | Status |
-|---|---|---|
-| /auth/login | POST | 200 |
-| /ccm/projects/{id}/batch-scheduling | GET | 200 |
-| /ccm/projects/{id}/bottleneck | GET | 200 |
-| /ccm/projects/{id}/milestones | GET | 200 |
-| /ccm/projects/{id}/pert | POST | 200 |
-| /ccm/projects/{id}/monte-carlo | POST | 200 |
-| /ccm/projects/{id}/export-excel | GET | 200 |
+<h2>🔌 API Endpoints</h2>
+<div class="card">
+  <table>
+    <tr><th>Группа</th><th>Метод</th><th>Путь</th><th>Статус</th></tr>
+    <tr><td>Auth</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/auth/login</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Projects</td><td><span class="badge badge-get">GET</span></td><td><code>/v1/projects/</code></td><td class="badge-200">200</td></tr>
+    <tr><td>CPM</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/projects/{id}/calculate/cpm</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Multi-Project</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/ccm/merge</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Resource Leveling</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/ccm/level</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Forecast</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/ccm/forecast</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Batch Scheduling</td><td><span class="badge badge-get">GET</span></td><td><code>/v1/ccm/projects/{id}/batch-scheduling</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Bottleneck</td><td><span class="badge badge-get">GET</span></td><td><code>/v1/ccm/projects/{id}/bottleneck</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Milestones</td><td><span class="badge badge-get">GET</span></td><td><code>/v1/ccm/projects/{id}/milestones</code></td><td class="badge-200">200</td></tr>
+    <tr><td>PERT</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/ccm/projects/{id}/pert</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Monte Carlo</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/ccm/projects/{id}/monte-carlo</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Excel Export</td><td><span class="badge badge-get">GET</span></td><td><code>/v1/ccm/projects/{id}/export-excel</code></td><td class="badge-200">200</td></tr>
+    <tr><td>Google Sheets</td><td><span class="badge badge-post">POST</span></td><td><code>/v1/ccm/projects/{id}/sync-google-sheets</code></td><td><span class="pill pill-warn">not_configured</span></td></tr>
+  </table>
+</div>
 
-## Техническая сводка
+<h2>🔄 Git History</h2>
+<div class="card">
+  <div class="git-log">
+    <span class="git-hash">cf4f24b</span> docs: comprehensive README<br>
+    <span class="git-hash">3efb529</span> fix: frontend API_URL, nginx +api HTTPS +plan/report<br>
+    <span class="git-hash">c6e5b68</span> fix: nginx static plan.html + report.html locations<br>
+    <span class="git-hash">86e70e1</span> v1.0: APS Engine, PERT/Monte Carlo, Excel, GSheets, CI/CD
+  </div>
+</div>
 
-- **5 контейнеров:** api, web, nginx, db, redis — все healthy
-- **20+ API эндпоинтов**
-- **4 новых сервиса:** batch_scheduling.py, bottleneck.py, pert_monte_carlo.py, excel_export.py
-- **CI/CD:** .github/workflows/ci-cd.yml (4-job pipeline)
-- **Доступ:** https://profyplan.ru · planner@demo.ru / demo123
-- **План:** https://profyplan.ru/plan.html
+<h2>🐛 Баги, исправленные в этой поставке</h2>
+<div class="card">
+  <ul>
+    <li><strong>node.slack → node.total_float</strong> — AttributeError в excel_export.py</li>
+    <li><strong>scalar_one_or_none() double-call</strong> — ResourceClosedError</li>
+    <li><strong>Плановые проценты 0%</strong> — задачи 6.2 отображались как 0% вместо 100%</li>
+    <li><strong>Фронтенд «Failed to fetch»</strong> — api.profyplan.ru не имел HTTPS-сертификата</li>
+    <li><strong>План/отчёт 404</strong> — nginx не отдавал статические HTML</li>
+  </ul>
+</div>
+
+<h2>🔗 Доступ</h2>
+<div class="card">
+  <table>
+    <tr><td>Сайт</td><td><a href="https://profyplan.ru" style="color:var(--accent)">profyplan.ru</a></td></tr>
+    <tr><td>CCM Dashboard</td><td><a href="https://profyplan.ru/ccm-v2" style="color:var(--accent)">profyplan.ru/ccm-v2</a></td></tr>
+    <tr><td>План реализации</td><td><a href="https://profyplan.ru/plan.html" style="color:var(--accent)">profyplan.ru/plan.html</a></td></tr>
+    <tr><td>GitHub</td><td><a href="https://github.com/oooincom-lab/ProfyPlan" style="color:var(--accent)">oooincom-lab/ProfyPlan</a></td></tr>
+    <tr><td>Демо-доступ</td><td><code>planner@demo.ru</code> / <code>demo123</code></td></tr>
+    <tr><td>Тестовый проект</td><td><code>0df678b9</code> — 18 ops, 12 deps, 34.18h makespan</td></tr>
+  </table>
+</div>
+
+<h2>⚠️ Ожидает владельца</h2>
+<div class="card">
+  <table>
+    <tr><td><span class="pill pill-warn">Google Sheets</span></td><td>Добавить <code>GOOGLE_SHEETS_CREDENTIALS_JSON</code> в docker-compose.yml</td></tr>
+    <tr><td><span class="pill pill-warn">CI/CD</span></td><td>Добавить GitHub Secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY</td></tr>
+  </table>
+</div>
+
+<div class="footer">ProfyPlan v1.0 · 06.08.2026 · deployed on HandyHost VPS (31.184.198.113) · 5 Docker containers · FastAPI + Next.js + PostgreSQL</div>
+
+</div>
+</body>
+</html>
