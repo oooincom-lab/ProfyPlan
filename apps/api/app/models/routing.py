@@ -37,6 +37,10 @@ class Routing(BaseModel):
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    ext_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="Внешний ID из ERP"
+    )
+
 
 class RoutingOperation(BaseModel):
     """Операция в составе технологического маршрута."""
@@ -86,3 +90,7 @@ class RoutingOperation(BaseModel):
     )  # JSON: [{"id":"...","qty":100,"unit":"kg"}]
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    ext_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="Внешний ID из ERP"
+    )

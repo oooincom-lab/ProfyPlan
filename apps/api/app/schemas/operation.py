@@ -67,3 +67,30 @@ class DependencyOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OperationResourceCreate(BaseModel):
+    resource_id: str
+    role: str = "primary"  # primary / alternative / helper
+    efficiency_factor: Decimal = Field(default=Decimal("1.0"), ge=0, le=3)
+    capacity_demand: Decimal = Field(default=Decimal("1.0"), ge=0)
+    duration_override: Optional[Decimal] = None
+    setup_time_override: Optional[Decimal] = None
+    teardown_time_override: Optional[Decimal] = None
+    priority: int = 100
+
+
+class OperationResourceOut(BaseModel):
+    id: str
+    operation_id: str
+    resource_id: str
+    role: str
+    efficiency_factor: Decimal
+    capacity_demand: Decimal
+    duration_override: Optional[Decimal] = None
+    setup_time_override: Optional[Decimal] = None
+    teardown_time_override: Optional[Decimal] = None
+    priority: int
+
+    class Config:
+        from_attributes = True

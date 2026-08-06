@@ -32,7 +32,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from app.routers import auth, projects, resources, operations, calculations, ccm, early_access, actual
+    from app.routers import auth, projects, resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders
+    from app.routers.suppliers import sc_router
     app.include_router(auth.router)
     app.include_router(projects.router)
     app.include_router(resources.router)
@@ -42,6 +43,10 @@ def create_app() -> FastAPI:
     app.include_router(ccm.ccm_router)
     app.include_router(early_access.router)
     app.include_router(actual.router)
+    app.include_router(bom.bom_router)
+    app.include_router(calendars.router)
+    app.include_router(production_orders.router)
+    app.include_router(sc_router)
 
     @app.get("/v1/health")
     async def health():

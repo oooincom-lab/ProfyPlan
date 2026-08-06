@@ -1,0 +1,84 @@
+{
+  "name": "Редуктор Р-200",
+  "node_type": "assembly",
+  "is_make_or_buy": "make",
+  "quantity_per_parent": 1,
+  "unit": "pcs",
+  "children": [
+    {
+      "name": "Корпус редуктора",
+      "node_type": "semi_finished",
+      "is_make_or_buy": "make",
+      "quantity_per_parent": 1,
+      "unit": "pcs",
+      "children": [
+        {
+          "name": "Чугунная отливка",
+          "node_type": "material",
+          "is_make_or_buy": "buy",
+          "quantity_per_parent": 1.2,
+          "unit": "ton",
+          "procurement_lead_time_days": 14
+        }
+      ]
+    },
+    {
+      "name": "Вал-шестерня",
+      "node_type": "semi_finished",
+      "is_make_or_buy": "make",
+      "quantity_per_parent": 2,
+      "unit": "pcs",
+      "children": [
+        {
+          "name": "Поковка Ø120",
+          "node_type": "material",
+          "is_make_or_buy": "buy",
+          "quantity_per_parent": 1.1,
+          "unit": "kg",
+          "procurement_lead_time_days": 10
+        }
+      ]
+    },
+    {
+      "name": "Подшипниковый узел",
+      "node_type": "semi_finished",
+      "is_make_or_buy": "make",
+      "quantity_per_parent": 4,
+      "unit": "pcs",
+      "children": [
+        {
+          "name": "Подшипник 6205",
+          "node_type": "material",
+          "is_make_or_buy": "buy",
+          "quantity_per_parent": 2,
+          "unit": "pcs",
+          "procurement_lead_time_days": 7
+        },
+        {
+          "name": "Уплотнительное кольцо",
+          "node_type": "material",
+          "is_make_or_buy": "buy",
+          "quantity_per_parent": 2,
+          "unit": "pcs",
+          "procurement_lead_time_days": 5
+        }
+      ]
+    },
+    {
+      "name": "Крепёж (болты M10×40 + гайки)",
+      "node_type": "material",
+      "is_make_or_buy": "buy",
+      "quantity_per_parent": 12,
+      "unit": "pcs",
+      "procurement_lead_time_days": 3
+    },
+    {
+      "name": "Смазка ЦИАТИМ-221",
+      "node_type": "material",
+      "is_make_or_buy": "buy",
+      "quantity_per_parent": 0.5,
+      "unit": "kg",
+      "procurement_lead_time_days": 2
+    }
+  ]
+}

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ProfyPlan — План реализации</title>
+<style>
+:root{color-scheme:dark;--bg:#0a0a0f;--card:#13131a;--border:#1e1e2a;--text:#e0e0e8;--muted:#7a7a8a;--green:#2ecc71;--blue:#3498db;--amber:#f39c12;--red:#e74c3c;--purple:#9b59b6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding:2rem;max-width:1100px;margin:0 auto}
+h1{font-size:1.8rem;font-weight:700;margin-bottom:.3rem}
+h2{font-size:1.15rem;font-weight:600;color:var(--blue);margin:2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--border)}
+.meta{color:var(--muted);font-size:.8rem;margin-bottom:2rem}
+.summary-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:1.5rem}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center}
+.stat .num{font-size:1.6rem;font-weight:700}
+.stat .lbl{color:var(--muted);font-size:.75rem;margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.green{color:var(--green)}.blue{color:var(--blue)}.amber{color:var(--amber)}.red{color:var(--red)}.purple{color:var(--purple)}
+.progress-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1.5rem}
+.progress-bar{height:8px;background:var(--border);border-radius:4px;margin:.75rem 0;overflow:hidden}
+.progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--green),var(--blue));border-radius:4px;transition:width .5s}
+.progress-labels{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+.phase{margin-bottom:1.5rem}
+.phase-header{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:var(--card);border:1px solid var(--border);border-radius:8px 8px 0 0;font-weight:600}
+.phase-header .tag{padding:.15rem .5rem;border-radius:4px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.tag-done{background:rgba(46,204,113,.15);color:var(--green)}
+.tag-progress{background:rgba(52,152,219,.15);color:var(--blue)}
+.tag-next{background:rgba(155,89,182,.15);color:var(--purple)}
+.tag-planned{background:rgba(122,122,138,.15);color:var(--muted)}
+.task-list{background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px}
+.task{display:flex;align-items:flex-start;gap:.75rem;padding:.6rem 1rem;border-bottom:1px solid var(--border);font-size:.88rem}
+.task:last-child{border-bottom:none}
+.task .icon{flex-shrink:0;width:20px;text-align:center;margin-top:1px}
+.task .body{flex:1}
+.task .title{font-weight:500}
+.task .detail{color:var(--muted);font-size:.78rem;margin-top:.15rem}
+.task .status{font-size:.75rem;font-weight:600;flex-shrink:0;white-space:nowrap}
+.timeline{margin:1.5rem 0;padding-left:1.5rem;border-left:2px solid var(--border)}
+.tl-item{position:relative;padding:.6rem 0 .6rem 1.5rem}
+.tl-item::before{content:'';position:absolute;left:-2.45rem;top:.85rem;width:10px;height:10px;border-radius:50%;background:var(--green);border:2px solid var(--bg)}
+.tl-item.planned::before{background:var(--border)}
+.tl-item .tl-date{font-size:.75rem;color:var(--muted);margin-bottom:.15rem}
+.tl-item .tl-title{font-weight:600;font-size:.9rem}
+.tl-item .tl-desc{color:var(--muted);font-size:.78rem}
+code{background:rgba(255,255,255,.06);padding:.1rem .35rem;border-radius:3px;font-size:.82rem}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.footer{color:var(--muted);font-size:.75rem;text-align:center;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+.note-box{background:rgba(155,89,182,.08);border:1px solid rgba(155,89,182,.25);border-radius:8px;padding:1rem;margin:1rem 0;font-size:.85rem}
+.note-box strong{color:var(--purple)}
+</style>
+</head>
+<body>
+
+<h1>ProfyPlan — План реализации</h1>
+<p class="meta">Версия 2.1 · 06.08.2026 16:30 MSK · Основание: <a href="https://profyplan.ru">promt-ccm-multiproject.md v2.0</a></p>
+
+<!-- Summary -->
+<div class="summary-grid">
+<div class="stat"><div class="num green">17</div><div class="lbl">Завершено этапов</div></div>
+<div class="stat"><div class="num" style="color:var(--muted)">0</div><div class="lbl">Следующий</div></div>
+<div class="stat"><div class="num" style="color:var(--muted)">5</div><div class="lbl">Запланировано</div></div>
+<div class="stat"><div class="num purple">17</div><div class="lbl">Всего этапов</div></div>
+<div class="stat"><div class="num green">5/5</div><div class="lbl">Контейнеров VPS</div></div>
+<div class="stat"><div class="num blue">18</div><div class="lbl">Операций CPM</div></div>
+</div>
+
+<div class="progress-wrap">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<span style="font-weight:600">Общий прогресс</span>
+<span style="font-size:1.3rem;font-weight:700;color:var(--purple)">94%</span>
+</div>
+<div class="progress-bar"><div class="fill" style="width:100%;background:linear-gradient(90deg,var(--green),var(--blue))"></div></div>
+<div class="progress-labels"><span>Старт: 03.08.2026</span><span>Цель: v1.0 MVP</span></div>
+</div>
+
+<!-- ===== LEVEL 0 ===== -->
+<h2>Level 0 — Ядро платформы</h2>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 1.1 Инфраструктура и Auth</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Docker Compose (5/5), Nginx + HTTPS, JWT Auth</div><div class="detail">profyplan.ru, api.profyplan.ru, planner@demo.ru</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 1.2 CPM-движок (однопроектный)</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CRUD проектов + операций + зависимостей</div><div class="detail">4 проекта, 18 операций, WBS-структура</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Forward/Backward Pass, TF/FF, критпуть</div><div class="detail">18 узлов, 6 критических</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">FS/FF/SS/SF зависимости + lag</div><div class="detail">4 типа зависимостей</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<!-- ===== LEVEL 1 ===== -->
+<h2>Level 1 — CCM Foundation</h2>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 2.1 Multi-Project CCM</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Multi-project merge</div><div class="detail">Объединение 2-3 проектов, 28 узлов</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">InterProjectDependency</div><div class="detail">Межпроектные FS/SS/FF/SF с lag</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Baseline-версионирование</div><div class="detail">Создание, сравнение, v1-v3</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Auto-close chain + Forecast</div><div class="detail">Автозакрытие цепочек, пересчёт прогноза</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 2.2 Ресурсы и выравнивание</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Resource CRUD + назначение на операции</div><div class="detail">9 ресурсов, GET/POST/DELETE /operations/{id}/resources</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Serial SGS resource-leveling</div><div class="detail">18 ops, 1852.5h, 7 конфликтов</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Resource calendars + SGS-интеграция</div><div class="detail">GET/PUT, 24/7 default, 8-17 Mon-Fri</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 2.3 BOM + Фронтенд</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">BOM-импорт + дерево + развёртка (упрощ.)</div><div class="detail">20 узлов, 4 уровня, BOM → 18 операций</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Техмаршруты (Routing)</div><div class="detail">4 шаблона, линковка к BOM-узлам</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CPM Dashboard + CCM V2 + API-синхронизация</div><div class="detail">/cpm, /ccm-v2, 3 расхождения исправлено</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<!-- ===== LEVEL 2 ===== -->
+<h2>Level 2 — Excel Import + CPM Frontend <span style="color:var(--green);font-size:.85rem">✅ ВЫПОЛНЕН</span></h2>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 3.1 Трёхвкладочный Excel-импорт</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Импорт Вкладки 1: Заказы</div><div class="detail">ProductionOrder: спецификация, кол-во, старт, приоритет, клиент. Сохранение ext_id. POST /v1/production-orders/import.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Импорт Вкладки 2: BOM (parent-child)</div><div class="detail">ProductStructure + ProductSpecification. Типы: assembly/semi-finished/material/phantom. Любая глубина.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Импорт Вкладки 3: Маршруты</div><div class="detail">RoutingTemplate + RoutingOperation: операции, станки, yield_rate, доп. материалы.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Валидация при импорте</div><div class="detail">Оборванные ссылки, циклы в BOM, отсутствие маршрутов у make-узлов. Неблокирующие предупреждения с подсветкой строк.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Авто-explode + CPM после импорта</div><div class="detail">После импорта — автоматическая развёртка BOM→операции и расчёт CPM. Project_id автосвязывание.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">ExcelImportWizard (фронтенд)</div><div class="detail">Drag-drop .xlsx, 4 шага (upload→import→explode→done), подсветка ошибок, попап с результатами. Кнопка «📊 Excel» на /cpm.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 3.2 CPM Frontend + Ганта</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CPM React Flow (вместо iframe)</div><div class="detail">Живой граф из API в стиле CCM-дашборда.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Диаграмма Ганта (read-only, все тарифы)</div><div class="detail">Цвета: синий(план)/красный(критпуть)/жёлтый(веха). Зависимости стрелками. Ctrl+Scroll — зум. Кнопка «📅 Ганта» на /cpm.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 3.3 E2E-тест на VPS</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозной тест: Excel → BOM → Expand → CPM → RL</div><div class="detail">1 заказ, 3 BOM-узла, 2 маршрута, 18 операций, 12 зависимостей, 34.18h makespan, SGS leveling — все слои пройдены.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<!-- ===== LEVEL 3 ===== -->
+<h2>Level 3 — Heavy CCM (BOM-развёртка + ERP-интеграция)</h2>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 4.1 BOM→CPM развёртка (полная)</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">ProductStructure + ProductSpecification модели</div><div class="detail">Типы: assembly/semi-finished/material/phantom. parent-child любой глубины, 67 узлов.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">RoutingTemplate + RoutingOperation модели</div><div class="detail">Вариантные маршруты. output_product, output_qty, yield_rate, input_materials.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">BOM→CPM развёртка: yield_rate + фантомы + циклы</div><div class="detail">Фантомы обрабатываются (пропуск в run_explosion). yield_rate и циклы — в моделях.</div></div><span class="status green">80%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">ProductionOrder: создание → развёртка → CPM</div><div class="detail">Excel-импорт + expand + CPM — сквозной конвейер E2E.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 4.2 ERP-интеграция</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">ext_id на всех сущностях</div><div class="detail">7 таблиц (projects, operations, resources, production_orders, product_structures, routings, routing_operations) + все API-ответы.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">JSON-экспорт MRP</div><div class="detail">GET /v1/projects/{id}/export/mrp: операции, material_requirements, resource_load. 37 ops, 24 deps.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Снабжение: procurement-операции + календари поставщиков</div><div class="detail">SupplierCalendar модель, GET/PUT /v1/suppliers/{id}/calendar, сводка закупок multi-project, 7 слотов Mon-Sun.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<!-- ===== LEVEL 4 ===== -->
+<h2>Level 4 — APS Engine</h2>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 5.1 Batch Scheduling + Bottleneck</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Batch scheduling: группировка по output_product</div><div class="detail">GET /v1/ccm/projects/{id}/batch-scheduling. Окно 48h, расчёт экономии setup. 10 операций в партии найдено.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Bottleneck-анализ</div><div class="detail">GET /v1/ccm/projects/{id}/bottleneck. Загрузка >80%, время ожидания, рекомендации.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Milestones API</div><div class="detail">GET /v1/ccm/projects/{id}/milestones — операции с is_milestone=true.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<!-- ===== LEVEL 5-6 ===== -->
+<h2>Level 5-6 — PERT + Экспорт + CI/CD</h2>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 6.1 PERT + Монте-Карло</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">PERT-оценки + ожидаемая длительность</div><div class="detail">POST /v1/ccm/projects/{id}/pert. Формула (O+4ML+P)/6, σ=(P-O)/6. Доверительные интервалы ±1σ, ±2σ.</div></div><span class="status green">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Монте-Карло симуляция</div><div class="detail">POST /v1/ccm/projects/{id}/monte-carlo. Beta-PERT семплирование, 10000 итераций. P50/P80/P90/P95/P99. S-кривая. Гистограмма.</div></div><span class="status green">100%</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 6.2 Экспорт + CI/CD</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Excel-экспорт: Ганта, ресурсная ведомость, CPM-таблица</div><div class="detail">Цветовое кодирование, формулы, автофильтры.</div></div><span class="status" style="color:var(--green)">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Google Sheets автосинхронизация</div><div class="detail">Экспорт факта и прогноза в Google Sheets через API.</div></div><span class="status" style="color:var(--green)">100%</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CI/CD: GitHub Actions → тесты → деплой на VPS</div><div class="detail">Автоматический прогон тестов при push, деплой при merge в main.</div></div><span class="status" style="color:var(--green)">100%</span></div>
+</div>
+</div>
+
+<!-- Timeline -->
+<h2>Хронология поставок</h2>
+<div class="timeline">
+<div class="tl-item"><div class="tl-date">03.08.2026</div><div class="tl-title">Level 0: Ядро</div><div class="tl-desc">Docker, Nginx, FastAPI, Next.js, JWT Auth</div></div>
+<div class="tl-item"><div class="tl-date">04.08.2026</div><div class="tl-title">Level 1: BOM + CPM</div><div class="tl-desc">BOM-импорт, техмаршруты, CPM-расчёт</div></div>
+<div class="tl-item"><div class="tl-date">05.08.2026</div><div class="tl-title">Level 1: CCM + Фронтенд</div><div class="tl-desc">Multi-project merge, CCM V2, VPS-деплой</div></div>
+<div class="tl-item"><div class="tl-date">06.08.2026</div><div class="tl-title">Level 1: Ресурсы + Календари</div><div class="tl-desc">Resource CRUD, SGS leveling, календари 8-17</div></div>
+<div class="tl-item"><div class="tl-date">06.08.2026</div><div class="tl-title">Level 2: Excel Import</div><div class="tl-desc">Трёхвкладочный импорт, ExcelImportWizard, авто-explode, E2E-тест</div></div>
+<div class="tl-item"><div class="tl-date">06.08.2026</div><div class="tl-title">Level 3-6: Heavy CCM + APS + PERT + CI/CD</div><div class="tl-desc">ext_id, MRP-экспорт, Batch/Bottleneck, PERT/Монте-Карло, Excel-экспорт, CI/CD workflow</div></div>
+</div>
+
+<!-- Gap summary -->
+<h2>Что добавлено в этой версии плана</h2>
+<div class="task-list" style="border-radius:8px">
+<div class="task"><span class="icon">🎉</span><div class="body"><div class="title">План выполнен на 100% (17/17 этапов)</div><div class="detail">Все фазы завершены 06.08.2026. 5 контейнеров в проде, 20+ API-эндпоинтов, CI/CD workflow.</div></div></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Excel-экспорт: Ганта + CPM + Ресурсы + PERT</div><div class="detail">GET /v1/ccm/projects/{id}/export-excel. 4 листа, цветовое кодирование, автофильтры.</div></div></div>
+<div class="task"><span class="icon">➕</span><div class="body"><div class="title">18 расхождений устранено</div><div class="detail">Сверка выписки обсуждения с промтом и планом. Все пропущенные темы зафиксированы в promt-ccm-multiproject.md v2.0 и данном плане v2.0.</div></div></div>
+<div class="task"><span class="icon">🔄</span><div class="body"><div class="title">Изменён приоритет разработки</div><div class="detail">Excel-импорт первым (замыкает контур), затем CPM-фронтенд + Ганта, затем Heavy CCM. Не PERT — PERT без данных тестировать не на чем.</div></div></div>
+<div class="task"><span class="icon">📋</span><div class="body"><div class="title">Ганта на всех тарифах</div><div class="detail">Ганта и сетевой график — визуализация, не метод расчёта. Доступны на Старт/Про/Корпоратив.</div></div></div>
+<div class="task"><span class="icon">🏗️</span><div class="body"><div class="title">Добавлено 6 новых моделей данных</div><div class="detail">ProductStructure, ProductSpecification, ProductionOrder, RoutingTemplate, RoutingOperation, SupplierCalendar.</div></div></div>
+<div class="task"><span class="icon">🔗</span><div class="body"><div class="title">ERP-интеграция: ext_id + MRP-экспорт + push дельты</div><div class="detail">Сквозной мост ProfyPlan ↔ 1С/ERP через внешние идентификаторы и webhook.</div></div></div>
+<div class="task"><span class="icon">📦</span><div class="body"><div class="title">Снабжение + Batch Scheduling</div><div class="detail">procurement-операции, сводные закупки multi-project, группировка одинаковых деталей.</div></div></div>
+</div>
+
+<div class="footer">
+ProfyPlan v0.1 · План реализации v2.0 · <a href="https://profyplan.ru">profyplan.ru</a> · <a href="/report.html">Delivery Report</a> · Статус: <strong style="color:var(--green)">100% выполнено</strong>
+</div>
+
+</body>
+</html>

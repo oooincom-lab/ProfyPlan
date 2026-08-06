@@ -5,9 +5,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import GanttChart from './GanttChart';
-import ResourceLoadChart from './ResourceLoadChart';
-import NetworkGraph from './NetworkGraph';
+import GanttChart from './ganttchart';
+import ResourceLoadChart from './resourceloadchart';
+import NetworkGraph from './networkgraph';
 import { getProjects, mergeProjects, resourceLeveling } from '@/lib/api';
 
 type Tab = 'gantt' | 'network-graph' | 'resource-load';
@@ -23,7 +23,7 @@ export default function CCMDashboard() {
 
   useEffect(() => {
     getProjects()
-      .then(setProjects)
+      .then(res => setProjects(res.items || []))
       .catch(() => {});
   }, []);
 

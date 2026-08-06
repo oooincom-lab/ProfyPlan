@@ -57,7 +57,7 @@ export function isAuthenticated(): boolean {
 
 // --- Projects ---
 export function getProjects() {
-  return request<Project[]>('/v1/projects');
+  return request<{ items: Project[]; total: number }>('/v1/projects');
 }
 
 export function getProject(id: string) {
@@ -109,11 +109,8 @@ export function recalculateForecast(projectId: string) {
 
 export function createBaseline(projectId: string, name: string) {
   return request<Baseline>(
-    `/v1/ccm/projects/${projectId}/baseline`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    }
+    `/v1/ccm/projects/${projectId}/baseline?name=${encodeURIComponent(name)}`,
+    { method: 'POST' }
   );
 }
 
@@ -128,7 +125,7 @@ export function importFacts(projectId: string, facts: ActualFact[]) {
     `/v1/ccm/projects/${projectId}/facts`,
     {
       method: 'POST',
-      body: JSON.stringify({ facts }),
+      body: JSON.stringify(facts),
     }
   );
 }
@@ -157,4 +154,128 @@ export function uncloseChain(operationId: string) {
     `/v1/operations/${operationId}/unclose`,
     { method: 'POST' }
   );
+}
+
+// --- BOM ---
+
+export function getBOMTree(projectId: string) {
+  return request<{ project_id: string; nodes: BOMNode[]; total_nodes: number }>(
+    `/v1/bom/projects/${projectId}/tree`
+  );
+}
+
+export function uploadBOM(projectId: string, file: File) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  return fetch(`${API_BASE}/v1/bom/projects/${projectId}/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  }).then(r => r.json()) as Promise<{ imported: number; skipped: number; errors: string[]; root_ids: string[] }>;
+}
+
+export function explodeBOM(projectId: string, projectQuantity?: number) {
+  return request<{
+    operations: any[];
+    dependencies: any[];
+    materials: any[];
+    warnings: string[];
+  }>(`/v1/bom/projects/${projectId}/explode`, {
+    method: 'POST',
+    body: JSON.stringify({ project_quantity: projectQuantity || 1 }),
+  });
+}
+
+export function explodeAndSaveBOM(projectId: string, projectQuantity?: number) {
+  return request<{
+    created_operations: number;
+    created_dependencies: number;
+    materials_count: number;
+    warnings: string[];
+  }>(`/v1/bom/projects/${projectId}/explode-and-save`, {
+    method: 'POST',
+    body: JSON.stringify({ project_quantity: projectQuantity || 1 }),
+  });
+}
+
+export interface BOMNode {
+  id: string;
+  tenant_id: string;
+  project_id: string | null;
+  parent_id: string | null;
+  level: number;
+  path: string | null;
+  node_type: string;
+  nomenclature_id: string | null;
+  nomenclature_name: string;
+  quantity_per_parent: number;
+  unit: string;
+  is_make_or_buy: string;
+  procurement_lead_time_days: number | null;
+  is_phantom: boolean;
+  sort_order: number;
+  routing_id: string | null;
+  notes: string | null;
+}
+
+// --- Production Orders (Excel Import) ---
+
+export interface ImportValidationError {
+  row: number;
+  sheet: string;
+  field: string;
+  message: string;
+}
+
+export interface ExcelImportResult {
+  orders_created: number;
+  bom_nodes_created: number;
+  routings_created: number;
+  routing_ops_created: number;
+  errors: ImportValidationError[];
+}
+
+export function importProductionOrders(file: File, projectId?: string) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  if (projectId) formData.append('project_id', projectId);
+  return fetch(`${API_BASE}/v1/production-orders/import`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  }).then(r => r.json()) as Promise<ExcelImportResult>;
+}
+
+export interface ProductionOrder {
+  id: string;
+  order_number: string;
+  product_name: string;
+  specification_id: string | null;
+  specification_name: string | null;
+  quantity: number;
+  priority: string;
+  customer: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  status: string;
+  project_id: string | null;
+  created_at: string;
+}
+
+export function getProductionOrders(projectId?: string) {
+  const qs = projectId ? `?project_id=${projectId}` : '';
+  return request<ProductionOrder[]>(`/v1/production-orders/${qs}`);
+}
+
+export function expandProductionOrder(orderId: string) {
+  return request<{
+    order_id: string;
+    status: string;
+    operations_created: number;
+    dependencies_created: number;
+    materials_required: number;
+    warnings: string[];
+  }>(`/v1/production-orders/${orderId}/expand`, { method: 'POST' });
 }

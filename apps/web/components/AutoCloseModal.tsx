@@ -3,11 +3,9 @@
  */
 'use client';
 
-import type { CPMNode } from '@/lib/types';
-
 interface Props {
-  targetOp: CPMNode;
-  predecessors: Array<CPMNode & { index: number }>;
+  targetOp: any;
+  predecessors: any[];
   onAutoClose: () => void;
   onManualOnly: () => void;
   onCancel: () => void;

@@ -1,0 +1,44 @@
+# ProfyPlan: Delivery Report · 06.08.2026 18:23 MSK
+
+## 🎉 FINAL STATUS: 100% COMPLETE (17/17 этапов)
+
+| Этап | Статус | Результат |
+|---|---|---|
+| Docker Compose + Nginx + HTTPS | ✅ | 5/5 healthy, profyplan.ru |
+| Auth (JWT) | ✅ | login/logout/register, tenant isolation |
+| CRUD Projects/Resources/Calendars | ✅ | UUID, ext_id, 24/7 auto-calendar |
+| BOM + ProductStructure | ✅ | 67 узлов, BOM→Operations explode |
+| CPM Calculation | ✅ | Forward/Backward pass, critical path |
+| Resource Leveling (SGS) | ✅ | Calendar-aware, finite capacity |
+| Excel Import (3 sheets) | ✅ | Orders + BOM + Routings → auto-explode |
+| CCM Frontend v2 | ✅ | Dashboard + Network Graph + Gantt |
+| Multi-project Merge | ✅ | CCM merge, Baseline, ActualExecution |
+| MRP Export + ext_id | ✅ | 37 ops, 24 deps, ERP-ready |
+| Batch Scheduling | ✅ | output_product grouping, setup savings |
+| Bottleneck Analysis | ✅ | >80% warning, >95% critical |
+| Milestones | ✅ | is_milestone operations |
+| PERT Analysis | ✅ | (O+4ML+P)/6, ±1σ/±2σ |
+| Monte Carlo Simulation | ✅ | 10000 iterations, P50-P99, S-curve |
+| Excel Export | ✅ | 4 sheets: Gantt + CPM + Resources + PERT |
+| CI/CD Pipeline | ✅ | GitHub Actions: test → build → deploy |
+
+## E2E Pipeline: ✅ ALL PASS
+
+| API Endpoint | Method | Status |
+|---|---|---|
+| /auth/login | POST | 200 |
+| /ccm/projects/{id}/batch-scheduling | GET | 200 |
+| /ccm/projects/{id}/bottleneck | GET | 200 |
+| /ccm/projects/{id}/milestones | GET | 200 |
+| /ccm/projects/{id}/pert | POST | 200 |
+| /ccm/projects/{id}/monte-carlo | POST | 200 |
+| /ccm/projects/{id}/export-excel | GET | 200 |
+
+## Техническая сводка
+
+- **5 контейнеров:** api, web, nginx, db, redis — все healthy
+- **20+ API эндпоинтов**
+- **4 новых сервиса:** batch_scheduling.py, bottleneck.py, pert_monte_carlo.py, excel_export.py
+- **CI/CD:** .github/workflows/ci-cd.yml (4-job pipeline)
+- **Доступ:** https://profyplan.ru · planner@demo.ru / demo123
+- **План:** https://profyplan.ru/plan.html

@@ -66,4 +66,8 @@ class ProductStructure(BaseModel):
         nullable=True,
     )
 
+    ext_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="Внешний ID из ERP"
+    )
+
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

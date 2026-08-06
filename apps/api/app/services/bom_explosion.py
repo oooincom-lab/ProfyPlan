@@ -62,158 +62,159 @@ async def explode_bom_to_operations(
     project_id: Optional[UUID] = None,
 ) -> BOMExplosionResult:
     """
-    Разворачивает BOM-дерево спецификации в плоский список CPM-операций.
+    Разворачивает BOM-дерево проекта в плоский список CPM-операций.
+
+    Загружает все узлы BOM по project_id, строит children_map и
+    рекурсивно обходит дерево: для phantom-узлов — пропускает,
+    для buy — создаёт операции закупки, для make с routing_id —
+    разворачивает техмаршрут в операции.
 
     Args:
         db: асинхронная сессия БД
-        spec_id: ID спецификации (nomenclature_id корневого узла)
+        spec_id: не используется (сохранено для обратной совместимости)
         project_quantity: количество продукции по заказу
         tenant_id: ID тенанта
-        project_id: ID проекта (если есть)
+        project_id: ID проекта
 
     Returns:
         BOMExplosionResult с операциями, зависимостями и сводкой материалов
     """
     result = BOMExplosionResult(operations=[], dependencies=[], materials=[])
 
-    # Загружаем все узлы BOM для данной спецификации
-    all_nodes_result = await db.execute(
-        select(ProductStructure).where(
-            ProductStructure.tenant_id == tenant_id,
-            ProductStructure.nomenclature_id == spec_id,
-        )
-    )
-    root_node = all_nodes_result.scalars().first()
-
-    if not root_node:
-        # Ищем по project_id если spec_id не найден как точный nomenclature_id
-        node_query = select(ProductStructure).where(
-            ProductStructure.tenant_id == tenant_id,
-            ProductStructure.project_id == project_id if project_id else root_node,
-        )
-        # Fallback: ищем корневой узел без родителя
-        node_query = select(ProductStructure).where(
-            ProductStructure.tenant_id == tenant_id,
-            ProductStructure.parent_id.is_(None),
-        )
-        if project_id:
-            node_query = node_query.where(
-                ProductStructure.project_id == project_id
-            )
-
-        root_result = await db.execute(node_query)
-        root_nodes = root_result.scalars().all()
-
-        for node in root_nodes:
-            _expand_node(db, node, project_quantity, result, {})
-
+    if not project_id:
+        result.warnings.append("project_id не указан — развёртка невозможна")
         return result
 
-    # Рекурсивно разворачиваем от корня
-    bom_cache = {}  # кеш узлов BOM по id
-    _expand_node(root_node, project_quantity, result, bom_cache)
+    # Загружаем все узлы BOM для проекта
+    nodes_result = await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == project_id,
+        ).order_by(ProductStructure.level, ProductStructure.sort_order)
+    )
+    all_nodes = nodes_result.scalars().all()
+
+    if not all_nodes:
+        result.warnings.append("BOM-дерево пусто. Загрузите структуру изделия.")
+        return result
+
+    # Строим индекс: parent_id → [children]
+    children_map: dict[str, list[ProductStructure]] = {}
+    for node in all_nodes:
+        key = str(node.parent_id) if node.parent_id else "__root__"
+        children_map.setdefault(key, []).append(node)
+
+    root_nodes = children_map.get("__root__", [])
+
+    # Состояние обхода
+    node_op_map: dict[str, list[str]] = {}  # node_id → [temp_op_id]
+    last_op_in_path: dict[str, str] = {}  # parent_path → last_op_temp_id
+    _counter = [0]
+
+    def _tid(prefix: str) -> str:
+        _counter[0] += 1
+        return f"{prefix}_{_counter[0]:04d}"
+
+    async def _traverse(node: ProductStructure, node_path: str):
+        if node.is_phantom:
+            for child in children_map.get(str(node.id), []):
+                await _traverse(child, node_path)
+            return
+
+        if node.is_make_or_buy == "buy":
+            lead_days = node.procurement_lead_time_days or Decimal("0")
+            op = ExplodedOperation(
+                temp_id=_tid("proc"),
+                name=f"Закупка: {node.nomenclature_name}",
+                duration_base=lead_days * Decimal("24"),
+                operation_type="procurement",
+                output_product=node.nomenclature_id,
+                output_quantity=node.quantity_per_parent * project_quantity,
+                procurement_lead_time_days=lead_days,
+                source_node_path=node_path,
+            )
+            result.operations.append(op)
+            node_op_map[str(node.id)] = [op.temp_id]
+            last_op_in_path[node_path] = op.temp_id
+            result.materials.append({
+                "nomenclature_id": node.nomenclature_id,
+                "nomenclature_name": node.nomenclature_name,
+                "quantity": float(node.quantity_per_parent * project_quantity),
+                "unit": node.unit,
+                "lead_time_days": float(lead_days),
+                "source_node_path": node_path,
+            })
+            for child in children_map.get(str(node.id), []):
+                await _traverse(child, node_path)
+            return
+
+        if node.is_make_or_buy == "make" and node.routing_id:
+            routing_ops = await load_routing_operations(db, node.routing_id)
+            if not routing_ops:
+                result.warnings.append(
+                    f"Узел '{node.nomenclature_name}' ({node_path}): маршрут без операций"
+                )
+                return
+
+            prod_ops, internal_deps = expand_routing_to_ops(
+                routing_ops,
+                node.quantity_per_parent * project_quantity,
+                node_path,
+            )
+
+            # Глобально уникальные temp_id
+            local_to_global: dict[str, str] = {}
+            op_ids: list[str] = []
+            for op in prod_ops:
+                new_id = _tid("op")
+                local_to_global[op.temp_id] = new_id
+                op.temp_id = new_id
+                op.name = f"{node.nomenclature_name} · {op.name}"
+                result.operations.append(op)
+                op_ids.append(new_id)
+
+            for dep in internal_deps:
+                pg = local_to_global.get(dep.predecessor_temp_id)
+                sg = local_to_global.get(dep.successor_temp_id)
+                if pg and sg:
+                    result.dependencies.append(ExplodedDependency(
+                        predecessor_temp_id=pg,
+                        successor_temp_id=sg,
+                        dependency_type=dep.dependency_type,
+                        lag_hours=dep.lag_hours,
+                    ))
+
+            node_op_map[str(node.id)] = op_ids
+
+            # Связь с предыдущей операцией в иерархии
+            if node_path in last_op_in_path and op_ids:
+                result.dependencies.append(ExplodedDependency(
+                    predecessor_temp_id=last_op_in_path[node_path],
+                    successor_temp_id=op_ids[0],
+                    dependency_type="FS",
+                ))
+
+            if op_ids:
+                last_op = op_ids[-1]
+                parts = node_path.split(".")
+                for i in range(len(parts)):
+                    last_op_in_path[".".join(parts[:i+1])] = last_op
+
+            for child in children_map.get(str(node.id), []):
+                await _traverse(child, node_path)
+            return
+
+        result.warnings.append(
+            f"Узел '{node.nomenclature_name}' ({node_path}): тип 'make' без маршрута"
+        )
+
+    for root in root_nodes:
+        await _traverse(root, "1")
+
+    # Связываем закупки с производством
+    _link_procurement(result, node_op_map, all_nodes, children_map)
 
     return result
-
-
-def _expand_node(
-    node: ProductStructure,
-    parent_quantity: Decimal,
-    result: BOMExplosionResult,
-    bom_cache: dict,
-    active_session: Optional[AsyncSession] = None,
-):
-    """
-    Рекурсивно разворачивает один узел BOM в операции.
-
-    Args:
-        node: узел BOM-дерева
-        parent_quantity: количество родительских изделий
-        result: накапливаемый результат развёртки
-        bom_cache: кеш узлов (id → node)
-    """
-    total_qty = parent_quantity * node.quantity_per_parent
-
-    # Фантомный узел — пропускаем, разворачиваем детей
-    if node.is_phantom:
-        children = _get_children(node, bom_cache)
-        for child in children:
-            _expand_node(child, total_qty, result, bom_cache)
-        return
-
-    # Узел-материал (закупка)
-    if node.is_make_or_buy == "buy":
-        op = ExplodedOperation(
-            temp_id=f"proc_{uuid4().hex[:8]}",
-            name=f"Закупка: {node.nomenclature_name}",
-            duration_base=_days_to_hours(node.procurement_lead_time_days),
-            operation_type="procurement",
-            output_product=node.nomenclature_id,
-            output_quantity=total_qty,
-            supplier_id=None,  # заполняется при импорте
-            procurement_lead_time_days=node.procurement_lead_time_days,
-            source_node_path=node.path or str(node.id),
-        )
-        result.operations.append(op)
-        result.materials.append({
-            "nomenclature_id": node.nomenclature_id,
-            "nomenclature_name": node.nomenclature_name,
-            "quantity": float(total_qty),
-            "unit": node.unit,
-            "lead_time_days": float(node.procurement_lead_time_days or 0),
-            "source_node_path": node.path,
-        })
-        return
-
-    # Узел-изготовитель (make)
-    if node.is_make_or_buy == "make" and node.routing_id:
-        routing_ops = _load_routing(result, node, total_qty, bom_cache)
-
-        # Разворачиваем детей (материалы и подсборки)
-        children = _get_children(node, bom_cache)
-        for child in children:
-            _expand_node(child, total_qty, result, bom_cache)
-
-        # Связываем закупки материалов с потребляющими операциями
-        _link_materials_to_operations(node, routing_ops, result)
-
-        return
-
-    # Если узел make но без routing_id — предупреждение
-    result.warnings.append(
-        f"Узел '{node.nomenclature_name}' ({node.path}) типа 'make' "
-        f"не имеет привязанного техмаршрута. Узел пропущен."
-    )
-
-
-def _get_children(node: ProductStructure, bom_cache: dict) -> list:
-    """Получить дочерние узлы BOM."""
-    # В реальной реализации — загрузка из БД по parent_id
-    # Здесь возвращаем пустой список (дети загружаются в expand_node)
-    return []
-
-
-def _load_routing(
-    result: BOMExplosionResult,
-    node: ProductStructure,
-    total_qty: Decimal,
-    bom_cache: dict,
-) -> list[ExplodedOperation]:
-    """
-    Загружает маршрут и создаёт операции.
-    Возвращает список созданных операций в порядке sequence_number.
-    """
-    # Здесь routing_ops загружаются из БД по routing_id
-    # В реальной имплементации — через сессию:
-    # routing_ops = await db.execute(
-    #     select(RoutingOperation)
-    #     .where(RoutingOperation.routing_id == node.routing_id)
-    #     .order_by(RoutingOperation.sequence_number)
-    # )
-    # routing_ops = routing_ops.scalars().all()
-
-    # Для развёртки — операции создаются вызывающим кодом
-    return []
 
 
 async def load_routing_operations(
@@ -287,17 +288,35 @@ def expand_routing_to_ops(
     return ops, deps
 
 
-def _link_materials_to_operations(
-    node: ProductStructure,
-    routing_ops: list[ExplodedOperation],
+def _link_procurement(
     result: BOMExplosionResult,
+    node_op_map: dict[str, list[str]],
+    all_nodes: list[ProductStructure],
+    children_map: dict[str, list[ProductStructure]],
 ):
     """
-    Связывает закупленные материалы с потребляющими операциями.
-    Пока заглушка — полная реализация требует отслеживания
-    того, какие материалы потребляются какими операциями.
+    Связывает операции закупки материалов с производственными операциями,
+    которые эти материалы потребляют.
+
+    Правило: закупка → первая операция родительского маршрута.
     """
-    pass
+    for node in all_nodes:
+        if node.is_make_or_buy != "buy":
+            continue
+        parent_id = str(node.parent_id) if node.parent_id else None
+        if not parent_id or parent_id not in node_op_map:
+            continue
+        parent_ops = node_op_map[parent_id]
+        buy_ops = node_op_map.get(str(node.id), [])
+        if not parent_ops or not buy_ops:
+            continue
+        first_prod_op = parent_ops[0]
+        for buy_op_id in buy_ops:
+            result.dependencies.append(ExplodedDependency(
+                predecessor_temp_id=buy_op_id,
+                successor_temp_id=first_prod_op,
+                dependency_type="FS",
+            ))
 
 
 def _days_to_hours(days: Optional[Decimal]) -> Decimal:

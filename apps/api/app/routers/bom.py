@@ -1,0 +1,902 @@
+"""
+BOM-роутер: загрузка структуры изделия, техмаршруты, развёртка BOM → CPM-операции.
+"""
+import json
+from decimal import Decimal
+from typing import Optional
+from uuid import UUID, uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.deps import get_current_tenant_id
+from app.models.product_structure import ProductStructure
+from app.models.routing import Routing, RoutingOperation
+from app.models.operation import Operation, OperationDependency
+from app.schemas.bom import (
+    BOMNodeCreate, BOMNodeUpdate, BOMNodeOut, BOMTreeOut, BOMUploadResult,
+    RoutingCreate, RoutingOut, RoutingOpOut, RoutingList,
+    BOMExplosionOut, BOMExplodeAndSaveRequest, BOMExplodeAndSaveOut,
+    ExplodedOpOut, ExplodedDepOut,
+)
+from app.services.bom_explosion import (
+    explode_bom_to_operations,
+    ExplodedOperation,
+    ExplodedDependency,
+    load_routing_operations,
+    expand_routing_to_ops,
+)
+
+bom_router = APIRouter(prefix="/v1/bom", tags=["BOM"])
+
+
+# ── ProductStructure CRUD ──
+
+@bom_router.get("/projects/{project_id}/tree", response_model=BOMTreeOut)
+async def get_bom_tree(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Получить дерево BOM для проекта."""
+    nodes = await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == project_id,
+        ).order_by(ProductStructure.sort_order)
+    )
+    nodes_list = nodes.scalars().all()
+    return BOMTreeOut(
+        project_id=str(project_id),
+        nodes=[BOMNodeOut.model_validate(n) for n in nodes_list],
+        total_nodes=len(nodes_list),
+    )
+
+
+@bom_router.post("/projects/{project_id}/nodes", response_model=BOMNodeOut, status_code=201)
+async def create_bom_node(
+    project_id: UUID,
+    body: BOMNodeCreate,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Добавить узел в BOM-дерево."""
+    # Вычисляем level и path
+    level = 0
+    path: Optional[str] = None
+    parent = None
+    if body.parent_id:
+        parent = (await db.execute(
+            select(ProductStructure).where(
+                ProductStructure.id == body.parent_id,
+                ProductStructure.tenant_id == tenant_id,
+            )
+        )).scalar_one_or_none()
+        if not parent:
+            raise HTTPException(status_code=404, detail="Родительский узел не найден")
+        level = parent.level + 1
+        path = (parent.path or "") + f".{level}" if parent.path else f"1.{level}"
+
+    node = ProductStructure(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        parent_id=UUID(body.parent_id) if body.parent_id else None,
+        level=level,
+        path=path,
+        node_type=body.node_type,
+        nomenclature_id=body.nomenclature_id,
+        nomenclature_name=body.nomenclature_name,
+        quantity_per_parent=body.quantity_per_parent,
+        unit=body.unit,
+        is_make_or_buy=body.is_make_or_buy,
+        procurement_lead_time_days=body.procurement_lead_time_days,
+        is_phantom=body.is_phantom,
+        sort_order=body.sort_order,
+        routing_id=UUID(body.routing_id) if body.routing_id else None,
+        notes=body.notes,
+    )
+    db.add(node)
+    await db.commit()
+    await db.refresh(node)
+    return BOMNodeOut.model_validate(node)
+
+
+@bom_router.patch("/nodes/{node_id}", response_model=BOMNodeOut)
+async def update_bom_node(
+    node_id: UUID,
+    body: BOMNodeUpdate,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Обновить узел BOM (routing_id, quantity и т.д.)."""
+    node = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.id == node_id,
+            ProductStructure.tenant_id == tenant_id,
+        )
+    )).scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Узел не найден")
+
+    if body.routing_id is not None:
+        node.routing_id = UUID(body.routing_id) if body.routing_id else None
+    if body.quantity_per_parent is not None:
+        node.quantity_per_parent = body.quantity_per_parent
+    if body.nomenclature_name is not None:
+        node.nomenclature_name = body.nomenclature_name
+    if body.notes is not None:
+        node.notes = body.notes
+
+    await db.commit()
+    await db.refresh(node)
+    return BOMNodeOut.model_validate(node)
+
+
+@bom_router.delete("/projects/{project_id}/nodes/{node_id}", status_code=204)
+async def delete_bom_node(
+    project_id: UUID,
+    node_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Удалить узел BOM (и дочерние — cascade)."""
+    node = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.id == node_id,
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == project_id,
+        )
+    )).scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Узел не найден")
+
+    # Рекурсивно удаляем потомков
+    async def delete_children(parent_id: str):
+        children = (await db.execute(
+            select(ProductStructure).where(
+                ProductStructure.parent_id == parent_id,
+            )
+        )).scalars().all()
+        for child in children:
+            await delete_children(str(child.id))
+            await db.delete(child)
+
+    await delete_children(str(node_id))
+    await db.delete(node)
+    await db.commit()
+
+
+@bom_router.post("/projects/{project_id}/upload", response_model=BOMUploadResult)
+async def upload_bom_json(
+    project_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """
+    Загрузить BOM из JSON-файла.
+
+    Формат: [{ "nomenclature_name": "...", "level": 0, "parent_path": "1", ... }, ...]
+    Или вложенное дерево: { "name": "Изделие", "children": [{...}] }
+    """
+    content = await file.read()
+    try:
+        data = json.loads(content.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Невалидный JSON: {e}")
+
+    imported = 0
+    skipped = 0
+    errors: list[str] = []
+    root_ids: list[str] = []
+
+    if isinstance(data, list):
+        # Плоский список с parent_path
+        for item in data:
+            try:
+                node = ProductStructure(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    parent_id=None,
+                    level=item.get("level", 0),
+                    path=item.get("path"),
+                    node_type=item.get("node_type", "material"),
+                    nomenclature_id=item.get("nomenclature_id"),
+                    nomenclature_name=item["nomenclature_name"],
+                    quantity_per_parent=Decimal(str(item.get("quantity_per_parent", 1))),
+                    unit=item.get("unit", "pcs"),
+                    is_make_or_buy=item.get("is_make_or_buy", "buy"),
+                    procurement_lead_time_days=Decimal(str(item.get("procurement_lead_time_days", 0))) if item.get("procurement_lead_time_days") else None,
+                    is_phantom=item.get("is_phantom", False),
+                    sort_order=item.get("sort_order", 0),
+                    notes=item.get("notes"),
+                )
+                db.add(node)
+                imported += 1
+                if item.get("level", 0) == 0:
+                    root_ids.append(str(node.id))
+            except Exception as e:
+                errors.append(f"Строка {imported + skipped}: {e}")
+                skipped += 1
+    elif isinstance(data, dict):
+        # Вложенное дерево — собираем узлы, flush, потом связываем
+        temp_nodes: list[tuple[dict, Optional[str], int]] = []
+
+        def collect_nodes(parent_node: dict, parent_temp_id: Optional[str], level: int):
+            temp_id = f"__tmp_{len(temp_nodes)}"
+            temp_nodes.append((parent_node, parent_temp_id, level, temp_id))
+            for child in parent_node.get("children", []):
+                collect_nodes(child, temp_id, level + 1)
+
+        collect_nodes(data, None, 0)
+
+        # Создаём и flush'им все узлы
+        temp_to_real: dict[str, str] = {}
+        for node_data, parent_temp_id, level, temp_id in temp_nodes:
+            real_parent_id = temp_to_real.get(parent_temp_id) if parent_temp_id else None
+            node = ProductStructure(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                parent_id=UUID(real_parent_id) if real_parent_id else None,
+                level=level,
+                path=None,
+                node_type=node_data.get("node_type", "assembly" if "children" in node_data else "material"),
+                nomenclature_id=node_data.get("nomenclature_id"),
+                nomenclature_name=node_data["name"],
+                quantity_per_parent=Decimal(str(node_data.get("quantity_per_parent", 1))),
+                unit=node_data.get("unit", "pcs"),
+                is_make_or_buy=node_data.get("is_make_or_buy", "make" if "children" in node_data else "buy"),
+                procurement_lead_time_days=Decimal(str(node_data.get("procurement_lead_time_days", 0))) if node_data.get("procurement_lead_time_days") else None,
+                is_phantom=node_data.get("is_phantom", False),
+                sort_order=node_data.get("sort_order", 0),
+                notes=node_data.get("notes"),
+            )
+            db.add(node)
+            await db.flush()
+            temp_to_real[temp_id] = str(node.id)
+            imported += 1
+            if level == 0:
+                root_ids.append(str(node.id))
+
+        await db.commit()
+
+        # Update paths
+        root_nodes = (await db.execute(
+            select(ProductStructure).where(
+                ProductStructure.project_id == project_id,
+                ProductStructure.parent_id.is_(None),
+            ).order_by(ProductStructure.created_at)
+        )).scalars().all()
+
+        queue: list[tuple[str, ProductStructure]] = [("1", node) for node in root_nodes]
+        while queue:
+            base_path, node = queue.pop(0)
+            node.path = base_path
+            children_q = (await db.execute(
+                select(ProductStructure).where(
+                    ProductStructure.parent_id == node.id,
+                ).order_by(ProductStructure.sort_order, ProductStructure.id)
+            )).scalars().all()
+            for idx, child in enumerate(children_q):
+                queue.append((f"{base_path}.{idx + 1}", child))
+        await db.commit()
+    else:
+        raise HTTPException(status_code=400, detail="Ожидается JSON-массив или объект")
+
+    await db.commit()
+
+    return BOMUploadResult(
+        imported=imported,
+        skipped=skipped,
+        errors=errors,
+        root_ids=root_ids,
+    )
+
+
+# ── Routing CRUD ──
+
+@bom_router.post("/routings", response_model=RoutingOut, status_code=201)
+async def create_routing(
+    body: RoutingCreate,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Создать техмаршрут с операциями."""
+    total_setup = Decimal("0")
+    routing = Routing(
+        tenant_id=tenant_id,
+        name=body.name,
+        product_node_id=UUID(body.product_node_id) if body.product_node_id else None,
+        spec_id=body.spec_id,
+        variant=body.variant,
+        is_default=body.is_default,
+        total_setup_hours=total_setup,
+        notes=body.notes,
+    )
+    db.add(routing)
+    await db.flush()
+
+    for op_data in body.operations:
+        rop = RoutingOperation(
+            routing_id=routing.id,
+            sequence_number=op_data.sequence_number,
+            name=op_data.name,
+            duration_hours=op_data.duration_hours,
+            setup_hours=op_data.setup_hours,
+            teardown_hours=op_data.teardown_hours,
+            resource_type_id=op_data.resource_type_id,
+            alternative_resource_types=op_data.alternative_resource_types,
+            output_product=op_data.output_product,
+            output_quantity=op_data.output_quantity,
+            yield_rate=op_data.yield_rate,
+            predecessors=op_data.predecessors,
+            input_materials=op_data.input_materials,
+            notes=op_data.notes,
+        )
+        db.add(rop)
+        total_setup += op_data.setup_hours
+
+    routing.total_setup_hours = total_setup
+    await db.commit()
+    await db.refresh(routing)
+
+    # Load operations
+    ops_result = (await db.execute(
+        select(RoutingOperation).where(
+            RoutingOperation.routing_id == routing.id,
+        ).order_by(RoutingOperation.sequence_number)
+    )).scalars().all()
+
+    return RoutingOut(
+        id=str(routing.id),
+        tenant_id=str(routing.tenant_id),
+        name=routing.name,
+        product_node_id=str(routing.product_node_id) if routing.product_node_id else None,
+        variant=routing.variant,
+        is_default=routing.is_default,
+        total_setup_hours=routing.total_setup_hours,
+        notes=routing.notes,
+        operations=[RoutingOpOut.model_validate(op) for op in ops_result],
+    )
+
+
+@bom_router.get("/routings", response_model=RoutingList)
+async def list_routings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Список техмаршрутов."""
+    total = (await db.execute(
+        select(func.count(Routing.id)).where(Routing.tenant_id == tenant_id)
+    )).scalar() or 0
+
+    routings = (await db.execute(
+        select(Routing).where(Routing.tenant_id == tenant_id)
+        .offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all()
+
+    items = []
+    for r in routings:
+        ops = (await db.execute(
+            select(RoutingOperation).where(
+                RoutingOperation.routing_id == r.id,
+            ).order_by(RoutingOperation.sequence_number)
+        )).scalars().all()
+        items.append(RoutingOut(
+            id=str(r.id),
+            tenant_id=str(r.tenant_id),
+            name=r.name,
+            product_node_id=str(r.product_node_id) if r.product_node_id else None,
+            variant=r.variant,
+            is_default=r.is_default,
+            total_setup_hours=r.total_setup_hours,
+            notes=r.notes,
+            operations=[RoutingOpOut.model_validate(op) for op in ops],
+        ))
+
+    return RoutingList(items=items, total=total)
+
+
+@bom_router.get("/routings/{routing_id}", response_model=RoutingOut)
+async def get_routing(
+    routing_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Получить техмаршрут по ID."""
+    routing = (await db.execute(
+        select(Routing).where(
+            Routing.id == routing_id,
+            Routing.tenant_id == tenant_id,
+        )
+    )).scalar_one_or_none()
+    if not routing:
+        raise HTTPException(status_code=404, detail="Маршрут не найден")
+
+    ops = (await db.execute(
+        select(RoutingOperation).where(
+            RoutingOperation.routing_id == routing.id,
+        ).order_by(RoutingOperation.sequence_number)
+    )).scalars().all()
+
+    return RoutingOut(
+        id=str(routing.id),
+        tenant_id=str(routing.tenant_id),
+        name=routing.name,
+        product_node_id=str(routing.product_node_id) if routing.product_node_id else None,
+        variant=routing.variant,
+        is_default=routing.is_default,
+        total_setup_hours=routing.total_setup_hours,
+        notes=routing.notes,
+        operations=[RoutingOpOut.model_validate(op) for op in ops],
+    )
+
+
+# ── BOM Explosion (Развёртка в CPM-операции) ──
+
+@bom_router.post("/projects/{project_id}/explode", response_model=BOMExplosionOut)
+async def explode_bom(
+    project_id: UUID,
+    body: BOMExplodeAndSaveRequest = BOMExplodeAndSaveRequest(),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """
+    Развернуть BOM проекта в CPM-операции (без сохранения).
+
+    Возвращает список операций и зависимостей, которые будут созданы.
+    Используйте explode-and-save для сохранения.
+    """
+    result = await run_explosion(db, tenant_id, project_id, body)
+    return BOMExplosionOut(
+        operations=[
+            ExplodedOpOut(
+                temp_id=op.temp_id,
+                name=op.name,
+                duration_base=op.duration_base,
+                duration_unit=op.duration_unit,
+                setup_time=op.setup_time,
+                teardown_time=op.teardown_time,
+                operation_type=op.operation_type,
+                output_product=op.output_product,
+                output_quantity=op.output_quantity,
+                yield_rate=op.yield_rate,
+                resource_type_id=op.resource_type_id,
+                is_milestone=op.is_milestone,
+                source_node_path=op.source_node_path,
+            )
+            for op in result.operations
+        ],
+        dependencies=[
+            ExplodedDepOut(
+                predecessor_temp_id=d.predecessor_temp_id,
+                successor_temp_id=d.successor_temp_id,
+                dependency_type=d.dependency_type,
+                lag_hours=d.lag_hours,
+            )
+            for d in result.dependencies
+        ],
+        materials=result.materials,
+        warnings=result.warnings,
+    )
+
+
+@bom_router.post("/projects/{project_id}/explode-and-save", response_model=BOMExplodeAndSaveOut)
+async def explode_and_save_bom(
+    project_id: UUID,
+    body: BOMExplodeAndSaveRequest = BOMExplodeAndSaveRequest(),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """
+    Развернуть BOM проекта в CPM-операции и сохранить в БД.
+
+    Создаёт операции и зависимости для CPM-расчёта.
+    """
+    result = await run_explosion(db, tenant_id, project_id, body)
+
+    # Сохраняем операции (explode endpoint)
+    temp_to_real: dict[str, str] = {}
+    for op in result.operations:
+        real_op = Operation(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            name=op.name,
+            duration_base=op.duration_base,
+            duration_unit=op.duration_unit,
+            setup_time=op.setup_time,
+            teardown_time=op.teardown_time,
+        )
+        db.add(real_op)
+        await db.flush()
+        temp_to_real[op.temp_id] = str(real_op.id)
+
+    # Сохраняем зависимости
+    dep_count = 0
+    for dep in result.dependencies:
+        pred_id = temp_to_real.get(dep.predecessor_temp_id)
+        succ_id = temp_to_real.get(dep.successor_temp_id)
+        if pred_id and succ_id:
+            real_dep = OperationDependency(
+                predecessor_id=UUID(pred_id),
+                successor_id=UUID(succ_id),
+                dependency_type=dep.dependency_type,
+                lag_time=dep.lag_hours,
+                lag_unit="hour",
+            )
+            db.add(real_dep)
+            dep_count += 1
+
+    await db.commit()
+
+    return BOMExplodeAndSaveOut(
+        created_operations=len(result.operations),
+        created_dependencies=dep_count,
+        materials_count=len(result.materials),
+        warnings=result.warnings,
+    )
+
+
+async def run_explosion(
+    db: AsyncSession,
+    tenant_id: UUID,
+    project_id: UUID,
+    body: BOMExplodeAndSaveRequest,
+):
+    """
+    Выполнить развёртку BOM. Ищет все узлы BOM проекта,
+    для make-узлов с routing_id загружает маршрутные операции,
+    для buy-узлов создаёт операции закупки.
+    """
+    from app.services.bom_explosion import BOMExplosionResult
+
+    result = BOMExplosionResult(operations=[], dependencies=[], materials=[])
+
+    # Загружаем все узлы BOM для проекта
+    nodes_result = await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == project_id,
+        ).order_by(ProductStructure.level, ProductStructure.sort_order)
+    )
+    all_nodes = nodes_result.scalars().all()
+
+    if not all_nodes:
+        result.warnings.append("BOM-дерево пусто. Загрузите структуру изделия.")
+        return result
+
+    # Строим индекс: parent_id → [children]
+    children_map: dict[str, list[ProductStructure]] = {}
+    for node in all_nodes:
+        key = str(node.parent_id) if node.parent_id else "__root__"
+        if key not in children_map:
+            children_map[key] = []
+        children_map[key].append(node)
+
+    # Находим корневые узлы
+    root_nodes = children_map.get("__root__", [])
+
+    # Отслеживаем созданные узлы для построения зависимостей
+    node_op_map: dict[str, list[str]] = {}  # node_id → [temp_op_id]
+    last_op_in_path: dict[str, str] = {}  # parent_path → last_op_temp_id
+    op_counter = [0]
+
+    def _make_temp_id(prefix: str) -> str:
+        op_counter[0] += 1
+        return f"{prefix}_{op_counter[0]:04d}"
+
+    async def _traverse(node: ProductStructure, parent_path: str):
+        node_path = node.path or f"{parent_path}.{node.sort_order or 1}"
+
+        if node.is_phantom:
+            # Пропускаем фантомный узел, разворачиваем детей
+            for child in children_map.get(str(node.id), []):
+                await _traverse(child, node_path)
+            return
+
+        if node.is_make_or_buy == "buy":
+            # Создаём операцию закупки
+            lead_days = node.procurement_lead_time_days or Decimal("0")
+            op = ExplodedOperation(
+                temp_id=_make_temp_id("proc"),
+                name=f"Закупка: {node.nomenclature_name}",
+                duration_base=lead_days * Decimal("24"),  # дни → часы
+                operation_type="procurement",
+                output_product=node.nomenclature_id,
+                output_quantity=node.quantity_per_parent * body.project_quantity,
+                procurement_lead_time_days=lead_days,
+                source_node_path=node_path,
+            )
+            result.operations.append(op)
+            node_op_map[str(node.id)] = [op.temp_id]
+            last_op_in_path[node_path] = op.temp_id
+
+            result.materials.append({
+                "nomenclature_id": node.nomenclature_id,
+                "nomenclature_name": node.nomenclature_name,
+                "quantity": float(node.quantity_per_parent * body.project_quantity),
+                "unit": node.unit,
+                "lead_time_days": float(lead_days),
+                "source_node_path": node_path,
+            })
+
+            # Разворачиваем детей (если есть — вложенная закупка)
+            for child in children_map.get(str(node.id), []):
+                await _traverse(child, node_path)
+
+            return
+
+        if node.is_make_or_buy == "make" and node.routing_id:
+            # Загружаем маршрутные операции
+            routing_ops = await load_routing_operations(db, node.routing_id)
+            if not routing_ops:
+                result.warnings.append(
+                    f"Узел '{node.nomenclature_name}' ({node_path}): маршрут без операций"
+                )
+                return
+
+            prod_ops, internal_deps = expand_routing_to_ops(
+                routing_ops,
+                node.quantity_per_parent * body.project_quantity,
+                node_path,
+            )
+
+            # Переименовываем temp_id в глобально уникальные и добавляем
+            local_to_global: dict[str, str] = {}
+            op_ids_in_node: list[str] = []
+            for op in prod_ops:
+                new_id = _make_temp_id("op")
+                local_to_global[op.temp_id] = new_id
+                op.temp_id = new_id
+                op.name = f"{node.nomenclature_name} · {op.name}"
+                result.operations.append(op)
+                op_ids_in_node.append(new_id)
+
+            # Добавляем внутренние зависимости
+            for dep in internal_deps:
+                pred_g = local_to_global.get(dep.predecessor_temp_id)
+                succ_g = local_to_global.get(dep.successor_temp_id)
+                if pred_g and succ_g:
+                    result.dependencies.append(ExplodedDependency(
+                        predecessor_temp_id=pred_g,
+                        successor_temp_id=succ_g,
+                        dependency_type=dep.dependency_type,
+                        lag_hours=dep.lag_hours,
+                    ))
+
+            node_op_map[str(node.id)] = op_ids_in_node
+
+            # Связываем с предыдущей операцией в иерархии (если есть)
+            if parent_path in last_op_in_path:
+                first_op = op_ids_in_node[0] if op_ids_in_node else None
+                prev_op = last_op_in_path[parent_path]
+                if first_op and prev_op:
+                    result.dependencies.append(ExplodedDependency(
+                        predecessor_temp_id=prev_op,
+                        successor_temp_id=first_op,
+                        dependency_type="FS",
+                    ))
+
+            # Обновляем last_op_in_path для этого уровня и выше
+            if op_ids_in_node:
+                last_op = op_ids_in_node[-1]
+                # Обновляем путь к родительским уровням
+                parts = node_path.split(".")
+                for i in range(len(parts)):
+                    ancestor_path = ".".join(parts[:i+1])
+                    last_op_in_path[ancestor_path] = last_op
+
+            return
+
+        # Узел make без routing_id
+        result.warnings.append(
+            f"Узел '{node.nomenclature_name}' ({node_path}): тип 'make' без маршрута"
+        )
+
+    # Обходим все корневые узлы
+    for root in root_nodes:
+        await _traverse(root, "1")
+
+    # Связываем операции закупки с потребляющими (FS от закупки к первому потребителю)
+    _link_procurement_to_production(result, node_op_map, all_nodes, children_map)
+
+    return result
+
+
+def _link_procurement_to_production(
+    result,
+    node_op_map: dict[str, list[str]],
+    all_nodes: list[ProductStructure],
+    children_map: dict[str, list[ProductStructure]],
+):
+    """
+    Связывает операции закупки материалов с производственными операциями,
+    которые эти материалы потребляют.
+
+    Правило: закупка → первая операция родительского маршрута.
+    """
+    node_by_id = {str(n.id): n for n in all_nodes}
+
+    for node in all_nodes:
+        if node.is_make_or_buy == "buy":
+            parent_id = str(node.parent_id) if node.parent_id else None
+            if not parent_id or parent_id not in node_op_map:
+                continue
+
+            parent_ops = node_op_map[parent_id]
+            buy_ops = node_op_map.get(str(node.id), [])
+
+            if not parent_ops or not buy_ops:
+                continue
+
+            # Закупка предшествует первой операции родительского маршрута
+            first_prod_op = parent_ops[0]
+            for buy_op_id in buy_ops:
+                result.dependencies.append(ExplodedDependency(
+                    predecessor_temp_id=buy_op_id,
+                    successor_temp_id=first_prod_op,
+                    dependency_type="FS",
+                ))
+
+
+
+# ── MRP Export ────────────────────────────────────────────────
+
+from pydantic import BaseModel as PydanticBaseModel
+
+class MRPMaterialRequirement(PydanticBaseModel):
+    """Потребность в материале для MRP-экспорта."""
+    nomenclature_id: str
+    nomenclature_name: str
+    quantity: float
+    unit: str
+    need_date: str
+    source_operation: str
+    lead_time_days: float
+
+
+class MRPResourceLoad(PydanticBaseModel):
+    """Загрузка ресурса для MRP-экспорта."""
+    resource_id: str
+    resource_name: str
+    operation_name: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    duration_hours: float
+    load_percent: float
+
+
+class MRPExportOut(PydanticBaseModel):
+    """Агрегированный MRP-экспорт для ERP-интеграции."""
+    project_id: str
+    generated_at: str
+    total_operations: int
+    total_dependencies: int
+    materials: list[dict]
+    operations: list[dict]
+    dependencies: list[dict]
+    resource_load: list[MRPResourceLoad]
+    warnings: list[str]
+
+
+@bom_router.get("/projects/{project_id}/export/mrp", response_model=MRPExportOut)
+async def export_mrp(
+    project_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """MRP-экспорт: сводка операций, потребностей в материалах и загрузки ресурсов."""
+    from datetime import datetime as dt
+
+    ops_result = await db.execute(
+        select(Operation).where(
+            Operation.tenant_id == tenant_id,
+            Operation.project_id == project_id,
+        )
+    )
+    ops = ops_result.scalars().all()
+
+    deps_result = await db.execute(
+        select(OperationDependency).where(
+            OperationDependency.predecessor_id.in_(
+                select(Operation.id).where(
+                    Operation.tenant_id == tenant_id,
+                    Operation.project_id == project_id,
+                )
+            )
+        )
+    )
+    deps = deps_result.scalars().all()
+
+    from app.models.operation import OperationResource
+    from app.models.resource import Resource
+
+    res_result = await db.execute(
+        select(OperationResource).where(
+            OperationResource.operation_id.in_(
+                select(Operation.id).where(
+                    Operation.tenant_id == tenant_id,
+                    Operation.project_id == project_id,
+                )
+            )
+        )
+    )
+    op_resources = res_result.scalars().all()
+    res_map: dict[str, list] = {}
+    for or_m in op_resources:
+        res_map.setdefault(str(orm.operation_id), []).append(orm)
+
+    # Fetch resource names
+    resource_names: dict[str, str] = {}
+    if op_resources:
+        res_ids = list({or_m.resource_id for or_m in op_resources})
+        resources_result = await db.execute(
+            select(Resource).where(Resource.id.in_(res_ids))
+        )
+        for res in resources_result.scalars().all():
+            resource_names[str(res.id)] = res.name
+
+    warnings: list[str] = []
+
+    # BOM развёртка для материалов
+    result_exp = await run_explosion(
+        db, tenant_id, project_id,
+        BOMExplodeAndSaveRequest(project_quantity=Decimal("1"))
+    )
+    materials = result_exp.materials
+    warnings.extend(result_exp.warnings)
+
+    # Загрузка ресурсов
+    resource_load: list[MRPResourceLoad] = []
+    for op in ops:
+        for or_m in res_map.get(str(op.id), []):
+            resource_load.append(MRPResourceLoad(
+                resource_id=str(or_m.resource_id),
+                resource_name=resource_names.get(str(or_m.resource_id), ""),
+                operation_name=op.name,
+                start_date=op.expected_delivery.isoformat() if op.expected_delivery else None,
+                end_date=None,
+                duration_hours=float(op.duration_base),
+                load_percent=100.0,
+            ))
+
+    ops_export = []
+    for op in ops:
+        ops_export.append({
+            "id": str(op.id),
+            "name": op.name,
+            "ext_id": op.ext_id,
+            "duration_hours": float(op.duration_base),
+            "expected_start": op.expected_delivery.isoformat() if op.expected_delivery else None,
+            "expected_finish": None,
+            "is_critical": bool(op.is_critical),
+            "operation_type": op.operation_type,
+            "output_product": op.output_product,
+            "output_quantity": float(op.output_quantity) if op.output_quantity else None,
+            "yield_rate": float(op.yield_rate),
+        })
+
+    deps_export = []
+    for d in deps:
+        deps_export.append({
+            "predecessor_id": str(d.predecessor_id),
+            "successor_id": str(d.successor_id),
+            "dependency_type": d.dependency_type,
+            "lag_hours": float(d.lag_time) if d.lag_time else 0,
+        })
+
+    return MRPExportOut(
+        project_id=str(project_id),
+        generated_at=dt.utcnow().isoformat() + "Z",
+        total_operations=len(ops),
+        total_dependencies=len(deps),
+        materials=materials,
+        operations=ops_export,
+        dependencies=deps_export,
+        resource_load=resource_load,
+        warnings=warnings,
+    )

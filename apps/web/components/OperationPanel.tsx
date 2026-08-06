@@ -8,8 +8,8 @@ import type { CPMNode, ActualFact } from '@/lib/types';
 import { getActual, saveActual } from '@/lib/api';
 
 interface Props {
-  node: CPMNode | null;
-  onSave: (updatedNode: CPMNode) => void;
+  node: any;
+  onSave: (updatedNode: any) => void;
   onClose: () => void;
   onStatusChange: (nodeId: string, newStatus: string) => void;
 }
@@ -323,10 +323,10 @@ export default function OperationPanel({ node, onSave, onClose, onStatusChange }
             fontSize: 10, color: 'var(--fg-4)', lineHeight: 1.5,
           }}>
             <div>
-              Создано: {actual.recorded_at || actual.updated_at || '—'}&nbsp;
+              Создано: {(actual as any).recorded_at || actual.updated_at || '—'}&nbsp;
               ({actual.source === 'auto_closed' ? 'автоматически' : 'вручную'})
             </div>
-            {actual.updated_at && actual.updated_at !== actual.recorded_at && (
+            {actual.updated_at && actual.updated_at !== actual.updated_at && (
               <div>
                 <strong>Последнее изменение: {actual.updated_at}</strong>&nbsp;
                 {actual.edit_count != null && actual.edit_count > 0 && (
