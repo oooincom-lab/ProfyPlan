@@ -24,7 +24,7 @@ const STATUS_OPTIONS = [
 
 const REASON_OPTIONS = [
   { value: '', label: '— нет отклонений —' },
-  { value: 'machine', label: 'Простой станка' },
+  { value: 'resource', label: 'Простой ресурса' },
   { value: 'material', label: 'Отсутствие материала' },
   { value: 'tool', label: 'Брак инструмента' },
   { value: 'quality', label: 'Качество сырья' },
