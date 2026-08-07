@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import ClipboardPaste from '@/components/ClipboardPaste';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -482,6 +483,8 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
   const [mode, setMode] = useState('cpm');
   const [usesPhases, setUsesPhases] = useState(false);
   const [country, setCountry] = useState('RU');
+  const [manualRows, setManualRows] = useState<Record<string, string>[]>([]);
+  const [showManual, setShowManual] = useState(false);
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -558,7 +561,7 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
       )}
 
       {/* Step 2: Data */}
-      {step === 2 && (
+      {step === 2 && !showManual && (
         <div className="panel">
           <div className="panel-title" style={{ marginBottom: 20 }}>Шаг 2: Загрузка данных</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -566,9 +569,10 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
               { icon: '📥', title: 'Импорт из Excel', desc: 'Загрузите .xlsx файл' },
               { icon: '📋', title: 'Google Таблицы', desc: 'Синхронизация с Sheets' },
               { icon: '🔌', title: 'API / 1С', desc: 'Интеграция с ERP' },
-              { icon: '✍️', title: 'Вручную', desc: 'Заполнить в интерфейсе' },
+              { icon: '✍️', title: 'Вручную', desc: 'Заполнить в интерфейсе', action: () => setShowManual(true) },
             ].map((opt, i) => (
-              <div key={i} className="dir-card" style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 14, padding: 16 }}>
+              <div key={i} className="dir-card" onClick={opt.action}
+                style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 14, padding: 16, cursor: opt.action ? 'pointer' : 'default' }}>
                 <div style={{ fontSize: 28 }}>{opt.icon}</div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{opt.title}</div>
@@ -583,6 +587,18 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
         </div>
       )}
 
+      {/* Step 2: Manual Input */}
+      {step === 2 && showManual && (
+        <div className="panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div className="panel-title">Шаг 2: Ручной ввод</div>
+            <button className="btn btn-sm" style={{ background: 'transparent', border: '1px solid #2A4060', color: '#B0C4DE', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
+              onClick={() => setShowManual(false)}>← Назад к выбору</button>
+          </div>
+          <ClipboardPaste onApply={(rows) => { setManualRows(rows); setShowManual(false); }} />
+        </div>
+      )}
+
       {/* Step 3: Confirm */}
       {step === 3 && (
         <div className="panel">
@@ -592,7 +608,7 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
               <div style={{ color: '#5A7090' }}>Название</div><div style={{ fontWeight: 600 }}>{name || '(не указано)'}</div>
               <div style={{ color: '#5A7090' }}>Режим</div><div>{mode.toUpperCase()}{usesPhases ? ' + Этапы' : ''}</div>
               <div style={{ color: '#5A7090' }}>Страна</div><div>{country}</div>
-              <div style={{ color: '#5A7090' }}>Данные</div><div>Будут добавлены позже</div>
+              <div style={{ color: '#5A7090' }}>Данные</div><div>{manualRows.length > 0 ? `${manualRows.length} строк вручную` : 'Будут добавлены позже'}</div>
             </div>
           </div>
         </div>
