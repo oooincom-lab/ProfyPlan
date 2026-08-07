@@ -12,6 +12,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   if (tok) h['Authorization'] = `Bearer ${tok}`;
   const r = await fetch(`${API}${path}`, { ...opts, headers: h });
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  if (r.status === 204) return undefined as any;
   return r.json();
 }
 
