@@ -10,6 +10,7 @@ from app.models.routing import Routing, RoutingOperation  # noqa: F401
 from app.models.production_order import ProductionOrder  # noqa: F401
 from app.models.order_group import OrderGroup  # noqa: F401
 from app.models.order_pool import OrderPool  # noqa: F401
+from app.models.nomenclature import Nomenclature  # noqa: F401
 from app.models.plan_version import (
     PlanBaseline,
     ActualExecution,

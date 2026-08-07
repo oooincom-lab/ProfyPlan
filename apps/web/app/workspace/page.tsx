@@ -2,6 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import ClipboardPaste from '@/components/ClipboardPaste';
+import DirectoryTable from '@/components/DirectoryTable';
+import DirectoryPicker from '@/components/DirectoryPicker';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -611,6 +613,32 @@ export default function AppShell() {
                 <button className="btn btn-secondary btn-sm" onClick={() => navTo('projects')}>← К проектам</button>
               </div>
             </>
+          )}
+
+          {/* ═══ DIRECTORIES ═══ */}
+          {view === 'directories' && (
+            <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+              <div className="panel-hdr" style={{ marginBottom: 16 }}>
+                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>📚 Номенклатура</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-sm" style={{ background: '#1E3252', color: '#B0C4DE', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Номенклатура</button>
+                  <button className="btn btn-sm" style={{ background: '#162844', color: '#5A7090', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Ресурсы</button>
+                  <button className="btn btn-sm" style={{ background: '#162844', color: '#5A7090', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Подразделения</button>
+                  <button className="btn btn-sm" style={{ background: '#162844', color: '#5A7090', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Организации</button>
+                </div>
+              </div>
+              <DirectoryTable
+                entity="nomenclature"
+                apiBase="https://profyplan.ru/api"
+                columns={[
+                  { key: 'name', label: 'Название', width: 240 },
+                  { key: 'code', label: 'Код', width: 120 },
+                  { key: 'ntype', label: 'Тип', width: 120 },
+                  { key: 'unit', label: 'Ед.', width: 70 },
+                  { key: 'description', label: 'Описание' },
+                ]}
+              />
+            </div>
           )}
 
           {/* ═══ REPORTS / CCM ═══ */}
