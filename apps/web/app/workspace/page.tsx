@@ -30,7 +30,74 @@ export default function AppShell() {
   const [expandedProj, setExpandedProj] = useState<string | null>(null);
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
 
-  // ── Load ──
+  const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
+  const [showNewOrder, setShowNewOrder] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+
+  // ── Order CRUD ──
+  const createOrder = async () => {
+    if (!newOrder.specification_name.trim() || !selectedProject) return;
+    try {
+      await apiF(`/production-orders/?project_id=${selectedProject.id}`, {
+        method: 'POST', body: JSON.stringify({
+          specification_name: newOrder.specification_name, quantity: Number(newOrder.quantity) || 1,
+          unit: newOrder.unit, priority: newOrder.priority, client: newOrder.client || null,
+        })
+      });
+      setNewOrder({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
+      setShowNewOrder(false);
+      await loadProject(selectedProject);
+    } catch (e: any) { alert('Ошибка создания: ' + (e.message || String(e))); }
+  };
+
+  const deleteOrder = async (orderId: string) => {
+    if (!confirm('Удалить заказ?')) return;
+    try {
+      await apiF(`/production-orders/${orderId}`, { method: 'DELETE' });
+      await loadProject(selectedProject);
+    } catch (e: any) { alert('Ошибка удаления: ' + (e.message || String(e))); }
+  };
+
+  const updateOrder = async (orderId: string) => {
+    if (!editValues.specification_name?.trim()) { setEditingOrder(null); return; }
+    try {
+      await apiF(`/production-orders/${orderId}/update`, {
+        method: 'PUT', body: JSON.stringify({
+          specification_name: editValues.specification_name,
+          quantity: Number(editValues.quantity) || undefined,
+          client: editValues.client,
+        })
+      });
+      setEditingOrder(null);
+      await loadProject(selectedProject);
+    } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
+  };
+
+  // ── Project actions ──
+  const archiveProject = async (p: any) => {
+    try {
+      await apiF(`/projects/${p.id}`, { method: 'PUT', body: JSON.stringify({ status: p.status === 'archived' ? 'draft' : 'archived' }) });
+      await load().then(() => navTo('projects'));
+    } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
+  };
+
+  const deleteProject = async (p: any) => {
+    if (!confirm(`Удалить проект "${p.name}"? Это действие необратимо.`)) return;
+    try {
+      await apiF(`/projects/${p.id}`, { method: 'DELETE' });
+      setSelectedProject(null); setOrders([]);
+      await load().then(() => navTo('projects'));
+    } catch (e: any) { alert('Ошибка удаления: ' + (e.message || String(e))); }
+  };
+
+  const renameProject = async (p: any, newName: string) => {
+    if (!newName.trim()) return;
+    try {
+      await apiF(`/projects/${p.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
+      await load().then(() => { if (selectedProject?.id === p.id) setSelectedProject({ ...selectedProject, name: newName }); });
+    } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
+  };
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -230,7 +297,7 @@ export default function AppShell() {
                   <div className="s-sub" onClick={() => {}}>
                     📦 Пулы <span className="s-count">{pools.length || '—'}</span>
                   </div>
-                  <div className="s-sub" onClick={() => navTo('settings')}>
+                  <div className="s-sub" onClick={() => { setSelectedProject(p); setView('settings'); }}>
                     ⚙️ Настройки
                   </div>
                 </>
@@ -332,7 +399,8 @@ export default function AppShell() {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     <button className="btn btn-primary btn-sm" onClick={() => loadProject(p)}>Открыть</button>
                     <button className="btn btn-secondary btn-sm">📥 Импорт</button>
-                    <button className="btn btn-secondary btn-sm">⚙️</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedProject(p); setView('settings'); }}>⚙️</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => deleteProject(p)}>🗑</button>
                   </div>
                 </div>
               ))}
@@ -361,13 +429,14 @@ export default function AppShell() {
               <div className="panel">
                 <div className="panel-hdr">
                   <div><span className="panel-title">Заказы</span><span className="panel-sub">КОРЕНЬ · {rootOrders.length} шт.</span></div>
-                  <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#5A7090' }}>
-                    <span>⚡ = CPM</span><span>○ = План</span>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
+                    <span style={{ fontSize: 11, color: '#5A7090' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090' }}>○ = План</span>
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table className="tbl">
-                    <thead><tr><th className="t-graph">Граф</th><th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приоритет</th><th>Статус</th><th>Старт</th><th>Финиш</th></tr></thead>
+                    <thead><tr><th className="t-graph">Граф</th><th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приоритет</th><th>Статус</th><th>Старт</th><th>Финиш</th><th style={{ width: 40 }}></th></tr></thead>
                     <tbody>
                       {rootOrders.map((o: any) => (
                         <tr key={o.id}>
@@ -380,9 +449,27 @@ export default function AppShell() {
                           <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
                           <td className="t-mono">{o.start_date || '—'}</td>
                           <td className="t-mono">{o.due_date || '—'}</td>
+                          <td><button onClick={() => deleteOrder(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
                         </tr>
                       ))}
-                      {rootOrders.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
+                      {showNewOrder && (
+                        <tr>
+                          <td className="t-graph"><span className="g-pln">○</span></td>
+                          <td className="t-mono">—</td>
+                          <td><input value={newOrder.specification_name} onChange={e => setNewOrder({ ...newOrder, specification_name: e.target.value })} placeholder="Продукт" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#E8EEF5', padding: '4px 8px', width: 130, fontSize: 12 }} onKeyDown={e => e.key === 'Enter' && createOrder()} autoFocus /></td>
+                          <td><input value={newOrder.client} onChange={e => setNewOrder({ ...newOrder, client: e.target.value })} placeholder="Клиент" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 90, fontSize: 12 }} /></td>
+                          <td><input value={newOrder.quantity} onChange={e => setNewOrder({ ...newOrder, quantity: e.target.value })} type="number" min="1" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 60, fontSize: 12 }} /></td>
+                          <td><select value={newOrder.priority} onChange={e => setNewOrder({ ...newOrder, priority: e.target.value })} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 4px', fontSize: 12 }}><option value="normal">Обычный</option><option value="high">Высокий</option><option value="critical">Критич.</option><option value="low">Низкий</option></select></td>
+                          <td><span className="badge draft">Новый</span></td>
+                          <td className="t-mono">—</td>
+                          <td className="t-mono">—</td>
+                          <td style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={createOrder} style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '3px 8px', fontSize: 11, fontWeight: 600 }}>✓</button>
+                            <button onClick={() => setShowNewOrder(false)} style={{ background: 'transparent', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: 11 }}>✕</button>
+                          </td>
+                        </tr>
+                      )}
+                      {rootOrders.length === 0 && !showNewOrder && <tr><td colSpan={10} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -397,7 +484,7 @@ export default function AppShell() {
                       <button onClick={() => delGroup(g.id)} className="btn btn-danger btn-sm">🗑</button>
                     </div>
                     {gOrds.length > 0 && (
-                      <table className="tbl"><thead><tr><th className="t-graph">Граф</th><th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th><th>Старт</th><th>Финиш</th></tr></thead>
+                      <table className="tbl"><thead><tr><th className="t-graph">Граф</th><th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th><th>Старт</th><th>Финиш</th><th style={{ width: 40 }}></th></tr></thead>
                         <tbody>{gOrds.map((o: any) => (
                           <tr key={o.id}>
                             <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'}>{isDyn(o) ? '⚡' : '○'}</span></td>
@@ -406,6 +493,7 @@ export default function AppShell() {
                             <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Выс.' : 'Обыч.'}</span></td>
                             <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status}</span></td>
                             <td className="t-mono">{o.start_date || '—'}</td><td className="t-mono">{o.due_date || '—'}</td>
+                            <td><button onClick={() => deleteOrder(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }}>🗑</button></td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -453,14 +541,51 @@ export default function AppShell() {
           )}
 
           {/* ═══ SETTINGS ═══ */}
-          {view === 'settings' && (
+          {view === 'settings' && !selectedProject && (
             <div className="panel">
               <div className="panel-hdr"><span className="panel-title">Настройки интерфейса</span></div>
               <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>⚙️</div>
                 <div>Тема, состав KPI, уведомления — в разработке</div>
+                <div style={{ marginTop: 16, fontSize: 13, color: '#8FA3BD' }}>Для управления проектом выберите его и нажмите ⚙️ в карточке</div>
               </div>
             </div>
+          )}
+
+          {view === 'settings' && selectedProject && (
+            <>
+              <div className="panel">
+                <div className="panel-hdr"><span className="panel-title">⚙️ Настройки проекта</span><span className="panel-sub">{selectedProject.name}</span></div>
+                <div style={{ display: 'grid', gap: 16, maxWidth: 500 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: '#5A7090', marginBottom: 6 }}>Название</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input id="proj-name-input" defaultValue={selectedProject.name} style={{ flex: 1, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '8px 12px', fontSize: 14 }} onKeyDown={e => { if (e.key === 'Enter') renameProject(selectedProject, (e.target as HTMLInputElement).value); }} />
+                      <button className="btn btn-primary btn-sm" onClick={() => renameProject(selectedProject, (document.getElementById('proj-name-input') as HTMLInputElement)?.value || '')}>Сохранить</button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedProject.status === 'archived' ? '📦 В архиве' : '📁 Активный'}</div>
+                        <div style={{ fontSize: 12, color: '#5A7090' }}>{selectedProject.status === 'archived' ? 'Проект скрыт из основных списков' : 'Проект отображается в списках'}</div>
+                      </div>
+                      <button className={selectedProject.status === 'archived' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'} onClick={() => archiveProject(selectedProject)}>
+                        {selectedProject.status === 'archived' ? 'Восстановить' : 'В архив'}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                    <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 12 }} onClick={() => deleteProject(selectedProject)}>
+                      🗑 Удалить проект
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => navTo('projects')}>← К проектам</button>
+              </div>
+            </>
           )}
 
           {/* ═══ REPORTS / CCM ═══ */}
