@@ -190,13 +190,12 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
                 ✕ Очистить
               </button>
               <button onClick={handleApply}
-                className="btn btn-sm"
                 disabled={Object.keys(mapping).length === 0}
                 style={{
                   background: Object.keys(mapping).length === 0 ? '#1E3252' : 'linear-gradient(135deg, #3B82F6, #2563EB)',
-                  color: 'white', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                 }}>
-                ✓ Применить ({rows.length} строк)
+                ✓ Сохранить и продолжить ({rows.length} стр.)
               </button>
             </div>
           </div>
