@@ -1,8 +1,9 @@
 """Pydantic-схемы для номенклатуры."""
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NomenclatureCreate(BaseModel):
@@ -25,9 +26,11 @@ class NomenclatureUpdate(BaseModel):
 
 
 class NomenclatureOut(BaseModel):
-    id: str
-    tenant_id: str
-    project_id: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    project_id: Optional[UUID] = None
     name: str
     code: Optional[str] = None
     ntype: str
@@ -36,6 +39,4 @@ class NomenclatureOut(BaseModel):
     is_active: bool
     ext_id: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
+    updated_at: Optional[datetime] = None
