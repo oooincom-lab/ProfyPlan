@@ -332,7 +332,7 @@ async def create_order(
     from uuid import UUID
     order = ProductionOrder(
         id=uuid4(),
-        tenant_id=UUID(tenant_id),
+        tenant_id=tenant_id,
         project_id=UUID(project_id),
         ext_id=body.ext_id,
         specification_name=body.specification_name,
