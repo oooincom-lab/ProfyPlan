@@ -20,7 +20,7 @@ type Props = {
   synonyms?: Record<string, string[]>;
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, compact }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, compact, synonyms }: Props) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
