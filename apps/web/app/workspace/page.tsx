@@ -807,5 +807,6 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
         </div>
       </>
     )}
+  </div>
   );
 }
