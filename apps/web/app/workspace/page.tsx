@@ -449,7 +449,7 @@ export default function AppShell() {
 
           {/* ═══ NEW PROJECT ═══ */}
           {view === 'new-project' && (
-            <NewProjectWizard onBack={() => navTo('projects')} />
+            <NewProjectWizard onBack={() => navTo('projects')} onCreated={() => { load().then(() => navTo('projects')); }} />
           )}
 
           {/* ═══ SETTINGS ═══ */}
@@ -477,7 +477,7 @@ export default function AppShell() {
 }
 
 // ═══ NEW PROJECT WIZARD ═══
-function NewProjectWizard({ onBack }: { onBack: () => void }) {
+function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated: () => void }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [mode, setMode] = useState('cpm');
@@ -485,6 +485,7 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
   const [country, setCountry] = useState('RU');
   const [manualRows, setManualRows] = useState<Record<string, string>[]>([]);
   const [showManual, setShowManual] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -622,8 +623,8 @@ function NewProjectWizard({ onBack }: { onBack: () => void }) {
         {step < 3 ? (
           <button className="btn btn-primary" onClick={() => setStep(step + 1)}>Далее →</button>
         ) : (
-          <button className="btn btn-primary" onClick={() => { alert(`Проект «${name}» создан!`); onBack(); }}>
-            Создать проект
+          <button className="btn btn-primary" disabled={creating} onClick={() => { setCreating(true); apiF('/projects', { method: 'POST', body: JSON.stringify({ name: name || 'Без названия', mode: mode === 'quick' ? 'quick' : 'project', default_method: mode === 'pert' ? 'pert_cpm' : 'cpm', country_code: country }) }).then(() => onCreated()).catch((e: any) => alert('Ошибка: ' + (e.message || String(e)))); }}>
+            {creating ? 'Создание...' : 'Создать проект'}
           </button>
         )}
       </div>
