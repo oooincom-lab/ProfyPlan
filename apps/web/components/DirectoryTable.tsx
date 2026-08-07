@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import DataImport from './DataImport';
 
 type ColumnDef = {
   key: string;
@@ -11,11 +12,12 @@ type ColumnDef = {
 };
 
 type Props = {
-  entity: 'nomenclature';
+  entity: string;
   columns: ColumnDef[];
   apiBase: string;
   onSelect?: (row: any) => void;
   compact?: boolean;
+  synonyms?: Record<string, string[]>;
 };
 
 export default function DirectoryTable({ entity, columns, apiBase, onSelect, compact }: Props) {
@@ -26,6 +28,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState('');
+  const [showImport, setShowImport] = useState(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
 
@@ -94,12 +97,21 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
         />
         <div style={{ flex: 1 }} />
         {!compact && (
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => { setAdding(true); setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '' }); }}
-          >
-            + Добавить
-          </button>
+          <>
+            <button
+              className="btn btn-sm"
+              style={{ background: '#162844', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}
+              onClick={() => setShowImport(true)}
+            >
+              📋 Импорт
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => { setAdding(true); setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '' }); }}
+            >
+              + Добавить
+            </button>
+          </>
         )}
       </div>
 
@@ -190,6 +202,30 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
           )}
         </tbody>
       </table>
+
+      {/* Import modal */}
+      {showImport && synonyms && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setShowImport(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: 900, width: '90vw', maxHeight: '80vh', overflow: 'auto' }}>
+            <DataImport
+              entity={entity}
+              columns={columns}
+              synonyms={synonyms}
+              apiBase={apiBase}
+              onImport={async (rows) => {
+                for (const row of rows) {
+                  try {
+                    await fetch(`${apiBase}/v1/${entity}/`, { method: 'POST', headers: hdr(), body: JSON.stringify(row) });
+                  } catch { }
+                }
+                await load();
+              }}
+              onClose={() => setShowImport(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

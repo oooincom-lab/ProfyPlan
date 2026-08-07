@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
+import { NOMENCLATURE_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
 
 const API = 'https://profyplan.ru/api/v1';
@@ -630,6 +631,7 @@ export default function AppShell() {
               <DirectoryTable
                 entity="nomenclature"
                 apiBase="https://profyplan.ru/api"
+                synonyms={NOMENCLATURE_SYNONYMS}
                 columns={[
                   { key: 'name', label: 'Название', width: 240 },
                   { key: 'code', label: 'Код', width: 120 },
