@@ -29,6 +29,8 @@ export default function AppShell() {
   const [groups, setGroups] = useState<any[]>([]);
   const [pools, setPools] = useState<any[]>([]);
   const [expandedProj, setExpandedProj] = useState<string | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<string | null>(null);
+  const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
@@ -40,6 +42,14 @@ export default function AppShell() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project: any } | null>(null);
 
   // ── Order CRUD ──
+  const loadProjectOrders = async (projId: string) => {
+    if (projectOrders[projId]) return;
+    try {
+      const ords = await apiF<any[]>(`/production-orders/?project_id=${projId}`);
+      setProjectOrders(prev => ({ ...prev, [projId]: ords }));
+    } catch {}
+  };
+
   const createOrder = async () => {
     if (!newOrder.specification_name.trim() || !selectedProject) return;
     try {
@@ -293,9 +303,19 @@ export default function AppShell() {
               </button>
               {isExp && (
                 <>
-                  <div className="s-sub" onClick={() => {}}>
-                    📋 Заказы <span className="s-count">{orders.length || '—'}</span>
+                  <div className="s-sub" onClick={() => { if (expandedOrders === p.id) { setExpandedOrders(null); } else { setExpandedOrders(p.id); loadProjectOrders(p.id); } }}>
+                    📋 Заказы <span className="s-count">{projectOrders[p.id]?.length ?? (expandedOrders === p.id ? '...' : (p.order_count || '—'))}</span>
                   </div>
+                  {expandedOrders === p.id && projectOrders[p.id] && (
+                    <>
+                      {projectOrders[p.id].length === 0 && <div className="s-sub" style={{ color: '#5A7090' }}>нет заказов</div>}
+                      {projectOrders[p.id].map((o: any) => (
+                        <div key={o.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} title={o.specification_name}>
+                          {o.specification_name || o.ext_id || '—'} <span style={{ color: '#374151', marginLeft: 4 }}>×{o.quantity}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                   <div className="s-sub" onClick={() => {}}>
                     📁 Группы <span className="s-count">{groups.length || '—'}</span>
                   </div>
