@@ -17,6 +17,7 @@ from app.models.production_order import ProductionOrder
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
 from app.schemas.production_order import (
+    ProductionOrderCreate,
     ProductionOrderOut,
     ExcelImportResult,
     ImportValidationError,
@@ -316,6 +317,37 @@ async def list_orders(
     res = await db.execute(stmt)
     orders = res.scalars().all()
     return [_order_to_out(o) for o in orders]
+
+
+# ── POST / ─────────────────────────────────────────────────────
+
+@router.post("/", response_model=ProductionOrderOut, status_code=201)
+async def create_order(
+    project_id: str,
+    body: ProductionOrderCreate,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Создать один заказ на производство."""
+    from uuid import UUID
+    order = ProductionOrder(
+        id=uuid4(),
+        tenant_id=UUID(tenant_id),
+        project_id=UUID(project_id),
+        ext_id=body.ext_id,
+        specification_name=body.specification_name,
+        quantity=body.quantity,
+        unit=body.unit,
+        start_date=body.start_date,
+        due_date=body.due_date,
+        priority=body.priority,
+        client=body.client,
+        notes=body.notes,
+    )
+    db.add(order)
+    await db.commit()
+    await db.refresh(order)
+    return _order_to_out(order)
 
 
 # ── GET /{id} ──────────────────────────────────────────────────
