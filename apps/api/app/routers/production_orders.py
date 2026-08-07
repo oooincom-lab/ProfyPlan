@@ -486,3 +486,24 @@ async def expand_order(
         "materials_required": len(result.materials),
         "warnings": result.warnings,
     }
+
+
+# ── DELETE /{id} ──────────────────────────────────────────────
+
+@router.delete("/{order_id}", status_code=204)
+async def delete_order(
+    order_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить заказ на производство."""
+    stmt = select(ProductionOrder).where(
+        ProductionOrder.id == order_id,
+        ProductionOrder.tenant_id == tenant_id,
+    )
+    res = await db.execute(stmt)
+    order = res.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    await db.delete(order)
+    await db.commit()
