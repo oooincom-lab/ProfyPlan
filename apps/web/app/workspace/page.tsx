@@ -43,6 +43,8 @@ export default function AppShell() {
 
   // ── Context menu ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project: any } | null>(null);
+  const [sidebarCtx, setSidebarCtx] = useState<{ x: number; y: number; view: string } | null>(null);
+  const [directoryModal, setDirectoryModal] = useState<string | null>(null); // e.g. 'nomenclature'
 
   // ── Order CRUD ──
   const loadProjectOrders = async (projId: string) => {
@@ -340,19 +342,19 @@ export default function AppShell() {
         </button>
         {['directories', 'nomenclature', 'resources', 'departments', 'organizations', 'calendars'].includes(view) && (
           <>
-            <div className={`s-sub ${view === 'nomenclature' ? 'active' : ''}`} style={view === 'nomenclature' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('nomenclature')}>
+            <div className={`s-sub ${view === 'nomenclature' ? 'active' : ''}`} style={view === 'nomenclature' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('nomenclature')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'nomenclature' }); }} onDoubleClick={() => setDirectoryModal('nomenclature')}>
               📦 Номенклатура
             </div>
-            <div className={`s-sub ${view === 'resources' ? 'active' : ''}`} style={view === 'resources' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('resources')}>
+            <div className={`s-sub ${view === 'resources' ? 'active' : ''}`} style={view === 'resources' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('resources')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'resources' }); }} onDoubleClick={() => setDirectoryModal('resources')}>
               🔧 Ресурсы
             </div>
-            <div className={`s-sub ${view === 'departments' ? 'active' : ''}`} style={view === 'departments' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('departments')}>
+            <div className={`s-sub ${view === 'departments' ? 'active' : ''}`} style={view === 'departments' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('departments')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'departments' }); }} onDoubleClick={() => setDirectoryModal('departments')}>
               🏢 Подразделения
             </div>
-            <div className={`s-sub ${view === 'organizations' ? 'active' : ''}`} style={view === 'organizations' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('organizations')}>
+            <div className={`s-sub ${view === 'organizations' ? 'active' : ''}`} style={view === 'organizations' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('organizations')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'organizations' }); }} onDoubleClick={() => setDirectoryModal('organizations')}>
               🏭 Организации
             </div>
-            <div className={`s-sub ${view === 'calendars' ? 'active' : ''}`} style={view === 'calendars' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('calendars')}>
+            <div className={`s-sub ${view === 'calendars' ? 'active' : ''}`} style={view === 'calendars' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('calendars')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'calendars' }); }} onDoubleClick={() => setDirectoryModal('calendars')}>
               📅 Календари
             </div>
           </>
@@ -542,7 +544,7 @@ export default function AppShell() {
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
                 { id: 'calendars', icon: '📅', title: 'Календари', desc: 'Праздники, смены, графики' },
               ].map(d => (
-                <div key={d.id} className="dir-card" onClick={() => navTo(d.id as View)}>
+                <div key={d.id} className="dir-card" onClick={() => setDirectoryModal(d.id)}>
                   <div className="dc-icon">{d.icon}</div>
                   <div className="dc-title">{d.title}</div>
                   <div className="dc-count">{d.desc}</div>
@@ -551,8 +553,40 @@ export default function AppShell() {
             </div>
           )}
 
-          {/* ═══ DIRECTORY DETAILS (placeholder) ═══ */}
-          {['nomenclature', 'resources', 'departments', 'organizations', 'calendars'].includes(view) && (
+          {/* ═══ DIRECTORY DETAIL ═══ */}
+          {view === 'nomenclature' && (
+            <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+              <div className="panel-hdr" style={{ marginBottom: 16 }}>
+                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>📦 Номенклатура</span>
+              </div>
+              <DirectoryTable
+                entity="nomenclature"
+                apiBase="https://profyplan.ru/api"
+                synonyms={NOMENCLATURE_SYNONYMS}
+                columns={[
+                  { key: 'name', label: 'Название', width: 240 },
+                  { key: 'code', label: 'Код', width: 120 },
+                  { key: 'article', label: 'Артикул', width: 150 },
+                  { key: 'ntype', label: 'Тип', width: 130 },
+                  { key: 'unit', label: 'Ед.', width: 70 },
+                  { key: 'description', label: 'Описание' },
+                ]}
+              />
+            </div>
+          )}
+
+          {view === 'resources' && (
+            <div className="panel">
+              <div className="panel-hdr"><span className="panel-title">{titles[view]}</span></div>
+              <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
+                <div>Здесь будет таблица ресурсов: станки, бригады, транспорт</div>
+              </div>
+            </div>
+          )}
+
+          {['departments', 'organizations', 'calendars'].includes(view) && (
             <div className="panel">
               <div className="panel-hdr"><span className="panel-title">{titles[view]}</span></div>
               <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
@@ -616,31 +650,68 @@ export default function AppShell() {
             </>
           )}
 
-          {/* ═══ DIRECTORIES ═══ */}
-          {view === 'directories' && (
-            <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
-              <div className="panel-hdr" style={{ marginBottom: 16 }}>
-                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>📚 Номенклатура</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-sm" style={{ background: '#1E3252', color: '#B0C4DE', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Номенклатура</button>
-                  <button className="btn btn-sm" style={{ background: '#162844', color: '#5A7090', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Ресурсы</button>
-                  <button className="btn btn-sm" style={{ background: '#162844', color: '#5A7090', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Подразделения</button>
-                  <button className="btn btn-sm" style={{ background: '#162844', color: '#5A7090', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Организации</button>
+          {/* ═══ DIRECTORY MODAL ═══ */}
+          {directoryModal && (
+            <>
+              <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.6)', zIndex: 9990, backdropFilter: 'blur(4px)' }} onClick={() => setDirectoryModal(null)} />
+              <div style={{
+                position: 'fixed', top: '5vh', left: '5vw', width: '90vw', height: '90vh', zIndex: 9991,
+                background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252',
+                borderRadius: 14, display: 'flex', flexDirection: 'column',
+                boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+              }}>
+                {/* Modal header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid #1E3252' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 20 }}>{directoryModal === 'nomenclature' ? '📦' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>
+                      {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {['nomenclature', 'resources', 'departments', 'organizations', 'calendars'].map(tab => (
+                      <button key={tab} onClick={() => setDirectoryModal(tab)} style={{
+                        background: directoryModal === tab ? '#1E3252' : '#162844',
+                        color: directoryModal === tab ? '#B0C4DE' : '#5A7090',
+                        border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12,
+                        cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.12s',
+                      }}>
+                        {tab === 'nomenclature' ? 'Номенклатура' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
+                      </button>
+                    ))}
+                    <button onClick={() => setDirectoryModal(null)} style={{
+                      background: 'transparent', border: 'none', color: '#5A7090', fontSize: 20,
+                      cursor: 'pointer', padding: '0 8px', lineHeight: 1,
+                    }}>✕</button>
+                  </div>
+                </div>
+                {/* Modal body */}
+                <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+                  {directoryModal === 'nomenclature' && (
+                    <DirectoryTable
+                      entity="nomenclature"
+                      apiBase="https://profyplan.ru/api"
+                      synonyms={NOMENCLATURE_SYNONYMS}
+                      columns={[
+                        { key: 'name', label: 'Название', width: 240 },
+                        { key: 'code', label: 'Код', width: 120 },
+                        { key: 'article', label: 'Артикул', width: 150 },
+                        { key: 'ntype', label: 'Тип', width: 130 },
+                        { key: 'unit', label: 'Ед.', width: 70 },
+                        { key: 'description', label: 'Описание' },
+                      ]}
+                    />
+                  )}
+                  {directoryModal !== 'nomenclature' && (
+                    <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
+                      <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
+                      <div>Здесь будет таблица с CRUD и импортом</div>
+                    </div>
+                  )}
                 </div>
               </div>
-              <DirectoryTable
-                entity="nomenclature"
-                apiBase="https://profyplan.ru/api"
-                synonyms={NOMENCLATURE_SYNONYMS}
-                columns={[
-                  { key: 'name', label: 'Название', width: 240 },
-                  { key: 'code', label: 'Код', width: 120 },
-                  { key: 'ntype', label: 'Тип', width: 120 },
-                  { key: 'unit', label: 'Ед.', width: 70 },
-                  { key: 'description', label: 'Описание' },
-                ]}
-              />
-            </div>
+            </>
           )}
 
           {/* ═══ REPORTS / CCM ═══ */}
@@ -652,6 +723,26 @@ export default function AppShell() {
           )}
         </div>
       </div>
+
+    {/* Sidebar context menu */}
+    {sidebarCtx && (
+      <>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998 }} onClick={() => setSidebarCtx(null)} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx(null); }} />
+        <div style={{
+          position: 'fixed', left: sidebarCtx.x, top: sidebarCtx.y, zIndex: 9999,
+          background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252',
+          borderRadius: 10, padding: '4px 0', minWidth: 180,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+        }}>
+          <button onClick={() => { setDirectoryModal(sidebarCtx.view); setSidebarCtx(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+            📋 Открыть список
+          </button>
+          <button onClick={() => { navTo(sidebarCtx.view as View); setSidebarCtx(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+            🔍 Перейти к разделу
+          </button>
+        </div>
+      </>
+    )}
 
     {/* Context menu */}
     {ctxMenu && (
