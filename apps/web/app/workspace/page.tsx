@@ -147,7 +147,7 @@ export default function AppShell() {
   if (!loaded) {
     return (
       <div style={{ background: '#0A1628', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <style>{css}</style>
+        <style dangerouslySetInnerHTML={{ __html: css }} />
         <div style={{ textAlign: 'center' }}>
           <div className="s-logo" style={{ margin: '0 auto 20px' }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>ProfyPlan</h1>
@@ -189,7 +189,7 @@ export default function AppShell() {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', minHeight: '100vh' }}>
-      <style>{css}</style>
+      <style dangerouslySetInnerHTML={{ __html: css }} />
 
       {/* ═══ SIDEBAR ═══ */}
       <div className="sidebar">
