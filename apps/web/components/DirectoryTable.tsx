@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import DataImport from './DataImport';
 
 type ColumnDef = {
@@ -9,6 +9,7 @@ type ColumnDef = {
   width?: number;
   render?: (val: any, row: any) => React.ReactNode;
   editable?: boolean;
+  sortable?: boolean;
 };
 
 type Props = {
@@ -21,6 +22,22 @@ type Props = {
 };
 
 export default function DirectoryTable({ entity, columns, apiBase, onSelect, compact, synonyms }: Props) {
+  // ── User preferences (localStorage) ──
+  const prefKey = `profyplan_prefs_${entity}`;
+  const loadPrefs = () => {
+    if (typeof window === 'undefined') return null;
+    try { return JSON.parse(localStorage.getItem(prefKey) || 'null'); } catch { return null; }
+  };
+  const savePrefs = (patch: Record<string, any>) => {
+    if (typeof window === 'undefined') return;
+    const curr = loadPrefs() || {};
+    localStorage.setItem(prefKey, JSON.stringify({ ...curr, ...patch }));
+  };
+
+  // Default search/sort field: prefer 'name' if it exists
+  const defaultSearchField = columns.find(c => c.key === 'name') ? 'name' : columns[0]?.key || 'name';
+  const defaultSortKey = columns[0]?.key || 'name';
+
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -28,6 +45,18 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState('');
+  const [searchField, setSearchField] = useState(() => {
+    const p = loadPrefs();
+    return p?.searchField || defaultSearchField;
+  });
+  const [sortKey, setSortKey] = useState<string | null>(() => {
+    const p = loadPrefs();
+    return p?.sortKey ?? defaultSortKey;
+  });
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => {
+    const p = loadPrefs();
+    return p?.sortDir || 'asc';
+  });
   const [showImport, setShowImport] = useState(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -81,20 +110,67 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const ntypeLabel = (v: string) =>
     v === 'product' ? 'Продукт' : v === 'material' ? 'Материал' : v === 'semi_finished' ? 'Полуфабрикат' : v === 'service' ? 'Услуга' : v;
 
-  const filtered = filter ? rows.filter(r => (r.name || '').toLowerCase().includes(filter.toLowerCase()) || (r.code || '').toLowerCase().includes(filter.toLowerCase())) : rows;
+  const handleSort = (colKey: string) => {
+    if (sortKey === colKey) {
+      const newDir = sortDir === 'asc' ? 'desc' : 'asc';
+      setSortDir(newDir);
+      savePrefs({ sortKey: colKey, sortDir: newDir });
+    } else {
+      setSortKey(colKey);
+      setSortDir('asc');
+      savePrefs({ sortKey: colKey, sortDir: 'asc' });
+    }
+  };
+
+  const handleSearchFieldChange = (field: string) => {
+    setSearchField(field);
+    savePrefs({ searchField: field });
+  };
+
+  // Filter → Sort chain
+  const filtered = useMemo(() => {
+    let result = rows;
+    if (filter) {
+      const q = filter.toLowerCase();
+      result = rows.filter(r => String(r[searchField] ?? '').toLowerCase().includes(q));
+    }
+    if (sortKey) {
+      result = [...result].sort((a, b) => {
+        const va = (a[sortKey] ?? '').toString().toLowerCase();
+        const vb = (b[sortKey] ?? '').toString().toLowerCase();
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+    }
+    return result;
+  }, [rows, filter, searchField, sortKey, sortDir]);
 
   if (loading) return <div style={{ padding: 16, color: '#5A7090' }}>Загрузка...</div>;
 
   return (
     <div>
       {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-        <input
-          placeholder="Поиск..."
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '6px 12px', fontSize: 12, width: 200 }}
-        />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Search field selector */}
+        <select
+          value={searchField}
+          onChange={e => handleSearchFieldChange(e.target.value)}
+          style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '6px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif', minWidth: 100 }}
+          title="Поле поиска"
+        >
+          {columns.map(c => (
+            <option key={c.key} value={c.key}>{c.label}</option>
+          ))}
+        </select>
+        {/* Search input */}
+        <div style={{ position: 'relative', flex: '0 0 auto' }}>
+          <input
+            placeholder="Поиск..."
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '6px 10px 6px 30px', fontSize: 12, width: 180 }}
+          />
+          <span style={{ position: 'absolute', left: 10, top: 7, fontSize: 12, color: '#5A7090' }}>🔍</span>
+        </div>
         <div style={{ flex: 1 }} />
         {!compact && (
           <>
@@ -120,8 +196,26 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
         <thead>
           <tr>
             {columns.map(c => (
-              <th key={c.key} style={{ textAlign: 'left', padding: '6px 10px', color: '#60A5FA', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: '1px solid #1E3252', width: c.width }}>
-                {c.label}
+              <th
+                key={c.key}
+                onClick={() => { if (c.sortable !== false) handleSort(c.key); }}
+                style={{
+                  textAlign: 'left', padding: '6px 10px', color: sortKey === c.key ? '#93C5FD' : '#60A5FA',
+                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 600,
+                  textTransform: 'uppercase', letterSpacing: '.06em',
+                  borderBottom: '1px solid #1E3252', width: c.width,
+                  cursor: c.sortable !== false ? 'pointer' : 'default',
+                  userSelect: 'none',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {c.label}
+                  {sortKey === c.key && (
+                    <span style={{ fontSize: 10, color: '#93C5FD', lineHeight: 1 }}>
+                      {sortDir === 'asc' ? '▼' : '▲'}
+                    </span>
+                  )}
+                </span>
               </th>
             ))}
             <th style={{ width: 70, padding: '6px 10px', borderBottom: '1px solid #1E3252' }} />
