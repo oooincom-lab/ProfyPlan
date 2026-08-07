@@ -38,6 +38,8 @@ class ProductionOrderOut(BaseModel):
     client: Optional[str] = None
     notes: Optional[str] = None
     status: str
+    group_id: Optional[str] = None
+    pool_id: Optional[str] = None
     exploded_at: Optional[datetime] = None
     operations_created: Optional[int] = None
     created_at: datetime

@@ -141,3 +141,19 @@ export interface ActualFact {
   updated_at?: string;
   edit_count?: number;
 }
+
+// --- Order Groups & Pools ---
+export interface OrderGroup {
+  id: string;
+  name: string;
+  sort_order: number;
+  notes?: string;
+}
+
+export interface OrderPool {
+  id: string;
+  name: string;
+  group_id?: string;
+  notes?: string;
+  order_count?: number;
+}

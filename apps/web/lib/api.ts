@@ -5,6 +5,7 @@ import type {
   Project, Operation, Resource,
   CPMResult, MergedCPMResult, ResourceLevelResult,
   ForecastResult, Baseline, ActualFact,
+  OrderGroup, OrderPool,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -250,17 +251,20 @@ export function importProductionOrders(file: File, projectId?: string) {
 
 export interface ProductionOrder {
   id: string;
-  order_number: string;
+  ext_id: string | null;
   product_name: string;
   specification_id: string | null;
   specification_name: string | null;
   quantity: number;
+  unit: string;
   priority: string;
-  customer: string | null;
+  client: string | null;
   start_date: string | null;
   due_date: string | null;
   status: string;
   project_id: string | null;
+  group_id: string | null;
+  pool_id: string | null;
   created_at: string;
 }
 
@@ -278,4 +282,53 @@ export function expandProductionOrder(orderId: string) {
     materials_required: number;
     warnings: string[];
   }>(`/v1/production-orders/${orderId}/expand`, { method: 'POST' });
+}
+
+// --- Order Groups & Pools ---
+export function getGroups(projectId: string) {
+  return request<{ items: OrderGroup[] }>(`/v1/projects/${projectId}/groups`);
+}
+
+export function createGroup(projectId: string, name: string, sortOrder = 0) {
+  return request<{ id: string; name: string }>(`/v1/projects/${projectId}/groups`, {
+    method: 'POST',
+    body: JSON.stringify({ name, sort_order: sortOrder }),
+  });
+}
+
+export function updateGroup(projectId: string, groupId: string, data: { name?: string; sort_order?: number }) {
+  return request<{ id: string; name: string }>(`/v1/projects/${projectId}/groups/${groupId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteGroup(projectId: string, groupId: string) {
+  return request<{ ok: boolean }>(`/v1/projects/${projectId}/groups/${groupId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getPools(projectId: string) {
+  return request<{ items: OrderPool[] }>(`/v1/projects/${projectId}/pools`);
+}
+
+export function createPool(projectId: string, name: string, groupId: string | null, orderIds: string[]) {
+  return request<{ id: string; name: string; order_ids: string[] }>(`/v1/projects/${projectId}/pools`, {
+    method: 'POST',
+    body: JSON.stringify({ name, group_id: groupId, order_ids: orderIds }),
+  });
+}
+
+export function deletePool(projectId: string, poolId: string) {
+  return request<{ ok: boolean }>(`/v1/projects/${projectId}/pools/${poolId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function moveOrder(orderId: string, target: 'group' | 'pool' | 'root', targetId?: string) {
+  return request<{ ok: boolean; group_id: string | null; pool_id: string | null }>(
+    `/v1/orders/${orderId}/move`,
+    { method: 'POST', body: JSON.stringify({ target, id: targetId || null }) }
+  );
 }
