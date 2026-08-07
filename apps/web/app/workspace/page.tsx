@@ -36,6 +36,9 @@ export default function AppShell() {
   const [editingOrder, setEditingOrder] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
+  // ── Context menu ──
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project: any } | null>(null);
+
   // ── Order CRUD ──
   const createOrder = async () => {
     if (!newOrder.specification_name.trim() || !selectedProject) return;
@@ -282,6 +285,7 @@ export default function AppShell() {
               <button
                 className={`s-item ${view === 'project-detail' && selectedProject?.id === p.id ? 'active' : ''}`}
                 onClick={() => loadProject(p)}
+                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, project: p }); }}
                 style={{ paddingLeft: 16 }}
               >
                 <span className="s-expand" style={{ opacity: isExp ? 1 : 0.4 }}>{isExp ? '▼' : '▶'}</span>
@@ -757,5 +761,31 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
         )}
       </div>
     </div>
+
+    {/* Context menu */}
+    {ctxMenu && (
+      <>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998 }} onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }} />
+        <div style={{
+          position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999,
+          background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252',
+          borderRadius: 10, padding: '4px 0', minWidth: 200,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+        }}>
+          <div style={{ padding: '8px 14px', fontSize: 13, color: '#B0C4DE', borderBottom: '1px solid #1E3252', marginBottom: 4 }}>
+            📁 {ctxMenu.project.name}
+          </div>
+          <button onClick={() => { const newName = prompt('Новое название:', ctxMenu.project.name); if (newName && newName !== ctxMenu.project.name) { renameProject(ctxMenu.project, newName); } setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+            ✏️ Переименовать
+          </button>
+          <button onClick={() => { archiveProject(ctxMenu.project); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+            {ctxMenu.project.status === 'archived' ? '📂 Восстановить' : '📦 В архив'}
+          </button>
+          <button onClick={() => { if (confirm('Удалить проект и все данные?')) { deleteProject(ctxMenu.project); } setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+            🗑 Удалить
+          </button>
+        </div>
+      </>
+    )}
   );
 }
