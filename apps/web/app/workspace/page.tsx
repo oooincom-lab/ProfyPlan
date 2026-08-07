@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
-import { NOMENCLATURE_SYNONYMS } from '@/components/DataImport';
+import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
 
 const API = 'https://profyplan.ru/api/v1';
@@ -19,7 +19,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-detail' | 'directories' | 'nomenclature' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-detail' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -261,8 +261,10 @@ export default function AppShell() {
     'dashboard': 'Рабочий стол',
     'projects': 'Проекты',
     'project-detail': selectedProject?.name || 'Проект',
+    'archive': 'Архив проектов',
     'directories': 'Справочники',
     'nomenclature': 'Номенклатура',
+    'units': 'Единицы измерения',
     'resources': 'Ресурсы',
     'departments': 'Подразделения',
     'organizations': 'Организации',
@@ -293,7 +295,10 @@ export default function AppShell() {
         <button className={`s-item ${view === 'projects' ? 'active' : ''}`} onClick={() => navTo('projects')}>
           📁 Все проекты
         </button>
-        {projects.map((p: any) => {
+        <button className={`s-item ${view === 'archive' ? 'active' : ''}`} onClick={() => navTo('archive')}>
+          📦 Архив
+        </button>
+        {projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
           const isExp = expandedProj === p.id;
           return (
             <div key={p.id}>
@@ -340,10 +345,13 @@ export default function AppShell() {
         <button className={`s-item ${view === 'directories' ? 'active' : ''}`} onClick={() => navTo('directories')}>
           📚 Справочники
         </button>
-        {['directories', 'nomenclature', 'resources', 'departments', 'organizations', 'calendars'].includes(view) && (
+        {['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'].includes(view) && (
           <>
             <div className={`s-sub ${view === 'nomenclature' ? 'active' : ''}`} style={view === 'nomenclature' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('nomenclature')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'nomenclature' }); }} onDoubleClick={() => setDirectoryModal('nomenclature')}>
               📦 Номенклатура
+            </div>
+            <div className={`s-sub ${view === 'units' ? 'active' : ''}`} style={view === 'units' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('units')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'units' }); }} onDoubleClick={() => setDirectoryModal('units')}>
+              📏 Единицы измерения
             </div>
             <div className={`s-sub ${view === 'resources' ? 'active' : ''}`} style={view === 'resources' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('resources')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'resources' }); }} onDoubleClick={() => setDirectoryModal('resources')}>
               🔧 Ресурсы
@@ -422,7 +430,7 @@ export default function AppShell() {
           {/* ═══ PROJECTS ═══ */}
           {view === 'projects' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-              {projects.map((p: any) => (
+              {projects.filter((p: any) => p.status !== 'archived').map((p: any) => (
                 <div key={p.id} className="proj-card">
                   <div className="pc-name">📁 {p.name}</div>
                   <div className="pc-meta">{p.status} · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
@@ -442,6 +450,29 @@ export default function AppShell() {
                   <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navTo('new-project')}>+ Новый проект</button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ═══ ARCHIVE ═══ */}
+          {view === 'archive' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+              {projects.filter((p: any) => p.status === 'archived').length === 0 && (
+                <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 48, color: '#5A7090' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Архив пуст</div>
+                  <div>Архивированные проекты появятся здесь</div>
+                </div>
+              )}
+              {projects.filter((p: any) => p.status === 'archived').map((p: any) => (
+                <div key={p.id} className="proj-card" style={{ opacity: 0.7 }}>
+                  <div className="pc-name">📦 {p.name}</div>
+                  <div className="pc-meta">архив · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => { apiF(`/projects/${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'active' }) }).then(() => load()); }}>📂 Восстановить</button>
+                    <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.05)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 6, fontSize: 12, padding: '3px 8px', cursor: 'pointer' }} onClick={() => deleteProject(p)}>🗑 Удалить</button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -539,6 +570,7 @@ export default function AppShell() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
               {[
                 { id: 'nomenclature', icon: '📦', title: 'Номенклатура', desc: 'Продукты, материалы, узлы' },
+                { id: 'units', icon: '📏', title: 'Единицы измерения', desc: 'Шт, кг, м, л и другие' },
                 { id: 'resources', icon: '🔧', title: 'Ресурсы', desc: 'Станки, люди, бригады' },
                 { id: 'departments', icon: '🏢', title: 'Подразделения', desc: 'Цеха, участки, отделы' },
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
@@ -570,6 +602,26 @@ export default function AppShell() {
                   { key: 'ntype', label: 'Тип', width: 130 },
                   { key: 'unit', label: 'Ед.', width: 70 },
                   { key: 'description', label: 'Описание' },
+                ]}
+              />
+            </div>
+          )}
+
+          {view === 'units' && (
+            <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+              <div className="panel-hdr" style={{ marginBottom: 16 }}>
+                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>📏 Единицы измерения</span>
+              </div>
+              <DirectoryTable
+                entity="units"
+                apiBase="https://profyplan.ru/api"
+                synonyms={UNIT_SYNONYMS}
+                columns={[
+                  { key: 'code', label: 'ОКЕИ', width: 80 },
+                  { key: 'symbol_int', label: 'Межд.', width: 80 },
+                  { key: 'symbol_ru', label: 'Символ', width: 80 },
+                  { key: 'name_ru', label: 'Название', width: 160 },
+                  { key: 'name_en', label: 'English', width: 160 },
                 ]}
               />
             </div>
@@ -663,20 +715,20 @@ export default function AppShell() {
                 {/* Modal header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid #1E3252' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20 }}>{directoryModal === 'nomenclature' ? '📦' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
+                    <span style={{ fontSize: 20 }}>{directoryModal === 'nomenclature' ? '📦' : directoryModal === 'units' ? '📏' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>
-                      {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
+                      {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'units' ? 'Единицы измерения' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {['nomenclature', 'resources', 'departments', 'organizations', 'calendars'].map(tab => (
+                    {['nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'].map(tab => (
                       <button key={tab} onClick={() => setDirectoryModal(tab)} style={{
                         background: directoryModal === tab ? '#1E3252' : '#162844',
                         color: directoryModal === tab ? '#B0C4DE' : '#5A7090',
                         border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12,
                         cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.12s',
                       }}>
-                        {tab === 'nomenclature' ? 'Номенклатура' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
+                        {tab === 'nomenclature' ? 'Номенклатура' : tab === 'units' ? 'Ед. измерения' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
                       </button>
                     ))}
                     <button onClick={() => setDirectoryModal(null)} style={{
@@ -702,7 +754,21 @@ export default function AppShell() {
                       ]}
                     />
                   )}
-                  {directoryModal !== 'nomenclature' && (
+                  {directoryModal === 'units' && (
+                    <DirectoryTable
+                      entity="units"
+                      apiBase="https://profyplan.ru/api"
+                      synonyms={UNIT_SYNONYMS}
+                      columns={[
+                        { key: 'code', label: 'ОКЕИ', width: 80 },
+                        { key: 'symbol_int', label: 'Межд.', width: 80 },
+                        { key: 'symbol_ru', label: 'Символ', width: 80 },
+                        { key: 'name_ru', label: 'Название', width: 160 },
+                        { key: 'name_en', label: 'English', width: 160 },
+                      ]}
+                    />
+                  )}
+                  {directoryModal !== 'nomenclature' && directoryModal !== 'units' && (
                     <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                       <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
