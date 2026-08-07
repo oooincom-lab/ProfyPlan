@@ -69,3 +69,13 @@ class ProductionOrder(BaseModel):
     operations_created: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )
+
+    # Группа / Пул (ровно одно из двух или оба NULL = в корне проекта)
+    group_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("order_groups.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    pool_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("order_pools.id", ondelete="SET NULL"),
+        nullable=True,
+    )

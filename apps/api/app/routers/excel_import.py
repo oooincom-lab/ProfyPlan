@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_tenant_id
-from app.models.user import User
+from app.models.tenant import User
 from app.services.excel_import import import_excel, ImportResult
 
 excel_router = APIRouter(prefix="/v1/import", tags=["import"])
