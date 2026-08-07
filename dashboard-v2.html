@@ -1,0 +1,870 @@
+﻿<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan — Рабочий стол</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A1628;
+    --bg-2: #0F1E36;
+    --bg-3: #162844;
+    --surface: #0F1E36;
+    --fg: #E8EEF5;
+    --fg-2: #B0C4DE;
+    --fg-3: #8FA3BD;
+    --fg-4: #5A7090;
+    --border: #1E3252;
+    --border-2: #2A4060;
+    --accent: #3B82F6;
+    --accent-2: #2563EB;
+    --accent-3: #60A5FA;
+    --accent-glow: rgba(59,130,246,0.35);
+    --accent-bg: rgba(59,130,246,0.12);
+    --success: #10B981;
+    --success-bg: rgba(16,185,129,0.12);
+    --success-border: rgba(16,185,129,0.25);
+    --danger: #EF4444;
+    --danger-bg: rgba(239,68,68,0.12);
+    --danger-border: rgba(239,68,68,0.25);
+    --warning: #F59E0B;
+    --warning-bg: rgba(245,158,11,0.12);
+    --warning-border: rgba(245,158,11,0.25);
+    --sidebar-w: 242px;
+    --radius: 10px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+    --transition: 0.2s ease;
+  }
+
+  [data-theme="light"] {
+    --bg: #F1F5F9;
+    --bg-2: #FFFFFF;
+    --bg-3: #F8FAFC;
+    --surface: #FFFFFF;
+    --fg: #0F172A;
+    --fg-2: #334155;
+    --fg-3: #475569;
+    --fg-4: #94A3B8;
+    --border: #E2E8F0;
+    --border-2: #CBD5E1;
+    --accent: #3B82F6;
+    --accent-2: #2563EB;
+    --accent-3: #1D4ED8;
+    --accent-glow: rgba(59,130,246,0.2);
+    --accent-bg: rgba(59,130,246,0.08);
+    --success: #059669;
+    --success-bg: rgba(5,150,105,0.08);
+    --success-border: rgba(5,150,105,0.2);
+    --danger: #DC2626;
+    --danger-bg: rgba(220,38,38,0.08);
+    --danger-border: rgba(220,38,38,0.2);
+    --warning: #D97706;
+    --warning-bg: rgba(217,119,6,0.08);
+    --warning-border: rgba(217,119,6,0.2);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.5;
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background var(--transition), color var(--transition);
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    padding: 20px 14px;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    z-index: 20;
+    transition: background var(--transition), border-color var(--transition);
+    overflow-y: auto;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 20px;
+  }
+  .brand-mark {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.25);
+    flex-shrink: 0;
+  }
+  .brand-mark svg { width: 20px; height: 20px; }
+  .brand-name { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .nav { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+  .nav-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--accent-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 18px 8px 6px;
+    font-weight: 600;
+  }
+  .nav a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: var(--radius-sm);
+    color: var(--fg-3); text-decoration: none;
+    font-size: 13.5px; font-weight: 500;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .nav a:hover { background: var(--bg-3); color: var(--fg); }
+  .nav a.active {
+    background: var(--accent-bg);
+    color: var(--accent-3);
+    font-weight: 600;
+  }
+  .nav a.active::before {
+    content: ''; width: 3px; height: 18px;
+    background: var(--accent); border-radius: 2px;
+    box-shadow: 0 0 10px var(--accent-glow);
+    position: absolute; left: -3px;
+  }
+  .nav svg { width: 18px; height: 18px; stroke-width: 1.6; flex-shrink: 0; }
+  .nav-badge {
+    margin-left: auto; font-size: 10px; font-weight: 700;
+    background: var(--danger); color: white; border-radius: 100px;
+    padding: 1px 7px; line-height: 1.4;
+  }
+
+  .sidebar-footer {
+    border-top: 1px solid var(--border);
+    padding-top: 12px; margin-top: auto;
+    transition: border-color var(--transition);
+  }
+  .user-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    transition: background 0.15s; cursor: pointer;
+  }
+  .user-row:hover { background: var(--bg-3); }
+  .user-avatar {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: white; flex-shrink: 0;
+    box-shadow: 0 2px 8px var(--accent-glow);
+  }
+  .user-info { font-size: 13px; line-height: 1.3; }
+  .user-name { font-weight: 600; }
+  .user-role { color: var(--fg-4); font-size: 11px; }
+
+  /* Theme toggle */
+  .theme-switch {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.15s;
+    margin-top: 8px; border: none; background: none;
+    color: var(--fg-3); font-family: inherit; font-size: 13px;
+    width: 100%; text-align: left;
+  }
+  .theme-switch:hover { background: var(--bg-3); color: var(--fg); }
+  .theme-switch:focus-visible { outline: 2px solid var(--accent-3); outline-offset: 2px; }
+  .theme-switch svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .theme-switch .toggle-track {
+    margin-left: auto; width: 40px; height: 22px;
+    background: var(--border-2); border-radius: 100px;
+    position: relative; transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .theme-switch .toggle-thumb {
+    width: 18px; height: 18px; background: white;
+    border-radius: 50%; position: absolute; top: 2px; left: 2px;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  [data-theme="light"] .toggle-track { background: var(--accent); }
+  [data-theme="light"] .toggle-thumb { transform: translateX(18px); }
+
+  /* ===== MAIN ===== */
+  .main-wrap {
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  .topbar {
+    padding: 14px 28px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+    position: sticky; top: 0; z-index: 10;
+    transition: background var(--transition), border-color var(--transition);
+    gap: 12px; flex-wrap: wrap;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .topbar h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; white-space: nowrap; }
+  .topbar .breadcrumb {
+    font-size: 13px; color: var(--fg-4);
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .topbar .breadcrumb span { color: var(--fg-3); }
+  .topbar-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .mobile-menu-btn {
+    display: none; background: none; border: none;
+    color: var(--fg); cursor: pointer; padding: 6px;
+    border-radius: 6px;
+  }
+  .mobile-menu-btn:hover { background: var(--bg-3); }
+  .mobile-menu-btn svg { width: 22px; height: 22px; }
+
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 14px;
+    transition: border-color var(--transition);
+  }
+  .search-box:focus-within { border-color: var(--accent); }
+  .search-box svg { flex-shrink: 0; color: var(--fg-4); }
+  .search-box input {
+    background: transparent; border: none; outline: none;
+    color: var(--fg); font-family: inherit; font-size: 14px; width: 180px;
+  }
+  .search-box input::placeholder { color: var(--fg-4); }
+
+  .btn {
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid transparent; transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .btn:focus-visible { outline: 2px solid var(--accent-3); outline-offset: 2px; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white; border: none;
+    box-shadow: 0 4px 12px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2); }
+  [data-theme="light"] .btn-primary { box-shadow: 0 2px 8px var(--accent-glow); }
+  .btn-secondary {
+    background: transparent; color: var(--fg-2);
+    border-color: var(--border-2);
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent-3); }
+
+  .content { padding: 24px 28px 48px; flex: 1; }
+
+  /* ===== KPIs ===== */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .kpi {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    transition: all 0.2s;
+  }
+  .kpi:hover { border-color: var(--border-2); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .kpi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; color: var(--accent-3);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 10px; font-weight: 600;
+  }
+  .kpi-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 28px; font-weight: 700;
+    letter-spacing: -0.02em; margin-bottom: 6px;
+  }
+  .kpi-value.danger { color: var(--danger); }
+  .kpi-value.success { color: var(--success); }
+  .kpi-delta { font-size: 12px; }
+  .kpi-delta.up { color: var(--success); }
+  .kpi-delta.down { color: var(--danger); }
+  .kpi-delta.neutral { color: var(--fg-4); }
+  .kpi-sub { font-size: 12px; color: var(--fg-4); margin-top: 2px; }
+
+  /* ===== PANELS ===== */
+  .panels-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .panel {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: border-color var(--transition);
+  }
+  .panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+  }
+  .panel-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; color: var(--accent-3);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .panel-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* Chart */
+  .chart-area { height: 200px; position: relative; }
+  .chart-area svg { width: 100%; height: 100%; }
+  .chart-legend {
+    display: flex; gap: 16px; margin-top: 12px;
+    font-size: 12px; color: var(--fg-4);
+  }
+  .chart-legend-item { display: flex; align-items: center; gap: 6px; }
+  .chart-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; }
+  .project-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+  .project-table th {
+    text-align: left; padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; color: var(--fg-4);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .project-table td {
+    padding: 11px 12px; font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    color: var(--fg-2);
+  }
+  .project-table tbody tr { transition: background 0.12s; }
+  .project-table tbody tr:hover { background: var(--bg-3); }
+  .project-table .name-cell { font-weight: 600; color: var(--fg); }
+  .project-table .name-cell a { color: inherit; text-decoration: none; }
+  .project-table .name-cell a:hover { color: var(--accent-3); }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .badge-success { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+  .badge-success::before { background: var(--success); }
+  .badge-info { background: var(--accent-bg); color: var(--accent-3); border: 1px solid rgba(59,130,246,0.25); }
+  .badge-info::before { background: var(--accent-3); }
+  .badge-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+  .badge-danger::before { background: var(--danger); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
+  .badge-warning::before { background: var(--warning); }
+
+  .recent-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* Quick start cards */
+  .quick-card {
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .quick-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .quick-card-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--accent-bg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent-3); margin-bottom: 12px;
+    border: 1px solid rgba(59,130,246,0.2);
+  }
+  .quick-card-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .quick-card-desc { font-size: 12px; color: var(--fg-4); line-height: 1.5; }
+
+  /* Footer */
+  .main-footer {
+    padding: 14px 28px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--fg-4);
+    transition: border-color var(--transition);
+    flex-wrap: wrap; gap: 8px;
+  }
+
+  /* Sidebar overlay for mobile */
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 19;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 1200px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .panels-row { grid-template-columns: 1fr; }
+    .recent-row { grid-template-columns: 1fr; }
+    .search-box input { width: 120px; }
+  }
+  @media (max-width: 768px) {
+    body { grid-template-columns: 1fr; }
+    .sidebar {
+      position: fixed; left: -280px; width: 260px;
+      transition: left 0.25s ease; box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+    }
+    .sidebar.open { left: 0; }
+    .sidebar-overlay.show { display: block; }
+    .mobile-menu-btn { display: block; }
+    .kpi-row { grid-template-columns: 1fr; }
+    .topbar { padding: 12px 16px; }
+    .topbar h1 { font-size: 17px; }
+    .content { padding: 16px; }
+    .search-box input { width: 100px; }
+    .btn { font-size: 12px; padding: 7px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Mobile overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 26 26" fill="none">
+        <circle cx="6" cy="6" r="3" fill="white"/>
+        <circle cx="20" cy="6" r="3" fill="white"/>
+        <circle cx="6" cy="20" r="3" fill="white"/>
+        <circle cx="20" cy="20" r="3" fill="white"/>
+        <line x1="9" y1="6" x2="17" y2="6" stroke="white" stroke-width="1.5"/>
+        <line x1="6" y1="9" x2="6" y2="17" stroke="white" stroke-width="1.5"/>
+        <line x1="20" y1="9" x2="20" y2="17" stroke="white" stroke-width="1.5"/>
+        <line x1="9" y1="20" x2="17" y2="20" stroke="white" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="brand-name">ProfyPlan</div>
+  </div>
+
+  <nav class="nav" aria-label="Основная навигация">
+    <span class="nav-label">Главное</span>
+    <a href="#" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Рабочий стол
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Проекты
+      <span class="nav-badge">12</span>
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 5-6"/></svg>
+      Отчёты
+    </a>
+
+    <span class="nav-label">Данные</span>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="3" width="20" height="12" rx="2"/><path d="M6 15v4m4-4v4m4-4v4m4-4v4"/></svg>
+      Ресурсы
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1m17-5l-4 4m-6 6l-4 4m0-14l4 4m6 6l4 4"/></svg>
+      Операции
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Заказы
+    </a>
+
+    <span class="nav-label">Настройки</span>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+      Справочники
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Настройки
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-row">
+      <div class="user-avatar">ИП</div>
+      <div class="user-info">
+        <div class="user-name">Иван Петров</div>
+        <div class="user-role">Главный инженер</div>
+      </div>
+    </div>
+    <button class="theme-switch" id="themeToggle" onclick="toggleTheme()" aria-label="Переключить тему">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" id="themeIcon">
+        <circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>
+      <span id="themeLabel">Тёмная тема</span>
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+    </button>
+  </div>
+</aside>
+
+<div class="main-wrap">
+  <!-- ===== TOPBAR ===== -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="mobile-menu-btn" onclick="openSidebar()" aria-label="Меню">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <h1>Рабочий стол</h1>
+      <div class="breadcrumb">
+        <span>Главная</span><span aria-hidden="true">/</span>
+        <span>Обзор · Август 2026</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="search-box" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" placeholder="Поиск..." aria-label="Поиск">
+      </div>
+      <button class="btn btn-secondary">30 дней ▾</button>
+      <button class="btn btn-primary" onclick="alert('Открыть мастер нового проекта')">+ Новый проект</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- ===== KPI CARDS ===== -->
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Активных проектов</div>
+        <div class="kpi-value">12</div>
+        <div class="kpi-delta up">↑ +3 за месяц</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Просрочек</div>
+        <div class="kpi-value danger">4</div>
+        <div class="kpi-delta down">↑ +2 за неделю</div>
+        <div class="kpi-sub">3 из 4 — ожидание поставок</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Средняя длительность</div>
+        <div class="kpi-value">46<span style="font-size:16px;color:var(--fg-3);margin-left:2px;"> дн.</span></div>
+        <div class="kpi-delta neutral">≈ ±4 дня</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Выполнение плана</div>
+        <div class="kpi-value success">87<span style="font-size:16px;color:var(--fg-3);margin-left:2px;">%</span></div>
+        <div class="kpi-delta up">↑ +5 п.п.</div>
+      </div>
+    </div>
+
+    <!-- ===== PANELS ROW ===== -->
+    <div class="panels-row">
+      <!-- Chart -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Загрузка производства · 30 дней</div>
+          <div class="panel-actions">
+            <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px;">Неделя</button>
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 10px;">Месяц</button>
+          </div>
+        </div>
+        <div class="chart-area" role="img" aria-label="График загрузки: план (пунктир) и факт (сплошная)">
+          <svg viewBox="0 0 520 200" preserveAspectRatio="none">
+            <line x1="0" y1="160" x2="520" y2="160" stroke="var(--border)" stroke-width="0.5" opacity="0.4"/>
+            <line x1="0" y1="120" x2="520" y2="120" stroke="var(--border)" stroke-width="0.5" opacity="0.4"/>
+            <line x1="0" y1="80" x2="520" y2="80" stroke="var(--border)" stroke-width="0.5" opacity="0.4"/>
+            <line x1="0" y1="40" x2="520" y2="40" stroke="var(--border)" stroke-width="0.5" opacity="0.4"/>
+            <polyline fill="none" stroke="var(--accent-3)" stroke-width="1.8" stroke-dasharray="6 3" opacity="0.5"
+              points="0,140 30,135 60,120 90,125 120,110 150,100 180,105 210,95 240,85 270,90 300,80 330,70 360,75 390,65 420,55 450,60 480,50 510,45 520,40"/>
+            <polyline fill="none" stroke="var(--accent)" stroke-width="2.5"
+              points="0,160 30,155 60,145 90,150 120,135 150,125 180,130 210,115 240,105 270,110 300,95 330,88 360,92 390,80 420,70 450,75 480,65 510,55 520,50"/>
+            <polygon fill="url(#chartFill)" opacity="0.12"
+              points="0,160 30,155 60,145 90,150 120,135 150,125 180,130 210,115 240,105 270,110 300,95 330,88 360,92 390,80 420,70 450,75 480,65 510,55 520,50 520,200 0,200"/>
+            <defs>
+              <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity="1"/>
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="chart-legend">
+          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--accent-3);box-shadow:0 0 6px var(--accent-glow);"></div> План</div>
+          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--accent);"></div> Факт</div>
+        </div>
+      </div>
+
+      <!-- Plan status -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Статус по планам</div>
+        </div>
+        <div class="table-wrap">
+        <table class="project-table" aria-label="Статусы планов">
+          <thead>
+            <tr><th>Проект</th><th>Метод</th><th>Статус</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="name-cell"><a href="#">ЗРУ-10 кВ · КТП-630</a></td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PERT+CPM</td>
+              <td><span class="badge badge-success">Завершён</span></td>
+            </tr>
+            <tr>
+              <td class="name-cell"><a href="#">Насосная станция НС-2</a></td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">CPM → CCM</td>
+              <td><span class="badge badge-info">В работе</span></td>
+            </tr>
+            <tr>
+              <td class="name-cell"><a href="#">Конвейерная линия КЛ-400</a></td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PERT → CCM</td>
+              <td><span class="badge badge-warning">Расчёт</span></td>
+            </tr>
+            <tr>
+              <td class="name-cell"><a href="#">Вентиляция · Цех №3</a></td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">CPM</td>
+              <td><span class="badge badge-danger">Просрочен</span></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PROJECT TABLE ===== -->
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-header">
+        <div class="panel-title">Активные проекты</div>
+        <div class="panel-actions">
+          <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px;">Все</button>
+          <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px;">Фильтр ▾</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="project-table" aria-label="Список активных проектов">
+          <thead>
+            <tr><th>ID</th><th>Проект</th><th>Метод</th><th>Статус</th><th>Крит. путь</th><th>Ресурсов</th><th>Операций</th><th>Обновлён</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PRJ-017</td>
+              <td class="name-cell"><a href="#">ЗРУ-10 кВ · КТП-630</a></td>
+              <td class="mono" style="font-size:11px;">PERT+CPM</td>
+              <td><span class="badge badge-success">Завершён</span></td>
+              <td class="mono" style="color:var(--success);font-weight:600;">38 дн.</td>
+              <td>12</td><td>28</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">28.07 14:30</td>
+            </tr>
+            <tr>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PRJ-018</td>
+              <td class="name-cell"><a href="#">Насосная станция НС-2</a></td>
+              <td class="mono" style="font-size:11px;">CPM → CCM</td>
+              <td><span class="badge badge-info">В работе</span></td>
+              <td class="mono" style="color:var(--danger);font-weight:600;">52 дн.</td>
+              <td>8</td><td>19</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">27.07 09:15</td>
+            </tr>
+            <tr>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PRJ-019</td>
+              <td class="name-cell"><a href="#">Конвейерная линия КЛ-400</a></td>
+              <td class="mono" style="font-size:11px;">PERT → CCM</td>
+              <td><span class="badge badge-warning">Расчёт</span></td>
+              <td class="mono" style="color:var(--fg-4);">—</td>
+              <td>15</td><td>34</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">29.07 08:02</td>
+            </tr>
+            <tr>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PRJ-020</td>
+              <td class="name-cell"><a href="#">Вентиляция · Цех №3</a></td>
+              <td class="mono" style="font-size:11px;">CPM</td>
+              <td><span class="badge badge-danger">Просрочен</span></td>
+              <td class="mono" style="color:var(--danger);font-weight:600;">22 дн.</td>
+              <td>5</td><td>11</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">25.07 16:40</td>
+            </tr>
+            <tr>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">PRJ-021</td>
+              <td class="name-cell"><a href="#">Шкафы автоматики ША-04</a></td>
+              <td class="mono" style="font-size:11px;">CPM</td>
+              <td><span class="badge badge-info">В работе</span></td>
+              <td class="mono" style="color:var(--success);font-weight:600;">14 дн.</td>
+              <td>3</td><td>7</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">29.07 10:11</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== RECENT + ALERTS ===== -->
+    <div class="recent-row">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Последние расчёты</div>
+        </div>
+        <div class="table-wrap">
+        <table class="project-table" aria-label="Последние расчёты">
+          <thead><tr><th>Проект</th><th>Метод</th><th>Время</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="name-cell">КЛ-400</td>
+              <td class="mono" style="font-size:11px;">PERT → CCM</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">сегодня, 08:02</td>
+            </tr>
+            <tr>
+              <td class="name-cell">ЗРУ-10 кВ</td>
+              <td class="mono" style="font-size:11px;">PERT+CPM</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">вчера, 14:30</td>
+            </tr>
+            <tr>
+              <td class="name-cell">НС-2</td>
+              <td class="mono" style="font-size:11px;">CPM → CCM</td>
+              <td class="mono" style="font-size:11px;color:var(--fg-4);">27.07, 09:15</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Уведомления</div>
+          <span class="badge badge-danger">3</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:10px;padding:10px;border-radius:8px;background:var(--danger-bg);border:1px solid var(--danger-border);">
+            <span style="color:var(--danger);font-size:16px;flex-shrink:0;">⚠</span>
+            <div style="font-size:12px;line-height:1.5;">
+              <div style="font-weight:600;margin-bottom:2px;">Критический путь сдвинут</div>
+              <div style="color:var(--fg-3);">Вентиляция · Цех №3 — +5 дней</div>
+              <div class="mono" style="font-size:10px;color:var(--fg-4);margin-top:4px;">25.07 16:40</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;padding:10px;border-radius:8px;background:var(--warning-bg);border:1px solid var(--warning-border);">
+            <span style="color:var(--warning);font-size:16px;flex-shrink:0;">⚠</span>
+            <div style="font-size:12px;line-height:1.5;">
+              <div style="font-weight:600;margin-bottom:2px;">Ресурс перегружен</div>
+              <div style="color:var(--fg-3);">Сварочный пост №2 — 130% на нед. 32</div>
+              <div class="mono" style="font-size:10px;color:var(--fg-4);margin-top:4px;">28.07 11:20</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;padding:10px;border-radius:8px;background:var(--accent-bg);border:1px solid rgba(59,130,246,0.15);">
+            <span style="color:var(--accent-3);font-size:16px;flex-shrink:0;">ℹ</span>
+            <div style="font-size:12px;line-height:1.5;">
+              <div style="font-weight:600;margin-bottom:2px;">Расчёт завершён</div>
+              <div style="color:var(--fg-3);">КЛ-400 — критическая цепь 64 дн.</div>
+              <div class="mono" style="font-size:10px;color:var(--fg-4);margin-top:4px;">29.07 08:02</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== QUICK START ===== -->
+    <div class="panel" style="margin-top:20px;">
+      <div class="panel-header">
+        <div class="panel-title">Быстрый старт</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+        <div class="quick-card">
+          <div class="quick-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="quick-card-title">Быстрый расчёт</div>
+          <div class="quick-card-desc">Загрузите Excel, выберите метод — получите план за 5 минут. Без сохранения.</div>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          </div>
+          <div class="quick-card-title">Новый проект</div>
+          <div class="quick-card-desc">Создайте проект с ресурсами и операциями. История версий, сравнение Baseline.</div>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="quick-card-title">Регулярное планирование</div>
+          <div class="quick-card-desc">Импорт заказов, автообновление, уведомления о сдвигах критического пути.</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="main-footer">
+    <span>© 2026 ProfyPlan</span>
+    <span>profyplan.ru · v2.0</span>
+  </footer>
+</div>
+
+<script>
+// ── Theme ────────────────────────────────────────────────────────
+const THEME_KEY = 'profyplan-theme';
+
+function getTheme() {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === 'light' || stored === 'dark') return stored;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem(THEME_KEY, theme);
+  updateThemeUI(theme);
+}
+
+function updateThemeUI(theme) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (theme === 'light') {
+    label.textContent = 'Светлая тема';
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+  } else {
+    label.textContent = 'Тёмная тема';
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+// Init
+applyTheme(getTheme());
+
+// Listen for system changes
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+  if (!localStorage.getItem(THEME_KEY)) {
+    applyTheme(e.matches ? 'light' : 'dark');
+  }
+});
+
+// ── Mobile sidebar ───────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
+
+// ── Keyboard: Escape to close sidebar ────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSidebar();
+});
+</script>
+</body>
+</html>
