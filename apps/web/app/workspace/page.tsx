@@ -622,7 +622,6 @@ export default function AppShell() {
           )}
         </div>
       </div>
-    </div>
 
     {/* Context menu */}
     {ctxMenu && (
@@ -649,8 +648,7 @@ export default function AppShell() {
         </div>
       </>
     )}
-
-  </div>
+    </div>
   );
 }
 
