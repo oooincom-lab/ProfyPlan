@@ -22,10 +22,14 @@ class Nomenclature(BaseModel):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    article: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     ntype: Mapped[str] = mapped_column(
         String(20), nullable=False, default="material"
     )  # product / material / semi_finished / service
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="pcs")
+    unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     description: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
