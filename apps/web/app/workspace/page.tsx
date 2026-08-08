@@ -14,6 +14,11 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts?.headers as any || {}) };
   if (tok) h['Authorization'] = `Bearer ${tok}`;
   const r = await fetch(`${API}${path}`, { ...opts, headers: h });
+  if (r.status === 401) {
+    localStorage.removeItem('profyplan_token');
+    window.location.href = '/';
+    throw new Error('Требуется авторизация');
+  }
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
   if (r.status === 204) return undefined as any;
   return r.json();

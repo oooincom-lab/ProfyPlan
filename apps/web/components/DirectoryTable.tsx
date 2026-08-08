@@ -61,6 +61,14 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
 
+  const af = async (url: string, opts?: RequestInit) => {
+    const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts?.headers as any || {}) };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    const r = await fetch(url, { ...opts, headers: h });
+    if (r.status === 401) { localStorage.removeItem('profyplan_token'); window.location.href = '/'; throw new Error('Unauthorized'); }
+    return r;
+  };
+
   const hdr = (): Record<string, string> => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) h['Authorization'] = `Bearer ${token}`;
@@ -70,7 +78,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${apiBase}/v1/${entity}/`, { headers: hdr() });
+      const r = await af(`${apiBase}/v1/${entity}/`);
       if (r.ok) setRows(await r.json());
     } catch { }
     setLoading(false);
@@ -81,8 +89,8 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const saveNew = async () => {
     if (!newRow.name?.trim()) return;
     try {
-      const r = await fetch(`${apiBase}/v1/${entity}/`, {
-        method: 'POST', headers: hdr(),
+      const r = await af(`${apiBase}/v1/${entity}/`, {
+        method: 'POST',
         body: JSON.stringify({ name: newRow.name, ntype: newRow.ntype || 'product', unit: newRow.unit || 'pcs', code: newRow.code || null }),
       });
       if (r.ok) { setNewRow({}); setAdding(false); await load(); }
@@ -91,8 +99,8 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
 
   const saveEdit = async (id: string) => {
     try {
-      const r = await fetch(`${apiBase}/v1/${entity}/${id}`, {
-        method: 'PUT', headers: hdr(),
+      const r = await af(`${apiBase}/v1/${entity}/${id}`, {
+        method: 'PUT',
         body: JSON.stringify(editVals),
       });
       if (r.ok) { setEditingId(null); await load(); }
@@ -102,7 +110,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const deleteRow = async (id: string) => {
     if (!confirm('Удалить запись?')) return;
     try {
-      await fetch(`${apiBase}/v1/${entity}/${id}`, { method: 'DELETE', headers: hdr() });
+      await af(`${apiBase}/v1/${entity}/${id}`, { method: 'DELETE' });
       await load();
     } catch (e: any) { alert('Ошибка: ' + e.message); }
   };
@@ -310,7 +318,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
               onImport={async (rows) => {
                 for (const row of rows) {
                   try {
-                    await fetch(`${apiBase}/v1/${entity}/`, { method: 'POST', headers: hdr(), body: JSON.stringify(row) });
+                    await af(`${apiBase}/v1/${entity}/`, { method: 'POST', body: JSON.stringify(row) });
                   } catch { }
                 }
                 await load();
