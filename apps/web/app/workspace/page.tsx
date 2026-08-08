@@ -16,8 +16,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   const r = await fetch(`${API}${path}`, { ...opts, headers: h });
   if (r.status === 401) {
     localStorage.removeItem('profyplan_token');
-    window.location.href = '/';
-    throw new Error('Требуется авторизация');
+    throw new Error('AUTH_REQUIRED');
   }
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
   if (r.status === 204) return undefined as any;
@@ -30,6 +29,8 @@ export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
+  const [authError, setAuthError] = useState(false);
+  const [loginForm, setLoginForm] = useState({ email: 'planner@demo.ru', password: 'demo123' });
   const [view, setView] = useState<View>('dashboard');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -124,12 +125,22 @@ export default function AppShell() {
   };
   const load = useCallback(async () => {
     setLoading(true);
+    setAuthError(false);
     try {
-      await apiF('/auth/login', { method: 'POST', body: JSON.stringify({ email: 'planner@demo.ru', password: 'demo123' }) });
+      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'planner@demo.ru', password: 'demo123' }) });
+      if (!r.ok) throw new Error('LOGIN_FAILED');
+      const data = await r.json();
+      localStorage.setItem('profyplan_token', data.access_token);
       const proj = await apiF<{ items: any[] }>('/projects');
       setProjects(proj.items);
       setLoaded(true);
-    } catch (e: any) { setMsg(e.message || String(e)); }
+    } catch (e: any) {
+      if (e.message === 'LOGIN_FAILED' || e.message === 'AUTH_REQUIRED') {
+        setAuthError(true);
+      } else {
+        setMsg(e.message || String(e));
+      }
+    }
     setLoading(false);
   }, []);
 
@@ -243,9 +254,25 @@ export default function AppShell() {
           <div className="s-logo" style={{ margin: '0 auto 20px' }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>ProfyPlan</h1>
           <p style={{ color: '#5A7090', marginBottom: 24 }}>{msg || 'Рабочий стол'}</p>
-          <button onClick={load} disabled={loading} className="btn btn-primary" style={{ padding: '12px 36px', fontSize: 15 }}>
+          {authError ? (
+            <div style={{ maxWidth: 320, margin: '0 auto', textAlign: 'left' }}>
+              <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 16 }}>Вход</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <input value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} placeholder="Email" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
+                  <input value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} type="password" placeholder="Пароль" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} onKeyDown={e => { if (e.key === 'Enter') load(); }} />
+                  <button onClick={load} disabled={loading} className="btn btn-primary" style={{ padding: '10px', fontSize: 14, fontWeight: 600, width: '100%' }}>
+                    {loading ? 'Вход...' : 'Войти'}
+                  </button>
+                  {msg && <div style={{ color: '#EF4444', fontSize: 12, textAlign: 'center' }}>{msg}</div>}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button onClick={load} disabled={loading} className="btn btn-primary" style={{ padding: '12px 36px', fontSize: 15 }}>
             {loading ? 'Загрузка...' : 'Загрузить рабочий стол'}
           </button>
+          )}
         </div>
       </div>
     );

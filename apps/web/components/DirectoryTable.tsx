@@ -65,7 +65,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
     const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts?.headers as any || {}) };
     if (token) h['Authorization'] = `Bearer ${token}`;
     const r = await fetch(url, { ...opts, headers: h });
-    if (r.status === 401) { localStorage.removeItem('profyplan_token'); window.location.href = '/'; throw new Error('Unauthorized'); }
+    if (r.status === 401) { localStorage.removeItem('profyplan_token'); throw new Error('Unauthorized'); }
     return r;
   };
 
