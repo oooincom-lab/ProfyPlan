@@ -36,6 +36,10 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
   });
   const [showSettings, setShowSettings] = useState(false);
 
+  // ── Manual mode state ──
+  const [manualRow, setManualRow] = useState<Record<string, string>>({});
+  const [manualRows, setManualRows] = useState<Record<string, string>[]>([]);
+
   // Normalize text for matching
   const norm = (s: string) => s.toLowerCase().replace(/[^a-zа-яё0-9]/g, '').trim();
 
@@ -44,7 +48,6 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
     const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length === 0) return [];
 
-    // Detect delimiter: tab or comma or semicolon
     const sep = lines[0].split('\t').length > 1 ? '\t'
       : lines[0].split(';').length > 1 ? ';'
       : ',';
@@ -97,14 +100,12 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
     const dataRows = grid.slice(1);
     const m = matchHeaders(headers);
 
-    // Collect sample values for preview
     m.forEach((match, i) => {
       match.values = dataRows.slice(0, 3).map(r => r[i] || '');
     });
 
     setMatches(m);
 
-    // Build rows
     const built = dataRows.map(row => {
       const obj: Record<string, string> = {};
       m.forEach((match, i) => {
@@ -117,77 +118,68 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
     setRows(built);
   };
 
-  const handleFieldChange = (headerIdx: number, field: string) => {
-    const newMatches = [...matches];
-    newMatches[headerIdx].field = field || null;
-    newMatches[headerIdx].confidence = field ? 100 : 0;
-    setMatches(newMatches);
-
-    // Rebuild rows
-    const grid = parse(rawText);
-    const headers = grid[0];
-    const dataRows = grid.slice(1);
-    const built = dataRows.map(row => {
-      const obj: Record<string, string> = {};
-      newMatches.forEach((m, i) => {
-        if (m.field && m.confidence >= settings.threshold) {
-          obj[m.field] = row[i] || '';
-        }
-      });
-      return obj;
-    });
-    setRows(built);
-  };
-
   const saveSettings = (s: typeof settings) => {
     setSettings(s);
     localStorage.setItem('dataimport_settings_' + entity, JSON.stringify(s));
-    setShowSettings(false);
-
-    // Re-match with new settings
-    const grid = parse(rawText);
-    if (grid.length >= 2) {
-      const m = matchHeaders(grid[0]);
-      const dataRows = grid.slice(1);
-      m.forEach((match, i) => {
-        match.values = dataRows.slice(0, 3).map(r => r[i] || '');
-      });
-      setMatches(m);
-      const built = dataRows.map(row => {
-        const obj: Record<string, string> = {};
-        m.forEach((match, i) => {
-          if (match.field && match.confidence >= s.threshold) {
-            obj[match.field] = row[i] || '';
-          }
-        });
-        return obj;
-      });
-      setRows(built);
-    }
   };
 
   const handleSave = async () => {
-    const valid = rows.filter(r => r.name && r.name.trim());
-    if (valid.length === 0) { alert('Нет строк с названием'); return; }
     setSaving(true);
-    try { await onImport(valid); onClose(); }
-    catch (e: any) { alert('Ошибка: ' + (e.message || e)); }
+    try {
+      await onImport(rows);
+      setRows([]);
+      setRawText('');
+      setMatches([]);
+    } catch (e: any) {
+      alert('Ошибка сохранения: ' + (e.message || String(e)));
+    }
     setSaving(false);
   };
 
+  // ── Manual: add row to list ──
+  const addManualRow = () => {
+    if (!manualRow.name?.trim() && !manualRow[columns[0]?.key]?.trim()) return;
+    setManualRows([...manualRows, { ...manualRow }]);
+    setManualRow({});
+  };
+
+  const removeManualRow = (idx: number) => {
+    setManualRows(manualRows.filter((_, i) => i !== idx));
+  };
+
+  const saveManual = async () => {
+    if (manualRows.length === 0) return;
+    setSaving(true);
+    try {
+      await onImport(manualRows);
+      setManualRows([]);
+      setManualRow({});
+    } catch (e: any) {
+      alert('Ошибка сохранения: ' + (e.message || String(e)));
+    }
+    setSaving(false);
+  };
+
+  // Field type hints for common keys
+  const fieldHint = (key: string): string => {
+    const hints: Record<string, string> = {
+      name: 'Название...', code: 'Код...', article: 'Артикул...',
+      symbol_int: 'pcs...', symbol_ru: 'шт...', name_ru: 'Штука...', name_en: 'Piece...',
+      unit: 'pcs...', description: 'Описание...',
+    };
+    return hints[key] || key;
+  };
+
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252',
-      borderRadius: 12, padding: 24,
-    }}>
+    <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24, maxHeight: '80vh', overflow: 'auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 2 }}>
           <button
             onClick={() => setMode('clipboard')}
             style={{
               background: mode === 'clipboard' ? '#1E3252' : 'transparent', border: '1px solid #2A4060',
-              borderRadius: 8, color: mode === 'clipboard' ? '#E8EEF5' : '#5A7090', padding: '6px 14px',
+              borderRadius: '8px 0 0 8px', color: mode === 'clipboard' ? '#E8EEF5' : '#5A7090', padding: '6px 14px',
               cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif',
             }}
           >
@@ -197,7 +189,7 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
             onClick={() => setMode('manual')}
             style={{
               background: mode === 'manual' ? '#1E3252' : 'transparent', border: '1px solid #2A4060',
-              borderRadius: 8, color: mode === 'manual' ? '#E8EEF5' : '#5A7090', padding: '6px 14px',
+              borderRadius: '0 8px 8px 0', color: mode === 'manual' ? '#E8EEF5' : '#5A7090', padding: '6px 14px',
               cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif',
             }}
           >
@@ -234,7 +226,7 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
         </div>
       )}
 
-      {/* Clipboard mode */}
+      {/* ═══ CLIPBOARD MODE ═══ */}
       {mode === 'clipboard' && (
         <div>
           <textarea
@@ -249,36 +241,32 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
             onChange={e => { setRawText(e.target.value); }}
           />
 
+          {/* Header matching preview */}
           {matches.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ color: '#60A5FA', fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', marginBottom: 8 }}>
-                Сопоставление полей ({rows.length} строк)
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 8 }}>Сопоставление полей</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {matches.map((m, i) => (
                   <div key={i} style={{
-                    background: m.confidence >= settings.threshold ? 'rgba(16,185,129,.1)' : m.confidence > 0 ? 'rgba(245,158,11,.1)' : 'rgba(239,68,68,.1)',
-                    border: `1px solid ${m.confidence >= settings.threshold ? '#10B981' : m.confidence > 0 ? '#F59E0B' : '#EF4444'}`,
-                    borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                    background: m.confidence >= 95 ? 'rgba(16,185,129,0.08)' : m.confidence >= 50 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
+                    border: `1px solid ${m.confidence >= 95 ? 'rgba(16,185,129,0.3)' : m.confidence >= 50 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                    borderRadius: 6, padding: '6px 10px', fontSize: 12,
                   }}>
-                    <div style={{ color: '#5A7090', marginBottom: 2 }}>{m.header || '(пусто)'}</div>
-                    <select
-                      value={m.field || ''}
-                      onChange={e => handleFieldChange(i, e.target.value)}
-                      style={{
-                        background: '#0A1628', border: 'none', color: m.field ? '#E8EEF5' : '#EF4444',
-                        fontSize: 10, padding: '2px 4px', borderRadius: 3, width: 130,
-                      }}
-                    >
-                      <option value="">— пропустить —</option>
-                      {columns.map(c => (
-                        <option key={c.key} value={c.key}>{c.label}</option>
-                      ))}
-                    </select>
-                    {m.confidence > 0 && (
-                      <div style={{ color: m.confidence >= settings.threshold ? '#10B981' : '#F59E0B', fontSize: 9, marginTop: 2 }}>
-                        {m.confidence}%
-                      </div>
+                    <span style={{ color: '#5A7090' }}>{m.header}</span>
+                    <span style={{ color: '#B0C4DE', margin: '0 6px' }}>→</span>
+                    {m.field ? (
+                      <span style={{ color: m.confidence >= 95 ? '#10B981' : m.confidence >= 50 ? '#F59E0B' : '#EF4444' }}>
+                        {columns.find(c => c.key === m.field)?.label || m.field}
+                      </span>
+                    ) : (
+                      <select
+                        value=""
+                        onChange={e => { m.field = e.target.value; setMatches([...matches]); }}
+                        style={{ background: '#0A1628', border: '1px solid #EF4444', borderRadius: 4, color: '#B0C4DE', fontSize: 12, padding: '2px 6px' }}
+                      >
+                        <option value="">— выберите —</option>
+                        {columns.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                      </select>
                     )}
                   </div>
                 ))}
@@ -315,8 +303,85 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
         </div>
       )}
 
+      {/* ═══ MANUAL MODE ═══ */}
+      {mode === 'manual' && (
+        <div>
+          {/* Input form */}
+          <div style={{
+            background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: 16, marginBottom: 14,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 12 }}>
+              Новая запись
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
+              {columns.map(c => (
+                <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 10, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.04em' }}>{c.label}</label>
+                  <input
+                    value={manualRow[c.key] || ''}
+                    onChange={e => setManualRow({ ...manualRow, [c.key]: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') addManualRow(); }}
+                    placeholder={fieldHint(c.key)}
+                    style={{
+                      background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6,
+                      color: '#E8EEF5', padding: '7px 10px', fontSize: 13, width: 140,
+                      fontFamily: 'Inter, sans-serif',
+                    }}
+                  />
+                </div>
+              ))}
+              <button
+                onClick={addManualRow}
+                style={{
+                  background: 'linear-gradient(135deg, #3B82F6, #2563EB)', border: 'none', borderRadius: 6,
+                  color: '#fff', padding: '7px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  height: 34, whiteSpace: 'nowrap',
+                }}
+              >
+                + Добавить
+              </button>
+            </div>
+          </div>
+
+          {/* Accumulated rows */}
+          {manualRows.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 8 }}>
+                Добавлено: {manualRows.length} зап.
+              </div>
+              <div style={{ maxHeight: 300, overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      {columns.map(c => (
+                        <th key={c.key} style={{ textAlign: 'left', padding: '4px 8px', color: '#60A5FA', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 600, borderBottom: '1px solid #1E3252' }}>
+                          {c.label}
+                        </th>
+                      ))}
+                      <th style={{ width: 40, borderBottom: '1px solid #1E3252' }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualRows.map((row, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #162844' }}>
+                        {columns.map(c => (
+                          <td key={c.key} style={{ padding: '5px 8px', color: '#B0C4DE' }}>{row[c.key] || '—'}</td>
+                        ))}
+                        <td style={{ padding: '4px 6px' }}>
+                          <button onClick={() => removeManualRow(i)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 12, opacity: 0.6 }}>✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom actions */}
-      {rows.length > 0 && (
+      {(rows.length > 0 || manualRows.length > 0) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, gap: 12 }}>
           <button
             onClick={onClose}
@@ -325,22 +390,20 @@ export default function DataImport({ entity, columns, synonyms, apiBase, onImpor
             Отмена
           </button>
           <button
-            onClick={handleSave}
+            onClick={mode === 'manual' ? saveManual : handleSave}
             disabled={saving}
             style={{
               background: 'linear-gradient(135deg, #3B82F6, #2563EB)', border: 'none', borderRadius: 8,
               color: '#fff', padding: '8px 24px', cursor: saving ? 'wait' : 'pointer', fontSize: 13, fontWeight: 600,
             }}
           >
-            {saving ? 'Сохранение...' : `Сохранить ${rows.length} записей`}
+            {saving ? 'Сохранение...' : `Сохранить ${mode === 'manual' ? manualRows.length : rows.length} записей`}
           </button>
         </div>
       )}
     </div>
   );
 }
-
-// ═══ Preset synonym maps ═══
 
 export const NOMENCLATURE_SYNONYMS: SynonymMap = {
   name: ['название', 'наименование', 'продукт', 'изделие', 'номенклатура', 'деталь', 'узел', 'сборка', 'name', 'product', 'item', 'part'],
