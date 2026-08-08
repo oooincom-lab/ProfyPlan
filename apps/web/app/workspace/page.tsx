@@ -41,6 +41,8 @@ export default function AppShell() {
   const [expandedOrders, setExpandedOrders] = useState<string | null>(null);
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
+  const [expandedProjects, setExpandedProjects] = useState(true);
+  const [expandedArchive, setExpandedArchive] = useState(false);
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -324,13 +326,14 @@ export default function AppShell() {
         </button>
 
         <div className="s-sec">Проекты</div>
-        <button className={`s-item ${view === 'projects' ? 'active' : ''}`} onClick={() => navTo('projects')}>
+        {/* Все проекты — expandable */}
+        <button className={`s-item ${view === 'projects' ? 'active' : ''}`}
+          onClick={() => { setExpandedProjects(!expandedProjects); if (!expandedProjects) navTo('projects'); }}
+        >
+          <span className="s-expand" style={{ opacity: expandedProjects ? 1 : 0.4 }}>{expandedProjects ? '▼' : '▶'}</span>
           📁 Все проекты
         </button>
-        <button className={`s-item ${view === 'archive' ? 'active' : ''}`} onClick={() => navTo('archive')}>
-          📦 Архив
-        </button>
-        {projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
+        {expandedProjects && projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
           const isExp = expandedProj === p.id;
           return (
             <div key={p.id}>
@@ -338,7 +341,7 @@ export default function AppShell() {
                 className={`s-item ${view === 'project-detail' && selectedProject?.id === p.id ? 'active' : ''}`}
                 onClick={() => loadProject(p)}
                 onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, project: p }); }}
-                style={{ paddingLeft: 16 }}
+                style={{ paddingLeft: 32 }}
               >
                 <span className="s-expand" style={{ opacity: isExp ? 1 : 0.4 }}>{isExp ? '▼' : '▶'}</span>
                 📁 {p.name}
@@ -372,6 +375,30 @@ export default function AppShell() {
             </div>
           );
         })}
+
+        {/* Архив — expandable */}
+        <button className={`s-item ${view === 'archive' ? 'active' : ''}`}
+          onClick={() => { setExpandedArchive(!expandedArchive); if (!expandedArchive) navTo('archive'); }}
+        >
+          <span className="s-expand" style={{ opacity: expandedArchive ? 1 : 0.4 }}>{expandedArchive ? '▼' : '▶'}</span>
+          📦 Архив
+        </button>
+        {expandedArchive && (
+          <>
+            {projects.filter((p: any) => p.status === 'archived').length === 0 && (
+              <div className="s-sub" style={{ color: '#5A7090', paddingLeft: 44 }}>пусто</div>
+            )}
+            {projects.filter((p: any) => p.status === 'archived').map((p: any) => (
+              <button key={p.id}
+                className={`s-item ${view === 'project-detail' && selectedProject?.id === p.id ? 'active' : ''}`}
+                onClick={() => loadProject(p)}
+                style={{ paddingLeft: 32, opacity: 0.7 }}
+              >
+                📦 {p.name}
+              </button>
+            ))}
+          </>
+        )}
 
         <div className="s-sec">Данные</div>
         <button className={`s-item ${view === 'directories' ? 'active' : ''}`} onClick={() => navTo('directories')}>
