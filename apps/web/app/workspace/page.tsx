@@ -23,7 +23,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -47,6 +47,8 @@ export default function AppShell() {
   const [orderSortKey, setOrderSortKey] = useState<string | null>(null);
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('asc');
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('free');
+  const [ganttData, setGanttData] = useState<any>(null);
+  const [ganttLoading, setGanttLoading] = useState(false);
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -214,6 +216,45 @@ export default function AppShell() {
 
   const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups([]); setPools([]); };
 
+  // ── Gantt ──
+  const loadProjectGantt = async (p: any) => {
+    setSelectedProject(p); setView('project-gantt'); setExpandedProj(p.id);
+    setGanttLoading(true); setGanttData(null);
+    try {
+      const r = await apiF<any>(`/projects/${p.id}/calculate/cpm`, { method: 'POST' });
+      setGanttData(r);
+    } catch (e: any) { setMsg('Ошибка загрузки Ганта: ' + (e.message || String(e))); }
+    setGanttLoading(false);
+  };
+
+  // ── Pools ──
+  const loadProjectPools = async (p: any) => {
+    setSelectedProject(p); setView('project-pools'); setExpandedProj(p.id);
+    try {
+      const [o, g, pl] = await Promise.all([
+        apiF<any[]>(`/production-orders/?project_id=${p.id}`),
+        apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
+        apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
+      ]);
+      setOrders(o); setGroups(g.items); setPools(pl.items);
+      setMsg(`${pl.items.length} пулов`);
+    } catch (e: any) { setMsg(String(e)); }
+  };
+
+  const addPool = async () => {
+    if (!selectedProject) return;
+    const n = prompt('Название пула (CCM-объединение):');
+    if (!n) return;
+    await apiF(`/projects/${selectedProject.id}/pools`, { method: 'POST', body: JSON.stringify({ name: n, order_ids: [] }) });
+    await loadProjectPools(selectedProject);
+  };
+
+  const delPool = async (plid: string) => {
+    if (!confirm('Удалить пул? Заказы вернутся в корень проекта.')) return;
+    await apiF(`/projects/${selectedProject.id}/pools/${plid}`, { method: 'DELETE' });
+    await loadProjectPools(selectedProject);
+  };
+
   // ── Styles ──
   const css = `
     *{box-sizing:border-box;margin:0;padding:0}
@@ -330,6 +371,8 @@ export default function AppShell() {
     'projects': 'Проекты',
     'project-dashboard': selectedProject?.name || 'Проект',
     'project-orders': selectedProject ? `Заказы — ${selectedProject.name}` : 'Заказы',
+    'project-gantt': selectedProject ? `Гант — ${selectedProject.name}` : 'Диаграмма Ганта',
+    'project-pools': selectedProject ? `Пулы — ${selectedProject.name}` : 'Пулы',
 
     'archive': 'Архив проектов',
     'directories': 'Справочники',
@@ -415,6 +458,12 @@ export default function AppShell() {
                   ))}
                   <div className="s-sub" onClick={() => { setSelectedProject(p); setView('settings'); }}>
                     ⚙️ Настройки
+                  </div>
+                  <div className="s-sub" onClick={() => loadProjectGantt(p)} style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
+                    📊 Диаграмма Ганта
+                  </div>
+                  <div className="s-sub" onClick={() => loadProjectPools(p)} style={view === 'project-pools' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
+                    📦 Пулы
                   </div>
                 </>
               )}
@@ -767,6 +816,161 @@ export default function AppShell() {
               </>
             );
           })()}
+
+          {/* ═══ PROJECT GANTT ═══ */}
+          {view === 'project-gantt' && (
+            <div className="panel">
+              <div className="panel-hdr">
+                <div><span className="panel-title">📊 Диаграмма Ганта</span><span className="panel-sub">{selectedProject?.name}</span></div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">🔄 Обновить</button>
+                  <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
+                </div>
+              </div>
+              {ganttLoading && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Загрузка данных CPM...</div>}
+              {!ganttLoading && !ganttData && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Нет данных. Запустите CPM-расчёт для проекта.</div>}
+              {!ganttLoading && ganttData && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="tbl">
+                    <thead><tr>
+                      <th style={{ width: 300 }}>Операция</th>
+                      <th style={{ width: 80 }}>Длит. (ч)</th>
+                      <th style={{ width: 90 }}>ES</th>
+                      <th style={{ width: 90 }}>EF</th>
+                      <th style={{ width: 90 }}>LS</th>
+                      <th style={{ width: 90 }}>LF</th>
+                      <th style={{ width: 80 }}>Резерв</th>
+                      <th style={{ minWidth: 300 }}>График</th>
+                    </tr></thead>
+                    <tbody>
+                      {(ganttData.nodes || []).map((n: any) => {
+                        const totalDur = ganttData.nodes?.reduce((m: number, x: any) => Math.max(m, x.late_finish || x.early_finish || 0), 1) || 1;
+                        const es = n.early_start || 0;
+                        const ef = n.early_finish || 0;
+                        const dur = n.duration || ef - es || 1;
+                        const leftPct = (es / totalDur) * 100;
+                        const widthPct = Math.max((dur / totalDur) * 100, 1);
+                        const isCritical = n.total_float === 0;
+                        const tf = n.total_float || 0;
+                        return (
+                          <tr key={n.id}>
+                            <td style={{ color: isCritical ? '#f87171' : '#E8EEF5', fontWeight: isCritical ? 600 : 400 }}>
+                              {isCritical ? '🔴 ' : ''}{n.name}
+                            </td>
+                            <td className="t-mono">{dur}ч</td>
+                            <td className="t-mono">{es}ч</td>
+                            <td className="t-mono">{ef}ч</td>
+                            <td className="t-mono">{n.late_start ?? '—'}</td>
+                            <td className="t-mono">{n.late_finish ?? '—'}</td>
+                            <td className="t-mono" style={{ color: tf === 0 ? '#10B981' : '#F59E0B' }}>{tf === 0 ? '0 (КП)' : tf}</td>
+                            <td>
+                              <div style={{ position: 'relative', height: 22, background: '#0A1628', borderRadius: 4 }}>
+                                <div style={{
+                                  position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`,
+                                  height: '100%', borderRadius: 4,
+                                  background: isCritical ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
+                                  border: isCritical ? '1px solid rgba(239,68,68,.5)' : '1px solid rgba(59,130,246,.3)',
+                                  display: 'flex', alignItems: 'center', paddingLeft: 6, fontSize: 10, color: '#E8EEF5',
+                                  minWidth: `${widthPct > 3 ? 'auto' : '20px'}`, overflow: 'hidden'
+                                }}>
+                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {n.name?.length > 28 ? n.name.slice(0, 26) + '…' : n.name}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div style={{ marginTop: 16, display: 'flex', gap: 20, fontSize: 12, color: '#5A7090' }}>
+                    <span>🔴 Критический путь</span>
+                    <span>🔵 Некритические операции</span>
+                    <span style={{ color: '#10B981' }}>Резерв = 0 — критическая</span>
+                    <span style={{ color: '#F59E0B' }}>Резерв {'>'} 0 — есть запас</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ PROJECT POOLS ═══ */}
+          {view === 'project-pools' && (
+            <>
+              <div className="panel">
+                <div className="panel-hdr">
+                  <div><span className="panel-title">📦 Пулы (CCM-объединения)</span><span className="panel-sub">{selectedProject?.name}</span></div>
+                  <button onClick={addPool} className="btn btn-primary btn-sm">+ Пул</button>
+                </div>
+                {pools.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Пулов нет</div>
+                    <div>Создайте пул — CCM-объединение с общим графом и ресурсами. Заказы внутри пула влияют друг на друга.</div>
+                  </div>
+                )}
+                {pools.map((p: any) => {
+                  const plOrders = orders.filter((o: any) => o.pool_id === p.id);
+                  return (
+                    <div key={p.id} className="group-card" style={{ borderColor: 'rgba(139,92,246,.3)', background: 'rgba(139,92,246,.04)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: plOrders.length > 0 ? 12 : 0 }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 15 }}>📦 {p.name}</span>
+                          <span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{plOrders.length} заказов</span>
+                        </div>
+                        <button onClick={() => delPool(p.id)} className="btn btn-danger btn-sm">🗑 Удалить пул</button>
+                      </div>
+                      {plOrders.length > 0 && (
+                        <table className="tbl">
+                          <thead><tr>
+                            <th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th>
+                            <th style={{ width: 40 }}></th>
+                          </tr></thead>
+                          <tbody>{plOrders.map((o: any) => {
+                            const isDyn = !!o.exploded_at;
+                            return (
+                              <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
+                                <td className="t-mono">{o.ext_id || '—'}</td>
+                                <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
+                                <td>{o.client || '—'}</td>
+                                <td className="t-mono">{o.quantity} {o.unit}</td>
+                                <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : 'Обычный'}</span></td>
+                                <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : 'В работе'}</span></td>
+                                <td><button onClick={() => { moveOrder(o.id, null, null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.5 }} title="Убрать из пула">↩</button></td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Root orders available for pooling */}
+              <div className="panel">
+                <div className="panel-hdr">
+                  <span className="panel-title">📋 Свободные заказы</span>
+                  <span className="panel-sub">Перетащите заказ в сайдбаре на пул</span>
+                </div>
+                <table className="tbl">
+                  <thead><tr><th>ID</th><th>Продукт</th><th>Кол-во</th><th>Статус</th><th>Группа</th></tr></thead>
+                  <tbody>
+                    {orders.filter((o: any) => !o.pool_id).map((o: any) => (
+                      <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
+                        <td className="t-mono">{o.ext_id || '—'}</td>
+                        <td className="t-name">{o.specification_name || '—'}</td>
+                        <td className="t-mono">{o.quantity} {o.unit}</td>
+                        <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : 'План'}</span></td>
+                        <td className="t-mono">{groups.find((g: any) => g.id === o.group_id)?.name || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
 
           {/* ═══ DIRECTORIES ═══ */}
           {view === 'directories' && (
