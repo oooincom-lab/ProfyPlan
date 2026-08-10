@@ -320,7 +320,7 @@ export default function AppShell() {
     'projects': 'Проекты',
     'project-dashboard': selectedProject?.name || 'Проект',
     'project-orders': selectedProject ? `Заказы — ${selectedProject.name}` : 'Заказы',
-    'project-detail': selectedProject?.name || 'Проект',
+
     'archive': 'Архив проектов',
     'directories': 'Справочники',
     'nomenclature': 'Номенклатура',
