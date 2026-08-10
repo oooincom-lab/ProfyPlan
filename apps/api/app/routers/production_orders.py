@@ -5,7 +5,7 @@ import io
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy import select
@@ -312,7 +312,7 @@ async def list_orders(
     """Список заказов на производство, опционально отфильтрованный по проекту."""
     stmt = select(ProductionOrder).where(ProductionOrder.tenant_id == tenant_id)
     if project_id:
-        stmt = stmt.where(ProductionOrder.project_id == project_id)
+        stmt = stmt.where(ProductionOrder.project_id == UUID(project_id))
     stmt = stmt.order_by(ProductionOrder.created_at.desc())
     res = await db.execute(stmt)
     orders = res.scalars().all()
@@ -359,7 +359,7 @@ async def get_order(
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ProductionOrder).where(
-        ProductionOrder.id == order_id,
+        ProductionOrder.id == UUID(order_id),
         ProductionOrder.tenant_id == tenant_id,
     )
     res = await db.execute(stmt)
@@ -385,6 +385,8 @@ def _order_to_out(o: ProductionOrder) -> ProductionOrderOut:
         client=o.client,
         notes=o.notes,
         status=o.status,
+        group_id=str(o.group_id) if o.group_id else None,
+        pool_id=str(o.pool_id) if o.pool_id else None,
         exploded_at=o.exploded_at,
         operations_created=o.operations_created,
         created_at=o.created_at,
@@ -405,7 +407,7 @@ async def expand_order(
 ):
     """Разворачивает BOM-спецификацию заказа в CPM-операции."""
     stmt = select(ProductionOrder).where(
-        ProductionOrder.id == order_id,
+        ProductionOrder.id == UUID(order_id),
         ProductionOrder.tenant_id == tenant_id,
     )
     res = await db.execute(stmt)
@@ -488,6 +490,76 @@ async def expand_order(
     }
 
 
+# ── PUT /{id} ─────────────────────────────────────────────────
+
+@router.put("/{order_id}", response_model=ProductionOrderOut)
+async def update_order(
+    order_id: str,
+    body: ProductionOrderCreate,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Обновить поля заказа."""
+    stmt = select(ProductionOrder).where(
+        ProductionOrder.id == UUID(order_id),
+        ProductionOrder.tenant_id == tenant_id,
+    )
+    res = await db.execute(stmt)
+    order = res.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    for field in ("specification_name", "ext_id", "unit", "priority", "client", "notes", "status"):
+        v = getattr(body, field, None)
+        if v is not None:
+            setattr(order, field, v)
+    if body.quantity is not None:
+        order.quantity = body.quantity
+    if body.start_date is not None:
+        order.start_date = body.start_date
+    if body.due_date is not None:
+        order.due_date = body.due_date
+    await db.commit()
+    await db.refresh(order)
+    return _order_to_out(order)
+
+
+# ── PATCH /{id}/move ───────────────────────────────────────────
+
+from pydantic import BaseModel as PydanticBase
+
+
+class OrderMoveRequest(PydanticBase):
+    group_id: Optional[str] = None
+    pool_id: Optional[str] = None
+
+
+@router.patch("/{order_id}/move", response_model=ProductionOrderOut)
+async def move_order(
+    order_id: str,
+    body: OrderMoveRequest,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Переместить заказ в группу/пул или убрать из них.
+    
+    Передайте group_id или pool_id (не оба сразу).
+    Передайте оба null чтобы убрать заказ из группы/пула и вернуть в корень.
+    """
+    stmt = select(ProductionOrder).where(
+        ProductionOrder.id == UUID(order_id),
+        ProductionOrder.tenant_id == tenant_id,
+    )
+    res = await db.execute(stmt)
+    order = res.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    order.group_id = UUID(body.group_id) if body.group_id else None
+    order.pool_id = UUID(body.pool_id) if body.pool_id else None
+    await db.commit()
+    await db.refresh(order)
+    return _order_to_out(order)
+
+
 # ── DELETE /{id} ──────────────────────────────────────────────
 
 @router.delete("/{order_id}", status_code=204)
@@ -498,7 +570,7 @@ async def delete_order(
 ):
     """Удалить заказ на производство."""
     stmt = select(ProductionOrder).where(
-        ProductionOrder.id == order_id,
+        ProductionOrder.id == UUID(order_id),
         ProductionOrder.tenant_id == tenant_id,
     )
     res = await db.execute(stmt)

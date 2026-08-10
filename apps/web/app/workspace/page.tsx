@@ -90,10 +90,20 @@ export default function AppShell() {
     } catch (e: any) { alert('Ошибка удаления: ' + (e.message || String(e))); }
   };
 
+  const moveOrder = async (orderId: string, groupId: string | null, poolId: string | null) => {
+    try {
+      await apiF(`/production-orders/${orderId}/move`, {
+        method: 'PATCH', body: JSON.stringify({ group_id: groupId, pool_id: poolId }),
+      });
+      await refresh();
+      if (selectedProject) { setExpandedOrders(null); loadProjectOrders(selectedProject.id); }
+    } catch (e: any) { alert('Ошибка перемещения: ' + (e.message || String(e))); }
+  };
+
   const updateOrder = async (orderId: string) => {
     if (!editValues.specification_name?.trim()) { setEditingOrder(null); return; }
     try {
-      await apiF(`/production-orders/${orderId}/update`, {
+      await apiF(`/production-orders/${orderId}`, {
         method: 'PUT', body: JSON.stringify({
           specification_name: editValues.specification_name,
           quantity: Number(editValues.quantity) || undefined,
@@ -387,12 +397,22 @@ export default function AppShell() {
                       ))}
                     </>
                   )}
-                  <div className="s-sub" onClick={() => {}}>
+                  <div className="s-sub" onClick={() => {}} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }} style={{ cursor: 'default' }}>
                     📁 Группы <span className="s-count">{groups.length || '—'}</span>
                   </div>
-                  <div className="s-sub" onClick={() => {}}>
+                  {groups.map((g: any) => (
+                    <div key={'sg-'+g.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}>
+                      ▸ {g.name}
+                    </div>
+                  ))}
+                  <div className="s-sub" onClick={() => {}} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }} style={{ cursor: 'default' }}>
                     📦 Пулы <span className="s-count">{pools.length || '—'}</span>
                   </div>
+                  {pools.map((p: any) => (
+                    <div key={'sp-'+p.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}>
+                      ▸ {p.name}
+                    </div>
+                  ))}
                   <div className="s-sub" onClick={() => { setSelectedProject(p); setView('settings'); }}>
                     ⚙️ Настройки
                   </div>
@@ -674,6 +694,16 @@ export default function AppShell() {
                       <span style={{ fontSize: 11, color: '#5A7090' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090' }}>○ = План</span>
                     </div>
                   </div>
+                  <div style={{
+                    padding: '8px 14px', marginBottom: 8, borderRadius: 8,
+                    border: '2px dashed #1E3252', textAlign: 'center',
+                    color: '#5A7090', fontSize: 12, transition: 'all .15s',
+                    cursor: 'default',
+                  }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.background = 'rgba(59,130,246,.06)'; }}
+                    onDragLeave={(e) => { e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; }}
+                    onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }}>
+                    📍 Бросьте заказ сюда — убрать из группы/пула
+                  </div>
                   <div style={{ overflowX: 'auto' }}>
                     <table className="tbl">
                       <thead><tr>
@@ -713,7 +743,7 @@ export default function AppShell() {
                         {filtered.map((o: any) => {
                           const ti = getTypeInfo(o);
                           return (
-                            <tr key={o.id}>
+                            <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
                               <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
                               <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
