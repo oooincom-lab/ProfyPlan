@@ -53,6 +53,10 @@ export default function AppShell() {
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [editingOrder, setEditingOrder] = useState<string | null>(null);
+  const [showBulkPaste, setShowBulkPaste] = useState(false);
+  const [bulkPasteText, setBulkPasteText] = useState('');
+  const [bulkNomenMatches, setBulkNomenMatches] = useState<Record<string, { id: string; name: string } | null>>({});
+  const [bulkMatchLoading, setBulkMatchLoading] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
   // ── Context menu ──
@@ -113,6 +117,94 @@ export default function AppShell() {
         })
       });
       setEditingOrder(null);
+      await refresh();
+    } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
+  };
+
+  // ── Nomenclature search ──
+  const searchNomenclature = async (query: string): Promise<{ id: string; name: string; code: string | null; article: string | null }[]> => {
+    try {
+      const r = await apiF<any[]>(`/nomenclature/search/?q=${encodeURIComponent(query)}&limit=8`);
+      return r.map((n: any) => ({ id: n.id, name: n.name, code: n.code || null, article: n.article || null }));
+    } catch { return []; }
+  };
+
+  // ── Fuzzy score for matching ──
+  const fuzzyScore = (query: string, target: string): number => {
+    const q = query.toLowerCase().replace(/[^a-zа-яё0-9]/g, '').trim();
+    const t = target.toLowerCase().replace(/[^a-zа-яё0-9]/g, '').trim();
+    if (!q || !t) return 0;
+    if (q === t) return 100;
+    if (t.includes(q)) return 90;
+    const qWords = q.split(/\s+/).filter(Boolean);
+    const tWords = t.split(/\s+/).filter(Boolean);
+    if (qWords.length === 0) return 0;
+    let matched = 0;
+    for (const qw of qWords) { if (tWords.some((tw: string) => tw.startsWith(qw) || qw.startsWith(tw) || tw.includes(qw))) matched++; }
+    return Math.round((matched / qWords.length) * 75);
+  };
+
+  // ── Bulk paste: parse + match nomenclature ──
+  const handleBulkPaste = async (text: string) => {
+    setBulkPasteText(text);
+    setBulkMatchLoading(true);
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { setBulkMatchLoading(false); return; }
+    const sep = lines[0].split('\t').length > 1 ? '\t' : lines[0].split(';').length > 1 ? ';' : ',';
+    const grid = lines.map(l => l.split(sep).map(c => c.replace(/^["']|["']$/g, '').trim()));
+    const headers = grid[0];
+    const specificationIdx = headers.findIndex((h: string) => {
+      const n = h.toLowerCase().replace(/[^a-zа-яё]/g, '');
+      return ['продукт','изделие','название','номенклатура','name','product','specification','specification_name'].some(s => n.includes(s) || s.includes(n));
+    });
+    if (specificationIdx === -1) { setBulkMatchLoading(false); return; }
+    const dataRows = grid.slice(1);
+    const uniqueNames = [...new Set(dataRows.map(r => r[specificationIdx] || '').filter(Boolean))];
+    const matches: Record<string, { id: string; name: string } | null> = {};
+    await Promise.all(uniqueNames.map(async (name) => {
+      try {
+        const results = await searchNomenclature(name);
+        if (results.length > 0) {
+          let best = results[0]; let bestScore = fuzzyScore(name, best.name);
+          for (const r of results) { const s = fuzzyScore(name, r.name); if (s > bestScore) { best = r; bestScore = s; } }
+          matches[name] = bestScore >= 40 ? { id: best.id, name: best.name } : null;
+        } else { matches[name] = null; }
+      } catch { matches[name] = null; }
+    }));
+    setBulkNomenMatches(matches);
+    setBulkMatchLoading(false);
+  };
+
+  // ── Bulk create orders from pasted data ──
+  const bulkCreateOrders = async () => {
+    const lines = bulkPasteText.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2 || !selectedProject) return;
+    const sep = lines[0].split('\t').length > 1 ? '\t' : lines[0].split(';').length > 1 ? ';' : ',';
+    const grid = lines.map(l => l.split(sep).map(c => c.replace(/^["']|["']$/g, '').trim()));
+    const headers = grid[0];
+    const dataRows = grid.slice(1);
+    const idxOf = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.toLowerCase().replace(/[^a-zа-яё]/g, '') === k));
+    const nameIdx = idxOf(['продукт','изделие','название','номенклатура','name','product']);
+    const qtyIdx = idxOf(['колво','количество','штук','qty','quantity','amount']);
+    const clientIdx = idxOf(['клиент','заказчик','client','customer']);
+    const idIdx = idxOf(['id','номер','код','заказ','order']);
+    try {
+      let created = 0;
+      for (const row of dataRows) {
+        const name = nameIdx >= 0 ? row[nameIdx] : (row[0] || 'Без названия');
+        const qty = qtyIdx >= 0 ? (parseFloat(row[qtyIdx]) || 1) : 1;
+        const client = clientIdx >= 0 ? row[clientIdx] : null;
+        const extId = idIdx >= 0 ? row[idIdx] : null;
+        if (!name.trim()) continue;
+        await apiF(`/production-orders/?project_id=${selectedProject.id}`, {
+          method: 'POST', body: JSON.stringify({
+            specification_name: name, quantity: qty, unit: 'pcs',
+            priority: 'normal', client: client || null, ext_id: extId || null,
+          })
+        });
+        created++;
+      }
+      setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({});
       await refresh();
     } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
   };
@@ -448,7 +540,9 @@ export default function AppShell() {
                     <>
                       {projectOrders[p.id].length === 0 && <div className="s-sub" style={{ color: '#5A7090' }}>нет заказов</div>}
                       {projectOrders[p.id].map((o: any) => (
-                        <div key={o.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} title={o.specification_name}>
+                        <div key={o.id} draggable
+                          onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
+                          className="s-sub" style={{ paddingLeft: 60, fontSize: 11, cursor: 'grab' }} title={o.specification_name}>
                           {o.specification_name || o.ext_id || '—'} <span style={{ color: '#374151', marginLeft: 4 }}>×{o.quantity}</span>
                         </div>
                       ))}
@@ -457,6 +551,14 @@ export default function AppShell() {
                   <div className="s-sub" onClick={() => loadProjectGroups(p)} style={view === 'project-groups' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
                     📁 Группы <span className="s-count">{groups.length || '—'}</span>
                   </div>
+                  {groups.map((g: any) => (
+                    <div key={'sg-'+g.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }}
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }}
+                      onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
+                      onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}>
+                      📁 {g.name}
+                    </div>
+                  ))}
                   {pools.map((p: any) => (
                     <div key={'sp-'+p.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}>
                       ▸ {p.name}
@@ -746,6 +848,7 @@ export default function AppShell() {
                         </select>
                       )}
                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
                       <span style={{ fontSize: 11, color: '#5A7090' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090' }}>○ = План</span>
                     </div>
                   </div>
@@ -759,6 +862,69 @@ export default function AppShell() {
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }}>
                     📍 Бросьте заказ сюда — убрать из группы/пула
                   </div>
+
+                  {/* Bulk paste panel */}
+                  {showBulkPaste && (
+                    <div style={{
+                      background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: 16, marginBottom: 12,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>📋 Вставка заказов из таблицы</span>
+                        <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 16 }}>✕</button>
+                      </div>
+                      <textarea
+                        placeholder="Скопируйте таблицу из Excel (Ctrl+C), затем вставьте сюда (Ctrl+V). Первая строка — заголовки."
+                        value={bulkPasteText}
+                        onChange={e => { const v = e.target.value; setBulkPasteText(v); if (v.includes('\n') || v.includes('\t')) handleBulkPaste(v); }}
+                        onPaste={e => { const t = e.clipboardData.getData('text'); setBulkPasteText(t); handleBulkPaste(t); }}
+                        style={{
+                          width: '100%', minHeight: 80, background: '#0F1E36', border: '1px solid #1E3252',
+                          borderRadius: 8, color: '#B0C4DE', padding: 12, fontSize: 12, resize: 'vertical',
+                          fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10,
+                        }}
+                      />
+                      {bulkMatchLoading && <div style={{ fontSize: 12, color: '#F59E0B', marginBottom: 8 }}>🔍 Сопоставление с номенклатурой...</div>}
+                      {!bulkMatchLoading && Object.keys(bulkNomenMatches).length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 6 }}>
+                            Сопоставление с номенклатурой:
+                            <span style={{ color: '#10B981', marginLeft: 8 }}>
+                              ✓ {Object.values(bulkNomenMatches).filter(Boolean).length}
+                            </span>
+                            <span style={{ color: '#EF4444', marginLeft: 4 }}>
+                              ✗ {Object.values(bulkNomenMatches).filter(v => v === null).length} не найдено
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {Object.entries(bulkNomenMatches).map(([name, match]) => (
+                              <span key={name} style={{
+                                background: match ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                                border: `1px solid ${match ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#B0C4DE',
+                              }}>
+                                {name} {match ? <span style={{ color: '#10B981' }}>→ {match.name}</span> : <span style={{ color: '#EF4444' }}>✗</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={bulkCreateOrders} disabled={!bulkPasteText.trim()}
+                          style={{
+                            background: bulkPasteText.trim() ? 'linear-gradient(135deg, #3B82F6, #2563EB)' : '#1E3252',
+                            color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px',
+                            cursor: bulkPasteText.trim() ? 'pointer' : 'default', fontSize: 13, fontWeight: 600,
+                          }}>
+                          ✓ Создать заказы
+                        </button>
+                        <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }}
+                          style={{ background: 'transparent', border: '1px solid #2A4060', borderRadius: 8, color: '#5A7090', padding: '8px 20px', cursor: 'pointer', fontSize: 13 }}>
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ overflowX: 'auto' }}>
                     <table className="tbl">
                       <thead><tr>
