@@ -23,7 +23,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -200,20 +200,6 @@ export default function AppShell() {
     else loadProjectDashboard(selectedProject);
   };
 
-  const addGroup = async () => {
-    if (!selectedProject) return;
-    const n = prompt('Название группы:');
-    if (!n) return;
-    await apiF(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: n, sort_order: groups.length }) });
-    await refresh();
-  };
-
-  const delGroup = async (gid: string) => {
-    if (!confirm('Удалить группу?')) return;
-    await apiF(`/projects/${selectedProject.id}/groups/${gid}`, { method: 'DELETE' });
-    await refresh();
-  };
-
   const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups([]); setPools([]); };
 
   // ── Gantt ──
@@ -225,6 +211,33 @@ export default function AppShell() {
       setGanttData(r);
     } catch (e: any) { setMsg('Ошибка загрузки Ганта: ' + (e.message || String(e))); }
     setGanttLoading(false);
+  };
+
+  // ── Groups ──
+  const loadProjectGroups = async (p: any) => {
+    setSelectedProject(p); setView('project-groups'); setExpandedProj(p.id);
+    try {
+      const [o, g] = await Promise.all([
+        apiF<any[]>(`/production-orders/?project_id=${p.id}`),
+        apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
+      ]);
+      setOrders(o); setGroups(g.items);
+      setMsg(`${g.items.length} групп`);
+    } catch (e: any) { setMsg(String(e)); }
+  };
+
+  const addGroup = async () => {
+    if (!selectedProject) return;
+    const n = prompt('Название группы:');
+    if (!n) return;
+    await apiF(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: n }) });
+    await loadProjectGroups(selectedProject);
+  };
+
+  const delGroup = async (gid: string) => {
+    if (!confirm('Удалить группу? Заказы и пулы вернутся в корень проекта.')) return;
+    await apiF(`/projects/${selectedProject.id}/groups/${gid}`, { method: 'DELETE' });
+    await loadProjectGroups(selectedProject);
   };
 
   // ── Pools ──
@@ -373,6 +386,7 @@ export default function AppShell() {
     'project-orders': selectedProject ? `Заказы — ${selectedProject.name}` : 'Заказы',
     'project-gantt': selectedProject ? `Гант — ${selectedProject.name}` : 'Диаграмма Ганта',
     'project-pools': selectedProject ? `Пулы — ${selectedProject.name}` : 'Пулы',
+    'project-groups': selectedProject ? `Группы — ${selectedProject.name}` : 'Группы',
 
     'archive': 'Архив проектов',
     'directories': 'Справочники',
@@ -440,16 +454,8 @@ export default function AppShell() {
                       ))}
                     </>
                   )}
-                  <div className="s-sub" onClick={() => {}} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }} style={{ cursor: 'default' }}>
+                  <div className="s-sub" onClick={() => loadProjectGroups(p)} style={view === 'project-groups' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
                     📁 Группы <span className="s-count">{groups.length || '—'}</span>
-                  </div>
-                  {groups.map((g: any) => (
-                    <div key={'sg-'+g.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}>
-                      ▸ {g.name}
-                    </div>
-                  ))}
-                  <div className="s-sub" onClick={() => {}} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }} style={{ cursor: 'default' }}>
-                    📦 Пулы <span className="s-count">{pools.length || '—'}</span>
                   </div>
                   {pools.map((p: any) => (
                     <div key={'sp-'+p.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}>
@@ -893,6 +899,87 @@ export default function AppShell() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* ═══ PROJECT GROUPS ═══ */}
+          {view === 'project-groups' && (
+            <>
+              <div className="panel">
+                <div className="panel-hdr">
+                  <div><span className="panel-title">📁 Группы</span><span className="panel-sub">{selectedProject?.name}</span></div>
+                  <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
+                </div>
+                {groups.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Групп нет</div>
+                    <div>Создайте группу для логической организации заказов. Группа — просто папка, не влияет на расчёты.</div>
+                  </div>
+                )}
+                {groups.map((g: any) => {
+                  const grOrders = orders.filter((o: any) => o.group_id === g.id);
+                  return (
+                    <div key={g.id} className="group-card" style={{ borderColor: 'rgba(59,130,246,.3)', background: 'rgba(59,130,246,.04)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: grOrders.length > 0 ? 12 : 0 }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 15 }}>📁 {g.name}</span>
+                          <span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{grOrders.length} заказов</span>
+                        </div>
+                        <button onClick={() => delGroup(g.id)} className="btn btn-danger btn-sm">🗑 Удалить группу</button>
+                      </div>
+                      {grOrders.length > 0 && (
+                        <table className="tbl">
+                          <thead><tr>
+                            <th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th>
+                            <th style={{ width: 40 }}></th>
+                          </tr></thead>
+                          <tbody>{grOrders.map((o: any) => {
+                            const isDyn = !!o.exploded_at;
+                            return (
+                              <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
+                                <td className="t-mono">{o.ext_id || '—'}</td>
+                                <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
+                                <td>{o.client || '—'}</td>
+                                <td className="t-mono">{o.quantity} {o.unit}</td>
+                                <td><span className={`badge ${o.priority === 'critical' ? 'badge-red' : o.priority === 'high' ? 'badge-yellow' : 'badge-gray'}`}>{o.priority || 'normal'}</span></td>
+                                <td><span className={`badge ${o.status === 'planned' ? 'badge-green' : o.status === 'draft' ? 'badge-gray' : 'badge-blue'}`}>{o.status || 'draft'}</span></td>
+                                <td><button onClick={() => moveOrder(o.id, null, null)} className="btn btn-sm" style={{ padding: '2px 6px', fontSize: 10 }} title="Убрать из группы">↩</button></td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Свободные заказы */}
+              {orders.filter((o: any) => !o.group_id && !o.pool_id).length > 0 && (
+                <div className="panel" style={{ marginTop: 10 }}>
+                  <div className="panel-hdr">
+                    <span className="panel-title">📋 Свободные заказы</span>
+                    <span className="panel-sub">Перетащите заказ в сайдбаре на группу</span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="tbl">
+                      <thead><tr>
+                        <th>ID</th><th>Продукт</th><th>Кол-во</th><th>Статус</th><th>Группа</th>
+                      </tr></thead>
+                      <tbody>{orders.filter((o: any) => !o.group_id && !o.pool_id).map((o: any) => (
+                        <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
+                          <td className="t-mono">{o.ext_id || '—'}</td>
+                          <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
+                          <td className="t-mono">{o.quantity} {o.unit}</td>
+                          <td><span className={`badge ${o.status === 'planned' ? 'badge-green' : o.status === 'draft' ? 'badge-gray' : 'badge-blue'}`}>{o.status || 'draft'}</span></td>
+                          <td className="t-mono">—</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* ═══ PROJECT POOLS ═══ */}
