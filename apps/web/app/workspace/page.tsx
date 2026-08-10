@@ -5,6 +5,7 @@ import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
+import Sidebar from '@/components/sidebar';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -37,12 +38,9 @@ export default function AppShell() {
   const [orders, setOrders] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [pools, setPools] = useState<any[]>([]);
-  const [expandedProj, setExpandedProj] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<string | null>(null);
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
-  const [expandedProjects, setExpandedProjects] = useState(true);
-  const [expandedArchive, setExpandedArchive] = useState(false);
   const [orderShowAll, setOrderShowAll] = useState(false);
   const [orderSortKey, setOrderSortKey] = useState<string | null>(null);
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('asc');
@@ -257,7 +255,6 @@ export default function AppShell() {
   const loadProjectDashboard = async (p: any) => {
     setSelectedProject(p);
     setView('project-dashboard');
-    setExpandedProj(p.id);
     setOrders([]); setGroups([]); setPools([]);
     try {
       const [o, g, pl] = await Promise.all([
@@ -273,7 +270,6 @@ export default function AppShell() {
   const loadProjectOrdersView = async (p: any) => {
     setSelectedProject(p);
     setView('project-orders');
-    setExpandedProj(p.id);
     if (!orders.length || selectedProject?.id !== p.id) {
       try {
         const [o, g, pl] = await Promise.all([
@@ -296,7 +292,7 @@ export default function AppShell() {
 
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
-    setSelectedProject(p); setView('project-gantt'); setExpandedProj(p.id);
+    setSelectedProject(p); setView('project-gantt');
     setGanttLoading(true); setGanttData(null);
     try {
       const r = await apiF<any>(`/projects/${p.id}/calculate/cpm`, { method: 'POST' });
@@ -307,7 +303,7 @@ export default function AppShell() {
 
   // ── Groups ──
   const loadProjectGroups = async (p: any) => {
-    setSelectedProject(p); setView('project-groups'); setExpandedProj(p.id);
+    setSelectedProject(p); setView('project-groups');
     try {
       const [o, g] = await Promise.all([
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -334,7 +330,7 @@ export default function AppShell() {
 
   // ── Pools ──
   const loadProjectPools = async (p: any) => {
-    setSelectedProject(p); setView('project-pools'); setExpandedProj(p.id);
+    setSelectedProject(p); setView('project-pools');
     try {
       const [o, g, pl] = await Promise.all([
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -400,18 +396,7 @@ export default function AppShell() {
     .btn-danger:hover{background:rgba(239,68,68,.15)}
     .btn-sm{font-size:11px;padding:4px 10px}
     .group-card{background:rgba(59,130,246,.04);border:1px solid #1E3252;border-radius:12px;padding:16px 20px;margin-bottom:12px}
-    .sidebar{background:#0F1E36;border-right:1px solid #1E3252;padding:14px 0;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;overflow-x:hidden}
-    .s-brand{display:flex;align-items:center;gap:10px;padding:4px 16px 14px}
     .s-logo{width:34px;height:34px;background:linear-gradient(135deg,#3B82F6,#2563EB);border-radius:9px;box-shadow:0 4px 14px rgba(59,130,246,.35);flex-shrink:0}
-    .s-name{font-size:17px;font-weight:700;letter-spacing:-.02em}
-    .s-sec{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#60A5FA;text-transform:uppercase;letter-spacing:.1em;padding:14px 20px 4px}
-    .s-item{display:flex;align-items:center;gap:10px;padding:7px 16px;color:#8FA3BD;font-size:13px;cursor:pointer;transition:all .12s;text-decoration:none;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif;border-left:3px solid transparent}
-    .s-item:hover{background:#162844;color:#B0C4DE}
-    .s-item.active{background:rgba(59,130,246,.12);color:#60A5FA;font-weight:600;border-left-color:#3B82F6;box-shadow:inset 0 0 0 1px rgba(59,130,246,.1)}
-    .s-sub{display:flex;align-items:center;gap:6px;padding:5px 16px 5px 44px;color:#5A7090;font-size:12px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif}
-    .s-sub:hover{color:#8FA3BD;background:#162844}
-    .s-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#374151;background:rgba(100,116,139,.2);padding:1px 6px;border-radius:4px}
-    .s-expand{font-size:11px;opacity:0.4;transition:opacity .15s;width:12px;text-align:center;flex-shrink:0}
     .proj-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:20px;transition:all .15s;cursor:pointer}
     .proj-card:hover{border-color:#2A4060;transform:translateY(-1px)}
     .proj-card .pc-name{font-size:16px;font-weight:600;margin-bottom:4px}
@@ -498,148 +483,29 @@ export default function AppShell() {
     <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', minHeight: '100vh' }}>
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
-      {/* ═══ SIDEBAR ═══ */}
-      <div className="sidebar">
-        <div className="s-brand">
-          <div className="s-logo" />
-          <span className="s-name">ProfyPlan</span>
-        </div>
-
-        <div className="s-sec" style={{ paddingTop: 4 }}>Навигация</div>
-        <button className={`s-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => navTo('dashboard')}>
-          📊 Рабочий стол
-        </button>
-
-        <div className="s-sec">Проекты</div>
-        {/* Все проекты — expandable */}
-        <button className={`s-item ${view === 'projects' ? 'active' : ''}`}
-          onClick={() => { setExpandedProjects(!expandedProjects); if (!expandedProjects) navTo('projects'); }}
-        >
-          <span className="s-expand" style={{ opacity: expandedProjects ? 1 : 0.4 }}>{expandedProjects ? '▼' : '▶'}</span>
-          📁 Все проекты
-        </button>
-        {expandedProjects && projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
-          const isExp = expandedProj === p.id;
-          return (
-            <div key={p.id}>
-              <button
-                className={`s-item ${(view === 'project-dashboard' || view === 'project-orders') && selectedProject?.id === p.id ? 'active' : ''}`}
-                onClick={() => loadProjectDashboard(p)}
-                onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, project: p }); }}
-                style={{ paddingLeft: 32 }}
-              >
-                <span className="s-expand" style={{ opacity: isExp ? 1 : 0.4 }}>{isExp ? '▼' : '▶'}</span>
-                📁 {p.name}
-              </button>
-              {isExp && (
-                <>
-                  <div className="s-sub" onClick={() => { loadProjectOrdersView(p); if (expandedOrders !== p.id) { setExpandedOrders(p.id); loadProjectOrders(p.id); } }} style={view === 'project-orders' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
-                    📋 Заказы <span className="s-count">{projectOrders[p.id]?.length ?? (expandedOrders === p.id ? '...' : (p.order_count || '—'))}</span>
-                  </div>
-                  {expandedOrders === p.id && projectOrders[p.id] && (
-                    <>
-                      {projectOrders[p.id].length === 0 && <div className="s-sub" style={{ color: '#5A7090' }}>нет заказов</div>}
-                      {projectOrders[p.id].map((o: any) => (
-                        <div key={o.id} draggable
-                          onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
-                          className="s-sub" style={{ paddingLeft: 60, fontSize: 11, cursor: 'grab' }} title={o.specification_name}>
-                          {o.specification_name || o.ext_id || '—'} <span style={{ color: '#374151', marginLeft: 4 }}>×{o.quantity}</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  <div className="s-sub" onClick={() => loadProjectGroups(p)} style={view === 'project-groups' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
-                    📁 Группы <span className="s-count">{groups.length || '—'}</span>
-                  </div>
-                  {groups.map((g: any) => (
-                    <div key={'sg-'+g.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }}
-                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }}
-                      onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
-                      onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}>
-                      📁 {g.name}
-                    </div>
-                  ))}
-                  {pools.map((p: any) => (
-                    <div key={'sp-'+p.id} className="s-sub" style={{ paddingLeft: 60, fontSize: 11 }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }} onDragLeave={(e) => { e.currentTarget.style.background = ''; }} onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}>
-                      ▸ {p.name}
-                    </div>
-                  ))}
-                  <div className="s-sub" onClick={() => { setSelectedProject(p); setView('settings'); }}>
-                    ⚙️ Настройки
-                  </div>
-                  <div className="s-sub" onClick={() => loadProjectGantt(p)} style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
-                    📊 Диаграмма Ганта
-                  </div>
-                  <div className="s-sub" onClick={() => loadProjectPools(p)} style={view === 'project-pools' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}>
-                    📦 Пулы
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Архив — expandable */}
-        <button className={`s-item ${view === 'archive' ? 'active' : ''}`}
-          onClick={() => { setExpandedArchive(!expandedArchive); if (!expandedArchive) navTo('archive'); }}
-        >
-          <span className="s-expand" style={{ opacity: expandedArchive ? 1 : 0.4 }}>{expandedArchive ? '▼' : '▶'}</span>
-          📦 Архив
-        </button>
-        {expandedArchive && (
-          <>
-            {projects.filter((p: any) => p.status === 'archived').length === 0 && (
-              <div className="s-sub" style={{ color: '#5A7090', paddingLeft: 44 }}>пусто</div>
-            )}
-            {projects.filter((p: any) => p.status === 'archived').map((p: any) => (
-              <button key={p.id}
-                className={`s-item ${view === 'project-dashboard' && selectedProject?.id === p.id ? 'active' : ''}`}
-                onClick={() => loadProjectDashboard(p)}
-                style={{ paddingLeft: 32, opacity: 0.7 }}
-              >
-                📦 {p.name}
-              </button>
-            ))}
-          </>
-        )}
-
-        <div className="s-sec">Данные</div>
-        <button className={`s-item ${view === 'directories' ? 'active' : ''}`} onClick={() => navTo('directories')}>
-          📚 Справочники
-        </button>
-        {['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'].includes(view) && (
-          <>
-            <div className={`s-sub ${view === 'nomenclature' ? 'active' : ''}`} style={view === 'nomenclature' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('nomenclature')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'nomenclature' }); }} onDoubleClick={() => setDirectoryModal('nomenclature')}>
-              📦 Номенклатура
-            </div>
-            <div className={`s-sub ${view === 'units' ? 'active' : ''}`} style={view === 'units' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('units')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'units' }); }} onDoubleClick={() => setDirectoryModal('units')}>
-              📏 Единицы измерения
-            </div>
-            <div className={`s-sub ${view === 'resources' ? 'active' : ''}`} style={view === 'resources' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('resources')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'resources' }); }} onDoubleClick={() => setDirectoryModal('resources')}>
-              🔧 Ресурсы
-            </div>
-            <div className={`s-sub ${view === 'departments' ? 'active' : ''}`} style={view === 'departments' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('departments')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'departments' }); }} onDoubleClick={() => setDirectoryModal('departments')}>
-              🏢 Подразделения
-            </div>
-            <div className={`s-sub ${view === 'organizations' ? 'active' : ''}`} style={view === 'organizations' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('organizations')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'organizations' }); }} onDoubleClick={() => setDirectoryModal('organizations')}>
-              🏭 Организации
-            </div>
-            <div className={`s-sub ${view === 'calendars' ? 'active' : ''}`} style={view === 'calendars' ? { color: '#60A5FA', fontWeight: 600 } : {}} onClick={() => navTo('calendars')} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'calendars' }); }} onDoubleClick={() => setDirectoryModal('calendars')}>
-              📅 Календари
-            </div>
-          </>
-        )}
-
-        <div className="s-sec">Аналитика</div>
-        <a href="/ccm-v2" className="s-item" style={{ textDecoration: 'none' }}>📈 CCM</a>
-        <button className={`s-item ${view === 'reports' ? 'active' : ''}`} onClick={() => navTo('reports')}>📋 Отчёты</button>
-
-        <div style={{ marginTop: 'auto', borderTop: '1px solid #1E3252', paddingTop: 8 }}>
-          <button className={`s-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navTo('settings')}>
-            ⚙️ Настройки
-          </button>
-        </div>
-      </div>
+      <Sidebar
+        view={view}
+        navTo={navTo}
+        projects={projects}
+        selectedProject={selectedProject}
+        groups={groups}
+        pools={pools}
+        projectOrders={projectOrders}
+        expandedOrders={expandedOrders}
+        setExpandedOrders={setExpandedOrders}
+        loadProjectDashboard={loadProjectDashboard}
+        loadProjectOrdersView={loadProjectOrdersView}
+        loadProjectGantt={loadProjectGantt}
+        loadProjectPools={loadProjectPools}
+        loadProjectGroups={loadProjectGroups}
+        loadProjectOrders={loadProjectOrders}
+        setCtxMenu={setCtxMenu}
+        setSidebarCtx={setSidebarCtx}
+        moveOrder={moveOrder}
+        setDirectoryModal={setDirectoryModal}
+        setSelectedProject={setSelectedProject}
+        setView={setView}
+      />
 
       {/* ═══ MAIN ═══ */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
