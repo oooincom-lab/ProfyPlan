@@ -48,6 +48,36 @@ async def create_item(
     return item
 
 
+@router.get("/search/", response_model=list[NomenclatureOut])
+async def search_items(
+    q: str,
+    limit: int = 10,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fuzzy search nomenclature by name. Uses ILIKE + word prefix matching."""
+    from sqlalchemy import or_, and_
+    # Normalize query: split into words, match each as prefix
+    words = [w.strip() for w in q.split() if w.strip()]
+    if not words:
+        return []
+    # Build ILIKE conditions: each word as prefix OR full substring
+    conditions = []
+    for w in words:
+        pattern = f"%{w}%"
+        conditions.append(Nomenclature.name.ilike(pattern))
+        conditions.append(Nomenclature.code.ilike(pattern))
+        conditions.append(Nomenclature.article.ilike(pattern))
+    stmt = (
+        select(Nomenclature)
+        .where(and_(Nomenclature.tenant_id == tenant_id, or_(*conditions)))
+        .order_by(Nomenclature.name)
+        .limit(limit)
+    )
+    res = await db.execute(stmt)
+    return res.scalars().all()
+
+
 @router.get("/{item_id}", response_model=NomenclatureOut)
 async def get_item(
     item_id: str,

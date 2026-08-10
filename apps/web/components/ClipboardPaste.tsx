@@ -1,6 +1,10 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+
+// ── Nomenclature match type ──
+type NomenclatureMatch = { id: string; name: string; code: string | null; article: string | null };
+type NomenclatureSearchFn = (query: string) => Promise<NomenclatureMatch[]>;
 
 // ── Column synonym dictionary ──
 const FIELD_SYNONYMS: Record<string, string[]> = {
@@ -33,11 +37,80 @@ function parseTSV(text: string): string[][] {
   return text.split('\n').filter(r => r.trim()).map(r => r.split('\t').map(c => c.trim()));
 }
 
-export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<string, string>[]) => void }) {
+// ── Fuzzy match scoring ──
+function fuzzyScore(query: string, target: string): number {
+  const q = query.toLowerCase().replace(/[^a-zа-яё0-9]/g, '').trim();
+  const t = target.toLowerCase().replace(/[^a-zа-яё0-9]/g, '').trim();
+  if (!q || !t) return 0;
+  if (q === t) return 100;
+  if (t.includes(q)) return 90;
+  if (q.includes(t)) return 80;
+
+  // Word-level matching: each query word must appear as a prefix/substring in target
+  const qWords = q.split(/\s+/).filter(Boolean);
+  const tWords = t.split(/\s+/).filter(Boolean);
+  if (qWords.length === 0) return 0;
+
+  let matched = 0;
+  for (const qw of qWords) {
+    if (tWords.some(tw => tw.startsWith(qw) || qw.startsWith(tw) || tw.includes(qw) || qw.includes(tw))) {
+      matched++;
+    }
+  }
+  return Math.round((matched / qWords.length) * 75); // max 75 for word match since not exact
+}
+
+// ── Batch lookup: unique product names → nomenclature matches ──
+async function lookupNomenclature(
+  rows: string[][],
+  specColIdx: number | null,
+  searchFn: NomenclatureSearchFn,
+): Promise<Map<string, NomenclatureMatch | null>> {
+  const cache = new Map<string, NomenclatureMatch | null>();
+  if (specColIdx === null) return cache;
+
+  const unique = [...new Set(rows.map(r => r[specColIdx] || '').filter(Boolean))];
+  await Promise.all(unique.map(async (name) => {
+    try {
+      const results = await searchFn(name);
+      if (results.length > 0) {
+        // Score all results, pick the best
+        let best = results[0];
+        let bestScore = fuzzyScore(name, best.name);
+        for (const r of results) {
+          const s = fuzzyScore(name, r.name);
+          if (s > bestScore) { best = r; bestScore = s; }
+        }
+        // Only return if score >= 40
+        if (bestScore >= 40) {
+          cache.set(name, best);
+        } else {
+          cache.set(name, null);
+        }
+      } else {
+        cache.set(name, null);
+      }
+    } catch {
+      cache.set(name, null);
+    }
+  }));
+
+  return cache;
+}
+
+export default function ClipboardPaste({
+  onApply,
+  nomenclatureSearchFn,
+}: {
+  onApply: (rows: Record<string, string>[], matches: Record<string, { id: string; name: string } | null>) => void;
+  nomenclatureSearchFn?: NomenclatureSearchFn;
+}) {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<number, string>>({});
   const [pasted, setPasted] = useState(false);
+  const [nomenMatches, setNomenMatches] = useState<Map<string, NomenclatureMatch | null>>(new Map());
+  const [matchLoading, setMatchLoading] = useState(false);
   const areaRef = useRef<HTMLDivElement>(null);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -46,7 +119,7 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
     if (!text.trim()) return;
 
     const data = parseTSV(text);
-    if (data.length < 2) return; // need header + at least 1 row
+    if (data.length < 2) return;
 
     const hdrs = data[0];
     const body = data.slice(1);
@@ -60,7 +133,25 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
     setRows(body);
     setMapping(m);
     setPasted(true);
+    setNomenMatches(new Map());
   }, []);
+
+  // Auto-lookup nomenclature when mapping changes (debounced)
+  useEffect(() => {
+    if (!nomenclatureSearchFn || !pasted) return;
+
+    const specColIdx = Object.entries(mapping).find(([, field]) => field === 'specification_name');
+    if (!specColIdx) { setNomenMatches(new Map()); return; }
+
+    const colIdx = parseInt(specColIdx[0]);
+    setMatchLoading(true);
+    const timer = setTimeout(async () => {
+      const matches = await lookupNomenclature(rows, colIdx, nomenclatureSearchFn);
+      setNomenMatches(matches);
+      setMatchLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [mapping, rows, pasted, nomenclatureSearchFn]);
 
   const setField = (colIdx: number, field: string) => {
     setMapping(prev => {
@@ -82,10 +173,21 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
       });
       return obj;
     });
-    onApply(result);
+    // Build match map: specification_name → { id, name } | null
+    const matches: Record<string, { id: string; name: string } | null> = {};
+    nomenMatches.forEach((match, name) => {
+      matches[name] = match ? { id: match.id, name: match.name } : null;
+    });
+    onApply(result, matches);
   };
 
   const availableFields = Object.keys(FIELD_LABELS);
+  const matchCount = [...nomenMatches.values()].filter(Boolean).length;
+  const uniqueNames = [...new Set(
+    Object.entries(mapping)
+      .filter(([, field]) => field === 'specification_name')
+      .flatMap(([colIdx]) => rows.map(r => r[parseInt(colIdx)] || '').filter(Boolean))
+  )];
 
   return (
     <div>
@@ -149,6 +251,29 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
               })}
             </div>
 
+            {/* Nomenclature match summary */}
+            {nomenclatureSearchFn && matchLoading && (
+              <div style={{ fontSize: 12, color: '#F59E0B', marginBottom: 8, textAlign: 'center' }}>
+                🔍 Сопоставление с номенклатурой...
+              </div>
+            )}
+            {nomenclatureSearchFn && !matchLoading && matchCount > 0 && (
+              <div style={{
+                fontSize: 12, color: '#10B981', marginBottom: 8, textAlign: 'center',
+                background: 'rgba(16,185,129,0.08)', borderRadius: 6, padding: '4px 12px', display: 'inline-block',
+              }}>
+                ✓ Сопоставлено: {matchCount} из {uniqueNames.length} уникальных продуктов
+              </div>
+            )}
+            {nomenclatureSearchFn && !matchLoading && matchCount === 0 && uniqueNames.length > 0 && (
+              <div style={{
+                fontSize: 12, color: '#F59E0B', marginBottom: 8, textAlign: 'center',
+                background: 'rgba(245,158,11,0.08)', borderRadius: 6, padding: '4px 12px', display: 'inline-block',
+              }}>
+                ⚠ Нет совпадений в номенклатуре для {uniqueNames.length} продуктов
+              </div>
+            )}
+
             {/* Preview table */}
             <div style={{ overflowX: 'auto', maxHeight: 200, overflowY: 'auto', textAlign: 'left' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -168,11 +293,26 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
                 <tbody>
                   {rows.slice(0, 10).map((row, ri) => (
                     <tr key={ri}>
-                      {row.map((cell, ci) => (
-                        <td key={ci} style={{ padding: '4px 10px', color: '#B0C4DE', borderBottom: '1px solid #162844', whiteSpace: 'nowrap' }}>
-                          {cell}
-                        </td>
-                      ))}
+                      {row.map((cell, ci) => {
+                        const isSpecName = mapping[ci] === 'specification_name';
+                        const match = isSpecName && cell ? nomenMatches.get(cell) : undefined;
+                        const hasMatch = match && match !== undefined;
+                        return (
+                          <td key={ci} style={{
+                            padding: '4px 10px', color: '#B0C4DE', borderBottom: '1px solid #162844', whiteSpace: 'nowrap',
+                          }}>
+                            {cell}
+                            {isSpecName && nomenclatureSearchFn && cell && match !== undefined && (
+                              <span style={{
+                                marginLeft: 6, fontSize: 10,
+                                color: match ? '#10B981' : '#EF4444',
+                              }} title={match ? `✓ ${match.name} (${match.code || '—'})` : '✗ Не найдено в номенклатуре'}>
+                                {match ? '✓' : '✗'}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -185,7 +325,7 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
             </div>
 
             <div style={{ marginTop: 12 }}>
-              <button onClick={() => { setPasted(false); setRows([]); setHeaders([]); setMapping({}); }}
+              <button onClick={() => { setPasted(false); setRows([]); setHeaders([]); setMapping({}); setNomenMatches(new Map()); }}
                 className="btn btn-sm" style={{ marginRight: 8, background: 'transparent', border: '1px solid #2A4060', color: '#B0C4DE', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: 12 }}>
                 ✕ Очистить
               </button>
@@ -204,6 +344,7 @@ export default function ClipboardPaste({ onApply }: { onApply: (rows: Record<str
 
       <div style={{ marginTop: 12, fontSize: 11, color: '#374151', textAlign: 'center' }}>
         💡 Поддерживаются колонки: {availableFields.map(f => FIELD_LABELS[f]).join(', ')}
+        {nomenclatureSearchFn && ' · ⚡ с автосопоставлением номенклатуры'}
       </div>
     </div>
   );

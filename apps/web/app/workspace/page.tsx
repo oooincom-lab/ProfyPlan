@@ -1020,8 +1020,17 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
   const [usesPhases, setUsesPhases] = useState(false);
   const [country, setCountry] = useState('RU');
   const [manualRows, setManualRows] = useState<Record<string, string>[]>([]);
+  const [nomenMatches, setNomenMatches] = useState<Record<string, { id: string; name: string } | null>>({});
   const [showManual, setShowManual] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  // Nomenclature search function for ClipboardPaste
+  const searchNomenclature = async (q: string) => {
+    try {
+      const items = await apiF<any[]>(`/nomenclature/search/?q=${encodeURIComponent(q)}`);
+      return items.map((i: any) => ({ id: i.id, name: i.name, code: i.code, article: i.article }));
+    } catch { return []; }
+  };
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -1132,7 +1141,10 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
             <button className="btn btn-sm" style={{ background: 'transparent', border: '1px solid #2A4060', color: '#B0C4DE', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
               onClick={() => setShowManual(false)}>← Назад к выбору</button>
           </div>
-          <ClipboardPaste onApply={(rows) => { setManualRows(rows); setShowManual(false); }} />
+          <ClipboardPaste
+            nomenclatureSearchFn={searchNomenclature}
+            onApply={(rows, matches) => { setManualRows(rows); setNomenMatches(matches); setShowManual(false); }}
+          />
         </div>
       )}
 
@@ -1145,7 +1157,15 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
               <div style={{ color: '#5A7090' }}>Название</div><div style={{ fontWeight: 600 }}>{name || '(не указано)'}</div>
               <div style={{ color: '#5A7090' }}>Режим</div><div>{mode.toUpperCase()}{usesPhases ? ' + Этапы' : ''}</div>
               <div style={{ color: '#5A7090' }}>Страна</div><div>{country}</div>
-              <div style={{ color: '#5A7090' }}>Данные</div><div>{manualRows.length > 0 ? `${manualRows.length} строк вручную` : 'Будут добавлены позже'}</div>
+              <div style={{ color: '#5A7090' }}>Данные</div>
+              <div>
+                <div>{manualRows.length > 0 ? `${manualRows.length} строк вручную` : 'Будут добавлены позже'}</div>
+                {Object.values(nomenMatches).filter(Boolean).length > 0 && (
+                  <div style={{ fontSize: 11, color: '#10B981', marginTop: 4 }}>
+                    ✓ Сопоставлено с номенклатурой: {Object.values(nomenMatches).filter(Boolean).length} продуктов
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
