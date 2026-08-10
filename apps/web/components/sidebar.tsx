@@ -46,6 +46,7 @@ export default function Sidebar(props: SidebarProps) {
   // Internal expand state — independent multiselect
   const [expandedProjects, setExpandedProjects] = useState(true);
   const [expandedArchive, setExpandedArchive] = useState(false);
+  const [expandedDirectories, setExpandedDirectories] = useState(false);
   const [expandedProj, setExpandedProj] = useState<Set<string>>(new Set());
   const prevSelectedRef = useRef<string | null>(null);
 
@@ -57,6 +58,14 @@ export default function Sidebar(props: SidebarProps) {
     }
     prevSelectedRef.current = pid || null;
   }, [selectedProject?.id]);
+
+  // Auto-expand directories section when navigating to a directory view
+  const dirViews = ['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'];
+  useEffect(() => {
+    if (dirViews.includes(view)) {
+      setExpandedDirectories(true);
+    }
+  }, [view]);
 
   const toggleProj = (pid: string) => {
     setExpandedProj(prev => {
@@ -124,15 +133,24 @@ export default function Sidebar(props: SidebarProps) {
       </div>
 
       {/* Все проекты — section expand */}
-      <button
+      <div
         className={`s-item ${view === 'projects' ? 'active' : ''}`}
-        onClick={() => { setExpandedProjects(!expandedProjects); if (!expandedProjects) navTo('projects'); }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10 }}
       >
-        <span className="s-expand" style={{ opacity: expandedProjects ? 1 : 0.4 }}>
+        <span
+          className="s-arrow"
+          onClick={(e) => { e.stopPropagation(); setExpandedProjects(!expandedProjects); }}
+        >
           {expandedProjects ? '▼' : '▶'}
         </span>
-        📁 Все проекты
-      </button>
+        <span
+          className="s-proj-name"
+          onClick={() => navTo('projects')}
+          style={{ cursor: 'pointer' }}
+        >
+          📁 Все проекты
+        </span>
+      </div>
 
       {expandedProjects && projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
         const isExp = expandedProj.has(p.id);
@@ -252,15 +270,24 @@ export default function Sidebar(props: SidebarProps) {
       })}
 
       {/* Архив */}
-      <button
+      <div
         className={`s-item ${view === 'archive' ? 'active' : ''}`}
-        onClick={() => { setExpandedArchive(!expandedArchive); if (!expandedArchive) navTo('archive'); }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10 }}
       >
-        <span className="s-expand" style={{ opacity: expandedArchive ? 1 : 0.4 }}>
+        <span
+          className="s-arrow"
+          onClick={(e) => { e.stopPropagation(); setExpandedArchive(!expandedArchive); }}
+        >
           {expandedArchive ? '▼' : '▶'}
         </span>
-        📦 Архив
-      </button>
+        <span
+          className="s-proj-name"
+          onClick={() => navTo('archive')}
+          style={{ cursor: 'pointer' }}
+        >
+          📦 Архив
+        </span>
+      </div>
 
       {expandedArchive && (
         <>
@@ -282,11 +309,26 @@ export default function Sidebar(props: SidebarProps) {
 
       {/* Данные */}
       <div className="s-sec" style={{ justifyContent: 'flex-start' }}>Данные</div>
-      <button className={`s-item ${view === 'directories' ? 'active' : ''}`} onClick={() => navTo('directories')}>
-        📚 Справочники
-      </button>
+      <div
+        className={`s-item ${view === 'directories' ? 'active' : ''}`}
+        style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+      >
+        <span
+          className="s-arrow"
+          onClick={(e) => { e.stopPropagation(); setExpandedDirectories(!expandedDirectories); }}
+        >
+          {expandedDirectories ? '▼' : '▶'}
+        </span>
+        <span
+          className="s-proj-name"
+          onClick={() => navTo('directories')}
+          style={{ cursor: 'pointer' }}
+        >
+          📚 Справочники
+        </span>
+      </div>
 
-      {['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'].includes(view) && (
+      {expandedDirectories && (
         <>
           <div
             className={`s-sub ${view === 'nomenclature' ? 'active' : ''}`}
