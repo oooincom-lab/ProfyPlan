@@ -6,6 +6,7 @@ import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import Sidebar from '@/components/sidebar';
+import DeleteCheckDialog from '@/components/DeleteCheckDialog';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -215,7 +216,16 @@ export default function AppShell() {
     } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
   };
 
+  const [deleteCheckEntity, setDeleteCheckEntity] = useState<{ type: string; id: string; name: string } | null>(null);
+
+  const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') || '' : '';
+
   const deleteProject = async (p: any) => {
+    setDeleteCheckEntity({ type: 'project', id: p.id, name: p.name });
+    setCtxMenu(null);
+  };
+
+  const _deleteProjectDirect = async (p: any) => {
     if (!confirm(`Удалить проект "${p.name}"? Это действие необратимо.`)) return;
     try {
       await apiF(`/projects/${p.id}`, { method: 'DELETE' });
@@ -1355,11 +1365,23 @@ export default function AppShell() {
           <button onClick={() => { archiveProject(ctxMenu.project); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
             {ctxMenu.project.status === 'archived' ? '📂 Восстановить' : '📦 В архив'}
           </button>
-          <button onClick={() => { if (confirm('Удалить проект и все данные?')) { deleteProject(ctxMenu.project); } setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+          <button onClick={() => { deleteProject(ctxMenu.project); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
             🗑 Удалить
           </button>
         </div>
       </>
+    )}
+
+    {/* Delete Check Dialog */}
+    {deleteCheckEntity && (
+      <DeleteCheckDialog
+        entityType={deleteCheckEntity.type}
+        entityId={deleteCheckEntity.id}
+        entityName={deleteCheckEntity.name}
+        token={getToken()}
+        onClose={() => setDeleteCheckEntity(null)}
+        onDeleted={() => { setSelectedProject(null); setOrders([]); load().then(() => navTo('projects')); }}
+      />
     )}
     </div>
   );

@@ -138,6 +138,10 @@ export default function Sidebar(props: SidebarProps) {
         .s-folder::before{content:'';position:absolute;top:-3px;left:0;width:7px;height:3px;background:currentColor;border-radius:2px 2px 0 0}
         .s-folder-open{display:inline-block;width:14px;height:11px;border:1.5px solid currentColor;border-radius:2px 3px 3px 2px;position:relative;top:1px;flex-shrink:0;background:transparent}
         .s-folder-open::before{content:'';position:absolute;top:-3px;left:-1.5px;width:7px;height:3px;border:1.5px solid currentColor;border-bottom:none;border-radius:2px 2px 0 0;background:transparent}
+        .sidebar::-webkit-scrollbar{width:6px}
+        .sidebar::-webkit-scrollbar-track{background:var(--s-bg)}
+        .sidebar::-webkit-scrollbar-thumb{background:var(--s-fg-sub);border-radius:3px}
+        .sidebar::-webkit-scrollbar-thumb:hover{background:var(--s-fg)}
       `}</style>
 
       {/* Brand */}
