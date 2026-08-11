@@ -96,23 +96,48 @@ export default function Sidebar(props: SidebarProps) {
     <div className="sidebar">
       {/* Inline CSS — self-contained */}
       <style>{`
-        .sidebar{background:#0F1E36;border-right:1px solid #1E3252;padding:14px 0;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;overflow-x:hidden}
+        .sidebar{
+          --s-bg:#0F1E36;--s-border:#1E3252;--s-hover-bg:#162844;
+          --s-active-bg:rgba(59,130,246,.12);--s-active-border:#3B82F6;--s-active-shadow:rgba(59,130,246,.1);
+          --s-fg:#CBD5E1;--s-fg-hover:#F1F5F9;--s-fg-sub:#94A3B8;--s-fg-active:#60A5FA;
+          --s-fg-section:#60A5FA;--s-badge-bg:rgba(100,116,139,.2);--s-badge-fg:#64748B;
+          --s-accent:#3B82F6;--s-accent-2:#2563EB;--s-folder-all:#60A5FA;--s-folder-proj:#60A5FA;
+          --s-fg-proj:#B0C4DE;
+          --s-dragover-bg:rgba(59,130,246,.15);--s-collapse-hover:rgba(59,130,246,.15);
+          --s-logo-glow:0 4px 14px rgba(59,130,246,.35);
+          background:var(--s-bg);border-right:1px solid var(--s-border);padding:14px 0;
+          display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;overflow-x:hidden
+        }
+        [data-theme="light"] .sidebar{
+          --s-bg:#F1F5F9;--s-border:#E2E8F0;--s-hover-bg:#F8FAFC;
+          --s-active-bg:rgba(59,130,246,.08);--s-active-border:#2563EB;--s-active-shadow:rgba(59,130,246,.05);
+          --s-fg:#334155;--s-fg-hover:#0F172A;--s-fg-sub:#64748B;--s-fg-active:#2563EB;
+          --s-fg-section:#3B82F6;--s-badge-bg:rgba(100,116,139,.1);--s-badge-fg:#94A3B8;
+          --s-accent:#3B82F6;--s-accent-2:#2563EB;--s-folder-all:#3B82F6;--s-folder-proj:#3B82F6;
+          --s-fg-proj:#475569;
+          --s-dragover-bg:rgba(59,130,246,.08);--s-collapse-hover:rgba(59,130,246,.08);
+          --s-logo-glow:0 4px 14px rgba(59,130,246,.15);
+        }
         .s-brand{display:flex;align-items:center;gap:10px;padding:4px 16px 14px}
-        .s-logo{width:34px;height:34px;background:linear-gradient(135deg,#3B82F6,#2563EB);border-radius:9px;box-shadow:0 4px 14px rgba(59,130,246,.35);flex-shrink:0}
+        .s-logo{width:34px;height:34px;background:linear-gradient(135deg,var(--s-accent),var(--s-accent-2));border-radius:9px;box-shadow:var(--s-logo-glow);flex-shrink:0}
         .s-name{font-size:17px;font-weight:700;letter-spacing:-.02em}
-        .s-sec{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#60A5FA;text-transform:uppercase;letter-spacing:.1em;padding:14px 20px 4px;display:flex;align-items:center;justify-content:space-between}
-        .s-collapse-all{font-size:11px;cursor:pointer;color:#60A5FA;padding:2px 6px;border-radius:4px;background:none;border:none;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;opacity:0.5;transition:opacity .15s}
-        .s-collapse-all:hover{opacity:1;background:rgba(59,130,246,.15)}
-        .s-item{display:flex;align-items:center;gap:10px;padding:7px 16px;color:#8FA3BD;font-size:13px;cursor:pointer;transition:all .12s;text-decoration:none;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif;border-left:3px solid transparent}
-        .s-item:hover{background:#162844;color:#B0C4DE}
-        .s-item.active{background:rgba(59,130,246,.12);color:#60A5FA;font-weight:600;border-left-color:#3B82F6;box-shadow:inset 0 0 0 1px rgba(59,130,246,.1)}
-        .s-sub{display:flex;align-items:center;gap:6px;padding:5px 16px 5px 56px;color:#5A7090;font-size:12px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif}
-        .s-sub:hover{color:#8FA3BD;background:#162844}
-        .s-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#374151;background:rgba(100,116,139,.2);padding:1px 6px;border-radius:4px}
+        .s-sec{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--s-fg-section);text-transform:uppercase;letter-spacing:.1em;padding:14px 20px 4px;display:flex;align-items:center;justify-content:space-between}
+        .s-collapse-all{font-size:11px;cursor:pointer;color:var(--s-fg-section);padding:2px 6px;border-radius:4px;background:none;border:none;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;opacity:0.5;transition:opacity .15s}
+        .s-collapse-all:hover{opacity:1;background:var(--s-collapse-hover)}
+        .s-item{display:flex;align-items:center;gap:10px;padding:7px 16px;color:var(--s-fg);font-size:13px;font-weight:500;cursor:pointer;transition:all .12s;text-decoration:none;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif;border-left:3px solid transparent}
+        .s-item:hover{background:var(--s-hover-bg);color:var(--s-fg-hover)}
+        .s-item.active{background:var(--s-active-bg);color:var(--s-fg-active);font-weight:600;border-left-color:var(--s-active-border);box-shadow:inset 0 0 0 1px var(--s-active-shadow)}
+        .s-sub{display:flex;align-items:center;gap:6px;padding:5px 16px 5px 56px;color:var(--s-fg-sub);font-size:12px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif}
+        .s-sub:hover{color:var(--s-fg);background:var(--s-hover-bg)}
+        .s-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--s-badge-fg);background:var(--s-badge-bg);padding:1px 6px;border-radius:4px}
         .s-expand{font-size:11px;opacity:0.4;transition:opacity .15s;width:12px;text-align:center;flex-shrink:0}
         .s-proj-name{flex:1}
         .s-arrow{cursor:pointer;width:14px;text-align:center;flex-shrink:0;font-size:11px;opacity:0.4;transition:opacity .12s}
         .s-arrow:hover{opacity:1}
+        .s-folder{display:inline-block;width:14px;height:11px;background:currentColor;border-radius:2px 3px 3px 2px;position:relative;top:1px;flex-shrink:0}
+        .s-folder::before{content:'';position:absolute;top:-3px;left:0;width:7px;height:3px;background:currentColor;border-radius:2px 2px 0 0}
+        .s-folder-open{display:inline-block;width:14px;height:11px;border:1.5px solid currentColor;border-radius:2px 3px 3px 2px;position:relative;top:1px;flex-shrink:0;background:transparent}
+        .s-folder-open::before{content:'';position:absolute;top:-3px;left:-1.5px;width:7px;height:3px;border:1.5px solid currentColor;border-bottom:none;border-radius:2px 2px 0 0;background:transparent}
       `}</style>
 
       {/* Brand */}
@@ -158,7 +183,7 @@ export default function Sidebar(props: SidebarProps) {
           onClick={() => navTo('projects')}
           style={{ cursor: 'pointer' }}
         >
-          📁 Все проекты
+          <span className="s-folder" style={{ color: 'var(--s-folder-all)' }} /> Все проекты
         </span>
       </div>
 
@@ -169,7 +194,9 @@ export default function Sidebar(props: SidebarProps) {
             <div
               className={`s-item ${view === 'project-dashboard' && selectedProject?.id === p.id ? 'active' : ''}`}
               onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, project: p }); }}
-              style={{ paddingLeft: 32, display: 'flex', alignItems: 'center', gap: 10 }}
+              style={view === 'project-dashboard' && selectedProject?.id === p.id
+                ? { paddingLeft: 32, display: 'flex', alignItems: 'center', gap: 10 }
+                : { paddingLeft: 32, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--s-fg-proj)' }}
             >
               {/* Arrow — toggles expand only */}
               <span
@@ -184,7 +211,7 @@ export default function Sidebar(props: SidebarProps) {
                 onClick={() => loadProjectDashboard(p)}
                 style={{ cursor: 'pointer' }}
               >
-                <span style={{ color: '#6EE7B7', fontSize: 10 }}>◆</span> {p.name}
+                <span className="s-folder" style={{ color: 'var(--s-folder-proj)' }} /> {p.name}
               </span>
             </div>
 
@@ -193,7 +220,7 @@ export default function Sidebar(props: SidebarProps) {
                 {/* Заказы — arrow + name */}
                 <div
                   className="s-sub"
-                  style={view === 'project-orders' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
+                  style={view === 'project-orders' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
                 >
                   <span
                     className="s-arrow"
@@ -216,7 +243,7 @@ export default function Sidebar(props: SidebarProps) {
                 {expandedOrders === p.id && projectOrders[p.id] && (
                   <>
                     {projectOrders[p.id].length === 0 && (
-                      <div className="s-sub" style={{ color: '#5A7090' }}>нет заказов</div>
+                      <div className="s-sub" style={{ color: 'var(--s-fg-sub)' }}>нет заказов</div>
                     )}
                     {projectOrders[p.id].map((o: any) => (
                       <div
@@ -228,7 +255,7 @@ export default function Sidebar(props: SidebarProps) {
                         title={o.specification_name}
                       >
                         {o.specification_name || o.ext_id || '—'}{' '}
-                        <span style={{ color: '#374151', marginLeft: 4 }}>×{o.quantity}</span>
+                        <span style={{ color: 'var(--s-badge-fg)', marginLeft: 4 }}>×{o.quantity}</span>
                       </div>
                     ))}
                   </>
@@ -237,7 +264,7 @@ export default function Sidebar(props: SidebarProps) {
                 {/* Группы — arrow + name */}
                 <div
                   className="s-sub"
-                  style={view === 'project-groups' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
+                  style={view === 'project-groups' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
                 >
                   <span
                     className="s-arrow"
@@ -260,7 +287,7 @@ export default function Sidebar(props: SidebarProps) {
                     key={'sg-' + g.id}
                     className="s-sub"
                     style={{ paddingLeft: 72, fontSize: 11 }}
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}
                   >
@@ -271,7 +298,7 @@ export default function Sidebar(props: SidebarProps) {
                 {/* Пулы — arrow + name */}
                 <div
                   className="s-sub"
-                  style={view === 'project-pools' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
+                  style={view === 'project-pools' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
                 >
                   <span
                     className="s-arrow"
@@ -293,7 +320,7 @@ export default function Sidebar(props: SidebarProps) {
                     key={'sp-' + p.id}
                     className="s-sub"
                     style={{ paddingLeft: 72, fontSize: 11 }}
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}
                   >
@@ -307,7 +334,7 @@ export default function Sidebar(props: SidebarProps) {
                 <div
                   className="s-sub"
                   onClick={() => loadProjectGantt(p)}
-                  style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
+                  style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
                 >
                   📊 Диаграмма Ганта
                 </div>
@@ -340,14 +367,16 @@ export default function Sidebar(props: SidebarProps) {
       {expandedArchive && (
         <>
           {projects.filter((p: any) => p.status === 'archived').length === 0 && (
-            <div className="s-sub" style={{ color: '#5A7090', paddingLeft: 56 }}>пусто</div>
+            <div className="s-sub" style={{ color: 'var(--s-fg-sub)', paddingLeft: 56 }}>пусто</div>
           )}
           {projects.filter((p: any) => p.status === 'archived').map((p: any) => (
             <button
               key={p.id}
               className={`s-item ${view === 'project-dashboard' && selectedProject?.id === p.id ? 'active' : ''}`}
               onClick={() => loadProjectDashboard(p)}
-              style={{ paddingLeft: 32, opacity: 0.7 }}
+              style={view === 'project-dashboard' && selectedProject?.id === p.id
+                ? { paddingLeft: 32, opacity: 0.7 }
+                : { paddingLeft: 32, color: 'var(--s-fg-proj)', opacity: 0.7 }}
             >
               📦 {p.name}
             </button>
@@ -380,7 +409,7 @@ export default function Sidebar(props: SidebarProps) {
         <>
           <div
             className={`s-sub ${view === 'nomenclature' ? 'active' : ''}`}
-            style={view === 'nomenclature' ? { color: '#60A5FA', fontWeight: 600 } : {}}
+            style={view === 'nomenclature' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('nomenclature')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'nomenclature' }); }}
             onDoubleClick={() => setDirectoryModal('nomenclature')}
@@ -389,7 +418,7 @@ export default function Sidebar(props: SidebarProps) {
           </div>
           <div
             className={`s-sub ${view === 'units' ? 'active' : ''}`}
-            style={view === 'units' ? { color: '#60A5FA', fontWeight: 600 } : {}}
+            style={view === 'units' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('units')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'units' }); }}
             onDoubleClick={() => setDirectoryModal('units')}
@@ -398,7 +427,7 @@ export default function Sidebar(props: SidebarProps) {
           </div>
           <div
             className={`s-sub ${view === 'resources' ? 'active' : ''}`}
-            style={view === 'resources' ? { color: '#60A5FA', fontWeight: 600 } : {}}
+            style={view === 'resources' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('resources')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'resources' }); }}
             onDoubleClick={() => setDirectoryModal('resources')}
@@ -407,7 +436,7 @@ export default function Sidebar(props: SidebarProps) {
           </div>
           <div
             className={`s-sub ${view === 'departments' ? 'active' : ''}`}
-            style={view === 'departments' ? { color: '#60A5FA', fontWeight: 600 } : {}}
+            style={view === 'departments' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('departments')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'departments' }); }}
             onDoubleClick={() => setDirectoryModal('departments')}
@@ -416,7 +445,7 @@ export default function Sidebar(props: SidebarProps) {
           </div>
           <div
             className={`s-sub ${view === 'organizations' ? 'active' : ''}`}
-            style={view === 'organizations' ? { color: '#60A5FA', fontWeight: 600 } : {}}
+            style={view === 'organizations' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('organizations')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'organizations' }); }}
             onDoubleClick={() => setDirectoryModal('organizations')}
@@ -425,7 +454,7 @@ export default function Sidebar(props: SidebarProps) {
           </div>
           <div
             className={`s-sub ${view === 'calendars' ? 'active' : ''}`}
-            style={view === 'calendars' ? { color: '#60A5FA', fontWeight: 600 } : {}}
+            style={view === 'calendars' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('calendars')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'calendars' }); }}
             onDoubleClick={() => setDirectoryModal('calendars')}
@@ -443,7 +472,7 @@ export default function Sidebar(props: SidebarProps) {
       </button>
 
       {/* Настройки (bottom) */}
-      <div style={{ marginTop: 'auto', borderTop: '1px solid #1E3252', paddingTop: 8 }}>
+      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--s-border)', paddingTop: 8 }}>
         <button className={`s-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navTo('settings')}>
           ⚙️ Настройки
         </button>
