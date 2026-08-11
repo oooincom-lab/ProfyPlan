@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
@@ -48,16 +48,6 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedArchive, setExpandedArchive] = useState(false);
   const [expandedDirectories, setExpandedDirectories] = useState(false);
   const [expandedProj, setExpandedProj] = useState<Set<string>>(new Set());
-  const prevSelectedRef = useRef<string | null>(null);
-
-  // Auto-expand project when selected from outside sidebar (dashboard cards, etc.)
-  useEffect(() => {
-    const pid = selectedProject?.id;
-    if (pid && pid !== prevSelectedRef.current) {
-      setExpandedProj(prev => new Set(prev).add(pid));
-    }
-    prevSelectedRef.current = pid || null;
-  }, [selectedProject?.id]);
 
   // Auto-expand directories section when navigating to a directory view
   const dirViews = ['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'];
@@ -78,8 +68,6 @@ export default function Sidebar(props: SidebarProps) {
 
   const collapseAllProjects = () => {
     setExpandedProj(new Set());
-    // Prevent auto-expand from re-opening the selected project
-    prevSelectedRef.current = selectedProject?.id || null;
   };
 
   return (
@@ -96,7 +84,7 @@ export default function Sidebar(props: SidebarProps) {
         .s-item{display:flex;align-items:center;gap:10px;padding:7px 16px;color:#8FA3BD;font-size:13px;cursor:pointer;transition:all .12s;text-decoration:none;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif;border-left:3px solid transparent}
         .s-item:hover{background:#162844;color:#B0C4DE}
         .s-item.active{background:rgba(59,130,246,.12);color:#60A5FA;font-weight:600;border-left-color:#3B82F6;box-shadow:inset 0 0 0 1px rgba(59,130,246,.1)}
-        .s-sub{display:flex;align-items:center;gap:6px;padding:5px 16px 5px 44px;color:#5A7090;font-size:12px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif}
+        .s-sub{display:flex;align-items:center;gap:6px;padding:5px 16px 5px 80px;color:#5A7090;font-size:12px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif}
         .s-sub:hover{color:#8FA3BD;background:#162844}
         .s-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#374151;background:rgba(100,116,139,.2);padding:1px 6px;border-radius:4px}
         .s-expand{font-size:11px;opacity:0.4;transition:opacity .15s;width:12px;text-align:center;flex-shrink:0}
@@ -202,7 +190,7 @@ export default function Sidebar(props: SidebarProps) {
                         draggable
                         onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
                         className="s-sub"
-                        style={{ paddingLeft: 60, fontSize: 11, cursor: 'grab' }}
+                        style={{ paddingLeft: 96, fontSize: 11, cursor: 'grab' }}
                         title={o.specification_name}
                       >
                         {o.specification_name || o.ext_id || '—'}{' '}
@@ -224,7 +212,7 @@ export default function Sidebar(props: SidebarProps) {
                   <div
                     key={'sg-' + g.id}
                     className="s-sub"
-                    style={{ paddingLeft: 60, fontSize: 11 }}
+                    style={{ paddingLeft: 96, fontSize: 11 }}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}
@@ -237,7 +225,7 @@ export default function Sidebar(props: SidebarProps) {
                   <div
                     key={'sp-' + p.id}
                     className="s-sub"
-                    style={{ paddingLeft: 60, fontSize: 11 }}
+                    style={{ paddingLeft: 96, fontSize: 11 }}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59,130,246,.15)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}
@@ -292,7 +280,7 @@ export default function Sidebar(props: SidebarProps) {
       {expandedArchive && (
         <>
           {projects.filter((p: any) => p.status === 'archived').length === 0 && (
-            <div className="s-sub" style={{ color: '#5A7090', paddingLeft: 44 }}>пусто</div>
+            <div className="s-sub" style={{ color: '#5A7090', paddingLeft: 80 }}>пусто</div>
           )}
           {projects.filter((p: any) => p.status === 'archived').map((p: any) => (
             <button
