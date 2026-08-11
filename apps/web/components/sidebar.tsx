@@ -167,7 +167,7 @@ export default function Sidebar(props: SidebarProps) {
         return (
           <div key={p.id}>
             <div
-              className={`s-item ${(view === 'project-dashboard' || view === 'project-orders') && selectedProject?.id === p.id ? 'active' : ''}`}
+              className={`s-item ${view === 'project-dashboard' && selectedProject?.id === p.id ? 'active' : ''}`}
               onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, project: p }); }}
               style={{ paddingLeft: 32, display: 'flex', alignItems: 'center', gap: 10 }}
             >
@@ -184,7 +184,7 @@ export default function Sidebar(props: SidebarProps) {
                 onClick={() => loadProjectDashboard(p)}
                 style={{ cursor: 'pointer' }}
               >
-                <span style={{ color: '#7DD3FC' }}>🗂️</span> {p.name}
+                <span style={{ color: '#6EE7B7' }}>🗂️</span> {p.name}
               </span>
             </div>
 
