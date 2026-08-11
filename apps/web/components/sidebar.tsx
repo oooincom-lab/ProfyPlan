@@ -48,6 +48,8 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedArchive, setExpandedArchive] = useState(false);
   const [expandedDirectories, setExpandedDirectories] = useState(false);
   const [expandedProj, setExpandedProj] = useState<Set<string>>(new Set());
+  const [expandedProjGroups, setExpandedProjGroups] = useState<Set<string>>(new Set());
+  const [expandedProjPools, setExpandedProjPools] = useState<Set<string>>(new Set());
 
   // Auto-expand directories section when navigating to a directory view
   const dirViews = ['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'];
@@ -66,8 +68,28 @@ export default function Sidebar(props: SidebarProps) {
     });
   };
 
+  const toggleProjGroups = (pid: string) => {
+    setExpandedProjGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
+  };
+
+  const toggleProjPools = (pid: string) => {
+    setExpandedProjPools(prev => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
+  };
+
   const collapseAllProjects = () => {
     setExpandedProj(new Set());
+    setExpandedProjGroups(new Set());
+    setExpandedProjPools(new Set());
   };
 
   return (
@@ -162,18 +184,30 @@ export default function Sidebar(props: SidebarProps) {
                 onClick={() => loadProjectDashboard(p)}
                 style={{ cursor: 'pointer' }}
               >
-                📁 {p.name}
+                🗂️ {p.name}
               </span>
             </div>
 
             {isExp && (
               <>
+                {/* Заказы — arrow + name */}
                 <div
                   className="s-sub"
-                  onClick={() => { loadProjectOrdersView(p); if (expandedOrders !== p.id) { setExpandedOrders(p.id); loadProjectOrders(p.id); } }}
                   style={view === 'project-orders' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
                 >
-                  📋 Заказы{' '}
+                  <span
+                    className="s-arrow"
+                    onClick={(e) => { e.stopPropagation(); if (expandedOrders !== p.id) { setExpandedOrders(p.id); loadProjectOrders(p.id); } else { setExpandedOrders(null); } }}
+                  >
+                    {expandedOrders === p.id ? '▼' : '▶'}
+                  </span>
+                  <span
+                    className="s-proj-name"
+                    onClick={() => { loadProjectOrdersView(p); if (expandedOrders !== p.id) { setExpandedOrders(p.id); loadProjectOrders(p.id); } }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    📋 Заказы
+                  </span>
                   <span className="s-count">
                     {projectOrders[p.id]?.length ?? (expandedOrders === p.id ? '...' : (p.order_count || '—'))}
                   </span>
@@ -200,15 +234,28 @@ export default function Sidebar(props: SidebarProps) {
                   </>
                 )}
 
+                {/* Группы — arrow + name */}
                 <div
                   className="s-sub"
-                  onClick={() => loadProjectGroups(p)}
                   style={view === 'project-groups' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
                 >
-                  📁 Группы <span className="s-count">{groups.length || '—'}</span>
+                  <span
+                    className="s-arrow"
+                    onClick={(e) => { e.stopPropagation(); toggleProjGroups(p.id); }}
+                  >
+                    {expandedProjGroups.has(p.id) ? '▼' : '▶'}
+                  </span>
+                  <span
+                    className="s-proj-name"
+                    onClick={() => loadProjectGroups(p)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    📁 Группы
+                  </span>
+                  <span className="s-count">{groups.length || '—'}</span>
                 </div>
 
-                {groups.map((g: any) => (
+                {expandedProjGroups.has(p.id) && groups.map((g: any) => (
                   <div
                     key={'sg-' + g.id}
                     className="s-sub"
@@ -221,7 +268,27 @@ export default function Sidebar(props: SidebarProps) {
                   </div>
                 ))}
 
-                {pools.map((p: any) => (
+                {/* Пулы — arrow + name */}
+                <div
+                  className="s-sub"
+                  style={view === 'project-pools' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
+                >
+                  <span
+                    className="s-arrow"
+                    onClick={(e) => { e.stopPropagation(); toggleProjPools(p.id); }}
+                  >
+                    {expandedProjPools.has(p.id) ? '▼' : '▶'}
+                  </span>
+                  <span
+                    className="s-proj-name"
+                    onClick={() => loadProjectPools(p)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    📦 Пулы
+                  </span>
+                </div>
+
+                {expandedProjPools.has(p.id) && pools.map((p: any) => (
                   <div
                     key={'sp-' + p.id}
                     className="s-sub"
