@@ -203,7 +203,7 @@ export default function Sidebar(props: SidebarProps) {
                   </span>
                   <span
                     className="s-proj-name"
-                    onClick={() => { loadProjectOrdersView(p); if (expandedOrders !== p.id) { setExpandedOrders(p.id); loadProjectOrders(p.id); } }}
+                    onClick={() => loadProjectOrdersView(p)}
                     style={{ cursor: 'pointer' }}
                   >
                     📋 Заказы
@@ -310,13 +310,6 @@ export default function Sidebar(props: SidebarProps) {
                   style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
                 >
                   📊 Диаграмма Ганта
-                </div>
-                <div
-                  className="s-sub"
-                  onClick={() => loadProjectPools(p)}
-                  style={view === 'project-pools' && selectedProject?.id === p.id ? { color: '#60A5FA', fontWeight: 600 } : {}}
-                >
-                  📦 Пулы
                 </div>
               </>
             )}
