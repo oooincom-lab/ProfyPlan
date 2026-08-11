@@ -184,7 +184,7 @@ export default function Sidebar(props: SidebarProps) {
                 onClick={() => loadProjectDashboard(p)}
                 style={{ cursor: 'pointer' }}
               >
-                <span style={{ color: '#6EE7B7' }}>🗂️</span> {p.name}
+                <span style={{ color: '#6EE7B7', fontSize: 10 }}>◆</span> {p.name}
               </span>
             </div>
 
