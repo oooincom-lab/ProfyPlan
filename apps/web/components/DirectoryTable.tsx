@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import DataImport from './DataImport';
+import DeleteCheckDialog from './DeleteCheckDialog';
 
 type ColumnDef = {
   key: string;
@@ -58,6 +59,10 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
     return p?.sortDir || 'asc';
   });
   const [showImport, setShowImport] = useState(false);
+  const [deleteCheckResult, setDeleteCheckResult] = useState<any>(null);
+  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
+  const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
+  const [deleteCheckTarget, setDeleteCheckTarget] = useState<{ id: string; name: string } | null>(null);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
 
@@ -107,12 +112,19 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
     } catch (e: any) { alert('Ошибка: ' + e.message); }
   };
 
-  const deleteRow = async (id: string) => {
-    if (!confirm('Удалить запись?')) return;
+  const deleteRow = async (id: string, name: string) => {
+    setDeleteCheckTarget({ id, name });
+    setDeleteCheckLoading(true);
+    setDeleteCheckError(null);
+    setDeleteCheckResult(null);
     try {
-      await af(`${apiBase}/v1/${entity}/${id}`, { method: 'DELETE' });
-      await load();
-    } catch (e: any) { alert('Ошибка: ' + e.message); }
+      const r = await af(`${apiBase}/v1/delete-check/${entity}/${id}`);
+      if (!r.ok) { setDeleteCheckError('Ошибка проверки: ' + r.status); setDeleteCheckLoading(false); return; }
+      setDeleteCheckResult(await r.json());
+    } catch (e: any) {
+      setDeleteCheckError(e.message || 'Ошибка');
+    }
+    setDeleteCheckLoading(false);
   };
 
   const ntypeLabel = (v: string) =>
@@ -261,7 +273,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
                 ) : (
                   <>
                     <button onClick={() => { setEditingId(row.id); setEditVals({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
-                    <button onClick={() => deleteRow(row.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
+                    <button onClick={() => deleteRow(row.id, row.name || row.specification_name || '')} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
                   </>
                 )}
               </td>
@@ -327,6 +339,20 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
             />
           </div>
         </div>
+      )}
+
+      {/* Delete-check dialog */}
+      {deleteCheckTarget && (
+        <DeleteCheckDialog
+          entityType={entity}
+          entityId={deleteCheckTarget.id}
+          entityName={deleteCheckTarget.name}
+          result={deleteCheckResult}
+          loading={deleteCheckLoading}
+          error={deleteCheckError}
+          onClose={() => { setDeleteCheckTarget(null); setDeleteCheckResult(null); }}
+          onDeleted={load}
+        />
       )}
     </div>
   );

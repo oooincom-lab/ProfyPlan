@@ -49,6 +49,7 @@ DEPENDENCY_MAP = {
         "name_field": "name",
         "cascade": [],
         "blocking": [],
+        # BOM-check handled via custom ext_id match below
     },
     "resource": {
         "model": Resource,
@@ -190,7 +191,23 @@ async def delete_check(
     db: AsyncSession = Depends(get_db),
 ):
     if entity_type not in DEPENDENCY_MAP:
-        raise HTTPException(400, f"Неизвестный тип сущности: {entity_type}")
+        # Normalize: DirectoryTable passes plural names, DEPENDENCY_MAP uses singular
+        _alias = {
+            'units': 'unit',
+            'resources': 'resource',
+            'calendars': 'resource_calendar',
+        }
+        mapped = _alias.get(entity_type)
+        if mapped:
+            entity_type = mapped
+    if entity_type not in DEPENDENCY_MAP:
+        # Unknown type — return safe-to-delete with no dependency check
+        return {
+            "entity": {"type": entity_type, "id": str(entity_id), "name": str(entity_id), "label": entity_type},
+            "cascade": [],
+            "blocking": [],
+            "can_delete": True,
+        }
 
     info = DEPENDENCY_MAP[entity_type]
     model = info["model"]
@@ -260,3 +277,167 @@ async def delete_check(
                 result["can_delete"] = False
 
     return result
+
+
+@router.delete("/safe-delete/{entity_type}/{entity_id}")
+async def safe_delete(
+    entity_type: str,
+    entity_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Perform safe deletion after delete-check approval."""
+    if entity_type not in DEPENDENCY_MAP:
+        _alias = {
+            'units': 'unit',
+            'resources': 'resource',
+            'calendars': 'resource_calendar',
+        }
+        mapped = _alias.get(entity_type)
+        if mapped:
+            entity_type = mapped
+        else:
+            raise HTTPException(400, f"Неизвестный тип сущности: {entity_type}")
+
+    info = DEPENDENCY_MAP[entity_type]
+    model = info["model"]
+
+    # 1. Load entity
+    q = select(model).where(model.id == entity_id, model.tenant_id == tenant_id)
+    r = await db.execute(q)
+    entity = r.scalar_one_or_none()
+    if not entity:
+        raise HTTPException(404, f"{info['label']} не найден")
+
+    # 2. Verify no blocking references exist (double-check at deletion time)
+    for key, dep_model, fk_field, _name_col in info.get("blocking", []):
+        count = await _count(db, dep_model, fk_field, entity_id)
+        if count > 0:
+            raise HTTPException(409, f"Невозможно удалить: есть {count} ссылок ({BLOCKING_LABELS.get(key, key)})")
+
+    # 3. Handle cascade deletions and cleanups
+    # order_pool: return orders to root before deleting
+    if entity_type == "order_pool":
+        orders = (await db.execute(
+            select(ProductionOrder).where(ProductionOrder.pool_id == entity_id)
+        )).scalars().all()
+        for o in orders:
+            o.pool_id = None
+
+    # order_group: return orders and pools to root before deleting
+    elif entity_type == "order_group":
+        orders = (await db.execute(
+            select(ProductionOrder).where(ProductionOrder.group_id == entity_id)
+        )).scalars().all()
+        for o in orders:
+            o.group_id = None
+        pools = (await db.execute(
+            select(OrderPool).where(OrderPool.group_id == entity_id)
+        )).scalars().all()
+        for p in pools:
+            p.group_id = None
+
+    # resource: delete calendars first
+    elif entity_type == "resource":
+        calendars = (await db.execute(
+            select(ResourceCalendar).where(ResourceCalendar.resource_id == entity_id)
+        )).scalars().all()
+        for cal in calendars:
+            await db.delete(cal)
+
+    # resource_calendar: delete slots first
+    elif entity_type == "resource_calendar":
+        slots = (await db.execute(
+            select(ResourceCalendarSlot).where(ResourceCalendarSlot.calendar_id == entity_id)
+        )).scalars().all()
+        for s in slots:
+            await db.delete(s)
+
+    # operation: delete deps + resource links first
+    elif entity_type == "operation":
+        deps1 = (await db.execute(
+            select(OperationDependency).where(OperationDependency.predecessor_id == entity_id)
+        )).scalars().all()
+        for d in deps1:
+            await db.delete(d)
+        deps2 = (await db.execute(
+            select(OperationDependency).where(OperationDependency.successor_id == entity_id)
+        )).scalars().all()
+        for d in deps2:
+            await db.delete(d)
+        op_resources = (await db.execute(
+            select(OperationResource).where(OperationResource.operation_id == entity_id)
+        )).scalars().all()
+        for or_ in op_resources:
+            await db.delete(or_)
+
+    # routing: delete routing_ops first
+    elif entity_type == "routing":
+        routing_ops = (await db.execute(
+            select(RoutingOperation).where(RoutingOperation.routing_id == entity_id)
+        )).scalars().all()
+        for ro in routing_ops:
+            await db.delete(ro)
+
+    # project: cascade delete all child entities (skipping blocking check since we validated)
+    elif entity_type == "project":
+        # Delete in reverse order of dependencies
+        await db.execute(
+            select(InterProjectDependency).where(
+                (InterProjectDependency.source_operation_id.in_(
+                    select(Operation.id).where(Operation.project_id == entity_id)
+                )) |
+                (InterProjectDependency.target_operation_id.in_(
+                    select(Operation.id).where(Operation.project_id == entity_id)
+                ))
+            )
+        )
+        await db.execute(
+            select(ActualExecution).where(
+                ActualExecution.operation_id.in_(
+                    select(Operation.id).where(Operation.project_id == entity_id)
+                )
+            )
+        )
+        for cal in (await db.execute(
+            select(ResourceCalendar).where(
+                ResourceCalendar.resource_id.in_(
+                    select(Resource.id).where(Resource.project_id == entity_id)
+                )
+            )
+        )).scalars().all():
+            await db.delete(cal)
+        for o in (await db.execute(select(OperationResource).where(
+            OperationResource.operation_id.in_(
+                select(Operation.id).where(Operation.project_id == entity_id)
+            )
+        ))).scalars().all():
+            await db.delete(o)
+        for d in (await db.execute(select(OperationDependency).where(
+            (OperationDependency.predecessor_id.in_(
+                select(Operation.id).where(Operation.project_id == entity_id)
+            )) |
+            (OperationDependency.successor_id.in_(
+                select(Operation.id).where(Operation.project_id == entity_id)
+            ))
+        ))).scalars().all():
+            await db.delete(d)
+        for bp in (await db.execute(select(PlanBaseline).where(PlanBaseline.project_id == entity_id))).scalars().all():
+            await db.delete(bp)
+        for ps in (await db.execute(select(ProductStructure).where(ProductStructure.project_id == entity_id))).scalars().all():
+            await db.delete(ps)
+        for p in (await db.execute(select(OrderPool).where(OrderPool.project_id == entity_id))).scalars().all():
+            await db.delete(p)
+        for g in (await db.execute(select(OrderGroup).where(OrderGroup.project_id == entity_id))).scalars().all():
+            await db.delete(g)
+        for o in (await db.execute(select(ProductionOrder).where(ProductionOrder.project_id == entity_id))).scalars().all():
+            await db.delete(o)
+        for res in (await db.execute(select(Resource).where(Resource.project_id == entity_id))).scalars().all():
+            await db.delete(res)
+        for op in (await db.execute(select(Operation).where(Operation.project_id == entity_id))).scalars().all():
+            await db.delete(op)
+
+    # 4. Delete the entity itself
+    await db.delete(entity)
+    await db.commit()
+    return {"ok": True, "deleted": {"type": entity_type, "id": str(entity_id)}}

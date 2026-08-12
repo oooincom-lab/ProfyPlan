@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface DeleteCheckResult {
   entity: { type: string; id: string; name: string; label: string };
@@ -15,62 +15,47 @@ interface DeleteCheckDialogProps {
   entityName?: string;
   onClose: () => void;
   onDeleted?: () => void;
-  token: string;
+  result?: DeleteCheckResult | null;
+  loading?: boolean;
+  error?: string | null;
 }
 
-export default function DeleteCheckDialog({ entityType, entityId, entityName, onClose, onDeleted, token }: DeleteCheckDialogProps) {
-  const [loading, setLoading] = useState(true);
+export default function DeleteCheckDialog({ entityType, entityId, entityName, onClose, onDeleted, result, loading, error }: DeleteCheckDialogProps) {
   const [deleting, setDeleting] = useState(false);
-  const [result, setResult] = useState<DeleteCheckResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch(`/api/v1/delete-check/${entityType}/${entityId}`, {
-          headers: { Authorization: `*** ${token}` },
-        });
-        if (!r.ok) throw new Error(`Ошибка ${r.status}`);
-        setResult(await r.json());
-      } catch (e: any) {
-        setError(e.message || 'Ошибка проверки');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [entityType, entityId, token]);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDelete = async () => {
     if (!result?.can_delete) return;
     setDeleting(true);
     try {
-      const r = await fetch(`/api/v1/safe-delete/${entityType}/${entityId}`, {
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const h: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (tok) h['Authorization'] = `Bearer ${tok}`;
+      const r = await fetch('https://profyplan.ru/api/v1/safe-delete/' + entityType + '/' + entityId, {
         method: 'DELETE',
-        headers: { Authorization: `*** ${token}` },
+        headers: h,
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({ detail: r.statusText }));
-        setError(err.detail || 'Ошибка удаления');
+        setDeleteError(err.detail || 'Ошибка удаления');
         setDeleting(false);
         return;
       }
       onDeleted?.();
       onClose();
     } catch (e: any) {
-      setError(e.message || 'Ошибка удаления');
+      setDeleteError(e.message || 'Ошибка удаления');
       setDeleting(false);
     }
   };
 
+  const displayError = error || deleteError;
   const totalCascade = result?.cascade.reduce((s, c) => s + c.count, 0) || 0;
   const totalBlocking = result?.blocking.reduce((s, b) => s + b.count, 0) || 0;
 
   return (
     <>
-      {/* Overlay */}
       <div style={styles.overlay} onClick={onClose} />
-
-      {/* Dialog */}
       <div style={styles.dialog}>
         <style>{`
           .dc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999}
@@ -96,85 +81,46 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
           .dc-btn-danger:disabled{opacity:.4;cursor:not-allowed}
           .dc-loader{display:flex;align-items:center;justify-content:center;padding:40px;color:#64748B;font-size:14px}
         `}</style>
-
         <div className="dc-header">
-          <h2 className="dc-title">
-            ⚠️ Удаление {result?.entity.label.toLowerCase() || entityType}
-          </h2>
-          <div className="dc-entity">
-            {result?.entity.name || entityName || entityId}
-          </div>
+          <h2 className="dc-title">⚠️ Удаление {result?.entity.label.toLowerCase() || entityType}</h2>
+          <div className="dc-entity">{result?.entity.name || entityName || entityId}</div>
         </div>
-
         <div className="dc-body">
           {loading && <div className="dc-loader">Проверка зависимостей...</div>}
-
-          {error && (
-            <div className="dc-block">
-              <div className="dc-block-title">Ошибка</div>
-              <div className="dc-row">{error}</div>
-            </div>
-          )}
-
+          {displayError && <div className="dc-block"><div className="dc-block-title">Ошибка</div><div className="dc-row">{displayError}</div></div>}
           {result && !result.can_delete && totalBlocking > 0 && (
             <div className="dc-block">
-              <div className="dc-block-title">
-                ⛔ Невозможно удалить — {totalBlocking} ссылок
-              </div>
+              <div className="dc-block-title">⛔ Невозможно удалить — {totalBlocking} ссылок</div>
               {result.blocking.map(b => (
                 <div key={b.key}>
-                  <div style={{ fontSize: 12, color: '#FCA5A5', fontWeight: 500, marginTop: 6 }}>
-                    {b.label} ({b.count})
-                  </div>
-                  {b.items.slice(0, 5).map((item, i) => (
-                    <div key={i} className="dc-row">
-                      {item.name}
-                      {item.field && <span style={{ color: '#64748B', marginLeft: 6 }}>({item.field})</span>}
-                    </div>
-                  ))}
+                  <div style={{ fontSize: 12, color: '#FCA5A5', fontWeight: 500, marginTop: 6 }}>{b.label} ({b.count})</div>
+                  {b.items.slice(0, 5).map((item, i) => <div key={i} className="dc-row">{item.name}{item.field && <span style={{ color: '#64748B', marginLeft: 6 }}>({item.field})</span>}</div>)}
                   {b.count > 5 && <div className="dc-row-more">...и ещё {b.count - 5}</div>}
                 </div>
               ))}
             </div>
           )}
-
           {result && result.can_delete && totalCascade > 0 && (
             <>
-              <div style={{ fontSize: 13, color: '#FBBF24', fontWeight: 500, marginBottom: 8 }}>
-                Будут удалены связанные объекты:
-              </div>
+              <div style={{ fontSize: 13, color: '#FBBF24', fontWeight: 500, marginBottom: 8 }}>Будут удалены связанные объекты:</div>
               {result.cascade.map(c => (
                 <div key={c.key} className="dc-cascade">
-                  <div className="dc-cascade-title">
-                    {c.label} ({c.count})
-                  </div>
-                  {c.items.slice(0, 5).map((item, i) => (
-                    <div key={i} className="dc-row">{item.name}</div>
-                  ))}
+                  <div className="dc-cascade-title">{c.label} ({c.count})</div>
+                  {c.items.slice(0, 5).map((item, i) => <div key={i} className="dc-row">{item.name}</div>)}
                   {c.count > 5 && <div className="dc-row-more">...и ещё {c.count - 5}</div>}
                 </div>
               ))}
             </>
           )}
-
           {result && result.can_delete && totalCascade === 0 && (
-            <div className="dc-safe">
-              <div className="dc-safe-text">Объект нигде не используется. Удаление безопасно.</div>
-            </div>
+            <div className="dc-safe"><div className="dc-safe-text">Объект нигде не используется. Удаление безопасно.</div></div>
           )}
         </div>
-
         <div className="dc-footer">
-          <button className="dc-btn dc-btn-cancel" onClick={onClose} disabled={deleting}>
-            {result?.can_delete === false ? 'OK' : 'Отмена'}
-          </button>
+          <button className="dc-btn dc-btn-cancel" onClick={onClose} disabled={deleting}>{result?.can_delete === false ? 'OK' : 'Отмена'}</button>
           {result?.can_delete && (
-            <button
-              className="dc-btn dc-btn-danger"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? 'Удаление...' : `Удалить${totalCascade > 0 ? ` всё (${totalCascade + 1})` : ''}`}
+            <button className="dc-btn dc-btn-danger" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Удаление...' : 'Удалить' + (totalCascade > 0 ? ' всё (' + (totalCascade + 1) + ')' : '')}
             </button>
           )}
         </div>
@@ -184,16 +130,6 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 999,
-  },
-  dialog: {
-    position: 'fixed', top: '50%', left: '50%',
-    transform: 'translate(-50%,-50%)',
-    background: '#1E293B', border: '1px solid #334155',
-    borderRadius: 12, padding: 0, width: 480,
-    maxWidth: '90vw', maxHeight: '80vh',
-    display: 'flex', flexDirection: 'column',
-    zIndex: 1000, boxShadow: '0 16px 48px rgba(0,0,0,.4)',
-  },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 999 },
+  dialog: { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: '#1E293B', border: '1px solid #334155', borderRadius: 12, padding: 0, width: 480, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', zIndex: 1000, boxShadow: '0 16px 48px rgba(0,0,0,.4)' },
 };

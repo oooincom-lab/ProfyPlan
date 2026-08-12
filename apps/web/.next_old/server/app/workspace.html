@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="ru" class="dark"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/08fe1f98498fb8e5.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/_next/static/chunks/webpack-03f7c6bc932ce1e3.js"/><script src="/_next/static/chunks/fd9d1056-88c8a1669018f964.js" async=""></script><script src="/_next/static/chunks/117-ce448f235c5a6535.js" async=""></script><script src="/_next/static/chunks/main-app-a4906701f2dc01b7.js" async=""></script><script src="/_next/static/chunks/app/workspace/page-1b909536f05e8df3.js" async=""></script><link rel="preconnect" href="https://fonts.googleapis.com"/><title>ProfyPlan — Производственное планирование</title><meta name="description" content="CPM, PERT и CCM в одном сервисе. Точный план производства за 5 минут."/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/><script src="/_next/static/chunks/polyfills-42372ed130431b0a.js" noModule=""></script></head><body><div style="background:#0A1628;min-height:100vh;display:flex;align-items:center;justify-content:center"><style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',sans-serif;background:#0A1628;color:#E8EEF5}
+    .kpi-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:18px 20px;transition:all .15s}
+    .kpi-card:hover{border-color:#2A4060;transform:translateY(-1px)}
+    .kpi-label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#60A5FA;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+    .kpi-val{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+    .kpi-val.g{color:#10B981}.kpi-val.r{color:#EF4444}
+    .kpi-sub{font-size:12px;color:#5A7090}
+    .panel{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:20px;margin-bottom:16px}
+    .panel-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .panel-title{font-size:15px;font-weight:600}
+    .panel-sub{font-size:12px;color:#5A7090;font-family:'IBM Plex Mono',monospace;margin-left:8px}
+    .tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tbl th{text-align:left;padding:8px 12px;color:#60A5FA;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #1E3252}
+    .tbl td{padding:10px 12px;border-bottom:1px solid #162844;color:#B0C4DE}
+    .tbl tr:hover td{background:rgba(59,130,246,.05)}
+    .tbl .t-name{color:#E8EEF5;font-weight:600}
+    .tbl .t-mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5A7090}
+    .tbl .t-graph{text-align:center;width:48px}
+    .tbl .g-dyn{color:#60A5FA;font-size:16px;cursor:help}
+    .tbl .g-pln{color:#374151;font-size:14px}
+    .badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;display:inline-block}
+    .badge.draft{background:rgba(100,116,139,.15);color:#94a3b8}
+    .badge.planned{background:rgba(59,130,246,.15);color:#60A5FA}
+    .badge.in_progress{background:rgba(16,185,129,.15);color:#34d399}
+    .badge.completed{background:rgba(16,185,129,.2);color:#10B981}
+    .badge.high{background:rgba(239,68,68,.12);color:#f87171}
+    .badge.critical{background:rgba(239,68,68,.18);color:#ef4444}
+    .badge.normal{background:rgba(100,116,139,.15);color:#94a3b8}
+    .btn{font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .12s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .btn-primary{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;box-shadow:0 4px 12px rgba(59,130,246,.35),inset 0 1px 0 rgba(255,255,255,.2)}
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(59,130,246,.4)}
+    .btn-secondary{background:transparent;color:#B0C4DE;border-color:#2A4060}
+    .btn-secondary:hover{border-color:#3B82F6;color:#60A5FA}
+    .btn-danger{color:#EF4444;border-color:transparent;background:rgba(239,68,68,.08)}
+    .btn-danger:hover{background:rgba(239,68,68,.15)}
+    .btn-sm{font-size:11px;padding:4px 10px}
+    .group-card{background:rgba(59,130,246,.04);border:1px solid #1E3252;border-radius:12px;padding:16px 20px;margin-bottom:12px}
+    .sidebar{background:#0F1E36;border-right:1px solid #1E3252;padding:14px 0;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;overflow-x:hidden}
+    .s-brand{display:flex;align-items:center;gap:10px;padding:4px 16px 14px}
+    .s-logo{width:34px;height:34px;background:linear-gradient(135deg,#3B82F6,#2563EB);border-radius:9px;box-shadow:0 4px 14px rgba(59,130,246,.35);flex-shrink:0}
+    .s-name{font-size:17px;font-weight:700;letter-spacing:-.02em}
+    .s-sec{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#60A5FA;text-transform:uppercase;letter-spacing:.1em;padding:14px 20px 4px}
+    .s-item{display:flex;align-items:center;gap:10px;padding:7px 16px;color:#8FA3BD;font-size:13px;cursor:pointer;transition:all .12s;text-decoration:none;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif;border-left:3px solid transparent}
+    .s-item:hover{background:#162844;color:#B0C4DE}
+    .s-item.active{background:rgba(59,130,246,.12);color:#60A5FA;font-weight:600;border-left-color:#3B82F6;box-shadow:inset 0 0 0 1px rgba(59,130,246,.1)}
+    .s-sub{display:flex;align-items:center;gap:6px;padding:5px 16px 5px 44px;color:#5A7090;font-size:12px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:Inter,sans-serif}
+    .s-sub:hover{color:#8FA3BD;background:#162844}
+    .s-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#374151;background:rgba(100,116,139,.2);padding:1px 6px;border-radius:4px}
+    .s-expand{font-size:11px;opacity:0.4;transition:opacity .15s;width:12px;text-align:center;flex-shrink:0}
+    .proj-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:20px;transition:all .15s;cursor:pointer}
+    .proj-card:hover{border-color:#2A4060;transform:translateY(-1px)}
+    .proj-card .pc-name{font-size:16px;font-weight:600;margin-bottom:4px}
+    .proj-card .pc-meta{font-size:12px;color:#5A7090;font-family:'IBM Plex Mono',monospace;margin-bottom:12px}
+    .proj-card .pc-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .topbar{padding:14px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1E3252;background:#0F1E36;position:sticky;top:0;z-index:10}
+    .topbar h1{font-size:20px;font-weight:700;margin:0;letter-spacing:-.015em}
+    .topbar .tb-sub{font-size:12px;color:#5A7090;margin-top:2px}
+    .dir-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:24px 20px;text-align:center;cursor:pointer;transition:all .15s;text-decoration:none;color:inherit;display:block}
+    .dir-card:hover{border-color:#2A4060;transform:translateY(-1px)}
+    .dir-card .dc-icon{font-size:32px;margin-bottom:10px}
+    .dir-card .dc-title{font-size:14px;font-weight:600;margin-bottom:4px}
+    .dir-card .dc-count{font-size:12px;color:#5A7090;font-family:'IBM Plex Mono',monospace}
+  </style><div style="text-align:center"><div class="s-logo" style="margin:0 auto 20px"></div><h1 style="font-size:24px;font-weight:700;margin-bottom:8px">ProfyPlan</h1><p style="color:#5A7090;margin-bottom:24px">Рабочий стол</p><button class="btn btn-primary" style="padding:12px 36px;font-size:15px">Загрузить рабочий стол</button></div></div><script src="/_next/static/chunks/webpack-03f7c6bc932ce1e3.js" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0]);self.__next_f.push([2,null])</script><script>self.__next_f.push([1,"1:HL[\"/_next/static/css/08fe1f98498fb8e5.css\",\"style\"]\n"])</script><script>self.__next_f.push([1,"2:I[2846,[],\"\"]\n4:I[9107,[],\"ClientPageRoot\"]\n5:I[8454,[\"221\",\"static/chunks/app/workspace/page-1b909536f05e8df3.js\"],\"default\",1]\n6:I[4707,[],\"\"]\n7:I[6423,[],\"\"]\n9:I[1060,[],\"\"]\na:[]\n"])</script><script>self.__next_f.push([1,"0:[\"$\",\"$L2\",null,{\"buildId\":\"yFDivAMVXCGI-tuUDTFYC\",\"assetPrefix\":\"\",\"urlParts\":[\"\",\"workspace\"],\"initialTree\":[\"\",{\"children\":[\"workspace\",{\"children\":[\"__PAGE__\",{}]}]},\"$undefined\",\"$undefined\",true],\"initialSeedData\":[\"\",{\"children\":[\"workspace\",{\"children\":[\"__PAGE__\",{},[[\"$L3\",[\"$\",\"$L4\",null,{\"props\":{\"params\":{},\"searchParams\":{}},\"Component\":\"$5\"}],null],null],null]},[null,[\"$\",\"$L6\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"workspace\",\"children\"],\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L7\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\"}]],null]},[[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/08fe1f98498fb8e5.css\",\"precedence\":\"next\",\"crossOrigin\":\"$undefined\"}]],[\"$\",\"html\",null,{\"lang\":\"ru\",\"className\":\"dark\",\"children\":[[\"$\",\"head\",null,{\"children\":[[\"$\",\"link\",null,{\"rel\":\"preconnect\",\"href\":\"https://fonts.googleapis.com\"}],[\"$\",\"link\",null,{\"href\":\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800\u0026family=IBM+Plex+Mono:wght@400;500;600\u0026display=swap\",\"rel\":\"stylesheet\"}]]}],[\"$\",\"body\",null,{\"children\":[\"$\",\"$L6\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\"],\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L7\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":\"404\"}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],\"notFoundStyles\":[]}]}]]}]],null],null],\"couldBeIntercepted\":false,\"initialHead\":[null,\"$L8\"],\"globalErrorComponent\":\"$9\",\"missingSlots\":\"$Wa\"}]\n"])</script><script>self.__next_f.push([1,"8:[[\"$\",\"meta\",\"0\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}],[\"$\",\"meta\",\"1\",{\"charSet\":\"utf-8\"}],[\"$\",\"title\",\"2\",{\"children\":\"ProfyPlan — Производственное планирование\"}],[\"$\",\"meta\",\"3\",{\"name\":\"description\",\"content\":\"CPM, PERT и CCM в одном сервисе. Точный план производства за 5 минут.\"}]]\n3:null\n"])</script></body></html>

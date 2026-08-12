@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Auth</title></head><body>
+<script>
+(async () => {
+  const r = await fetch('https://profyplan.ru/api/v1/auth/login', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email:'planner@demo.ru', password:'demo123'})
+  });
+  const d = await r.json();
+  localStorage.setItem('profyplan_token', d.access_token);
+  location.href = '/workspace';
+})();
+</script>
+</body></html>

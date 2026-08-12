@@ -1,0 +1,9 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/ccm/page": "app/ccm/page.js",
+  "/ccm-v2/page": "app/ccm-v2/page.js",
+  "/page": "app/page.js",
+  "/api/[...path]/route": "app/api/[...path]/route.js",
+  "/workspace/page": "app/workspace/page.js",
+  "/cpm/page": "app/cpm/page.js"
+}

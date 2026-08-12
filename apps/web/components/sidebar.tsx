@@ -14,8 +14,8 @@ interface SidebarProps {
   navTo: (v: View) => void;
   projects: any[];
   selectedProject: any;
-  groups: any[];
-  pools: any[];
+  groups: Record<string, any[]>;
+  pools: Record<string, any[]>;
   projectOrders: Record<string, any[]>;
   expandedOrders: string | null;
   setExpandedOrders: (v: string | null) => void;
@@ -272,7 +272,7 @@ export default function Sidebar(props: SidebarProps) {
                 >
                   <span
                     className="s-arrow"
-                    onClick={(e) => { e.stopPropagation(); toggleProjGroups(p.id); }}
+                    onClick={(e) => { e.stopPropagation(); const pid = p.id; toggleProjGroups(pid); if (!groups[pid]) loadProjectGroups(p); }}
                   >
                     {expandedProjGroups.has(p.id) ? '▼' : '▶'}
                   </span>
@@ -283,10 +283,10 @@ export default function Sidebar(props: SidebarProps) {
                   >
                     📁 Группы
                   </span>
-                  <span className="s-count">{groups.length || '—'}</span>
+                  <span className="s-count">{(groups[p.id] || []).length || '—'}</span>
                 </div>
 
-                {expandedProjGroups.has(p.id) && groups.map((g: any) => (
+                {expandedProjGroups.has(p.id) && (groups[p.id] || []).map((g: any) => (
                   <div
                     key={'sg-' + g.id}
                     className="s-sub"
@@ -295,7 +295,7 @@ export default function Sidebar(props: SidebarProps) {
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}
                   >
-                    📁 {g.name}
+                    {g.name}
                   </div>
                 ))}
 
@@ -306,7 +306,7 @@ export default function Sidebar(props: SidebarProps) {
                 >
                   <span
                     className="s-arrow"
-                    onClick={(e) => { e.stopPropagation(); toggleProjPools(p.id); }}
+                    onClick={(e) => { e.stopPropagation(); const pid = p.id; toggleProjPools(pid); if (!pools[pid]) loadProjectPools(p); }}
                   >
                     {expandedProjPools.has(p.id) ? '▼' : '▶'}
                   </span>
@@ -319,7 +319,7 @@ export default function Sidebar(props: SidebarProps) {
                   </span>
                 </div>
 
-                {expandedProjPools.has(p.id) && pools.map((p: any) => (
+                {expandedProjPools.has(p.id) && (pools[p.id] || []).map((p: any) => (
                   <div
                     key={'sp-' + p.id}
                     className="s-sub"
@@ -328,7 +328,7 @@ export default function Sidebar(props: SidebarProps) {
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}
                   >
-                    ▸ {p.name}
+                    {p.name}
                   </div>
                 ))}
 

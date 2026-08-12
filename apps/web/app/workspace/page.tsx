@@ -37,8 +37,8 @@ export default function AppShell() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [pools, setPools] = useState<any[]>([]);
+  const [groups, setGroups] = useState<Record<string, any[]>>({});
+  const [pools, setPools] = useState<Record<string, any[]>>({});
   const [expandedOrders, setExpandedOrders] = useState<string | null>(null);
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
@@ -62,6 +62,12 @@ export default function AppShell() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project: any } | null>(null);
   const [sidebarCtx, setSidebarCtx] = useState<{ x: number; y: number; view: string } | null>(null);
   const [directoryModal, setDirectoryModal] = useState<string | null>(null); // e.g. 'nomenclature'
+
+  // ── Inline create inputs (replaces prompt()) ──
+  const [newGroupInput, setNewGroupInput] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newPoolInput, setNewPoolInput] = useState(false);
+  const [newPoolName, setNewPoolName] = useState('');
 
   // ── Order CRUD ──
   const loadProjectOrders = async (projId: string) => {
@@ -87,12 +93,8 @@ export default function AppShell() {
     } catch (e: any) { alert('Ошибка создания: ' + (e.message || String(e))); }
   };
 
-  const deleteOrder = async (orderId: string) => {
-    if (!confirm('Удалить заказ?')) return;
-    try {
-      await apiF(`/production-orders/${orderId}`, { method: 'DELETE' });
-      await refresh();
-    } catch (e: any) { alert('Ошибка удаления: ' + (e.message || String(e))); }
+  const deleteOrder = (orderId: string, orderName: string) => {
+    runDeleteCheck('order', orderId, orderName);
   };
 
   const moveOrder = async (orderId: string, groupId: string | null, poolId: string | null) => {
@@ -217,21 +219,35 @@ export default function AppShell() {
   };
 
   const [deleteCheckEntity, setDeleteCheckEntity] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [deleteCheckResult, setDeleteCheckResult] = useState<any>(null);
+  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
+  const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
+
+  const runDeleteCheck = async (type: string, id: string, name: string) => {
+    setDeleteCheckEntity({ type, id, name });
+    setDeleteCheckResult(null);
+    setDeleteCheckError(null);
+    setDeleteCheckLoading(true);
+    try {
+      const res = await apiF<any>(`/delete-check/${type}/${id}`);
+      setDeleteCheckResult(res);
+    } catch (e: any) {
+      setDeleteCheckError(e.message || 'Ошибка');
+    } finally {
+      setDeleteCheckLoading(false);
+    }
+  };
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') || '' : '';
 
   const deleteProject = async (p: any) => {
-    setDeleteCheckEntity({ type: 'project', id: p.id, name: p.name });
+    runDeleteCheck('project', p.id, p.name);
     setCtxMenu(null);
   };
 
   const _deleteProjectDirect = async (p: any) => {
-    if (!confirm(`Удалить проект "${p.name}"? Это действие необратимо.`)) return;
-    try {
-      await apiF(`/projects/${p.id}`, { method: 'DELETE' });
-      setSelectedProject(null); setOrders([]);
-      await load().then(() => navTo('projects'));
-    } catch (e: any) { alert('Ошибка удаления: ' + (e.message || String(e))); }
+    // Covered by deleteProject → runDeleteCheck flow
+    deleteProject(p);
   };
 
   const renameProject = async (p: any, newName: string) => {
@@ -265,14 +281,14 @@ export default function AppShell() {
   const loadProjectDashboard = async (p: any) => {
     setSelectedProject(p);
     setView('project-dashboard');
-    setOrders([]); setGroups([]); setPools([]);
+    setOrders([]); setGroups({}); setPools({});
     try {
       const [o, g, pl] = await Promise.all([
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
         apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
         apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
       ]);
-      setOrders(o); setGroups(g.items); setPools(pl.items);
+      setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
       setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
     } catch (e: any) { setMsg(String(e)); }
   };
@@ -287,7 +303,7 @@ export default function AppShell() {
           apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
           apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
         ]);
-        setOrders(o); setGroups(g.items); setPools(pl.items);
+        setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
       } catch (e: any) { setMsg(String(e)); }
     }
   };
@@ -298,7 +314,7 @@ export default function AppShell() {
     else loadProjectDashboard(selectedProject);
   };
 
-  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups([]); setPools([]); };
+  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); };
 
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
@@ -319,23 +335,22 @@ export default function AppShell() {
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
         apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
       ]);
-      setOrders(o); setGroups(g.items);
+      setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items }));
       setMsg(`${g.items.length} групп`);
     } catch (e: any) { setMsg(String(e)); }
   };
 
   const addGroup = async () => {
     if (!selectedProject) return;
-    const n = prompt('Название группы:');
-    if (!n) return;
-    await apiF(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: n }) });
+    if (!newGroupInput) { setNewGroupInput(true); setNewGroupName(''); return; }
+    if (!newGroupName.trim()) { setNewGroupInput(false); return; }
+    await apiF(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: newGroupName.trim() }) });
+    setNewGroupInput(false);
     await loadProjectGroups(selectedProject);
   };
 
-  const delGroup = async (gid: string) => {
-    if (!confirm('Удалить группу? Заказы и пулы вернутся в корень проекта.')) return;
-    await apiF(`/projects/${selectedProject.id}/groups/${gid}`, { method: 'DELETE' });
-    await loadProjectGroups(selectedProject);
+  const delGroup = (gid: string, gname: string) => {
+    runDeleteCheck('order_group', gid, gname);
   };
 
   // ── Pools ──
@@ -347,23 +362,22 @@ export default function AppShell() {
         apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
         apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
       ]);
-      setOrders(o); setGroups(g.items); setPools(pl.items);
+      setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
       setMsg(`${pl.items.length} пулов`);
     } catch (e: any) { setMsg(String(e)); }
   };
 
   const addPool = async () => {
     if (!selectedProject) return;
-    const n = prompt('Название пула (CCM-объединение):');
-    if (!n) return;
-    await apiF(`/projects/${selectedProject.id}/pools`, { method: 'POST', body: JSON.stringify({ name: n, order_ids: [] }) });
+    if (!newPoolInput) { setNewPoolInput(true); setNewPoolName(''); return; }
+    if (!newPoolName.trim()) { setNewPoolInput(false); return; }
+    await apiF(`/projects/${selectedProject.id}/pools`, { method: 'POST', body: JSON.stringify({ name: newPoolName.trim(), order_ids: [] }) });
+    setNewPoolInput(false);
     await loadProjectPools(selectedProject);
   };
 
-  const delPool = async (plid: string) => {
-    if (!confirm('Удалить пул? Заказы вернутся в корень проекта.')) return;
-    await apiF(`/projects/${selectedProject.id}/pools/${plid}`, { method: 'DELETE' });
-    await loadProjectPools(selectedProject);
+  const delPool = (plid: string, plname: string) => {
+    runDeleteCheck('order_pool', plid, plname);
   };
 
   // ── Styles ──
@@ -489,6 +503,9 @@ export default function AppShell() {
     'new-project': 'Новый проект',
   };
 
+  const projGroups = selectedProject ? (groups[selectedProject.id] || []) : [];
+  const projPools = selectedProject ? (pools[selectedProject.id] || []) : [];
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', minHeight: '100vh' }}>
       <style dangerouslySetInnerHTML={{ __html: css }} />
@@ -531,12 +548,14 @@ export default function AppShell() {
             {view === 'project-dashboard' && (
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
+              {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
                 <button onClick={refresh} className="btn btn-secondary btn-sm">🔄</button>
               </>
             )}
             {view === 'project-orders' && (
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
+              {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
                 <button onClick={refresh} className="btn btn-secondary btn-sm">🔄</button>
               </>
             )}
@@ -629,16 +648,16 @@ export default function AppShell() {
                 <div className="kpi-card"><div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
                 <div className="kpi-card"><div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
                 <div className="kpi-card"><div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
-                <div className="kpi-card"><div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{groups.length + pools.length}</div><div className="kpi-sub">{groups.length} гр. · {pools.length} пул.</div></div>
+                <div className="kpi-card"><div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
               </div>
 
-              {groups.length > 0 && groups.map((g: any) => {
+              {projGroups.length > 0 && projGroups.map((g: any) => {
                 const gOrds = grpOrders(g.id);
                 return (
                   <div key={g.id} className="group-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: gOrds.length > 0 ? 12 : 0 }}>
                       <div><span style={{ fontWeight: 600, fontSize: 15 }}>📁 {g.name}</span><span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{gOrds.length} заказов</span></div>
-                      <button onClick={() => delGroup(g.id)} className="btn btn-danger btn-sm">🗑</button>
+                      <button onClick={() => delGroup(g.id, g.name)} className="btn btn-danger btn-sm">🗑</button>
                     </div>
                     {gOrds.length > 0 && (
                       <table className="tbl"><thead><tr><th className="t-graph">Граф</th><th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th><th>Старт</th><th>Финиш</th><th style={{ width: 40 }}></th></tr></thead>
@@ -650,7 +669,7 @@ export default function AppShell() {
                             <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Выс.' : 'Обыч.'}</span></td>
                             <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status}</span></td>
                             <td className="t-mono">{o.start_date || '—'}</td><td className="t-mono">{o.due_date || '—'}</td>
-                            <td><button onClick={() => deleteOrder(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }}>🗑</button></td>
+                            <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }}>🗑</button></td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -659,7 +678,7 @@ export default function AppShell() {
                 );
               })}
 
-              {groups.length === 0 && (
+              {projGroups.length === 0 && (
                 <div className="panel" style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
                   <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Нет групп</div>
@@ -672,8 +691,8 @@ export default function AppShell() {
           {/* ═══ PROJECT ORDERS ═══ */}
           {view === 'project-orders' && (() => {
             const getTypeInfo = (o: any) => {
-              if (o.group_id) { const g = groups.find(gr => gr.id === o.group_id); return { icon: '📁', label: 'Группа', name: g?.name || '—', id: o.group_id }; }
-              if (o.pool_id) { const p = pools.find(pl => pl.id === o.pool_id); return { icon: '📦', label: 'Пул', name: p?.name || '—', id: o.pool_id }; }
+              if (o.group_id) { const g = projGroups.find(gr => gr.id === o.group_id); return { icon: '📁', label: 'Группа', name: g?.name || '—', id: o.group_id }; }
+              if (o.pool_id) { const p = projPools.find(pl => pl.id === o.pool_id); return { icon: '📦', label: 'Пул', name: p?.name || '—', id: o.pool_id }; }
               return { icon: '—', label: 'Свободный', name: '—', id: null };
             };
             let filtered = orderShowAll ? [...orders] : orders.filter((o: any) => !o.group_id && !o.pool_id);
@@ -719,8 +738,8 @@ export default function AppShell() {
                         <select value={orderTypeFilter} onChange={e => setOrderTypeFilter(e.target.value)} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '4px 8px', fontSize: 12 }}>
                           <option value="all">Все типы</option>
                           <option value="free">Свободные</option>
-                          {groups.map((g: any) => <option key={'g-'+g.id} value={g.id}>📁 {g.name}</option>)}
-                          {pools.map((p: any) => <option key={'p-'+p.id} value={p.id}>📦 {p.name}</option>)}
+                          {projGroups.map((g: any) => <option key={'g-'+g.id} value={g.id}>📁 {g.name}</option>)}
+                          {projPools.map((p: any) => <option key={'p-'+p.id} value={p.id}>📦 {p.name}</option>)}
                         </select>
                       )}
                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
@@ -852,7 +871,7 @@ export default function AppShell() {
                               <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
                               <td className="t-mono">{o.start_date || '—'}</td>
                               <td className="t-mono">{o.due_date || '—'}</td>
-                              <td><button onClick={() => deleteOrder(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
+                              <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
                             </tr>
                           );
                         })}
@@ -950,15 +969,16 @@ export default function AppShell() {
                 <div className="panel-hdr">
                   <div><span className="panel-title">📁 Группы</span><span className="panel-sub">{selectedProject?.name}</span></div>
                   <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
+              {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
                 </div>
-                {groups.length === 0 && (
+                {projGroups.length === 0 && (
                   <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                     <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
                     <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Групп нет</div>
                     <div>Создайте группу для логической организации заказов. Группа — просто папка, не влияет на расчёты.</div>
                   </div>
                 )}
-                {groups.map((g: any) => {
+                {projGroups.map((g: any) => {
                   const grOrders = orders.filter((o: any) => o.group_id === g.id);
                   return (
                     <div key={g.id} className="group-card" style={{ borderColor: 'rgba(59,130,246,.3)', background: 'rgba(59,130,246,.04)' }}>
@@ -967,7 +987,7 @@ export default function AppShell() {
                           <span style={{ fontWeight: 600, fontSize: 15 }}>📁 {g.name}</span>
                           <span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{grOrders.length} заказов</span>
                         </div>
-                        <button onClick={() => delGroup(g.id)} className="btn btn-danger btn-sm">🗑 Удалить группу</button>
+                        <button onClick={() => delGroup(g.id, g.name)} className="btn btn-danger btn-sm">🗑 Удалить группу</button>
                       </div>
                       {grOrders.length > 0 && (
                         <table className="tbl">
@@ -1031,15 +1051,16 @@ export default function AppShell() {
                 <div className="panel-hdr">
                   <div><span className="panel-title">📦 Пулы (CCM-объединения)</span><span className="panel-sub">{selectedProject?.name}</span></div>
                   <button onClick={addPool} className="btn btn-primary btn-sm">+ Пул</button>
+              {newPoolInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newPoolName} onChange={e=>setNewPoolName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewPoolInput(false);else if(e.key==='Enter')addPool()}} placeholder="Название пула" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:140,outline:'none'}} /><button onClick={addPool} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
                 </div>
-                {pools.length === 0 && (
+                {projPools.length === 0 && (
                   <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                     <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
                     <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Пулов нет</div>
                     <div>Создайте пул — CCM-объединение с общим графом и ресурсами. Заказы внутри пула влияют друг на друга.</div>
                   </div>
                 )}
-                {pools.map((p: any) => {
+                {projPools.map((p: any) => {
                   const plOrders = orders.filter((o: any) => o.pool_id === p.id);
                   return (
                     <div key={p.id} className="group-card" style={{ borderColor: 'rgba(139,92,246,.3)', background: 'rgba(139,92,246,.04)' }}>
@@ -1048,7 +1069,7 @@ export default function AppShell() {
                           <span style={{ fontWeight: 600, fontSize: 15 }}>📦 {p.name}</span>
                           <span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{plOrders.length} заказов</span>
                         </div>
-                        <button onClick={() => delPool(p.id)} className="btn btn-danger btn-sm">🗑 Удалить пул</button>
+                        <button onClick={() => delPool(p.id, p.name)} className="btn btn-danger btn-sm">🗑 Удалить пул</button>
                       </div>
                       {plOrders.length > 0 && (
                         <table className="tbl">
@@ -1092,7 +1113,7 @@ export default function AppShell() {
                         <td className="t-name">{o.specification_name || '—'}</td>
                         <td className="t-mono">{o.quantity} {o.unit}</td>
                         <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : 'План'}</span></td>
-                        <td className="t-mono">{groups.find((g: any) => g.id === o.group_id)?.name || '—'}</td>
+                        <td className="t-mono">{projGroups.find((g: any) => g.id === o.group_id)?.name || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1359,9 +1380,13 @@ export default function AppShell() {
           <div style={{ padding: '8px 14px', fontSize: 13, color: '#B0C4DE', borderBottom: '1px solid #1E3252', marginBottom: 4 }}>
             📁 {ctxMenu.project.name}
           </div>
-          <button onClick={() => { const newName = prompt('Новое название:', ctxMenu.project.name); if (newName && newName !== ctxMenu.project.name) { renameProject(ctxMenu.project, newName); } setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+          <button onClick={(e) => { e.stopPropagation(); const btn = e.target as HTMLElement; btn.style.display = 'none'; const inp = btn.nextElementSibling as HTMLInputElement; if (inp) { inp.style.display = 'block'; inp.value = ctxMenu.project.name; inp.focus(); inp.select(); } }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
             ✏️ Переименовать
           </button>
+          <input style={{ display: 'none', width: 'calc(100% - 28px)', margin: '0 14px 8px', background: '#0A1628', border: '1px solid #3B82F6', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setCtxMenu(null); } if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v && v !== ctxMenu.project.name) { renameProject(ctxMenu.project, v); } setCtxMenu(null); } }}
+            onBlur={() => setCtxMenu(null)}
+          />
           <button onClick={() => { archiveProject(ctxMenu.project); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
             {ctxMenu.project.status === 'archived' ? '📂 Восстановить' : '📦 В архив'}
           </button>
@@ -1378,9 +1403,23 @@ export default function AppShell() {
         entityType={deleteCheckEntity.type}
         entityId={deleteCheckEntity.id}
         entityName={deleteCheckEntity.name}
-        token={getToken()}
-        onClose={() => setDeleteCheckEntity(null)}
-        onDeleted={() => { setSelectedProject(null); setOrders([]); load().then(() => navTo('projects')); }}
+        result={deleteCheckResult}
+        loading={deleteCheckLoading}
+        error={deleteCheckError}
+        onClose={() => { setDeleteCheckEntity(null); setDeleteCheckResult(null); setDeleteCheckError(null); }}
+        onDeleted={() => {
+          if (deleteCheckEntity.type === 'project') {
+            setSelectedProject(null); setOrders([]); load().then(() => navTo('projects'));
+          } else if (deleteCheckEntity.type === 'order') {
+            refresh();
+          } else if (deleteCheckEntity.type === 'order_group') {
+            loadProjectGroups(selectedProject);
+          } else if (deleteCheckEntity.type === 'order_pool') {
+            loadProjectPools(selectedProject);
+          } else {
+            load();
+          }
+        }}
       />
     )}
     </div>
