@@ -26,6 +26,7 @@ class BOMNodeCreate(BaseModel):
     is_phantom: bool = False
     sort_order: int = 0
     routing_id: Optional[str] = None
+    order_id: Optional[str] = None
     notes: Optional[str] = None
     ext_id: Optional[str] = None
 
@@ -36,6 +37,7 @@ class BOMNodeUpdate(BaseModel):
     quantity_per_parent: Optional[Decimal] = Field(default=None, ge=0)
     unit: Optional[str] = None
     routing_id: Optional[str] = None
+    order_id: Optional[str] = None
     notes: Optional[str] = None
     ext_id: Optional[str] = None
 
@@ -59,6 +61,7 @@ class BOMNodeOut(BaseModel):
     is_phantom: bool
     sort_order: int
     routing_id: Optional[UUID] = None
+    order_id: Optional[UUID] = None
     notes: Optional[str] = None
     ext_id: Optional[str] = None
 

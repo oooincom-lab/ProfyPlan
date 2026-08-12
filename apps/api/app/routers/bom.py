@@ -95,6 +95,7 @@ async def create_bom_node(
         is_phantom=body.is_phantom,
         sort_order=body.sort_order,
         routing_id=UUID(body.routing_id) if body.routing_id else None,
+        order_id=UUID(body.order_id) if body.order_id else None,
         notes=body.notes,
     )
     db.add(node)
@@ -122,10 +123,14 @@ async def update_bom_node(
 
     if body.routing_id is not None:
         node.routing_id = UUID(body.routing_id) if body.routing_id else None
+    if 'order_id' in body.model_fields_set:
+        node.order_id = UUID(body.order_id) if body.order_id else None
     if body.quantity_per_parent is not None:
         node.quantity_per_parent = body.quantity_per_parent
     if body.nomenclature_name is not None:
         node.nomenclature_name = body.nomenclature_name
+    if body.unit is not None:
+        node.unit = body.unit
     if body.notes is not None:
         node.notes = body.notes
 
@@ -166,6 +171,21 @@ async def delete_bom_node(
     await delete_children(str(node_id))
     await db.delete(node)
     await db.commit()
+
+
+def _resolve_order_id(value) -> Optional[UUID]:
+    """Преобразует order_id из JSON в UUID.
+
+    Принимает: None / '' → None; валидный UUID-строк → UUID; иначе None.
+    (для ext_id-привязки используйте Excel-импорт или PATCH /bom/nodes/{id})
+    """
+    if not value:
+        return None
+    s = str(value).strip()
+    try:
+        return UUID(s)
+    except (ValueError, AttributeError):
+        return None
 
 
 @bom_router.post("/projects/{project_id}/upload", response_model=BOMUploadResult)
@@ -211,6 +231,7 @@ async def upload_bom_json(
                     procurement_lead_time_days=Decimal(str(item.get("procurement_lead_time_days", 0))) if item.get("procurement_lead_time_days") else None,
                     is_phantom=item.get("is_phantom", False),
                     sort_order=item.get("sort_order", 0),
+                    order_id=_resolve_order_id(item.get("order_id")),
                     notes=item.get("notes"),
                 )
                 db.add(node)
@@ -251,6 +272,7 @@ async def upload_bom_json(
                 procurement_lead_time_days=Decimal(str(node_data.get("procurement_lead_time_days", 0))) if node_data.get("procurement_lead_time_days") else None,
                 is_phantom=node_data.get("is_phantom", False),
                 sort_order=node_data.get("sort_order", 0),
+                order_id=_resolve_order_id(node_data.get("order_id")),
                 notes=node_data.get("notes"),
             )
             db.add(node)
@@ -900,3 +922,131 @@ async def export_mrp(
         resource_load=resource_load,
         warnings=warnings,
     )
+
+
+# ── Order cluster (куст заказов) ──
+
+@bom_router.get("/projects/{project_id}/orders/{order_id}/cluster")
+async def get_order_cluster(
+    project_id: UUID,
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Получить куст заказов: родительские и дочерние.
+
+    Источники связей:
+    1. parent_order_id на заказе (явная self-FK) — вверх и вниз по дереву.
+    2. order_id на BOM-узлах (какой заказ производит этот узел) — доп. связь.
+
+    Каждый заказ включает: id, ext_id, specification_name, status, group_id, pool_id,
+    has_cpm (есть ли расчёт CPM), in_pool (входит ли в пул), relation (self/child/parent).
+    """
+    from app.models.production_order import ProductionOrder
+
+    current_order = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.id == order_id,
+            ProductionOrder.tenant_id == tenant_id,
+        )
+    )).scalar_one_or_none()
+    if not current_order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+
+    parent_ids: set[UUID] = set()
+    child_ids: set[UUID] = set()
+
+    # 1. Обход вверх по parent_order_id
+    cursor = current_order.parent_order_id
+    seen: set[UUID] = set()
+    while cursor and cursor not in seen:
+        seen.add(cursor)
+        parent_ids.add(cursor)
+        parent_order = (await db.execute(
+            select(ProductionOrder).where(
+                ProductionOrder.id == cursor,
+                ProductionOrder.tenant_id == tenant_id,
+            )
+        )).scalar_one_or_none()
+        cursor = parent_order.parent_order_id if parent_order else None
+
+    # 2. Обход вниз по parent_order_id (BFS)
+    frontier = [order_id]
+    visited: set[UUID] = set()
+    while frontier:
+        nxt = []
+        for pid in frontier:
+            if pid in visited:
+                continue
+            visited.add(pid)
+            children = (await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id,
+                    ProductionOrder.project_id == project_id,
+                    ProductionOrder.parent_order_id == pid,
+                )
+            )).scalars().all()
+            for c in children:
+                if c.id != order_id:
+                    child_ids.add(c.id)
+                    nxt.append(c.id)
+        frontier = nxt
+
+    # 3. Доп. связи через order_id на BOM-узлах:
+    #    узлы, которые производит текущий заказ (order_id = order_id) →
+    #    родители: заказы, в чьём BOM лежат эти узлы.
+    bom_nodes_produced = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.project_id == project_id,
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.order_id == order_id,
+        )
+    )).scalars().all()
+    for pnode in bom_nodes_produced:
+        root = pnode
+        while root and root.parent_id:
+            root = (await db.execute(
+                select(ProductStructure).where(ProductStructure.id == root.parent_id)
+            )).scalar_one_or_none()
+        if root and root.nomenclature_name:
+            owner = (await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.project_id == project_id,
+                    ProductionOrder.tenant_id == tenant_id,
+                    ProductionOrder.specification_name == root.nomenclature_name,
+                )
+            )).scalar_one_or_none()
+            if owner and owner.id != order_id:
+                parent_ids.add(owner.id)
+
+    all_ids = {order_id} | parent_ids | child_ids
+    orders = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.id.in_(list(all_ids)),
+            ProductionOrder.tenant_id == tenant_id,
+        )
+    )).scalars().all()
+
+    order_info = []
+    for o in orders:
+        has_cpm = o.operations_created is not None and o.operations_created > 0
+        order_info.append({
+            "id": str(o.id),
+            "ext_id": o.ext_id,
+            "specification_name": o.specification_name,
+            "status": o.status,
+            "group_id": str(o.group_id) if o.group_id else None,
+            "pool_id": str(o.pool_id) if o.pool_id else None,
+            "parent_order_id": str(o.parent_order_id) if o.parent_order_id else None,
+            "has_cpm": has_cpm,
+            "in_pool": o.pool_id is not None,
+            "relation": "self" if o.id == order_id else ("child" if o.id in child_ids else "parent"),
+        })
+
+    return {
+        "order_id": str(order_id),
+        "orders": order_info,
+        "total": len(order_info),
+        "parents": [str(x) for x in parent_ids],
+        "children": [str(x) for x in child_ids],
+    }

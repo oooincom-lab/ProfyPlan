@@ -1,0 +1,509 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+
+export interface BomTreeNode {
+  id: string;
+  parent_id: string | null;
+  level: number;
+  node_type: string; // assembly | semi_finished | material
+  nomenclature_id: string | null;
+  nomenclature_name: string;
+  quantity_per_parent: number | string;
+  unit: string;
+  is_make_or_buy: string; // make | buy
+  procurement_lead_time_days: number | string | null;
+  is_phantom: boolean;
+  routing_id: string | null;
+  order_id: string | null;
+  ext_id: string | null;
+  dimmed?: number; // 0/undefined = обычный; 1 = подчинённый 1-го уровня; 2 = 2-го уровня
+}
+
+export interface OrderOption {
+  id: string;
+  ext_id?: string | null;
+  specification_name?: string | null;
+}
+
+interface BomTreeProps {
+  nodes: BomTreeNode[];
+  compact?: boolean;
+  orderName?: string;
+  poolName?: string;
+  onOpenFull?: () => void;
+  timeline?: TimelineOp[];
+  timelineLoading?: boolean;
+  onLoadTimeline?: () => void;
+  editable?: boolean;
+  orders?: OrderOption[];
+  onNodeOrderChange?: (nodeId: string, orderId: string | null) => void;
+}
+
+export interface TimelineOp {
+  id?: string;
+  name: string;
+  duration: number;
+  early_start: number;
+  early_finish: number;
+  total_float?: number;
+}
+
+const TYPE_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  assembly: { label: 'Сборка', color: '#60A5FA', bg: 'rgba(59,130,246,.15)', border: 'rgba(59,130,246,.35)' },
+  semi_finished: { label: 'Полуфабрикат', color: '#34D399', bg: 'rgba(16,185,129,.14)', border: 'rgba(16,185,129,.3)' },
+  material: { label: 'Материал', color: '#A8B6C8', bg: 'rgba(138,151,173,.13)', border: 'rgba(138,151,173,.3)' },
+};
+
+function fmtNum(v: number | string | null | undefined): string {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (Number.isNaN(n)) return String(v);
+  return (Math.round(n * 1000) / 1000).toString();
+}
+
+function orderLabel(orders: OrderOption[] | undefined, orderId: string | null | undefined): string {
+  if (!orderId || !orders) return '';
+  const o = orders.find(x => x.id === orderId);
+  if (!o) return '';
+  return o.ext_id || o.specification_name || '—';
+}
+
+function TypeIcon({ node_type }: { node_type: string }) {
+  const c = 'currentColor';
+  if (node_type === 'assembly') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round">
+        <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+        <path d="M3 8v8l9 5 9-5V8" />
+      </svg>
+    );
+  }
+  if (node_type === 'semi_finished') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round">
+        <path d="M12 2l9 5-9 5-9-5 9-5z" />
+        <path d="M3 12l9 5 9-5" />
+      </svg>
+    );
+  }
+  // material
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round">
+      <path d="M12 3c3.2 0 5 2.2 5 4 0 5.4-5 14-5 14s-5-8.6-5-14c0-1.8 1.8-4 5-4z" />
+    </svg>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"
+      style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .15s' }}>
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange }: BomTreeProps) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [showTimeline, setShowTimeline] = useState(true);
+
+  const hasCpm = !!timeline && timeline.length > 0;
+  const cpmTotalDur = hasCpm ? Math.max(...timeline!.map(o => o.early_finish || 0), 1) : 1;
+  const cpmCritCount = hasCpm ? timeline!.filter(o => (o.total_float ?? 0) === 0).length : 0;
+
+  // Build tree from flat list
+  const tree = useMemo(() => {
+    const childrenMap: Record<string, BomTreeNode[]> = {};
+    const roots: BomTreeNode[] = [];
+    for (const n of nodes) {
+      if (n.parent_id) {
+        (childrenMap[n.parent_id] ||= []).push(n);
+      } else {
+        roots.push(n);
+      }
+    }
+    // sort children by sort_order then name
+    for (const k of Object.keys(childrenMap)) {
+      childrenMap[k].sort((a, b) => a.nomenclature_name.localeCompare(b.nomenclature_name));
+    }
+    return { childrenMap, roots };
+  }, [nodes]);
+
+  const toggleNode = (id: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const expandAll = () => setCollapsed(new Set());
+  const collapseAll = () => {
+    const all = new Set<string>();
+    for (const n of nodes) if (tree.childrenMap[n.id]?.length) all.add(n.id);
+    setCollapsed(all);
+  };
+
+  const matchesFilter = (n: BomTreeNode): boolean => {
+    if (typeFilter !== 'all' && n.node_type !== typeFilter) return false;
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      const hay = `${n.nomenclature_name} ${n.nomenclature_id || ''} ${n.ext_id || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  };
+
+  // Recursive render — but filter-aware: a node shows if it matches OR any descendant matches.
+  const renderNode = (n: BomTreeNode, depth: number): React.ReactNode => {
+    const meta = TYPE_META[n.node_type] || TYPE_META.material;
+    const children = tree.childrenMap[n.id] || [];
+    const hasChildren = children.length > 0;
+    const isCollapsed = collapsed.has(n.id);
+    const isBuy = n.is_make_or_buy === 'buy';
+    const lead = fmtNum(n.procurement_lead_time_days);
+    const dimLevel = n.dimmed || 0;
+    const dimOpacity = dimLevel >= 2 ? 0.4 : dimLevel === 1 ? 0.6 : 1;
+    const linkedOrderLabel = orderLabel(orders, n.order_id);
+
+    return (
+      <div key={n.id}>
+        <div
+          className="bom-node"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '5px 8px',
+            borderRadius: 7, cursor: hasChildren ? 'pointer' : 'default',
+            transition: 'background .12s',
+            opacity: dimOpacity,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#162844')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          onClick={() => hasChildren && toggleNode(n.id)}
+        >
+          <span style={{ width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#5A7090', flex: '0 0 16px' }}>
+            {hasChildren ? <Chevron open={!isCollapsed} /> : null}
+          </span>
+          <span style={{
+            width: 20, height: 20, borderRadius: 5, display: 'inline-flex', alignItems: 'center',
+            justifyContent: 'center', flex: '0 0 20px', background: meta.bg, color: meta.color,
+          }}>
+            <TypeIcon node_type={n.node_type} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#E8EEF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {n.nomenclature_name}
+              {n.is_phantom ? <span style={{ color: '#5A7090', fontSize: 11, marginLeft: 6 }}>фантом</span> : null}
+              {n.order_id && <span style={{ color: '#A78BFA', fontSize: 10, marginLeft: 6, fontWeight: 600 }}>🔗</span>}
+            </span>
+            <span style={{ display: 'block', fontSize: 11, color: '#5A7090', fontFamily: "'IBM Plex Mono', monospace" }}>
+              {n.nomenclature_id || n.ext_id || '—'}
+            </span>
+          </span>
+          <span style={{ width: 56, textAlign: 'right', fontSize: 12, color: '#B0C4DE', fontFamily: "'IBM Plex Mono', monospace", whiteSpace: 'nowrap', flex: '0 0 56px' }}>
+            {fmtNum(n.quantity_per_parent)} <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
+          </span>
+          <span style={{
+            width: compact ? 74 : 90, flex: `0 0 ${compact ? 74 : 90}px`, textAlign: 'center',
+            fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 5,
+            background: meta.bg, color: meta.color, whiteSpace: 'nowrap',
+          }}>
+            {meta.label}
+          </span>
+          <span style={{
+            width: 44, flex: '0 0 44px', textAlign: 'center', fontSize: 10.5, fontWeight: 600,
+            padding: '2px 5px', borderRadius: 5, whiteSpace: 'nowrap',
+            background: isBuy ? 'rgba(96,165,250,.14)' : 'rgba(245,158,11,.14)',
+            color: isBuy ? '#8FC1F7' : '#FBBF24',
+          }}>
+            {isBuy ? 'закупка' : 'произв.'}
+          </span>
+          {!compact && editable && orders && (
+            <span style={{ flex: '0 0 120px', width: 120, minWidth: 0 }}
+              onClick={e => e.stopPropagation()}>
+              <select
+                value={n.order_id || ''}
+                onChange={e => onNodeOrderChange?.(n.id, e.target.value || null)}
+                title={linkedOrderLabel ? `Заказ-производитель: ${linkedOrderLabel}` : 'Выбрать заказ-производитель'}
+                style={{
+                  width: '100%', background: n.order_id ? 'rgba(139,92,246,.15)' : '#0A1628',
+                  border: `1px solid ${n.order_id ? 'rgba(139,92,246,.4)' : '#1E3252'}`,
+                  borderRadius: 6, color: n.order_id ? '#A78BFA' : '#8FA3BD',
+                  padding: '3px 6px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer',
+                }}>
+                <option value="">— нет заказа —</option>
+                {orders.map(o => (
+                  <option key={o.id} value={o.id}>
+                    {o.ext_id || o.specification_name || o.id.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+            </span>
+          )}
+          {!compact && (
+            <span style={{
+              width: 56, flex: '0 0 56px', textAlign: 'right', fontSize: 12,
+              color: '#8FA3BD', fontFamily: "'IBM Plex Mono', monospace",
+            }}>
+              {n.procurement_lead_time_days !== null && n.procurement_lead_time_days !== undefined ? `${lead} дн` : '—'}
+            </span>
+          )}
+        </div>
+        {hasChildren && !isCollapsed && (
+          <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: '1px solid #2A4060' }}>
+            {children.map(c => renderNode(c, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Filter roots: keep a root if it matches OR any descendant matches
+  const visibleRoots = useMemo(() => {
+    if (!query.trim() && typeFilter === 'all') return tree.roots;
+    const keep = (n: BomTreeNode): boolean => {
+      if (matchesFilter(n)) return true;
+      for (const c of tree.childrenMap[n.id] || []) if (keep(c)) return true;
+      return false;
+    };
+    return tree.roots.filter(keep);
+  }, [tree, query, typeFilter]);
+
+  if (nodes.length === 0) {
+    return (
+      <div style={{ padding: '14px 10px', color: '#5A7090', fontSize: 12, textAlign: 'center' }}>
+        BOM не загружен. Загрузите структуру изделия (BOM).
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ fontFamily: 'inherit' }}>
+      {/* Heavy header: mode toggle + toolbar */}
+      {!compact && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div style={{ display: 'inline-flex', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 9, padding: 3, gap: 2 }}>
+              {(['structure', 'cpm', 'ccm', 'pert'] as const).map(m => {
+                const enabled = m === 'structure' || (m === 'cpm' && hasCpm);
+                return (
+                <button
+                  key={m}
+                  disabled={!enabled}
+                  title={enabled ? undefined : 'Доступно после расчёта'}
+                  onClick={() => setMode(m)}
+                  style={{
+                    border: 0, background: mode === m ? '#3B82F6' : 'transparent',
+                    color: mode === m ? '#fff' : enabled ? '#8FA3BD' : '#5A7090',
+                    fontFamily: 'inherit', fontSize: 12.5, fontWeight: 500,
+                    padding: '6px 12px', borderRadius: 6, cursor: enabled ? 'pointer' : 'not-allowed',
+                    opacity: enabled ? 1 : 0.55,
+                  }}>
+                  {m === 'structure' ? 'Структура' : m === 'cpm' ? 'CPM' : m === 'ccm' ? 'CCM' : 'PERT'}
+                </button>
+                );
+              })}
+            </div>
+            <div style={{ flex: 1 }} />
+            <button onClick={expandAll} style={toolbarBtn}>Развернуть</button>
+            <button onClick={collapseAll} style={toolbarBtn}>Свернуть</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 7, padding: '5px 9px', flex: 1, maxWidth: 280, color: '#5A7090' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" /></svg>
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по имени или коду…"
+                style={{ border: 0, background: 'transparent', color: '#E8EEF5', fontFamily: 'inherit', fontSize: 12.5, outline: 'none', width: '100%' }} />
+            </div>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 7, color: '#B0C4DE', padding: '5px 8px', fontSize: 12 }}>
+              <option value="all">Все типы</option>
+              <option value="assembly">Сборка</option>
+              <option value="semi_finished">Полуфабрикат</option>
+              <option value="material">Материал</option>
+            </select>
+            {onOpenFull && (
+              <button onClick={onOpenFull} style={{ ...toolbarBtn, color: '#60A5FA', borderColor: 'rgba(59,130,246,.4)' }}>
+                Развернуть полностью ↗
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Column header (heavy only, structure mode) */}
+      {!compact && mode === 'structure' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 8px', borderBottom: '1px solid #1E3252', fontSize: 10.5, letterSpacing: '.05em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600, marginBottom: 4 }}>
+          <span style={{ width: 16, flex: '0 0 16px' }} />
+          <span style={{ width: 20, flex: '0 0 20px' }} />
+          <span style={{ flex: 1 }}>Состав</span>
+          <span style={{ width: 56, flex: '0 0 56px', textAlign: 'right' }}>Кол-во</span>
+          <span style={{ width: 90, flex: '0 0 90px', textAlign: 'center' }}>Тип</span>
+          <span style={{ width: 44, flex: '0 0 44px', textAlign: 'center' }}>Способ</span>
+          {editable && orders && <span style={{ width: 120, flex: '0 0 120px', textAlign: 'center' }}>Заказ</span>}
+          <span style={{ width: 56, flex: '0 0 56px', textAlign: 'right' }}>Срок</span>
+        </div>
+      )}
+
+      {/* Body: structure tree OR CPM summary */}
+      {mode === 'cpm' && hasCpm ? (
+        <div style={{ padding: '6px 2px 2px' }}>
+          <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: '#5A7090' }}>Общая длительность</div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: '#E8EEF5', lineHeight: 1.2 }}>{Math.round(cpmTotalDur)} ч</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#5A7090' }}>Операций</div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: '#E8EEF5', lineHeight: 1.2 }}>{(timeline || []).length}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#5A7090' }}>Критический путь</div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: '#f87171', lineHeight: 1.2 }}>{cpmCritCount} оп.</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>
+            Гант по операциям проекта. КП — критический путь (резерв времени 0), некритические операции имеют запас.
+          </div>
+        </div>
+      ) : (
+        <div>{visibleRoots.map(r => renderNode(r, 0))}</div>
+      )}
+
+      {/* Legend (heavy only, structure mode) */}
+      {!compact && mode === 'structure' && (
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid #1E3252', fontSize: 11, color: '#8FA3BD' }}>
+          {Object.entries(TYPE_META).map(([k, m]) => (
+            <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: m.color }} /> {m.label}
+            </span>
+          ))}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: '#8FC1F7' }} /> закупка
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: '#FBBF24' }} /> производство
+          </span>
+        </div>
+      )}
+
+      {/* Compact timeline (light) */}
+      {compact && (
+        <div style={{ marginTop: 10, borderTop: '1px solid #1E3252', paddingTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: '#5A7090', fontWeight: 500 }}>Таймлайн</span>
+            {!timeline || timeline.length === 0
+              ? <span style={{ fontSize: 10.5, color: '#4A6080' }}>черновик — без расчёта</span>
+              : <span style={{ fontSize: 10.5, color: '#5A7090' }}>{timeline.length} оп. · КП: {cpmCritCount}</span>}
+          </div>
+          {timeline && timeline.length > 0 ? (
+            <div>
+              {timeline.slice(0, 8).map((op, i) => {
+                const totalDur = Math.max(...timeline.map(o => o.early_finish || 0), 1);
+                const es = op.early_start || 0;
+                const dur = op.duration || (op.early_finish - op.early_start) || 1;
+                const left = (es / totalDur) * 100;
+                const width = Math.max((dur / totalDur) * 100, 1);
+                const crit = (op.total_float ?? 0) === 0;
+                return (
+                  <div key={op.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <span style={{ width: 130, flex: '0 0 130px', fontSize: 10.5, color: crit ? '#f87171' : '#8FA3BD', fontWeight: crit ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={op.name}>
+                      {op.name}
+                    </span>
+                    <div style={{ flex: 1, position: 'relative', height: 11, background: '#0A1628', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{
+                        position: 'absolute', left: `${left}%`, width: `${width}%`, height: '100%', borderRadius: 2,
+                        background: crit ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
+                        border: crit ? '1px solid rgba(239,68,68,.4)' : '1px solid rgba(59,130,246,.25)',
+                      }} />
+                    </div>
+                    <span style={{ width: 34, flex: '0 0 34px', textAlign: 'right', fontSize: 9.5, fontFamily: "'IBM Plex Mono', monospace", color: crit ? '#f87171' : '#5A7090' }}>
+                      {crit ? 'КП' : `${Math.round(dur)}ч`}
+                    </span>
+                  </div>
+                );
+              })}
+              {timeline.length > 8 && <div style={{ fontSize: 10, color: '#5A7090', marginTop: 2 }}>+{timeline.length - 8} ещё…</div>}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 22, background: '#0A1628', borderRadius: 3, padding: '0 6px', border: '1px dashed #1E3252' }}>
+              <div style={{ flex: 1, height: 8, background: 'repeating-linear-gradient(90deg, #1E3252 0 8px, transparent 8px 14px)', borderRadius: 2 }} />
+              {onLoadTimeline && (
+                <button onClick={onLoadTimeline} disabled={timelineLoading} style={{ background: '#1E3252', border: '1px solid #2A4060', color: timelineLoading ? '#5A7090' : '#B0C4DE', borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: timelineLoading ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {timelineLoading ? '…' : '▶ CPM'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timeline (heavy only) */}
+      {!compact && (
+        <div style={{ marginTop: 12, borderTop: '1px solid #1E3252', paddingTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD', cursor: 'pointer' }}>
+              <input type="checkbox" checked={showTimeline} onChange={e => setShowTimeline(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
+              Таймлайн
+            </label>
+            {!timeline || timeline.length === 0
+              ? <span style={{ fontSize: 11, color: '#5A7090' }}>Черновик — без расчёта</span>
+              : <span style={{ fontSize: 11, color: '#5A7090' }}>после расчёта CPM</span>}
+          </div>
+          {showTimeline && (timeline && timeline.length > 0 ? (
+            <div style={{ marginTop: 8 }}>
+              {timeline.map((op, i) => {
+                const totalDur = Math.max(...timeline.map(o => o.early_finish || 0), 1);
+                const es = op.early_start || 0;
+                const dur = op.duration || (op.early_finish - op.early_start) || 1;
+                const left = (es / totalDur) * 100;
+                const width = Math.max((dur / totalDur) * 100, 1);
+                const crit = (op.total_float ?? 0) === 0;
+                return (
+                  <div key={op.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ width: 190, flex: '0 0 190px', fontSize: 11.5, color: crit ? '#f87171' : '#B0C4DE', fontWeight: crit ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={op.name}>
+                      {op.name}
+                    </span>
+                    <div style={{ flex: 1, position: 'relative', height: 15, background: '#0A1628', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        position: 'absolute', left: `${left}%`, width: `${width}%`, height: '100%', borderRadius: 3,
+                        background: crit ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
+                        border: crit ? '1px solid rgba(239,68,68,.5)' : '1px solid rgba(59,130,246,.3)',
+                      }} />
+                    </div>
+                    <span style={{ width: 44, flex: '0 0 44px', textAlign: 'right', fontSize: 10.5, fontFamily: "'IBM Plex Mono', monospace", color: crit ? '#f87171' : '#5A7090' }}>
+                      {crit ? 'КП' : `${Math.round(dur)}ч`}
+                    </span>
+                  </div>
+                );
+              })}
+              <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 10.5, color: '#5A7090' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(239,68,68,.6)' }} /> критический путь</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(59,130,246,.5)' }} /> некритический</span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 8, padding: '14px 12px', border: '1px dashed #1E3252', borderRadius: 8, textAlign: 'center', color: '#5A7090', fontSize: 12 }}>
+              Таймлайн появится после расчёта CPM/CCM.
+              {onLoadTimeline && (
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={onLoadTimeline} disabled={timelineLoading} style={{ background: '#1E3252', border: '1px solid #2A4060', color: timelineLoading ? '#5A7090' : '#B0C4DE', borderRadius: 7, padding: '6px 14px', fontSize: 12, cursor: timelineLoading ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                    {timelineLoading ? 'Расчёт…' : '▶ Запустить CPM-расчёт'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const toolbarBtn: React.CSSProperties = {
+  background: '#0A1628', border: '1px solid #1E3252', color: '#8FA3BD',
+  borderRadius: 7, padding: '5px 10px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
+};

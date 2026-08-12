@@ -23,6 +23,7 @@ Thumbs.db
 .next_old/
 dist/
 build/
+*.tsbuildinfo
 
 # Docker
 pgdata/

@@ -31,6 +31,7 @@ interface GroupEditorProps {
   pools: Pool[];
   onClose: () => void;
   onRefresh: () => void;
+  onMoveOrders?: (orderIds: string[], groupId: string | null) => Promise<void>;
 }
 
 const btnStyle = (w: number): React.CSSProperties => ({
@@ -119,7 +120,7 @@ function OrderCard({ o, selected, onToggle, colorSet }: { o: Order; selected: bo
   );
 }
 
-export default function GroupEditor({ group, orders, pools, onClose, onRefresh }: GroupEditorProps) {
+export default function GroupEditor({ group, orders, pools, onClose, onRefresh, onMoveOrders }: GroupEditorProps) {
   const groupOrders = orders.filter(o => o.group_id === group.id);
   const groupPools = pools.filter(p => p.group_id === group.id);
   const freeOrders = orders.filter(o => !o.group_id && !o.pool_id);
@@ -153,7 +154,10 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh }
   const addOrders = async (ids: string[]) => {
     if (ids.length === 0) return;
     setSaving(true);
-    try { await moveOrders(ids, group.id); }
+    try {
+      if (onMoveOrders) await onMoveOrders(ids, group.id);
+      else await moveOrders(ids, group.id);
+    }
     catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); setSaving(false); return; }
     setSaving(false);
     setSelFree({ orders: new Set(), pools: selFree.pools });
@@ -163,7 +167,10 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh }
   const removeOrders = async (ids: string[]) => {
     if (ids.length === 0) return;
     setSaving(true);
-    try { await moveOrders(ids, null); }
+    try {
+      if (onMoveOrders) await onMoveOrders(ids, null);
+      else await moveOrders(ids, null);
+    }
     catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); setSaving(false); return; }
     setSaving(false);
     setSelGroup({ orders: new Set(), pools: selGroup.pools });

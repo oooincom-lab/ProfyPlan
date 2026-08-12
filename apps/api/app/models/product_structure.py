@@ -66,6 +66,13 @@ class ProductStructure(BaseModel):
         nullable=True,
     )
 
+    # Связь с заказом-производителем: какой заказ делает этот узел BOM
+    order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("production_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     ext_id: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True, comment="Внешний ID из ERP"
     )

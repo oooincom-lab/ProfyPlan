@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Fragment, useRef } from 'react';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
@@ -10,6 +10,7 @@ import PoolEditor from '@/components/pooleditor';
 import GroupEditor from '@/components/groupeditor';
 import DeleteCheckDialog from '@/components/DeleteCheckDialog';
 import ExcelImportWizard from '@/components/ExcelImportWizard';
+import BomTree from '@/components/bomtree';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -43,6 +44,13 @@ export default function AppShell() {
   const [groups, setGroups] = useState<Record<string, any[]>>({});
   const [pools, setPools] = useState<Record<string, any[]>>({});
   const [expandedOrders, setExpandedOrders] = useState<string | null>(null);
+  const [bomTrees, setBomTrees] = useState<Record<string, any[]>>({});
+  const [bomLoading, setBomLoading] = useState<Record<string, boolean>>({});
+  const [expandedBomOrder, setExpandedBomOrder] = useState<string | null>(null);
+  const [expandedGroupPool, setExpandedGroupPool] = useState<string | null>(null);
+  const [bomModalOrder, setBomModalOrder] = useState<any>(null);
+  const [bomTimeline, setBomTimeline] = useState<any[] | null>(null);
+  const [bomTimelineLoading, setBomTimelineLoading] = useState(false);
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
   const [orderShowAll, setOrderShowAll] = useState(false);
@@ -54,6 +62,7 @@ export default function AppShell() {
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [dupCheck, setDupCheck] = useState<null | { spec: string; existing: any[] }>(null);
   const [editingOrder, setEditingOrder] = useState<string | null>(null);
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkPasteText, setBulkPasteText] = useState('');
@@ -81,6 +90,26 @@ export default function AppShell() {
   const [selPoolOrders, setSelPoolOrders] = useState<Set<string>>(new Set());
   const [selFreeOrders, setSelFreeOrders] = useState<Set<string>>(new Set());
 
+  // ── Контроль цепочки заказов (куст) ──
+  const [orderChainControl, setOrderChainControl] = useState<'off' | 'warning' | 'control'>(() => {
+    if (typeof window === 'undefined') return 'off';
+    const v = localStorage.getItem('profyplan_order_chain_control');
+    return (v === 'warning' || v === 'control') ? v : 'off';
+  });
+  const [chainDialog, setChainDialog] = useState<null | {
+    order: any;
+    selectedIds: string[];
+    targetGroupId: string | null;
+    targetPoolId: string | null;
+    cluster: any;
+  }>(null);
+  const chainResolveRef = useRef<(() => void) | null>(null);
+
+  const setChainControl = (mode: 'off' | 'warning' | 'control') => {
+    setOrderChainControl(mode);
+    if (typeof window !== 'undefined') localStorage.setItem('profyplan_order_chain_control', mode);
+  };
+
   // ── Order CRUD ──
   const loadProjectOrders = async (projId: string) => {
     if (projectOrders[projId]) return;
@@ -90,8 +119,135 @@ export default function AppShell() {
     } catch {}
   };
 
+  const loadBomTree = async (projId: string) => {
+    if (bomTrees[projId] || bomLoading[projId]) return;
+    await reloadBomTree(projId);
+  };
+
+  const reloadBomTree = async (projId: string) => {
+    setBomLoading(prev => ({ ...prev, [projId]: true }));
+    try {
+      const t = await apiF<{ nodes: any[] }>(`/bom/projects/${projId}/tree`);
+      setBomTrees(prev => ({ ...prev, [projId]: t.nodes || [] }));
+    } catch {}
+    finally { setBomLoading(prev => ({ ...prev, [projId]: false })); }
+  };
+
+  const toggleBomOrder = (o: any) => {
+    if (!selectedProject) return;
+    const next = expandedBomOrder === o.id ? null : o.id;
+    setExpandedBomOrder(next);
+    if (next) loadBomTree(selectedProject.id);
+  };
+
+  const orderBomNodes = (o: any) => {
+    const all = bomTrees[selectedProject?.id || ''] || [];
+    if (!all.length) return [];
+    const specName = (o.specification_name || '').toLowerCase().trim();
+    const specId = (o.specification_id || '').toLowerCase().trim();
+    const roots = all.filter(n => !n.parent_id);
+    const matched = roots.filter(r => {
+      const rn = (r.nomenclature_name || '').toLowerCase().trim();
+      const rid = (r.nomenclature_id || '').toLowerCase().trim();
+      const rext = (r.ext_id || '').toLowerCase().trim();
+      if (specName && rn === specName) return true;
+      if (specId && (rid === specId || rext === specId)) return true;
+      return false;
+    });
+    const keep = matched.length ? matched : roots;
+    const childrenMap: Record<string, any[]> = {};
+    for (const n of all) if (n.parent_id) (childrenMap[n.parent_id] ||= []).push(n);
+    const kept = new Set<string>();
+    const walk = (n: any) => { kept.add(n.id); for (const c of childrenMap[n.id] || []) walk(c); };
+    for (const r of keep) walk(r);
+    return all.filter(n => kept.has(n.id));
+  };
+
+  const openBomModal = (o: any) => {
+    setBomModalOrder(o);
+    setBomTimeline(null);
+    setBomTimelineLoading(false);
+    if (selectedProject) loadProjectOrders(selectedProject.id);
+  };
+
+  const handleNodeOrderChange = async (nodeId: string, orderId: string | null) => {
+    if (!selectedProject) return;
+    try {
+      await apiF(`/bom/nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify({ order_id: orderId }) });
+      await reloadBomTree(selectedProject.id);
+    } catch (e: any) { setMsg('Ошибка привязки заказа: ' + (e.message || String(e))); }
+  };
+
+  // BOM-узлы заказа + BOM подчинённых заказов (тусклые, через order_id на узлах)
+  const orderBomNodesWithSuborders = (o: any) => {
+    const projId = selectedProject?.id || '';
+    const all = bomTrees[projId] || [];
+    if (!all.length) return [];
+    const own = orderBomNodes(o);
+    const ordersList = projectOrders[projId] || [];
+
+    const result: any[] = [...own];
+
+    // Получить корни BOM подчинённого заказа по его id
+    const subOrderRoots = (orderId: string): any[] => {
+      const sub = ordersList.find((x: any) => x.id === orderId);
+      if (!sub) return [];
+      return orderBomNodes(sub).filter((n: any) => !n.parent_id);
+    };
+
+    // Рекурсивно встраиваем узлы подчинённого заказа как дочерние (тусклые)
+    const inject = (nodes: any[], parentId: string, dimLevel: number, visited: Set<string>) => {
+      for (const n of nodes) {
+        const synthId = `sub_${parentId}_${n.id}_${dimLevel}`;
+        const clone: any = { ...n, id: synthId, parent_id: parentId, dimmed: dimLevel };
+        result.push(clone);
+        const realChildren = all.filter((c: any) => c.parent_id === n.id);
+        if (realChildren.length) inject(realChildren, synthId, dimLevel, visited);
+        if (n.order_id && n.order_id !== o.id && !visited.has(n.order_id)) {
+          const nextVisited = new Set(visited);
+          nextVisited.add(n.order_id);
+          const deeper = subOrderRoots(n.order_id);
+          if (deeper.length) inject(deeper, synthId, Math.min(dimLevel + 1, 2), nextVisited);
+        }
+      }
+    };
+
+    for (const n of own) {
+      if (n.order_id && n.order_id !== o.id) {
+        const visited = new Set<string>([o.id]);
+        const subRoots = subOrderRoots(n.order_id);
+        if (subRoots.length) inject(subRoots, n.id, 1, visited);
+      }
+    }
+
+    return result;
+  };
+
+  const loadBomTimeline = async () => {
+    if (!selectedProject) return;
+    setBomTimelineLoading(true);
+    try {
+      const r = await apiF<any>(`/projects/${selectedProject.id}/calculate/cpm`, { method: 'POST' });
+      setBomTimeline(r?.nodes || []);
+    } catch (e: any) { setMsg('Ошибка расчёта: ' + (e.message || String(e))); }
+    setBomTimelineLoading(false);
+  };
+
   const createOrder = async () => {
     if (!newOrder.specification_name.trim() || !selectedProject) return;
+    const spec = newOrder.specification_name.trim();
+    try {
+      const dup = await apiF<any>(`/production-orders/check-duplicate?project_id=${selectedProject.id}&specification_name=${encodeURIComponent(spec)}`);
+      if (dup.duplicate) {
+        setDupCheck({ spec, existing: dup.existing || [] });
+        return;
+      }
+      await doCreateOrder();
+    } catch (e: any) { alert('Ошибка создания: ' + (e.message || String(e))); }
+  };
+
+  const doCreateOrder = async () => {
+    if (!selectedProject) return;
     try {
       await apiF(`/production-orders/?project_id=${selectedProject.id}`, {
         method: 'POST', body: JSON.stringify({
@@ -101,6 +257,7 @@ export default function AppShell() {
       });
       setNewOrder({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
       setShowNewOrder(false);
+      setDupCheck(null);
       await refresh();
     } catch (e: any) { alert('Ошибка создания: ' + (e.message || String(e))); }
   };
@@ -109,14 +266,68 @@ export default function AppShell() {
     runDeleteCheck('order', orderId, orderName);
   };
 
-  const moveOrder = async (orderId: string, groupId: string | null, poolId: string | null) => {
-    try {
-      await apiF(`/production-orders/${orderId}/move`, {
+  const doMoveOrders = async (orderIds: string[], groupId: string | null, poolId: string | null) => {
+    for (const oid of orderIds) {
+      await apiF(`/production-orders/${oid}/move`, {
         method: 'PATCH', body: JSON.stringify({ group_id: groupId, pool_id: poolId }),
       });
-      await refresh();
-      if (selectedProject) { setExpandedOrders(null); loadProjectOrders(selectedProject.id); }
-    } catch (e: any) { alert('Ошибка перемещения: ' + (e.message || String(e))); }
+    }
+    await refresh();
+    if (selectedProject) { setExpandedOrders(null); loadProjectOrders(selectedProject.id); }
+  };
+
+  const moveOrder = async (orderId: string, groupId: string | null, poolId: string | null) => {
+    return moveOrdersChecked([orderId], groupId, poolId);
+  };
+
+  const moveOrdersChecked = async (orderIds: string[], groupId: string | null, poolId: string | null) => {
+    if (orderChainControl === 'off') {
+      return doMoveOrders(orderIds, groupId, poolId);
+    }
+    const allOrders = projectOrders[selectedProject?.id || ''] || orders;
+    // Отфильтруем no-op перемещения (заказ уже в целевом месте)
+    const effectiveIds = orderIds.filter(oid => {
+      const o = allOrders.find((x: any) => x.id === oid);
+      if (!o) return true;
+      return !(o.group_id === groupId && o.pool_id === poolId);
+    });
+    if (effectiveIds.length === 0) return;
+    const firstOrder = allOrders.find((x: any) => x.id === effectiveIds[0]) || { id: effectiveIds[0] };
+    try {
+      // Собираем объединённый куст по всем выбранным заказам
+      const clusterUnion: any[] = [];
+      const seenIds = new Set<string>();
+      for (const oid of effectiveIds) {
+        const cluster = await apiF<any>(`/bom/projects/${selectedProject?.id}/orders/${oid}/cluster`);
+        for (const o of (cluster.orders || [])) {
+          if (!seenIds.has(o.id)) { seenIds.add(o.id); clusterUnion.push(o); }
+        }
+      }
+      const related = clusterUnion.filter((x: any) => !effectiveIds.includes(x.id));
+      if (related.length === 0) {
+        return doMoveOrders(effectiveIds, groupId, poolId);
+      }
+      return new Promise<void>((resolve) => {
+        chainResolveRef.current = () => resolve();
+        setChainDialog({ order: firstOrder, selectedIds: effectiveIds, targetGroupId: groupId, targetPoolId: poolId, cluster: { orders: clusterUnion } });
+      });
+    } catch {
+      return doMoveOrders(effectiveIds, groupId, poolId);
+    }
+  };
+
+  const resolveChainMove = async (action: 'all' | 'current' | 'cancel') => {
+    if (!chainDialog) return;
+    const { selectedIds, targetGroupId, targetPoolId, cluster } = chainDialog;
+    const finish = chainResolveRef.current;
+    chainResolveRef.current = null;
+    setChainDialog(null);
+    if (action === 'cancel') { finish?.(); return; }
+    const orderIds = action === 'all'
+      ? (cluster.orders || []).map((x: any) => x.id)
+      : selectedIds;
+    await doMoveOrders(orderIds, targetGroupId, targetPoolId);
+    finish?.();
   };
 
   // Batch pool operations
@@ -232,6 +443,7 @@ export default function AppShell() {
     const qtyIdx = idxOf(['колво','количество','штук','qty','quantity','amount']);
     const clientIdx = idxOf(['клиент','заказчик','client','customer']);
     const idIdx = idxOf(['id','номер','код','заказ','order']);
+    const parentIdx = idxOf(['родительскийзаказ','родитель','подчиненный','подчинённый','parentorder','родительскийid']);
     try {
       let created = 0;
       for (const row of dataRows) {
@@ -239,11 +451,13 @@ export default function AppShell() {
         const qty = qtyIdx >= 0 ? (parseFloat(row[qtyIdx]) || 1) : 1;
         const client = clientIdx >= 0 ? row[clientIdx] : null;
         const extId = idIdx >= 0 ? row[idIdx] : null;
+        const parentExtId = parentIdx >= 0 ? (row[parentIdx] || null) : null;
         if (!name.trim()) continue;
         await apiF(`/production-orders/?project_id=${selectedProject.id}`, {
           method: 'POST', body: JSON.stringify({
             specification_name: name, quantity: qty, unit: 'pcs',
             priority: 'normal', client: client || null, ext_id: extId || null,
+            parent_order_id: parentExtId,
           })
         });
         created++;
@@ -876,6 +1090,7 @@ export default function AppShell() {
                   <div style={{ overflowX: 'auto' }}>
                     <table className="tbl">
                       <thead><tr>
+                        <th style={{ width: 30 }}></th>
                         <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
                         {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Пул{sortArrow('_typeName')}</th>}
                         <th className="t-graph">Граф</th>
@@ -892,6 +1107,7 @@ export default function AppShell() {
                       <tbody>
                         {showNewOrder && (
                           <tr>
+                            <td></td>
                             <td className="t-mono">—</td>
                             {orderShowAll && <td className="t-mono">—</td>}
                             <td className="t-graph"><span className="g-pln">○</span></td>
@@ -911,14 +1127,25 @@ export default function AppShell() {
                         )}
                         {filtered.map((o: any) => {
                           const ti = getTypeInfo(o);
+                          const bomOpen = expandedBomOrder === o.id;
                           return (
-                            <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
+                            <Fragment key={o.id}>
+                            <tr draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+                                  title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+                                >{bomOpen ? '▾' : '▸'}</button>
+                              </td>
                               <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
                               <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
                               <td className="t-mono">{o.ext_id || '—'}</td>
-                              <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
-                              <td>{o.client || '—'}</td>
+                              <td className="t-name" style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.specification_name || o.ext_id || '—'}</td>
+                              <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
                               <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
@@ -926,9 +1153,25 @@ export default function AppShell() {
                               <td className="t-mono">{o.due_date || '—'}</td>
                               <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
                             </tr>
+                            {bomOpen && (
+                              <tr>
+                                <td colSpan={orderShowAll ? 13 : 12} style={{ background: '#0F1E36', padding: 0 }}>
+                                  <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
+                                      {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
+                                      <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
+                                      <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                    </div>
+<BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} timeline={bomTimeline || undefined} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            </Fragment>
                           );
                         })}
-                        {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 12 : 11} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
+                        {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 13 : 12} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -1216,17 +1459,47 @@ export default function AppShell() {
                 ) : (
                   <table className="tbl">
                     <thead><tr>
+                      <th style={{ width: 30 }}></th>
                       <th>Заказ</th><th>Клиент</th><th style={{ width: 80 }}>Кол-во</th><th style={{ width: 80 }}>Статус</th>
                     </tr></thead>
                     <tbody>
-                      {poolOrders.map((o: any) => (
-                        <tr key={o.id}>
-                          <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
-                          <td style={{ color: '#B0C4DE' }}>{o.client || '—'}</td>
+                      {poolOrders.map((o: any) => {
+                        const bomOpen = expandedBomOrder === o.id;
+                        return (
+                        <Fragment key={o.id}>
+                        <tr>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+                              title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                              onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+                              onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+                            >{bomOpen ? '▾' : '▸'}</button>
+                          </td>
+                          <td className="t-name" style={{ color: '#A78BFA' }}>{o.specification_name || o.ext_id || '—'}</td>
+                          <td style={{ color: '#A78BFA' }}>{o.client || '—'}</td>
                           <td className="t-mono">{o.quantity} {o.unit}</td>
                           <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
                         </tr>
-                      ))}
+                        {bomOpen && (
+                          <tr>
+                            <td colSpan={5} style={{ background: '#0F1E36', padding: 0 }}>
+                              <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
+                                  {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
+                                  <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
+                                  <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                </div>
+                                <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -1240,6 +1513,7 @@ export default function AppShell() {
               orders={orders}
               onClose={() => setEditingPool(false)}
               onRefresh={() => { (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+              onMoveOrders={(orderIds, poolId) => moveOrdersChecked(orderIds, null, poolId)}
             />
           )}
 
@@ -1275,6 +1549,7 @@ export default function AppShell() {
                 ) : (
                   <table className="tbl">
                     <thead><tr>
+                      <th style={{ width: 30 }}></th>
                       <th style={{ width: 60 }}>Тип</th>
                       <th>Название</th>
                       <th style={{ width: 100 }}>Кол-во / Заказов</th>
@@ -1285,23 +1560,99 @@ export default function AppShell() {
                         if (item.kind === 'pool') {
                           const p = item.data;
                           const pOrders = orders.filter((o: any) => o.pool_id === p.id);
+                          const poolExpanded = expandedGroupPool === p.id;
                           return (
-                            <tr key={'gp-' + p.id} style={{ background: 'rgba(139,92,246,.04)' }}>
+                            <Fragment key={'gp-' + p.id}>
+                            <tr style={{ background: 'rgba(139,92,246,.04)' }}>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setExpandedGroupPool(poolExpanded ? null : p.id); }}
+                                  title={poolExpanded ? 'Свернуть пул' : 'Развернуть пул'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: poolExpanded ? '#A78BFA' : '#7C6BAF', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = '#A78BFA')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = poolExpanded ? '#A78BFA' : '#7C6BAF')}
+                                >{poolExpanded ? '▾' : '▸'}</button>
+                              </td>
                               <td><span style={{ fontSize: 16 }}>📦</span></td>
                               <td className="t-name" style={{ color: '#A78BFA', fontWeight: 600 }}>{p.name}</td>
                               <td className="t-mono" style={{ color: '#A78BFA' }}>{pOrders.length}</td>
                               <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Пул</span></td>
                             </tr>
+                            {poolExpanded && pOrders.map((o: any) => {
+                              const bomOpen = expandedBomOrder === o.id;
+                              return (
+                                <Fragment key={'gpo-' + o.id}>
+                                <tr style={{ background: 'rgba(139,92,246,.02)' }}>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+                                      title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                                      onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+                                      onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+                                    >{bomOpen ? '▾' : '▸'}</button>
+                                  </td>
+                                  <td><span style={{ fontSize: 14, opacity: 0.5 }}>📋</span></td>
+                                  <td className="t-name" style={{ paddingLeft: 20, color: '#A78BFA' }}>{o.specification_name || o.ext_id || '—'}</td>
+                                  <td className="t-mono">{o.quantity} {o.unit}</td>
+                                  <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
+                                </tr>
+                                {bomOpen && (
+                                  <tr>
+                                    <td colSpan={5} style={{ background: '#0F1E36', padding: 0 }}>
+                                      <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                          <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
+                                          {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
+                                          <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
+                                          <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                        </div>
+                                        <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                                </Fragment>
+                              );
+                            })}
+                            </Fragment>
                           );
                         } else {
                           const o = item.data;
+                          const bomOpen = expandedBomOrder === o.id;
                           return (
-                            <tr key={'go-' + o.id}>
+                            <Fragment key={'go-' + o.id}>
+                            <tr>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+                                  title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+                                >{bomOpen ? '▾' : '▸'}</button>
+                              </td>
                               <td><span style={{ fontSize: 14 }}>📋</span></td>
-                              <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
+                              <td className="t-name" style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.specification_name || o.ext_id || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
                             </tr>
+                            {bomOpen && (
+                              <tr>
+                                <td colSpan={5} style={{ background: '#0F1E36', padding: 0 }}>
+                                  <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
+                                      {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
+                                      <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
+                                      <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                    </div>
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            </Fragment>
                           );
                         }
                       })}
@@ -1320,6 +1671,7 @@ export default function AppShell() {
               pools={projPools}
               onClose={() => setEditingGroup(false)}
               onRefresh={() => { (async () => { try { const [o, g] = await Promise.all([ apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`), apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`), ]); setOrders(o); setGroups(prev => ({ ...prev, [selectedProject.id]: g.items })); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+              onMoveOrders={(orderIds, groupId) => moveOrdersChecked(orderIds, groupId, null)}
             />
           )}
 
@@ -1415,11 +1767,35 @@ export default function AppShell() {
           {/* ═══ SETTINGS ═══ */}
           {view === 'settings' && !selectedProject && (
             <div className="panel">
-              <div className="panel-hdr"><span className="panel-title">Настройки интерфейса</span></div>
-              <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>⚙️</div>
-                <div>Тема, состав KPI, уведомления — в разработке</div>
-                <div style={{ marginTop: 16, fontSize: 13, color: '#8FA3BD' }}>Для управления проектом выберите его и нажмите ⚙️ в карточке</div>
+              <div className="panel-hdr"><span className="panel-title">Настройки Рабочего стола</span></div>
+              <div style={{ display: 'grid', gap: 20, maxWidth: 640 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🔗 Контроль цепочки заказов</div>
+                  <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                    При переносе заказа в пул или группу система может предупреждать о связанных заказах (родительских и дочерних — весь «куст»).
+                  </div>
+                  {([
+                    { v: 'control', icon: '🔒', title: 'Контроль', desc: 'Перенос только всем кустом целиком. Вариант один: перенести весь куст или отменить.' },
+                    { v: 'warning', icon: '⚠️', title: 'Предупреждение', desc: 'Показывать куст с выбором: перенести весь куст или только текущий заказ.' },
+                    { v: 'off', icon: '🚫', title: 'Выключен', desc: 'Не предупреждать — переносить как раньше.' },
+                  ] as const).map(opt => (
+                    <label key={opt.v} style={{
+                      display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px',
+                      borderRadius: 9, border: `1px solid ${orderChainControl === opt.v ? 'rgba(59,130,246,.5)' : '#1E3252'}`,
+                      background: orderChainControl === opt.v ? 'rgba(59,130,246,.08)' : '#0A1628',
+                      cursor: 'pointer', marginBottom: 8,
+                    }}>
+                      <input type="radio" name="chain-control" checked={orderChainControl === opt.v} onChange={() => setChainControl(opt.v)} style={{ marginTop: 3, accentColor: '#3B82F6' }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.icon} {opt.title}</div>
+                        <div style={{ fontSize: 12, color: '#8FA3BD', marginTop: 2, lineHeight: 1.45 }}>{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                  <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 8, lineHeight: 1.5, background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.15)', borderRadius: 8, padding: '10px 12px' }}>
+                    💡 Связанные заказы — это те, что связаны через поле «Заказ-производитель» в BOM или «Родительский заказ». При переносе куста связанные заказы отвязываются от своих прежних групп/пулов, и расчёты по ним (включая расчёты пулов) аннулируются.
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1652,6 +2028,162 @@ export default function AppShell() {
         }}
       />
     )}
+
+    {/* BOM heavy modal */}
+    {bomModalOrder && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,10,20,.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setBomModalOrder(null)}>
+        <div style={{ background: '#0F1E36', border: '1px solid #1E3252', borderRadius: 14, width: '100%', maxWidth: 880, maxHeight: '88vh', overflow: 'auto', padding: 22 }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600 }}>BOM · Развёртка</span>
+            <span style={{ fontSize: 17, fontWeight: 600, color: '#E8EEF5' }}>{bomModalOrder.specification_name || bomModalOrder.ext_id || '—'}</span>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setBomModalOrder(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 20 }}>✕</button>
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10, fontSize: 11, color: '#8FA3BD', padding: '8px 12px', background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.18)', borderRadius: 8 }}>
+            <span>🔗 Колонка «Заказ» — какой заказ производит этот узел (связывает куст заказов).</span>
+            <span style={{ opacity: .6 }}>Тусклые узлы — BOM подчинённых заказов.</span>
+          </div>
+          <BomTree
+            nodes={orderBomNodesWithSuborders(bomModalOrder)}
+            orderName={bomModalOrder.specification_name}
+            timeline={bomTimeline || undefined}
+            timelineLoading={bomTimelineLoading}
+            onLoadTimeline={loadBomTimeline}
+            editable
+            orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
+            onNodeOrderChange={handleNodeOrderChange}
+          />
+        </div>
+      </div>
+    )}
+
+    {/* Chain control dialog (куст заказов при перемещении) */}
+    {chainDialog && (() => {
+      const { order, selectedIds, targetGroupId, targetPoolId, cluster } = chainDialog;
+      const ordersInCluster = cluster.orders || [];
+      const selectedSet = new Set(selectedIds);
+      const related = ordersInCluster.filter((x: any) => !selectedSet.has(x.id));
+      const single = selectedIds.length === 1;
+      const parents = single ? related.filter((x: any) => x.relation === 'parent') : [];
+      const children = single ? related.filter((x: any) => x.relation === 'child') : [];
+      const unclassified = single ? related.filter((x: any) => x.relation !== 'parent' && x.relation !== 'child') : related;
+      const selfOrder = ordersInCluster.find((x: any) => x.id === selectedIds[0]) || order;
+      const targetLabel = targetPoolId
+        ? `пул «${(pools[selectedProject?.id || ''] || []).find((p: any) => p.id === targetPoolId)?.name || targetPoolId.slice(0, 8)}»`
+        : targetGroupId
+          ? `группу «${(groups[selectedProject?.id || ''] || []).find((g: any) => g.id === targetGroupId)?.name || targetGroupId.slice(0, 8)}»`
+          : 'корень проекта (без группы/пула)';
+      const nameOf = (o: any) => o.ext_id || o.specification_name || o.id.slice(0, 8);
+      const statusOf = (o: any) => {
+        const parts: string[] = [];
+        if (o.group_id) parts.push('в группе');
+        if (o.pool_id) parts.push('в пуле');
+        if (o.has_cpm) parts.push('рассчитан (CPM)');
+        return parts.length ? parts.join(' · ') : 'не сгруппирован';
+      };
+      const total = ordersInCluster.length;
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,10,20,.72)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => resolveChainMove('cancel')}>
+          <div style={{ background: '#0F1E36', border: '1px solid #2A4060', borderRadius: 14, width: '100%', maxWidth: 560, maxHeight: '88vh', overflow: 'auto', padding: 22 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 22 }}>⚠️</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>Контроль цепочки заказов</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => resolveChainMove('cancel')} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 20 }}>✕</button>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#B0C4DE', marginBottom: 14, lineHeight: 1.55 }}>
+              {single
+                ? <>Заказ <b style={{ color: '#E8EEF5' }}>{nameOf(selfOrder)}</b> переносится в <b style={{ color: '#A78BFA' }}>{targetLabel}</b> и связан с другими заказами:</>
+                : <>Выбранные заказы ({selectedIds.length}) переносятся в <b style={{ color: '#A78BFA' }}>{targetLabel}</b> и связаны с другими заказами:</>}
+            </div>
+
+            {parents.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600, marginBottom: 4 }}>Родительские</div>
+                {parents.map((o: any) => (
+                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', background: '#0A1628', borderRadius: 6, marginBottom: 4, fontSize: 12.5 }}>
+                    <span style={{ color: '#E8EEF5', fontWeight: 500 }}>{nameOf(o)}</span>
+                    <span style={{ color: '#8FA3BD', fontSize: 11 }}>{statusOf(o)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {children.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600, marginBottom: 4 }}>Дочерние</div>
+                {children.map((o: any) => (
+                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', background: '#0A1628', borderRadius: 6, marginBottom: 4, fontSize: 12.5 }}>
+                    <span style={{ color: '#E8EEF5', fontWeight: 500 }}>{nameOf(o)}</span>
+                    <span style={{ color: '#8FA3BD', fontSize: 11 }}>{statusOf(o)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {unclassified.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600, marginBottom: 4 }}>Связанные</div>
+                {unclassified.map((o: any) => (
+                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', background: '#0A1628', borderRadius: 6, marginBottom: 4, fontSize: 12.5 }}>
+                    <span style={{ color: '#E8EEF5', fontWeight: 500 }}>{nameOf(o)}</span>
+                    <span style={{ color: '#8FA3BD', fontSize: 11 }}>{statusOf(o)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, color: '#F59E0B', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 8, padding: '10px 12px', marginBottom: 14, lineHeight: 1.5 }}>
+              При переносе всего куста связанные заказы будут отвязаны от своих прежних групп и пулов, а расчёты по ним (включая расчёты пулов) будут аннулированы.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {orderChainControl !== 'control' && (
+                <button onClick={() => resolveChainMove('current')} style={{ background: '#0A1628', border: '1px solid #2A4060', color: '#B0C4DE', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>
+                  Только текущий
+                </button>
+              )}
+              <button onClick={() => resolveChainMove('all')} style={{ background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' }}>
+                Перенести весь куст ({total})
+              </button>
+              <button onClick={() => resolveChainMove('cancel')} style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* Duplicate order dialog */}
+    {dupCheck && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,10,20,.72)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setDupCheck(null)}>
+        <div style={{ background: '#0F1E36', border: '1px solid #2A4060', borderRadius: 14, width: '100%', maxWidth: 460, maxHeight: '80vh', overflow: 'auto', padding: 22 }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 20 }}>🔁</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#E8EEF5' }}>Возможный дубликат</span>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setDupCheck(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 20 }}>✕</button>
+          </div>
+          <div style={{ fontSize: 13, color: '#B0C4DE', marginBottom: 12, lineHeight: 1.5 }}>
+            Заказ с названием <b style={{ color: '#E8EEF5' }}>«{dupCheck.spec}»</b> уже есть в проекте:
+          </div>
+          {dupCheck.existing.map((o: any) => (
+            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '7px 10px', background: '#0A1628', borderRadius: 6, marginBottom: 4, fontSize: 12.5 }}>
+              <span style={{ color: '#E8EEF5' }}>{o.ext_id ? `${o.ext_id} · ` : ''}{o.specification_name}</span>
+              <span style={{ color: '#8FA3BD', fontSize: 11 }}>{o.status || '—'}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button onClick={doCreateOrder} style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' }}>
+              Всё равно создать
+            </button>
+            <button onClick={() => setDupCheck(null)} style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
@@ -1825,7 +2357,7 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
         ) : step < 3 ? (
           <div></div>
         ) : (
-          <button className="btn btn-primary" disabled={creating} onClick={async () => { setCreating(true); try { const proj = await apiF<any>('/projects', { method: 'POST', body: JSON.stringify({ name: name || 'Без названия', mode: mode === 'quick' ? 'quick' : 'project', default_method: mode === 'pert' ? 'pert_cpm' : 'cpm', country_code: country }) }); if (manualRows.length > 0 && proj?.id) { await Promise.all(manualRows.map((row: any) => apiF(`/production-orders/?project_id=${proj.id}`, { method: 'POST', body: JSON.stringify({ ext_id: row.ext_id || null, specification_name: row.specification_name || null, quantity: Number(row.quantity) || 1, unit: row.unit || 'pcs', start_date: row.start_date || null, due_date: row.due_date || null, priority: row.priority || 'normal', client: row.client || null, notes: row.notes || null }) }))); } onCreated(); } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); } }}>
+          <button className="btn btn-primary" disabled={creating} onClick={async () => { setCreating(true); try { const proj = await apiF<any>('/projects', { method: 'POST', body: JSON.stringify({ name: name || 'Без названия', mode: mode === 'quick' ? 'quick' : 'project', default_method: mode === 'pert' ? 'pert_cpm' : 'cpm', country_code: country }) }); if (manualRows.length > 0 && proj?.id) { for (const row of manualRows) { await apiF(`/production-orders/?project_id=${proj.id}`, { method: 'POST', body: JSON.stringify({ ext_id: row.ext_id || null, specification_name: row.specification_name || null, quantity: Number(row.quantity) || 1, unit: row.unit || 'pcs', start_date: row.start_date || null, due_date: row.due_date || null, priority: row.priority || 'normal', client: row.client || null, notes: row.notes || null, parent_order_id: row.parent_order_id || null }) }); } } onCreated(); } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); } }}>
             {creating ? 'Создание...' : 'Создать проект'}
           </button>
         )}

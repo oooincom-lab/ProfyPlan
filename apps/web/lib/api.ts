@@ -176,6 +176,51 @@ export function uploadBOM(projectId: string, file: File) {
   }).then(r => r.json()) as Promise<{ imported: number; skipped: number; errors: string[]; root_ids: string[] }>;
 }
 
+export function createBOMNode(projectId: string, body: Record<string, any>) {
+  return request<BOMNode>(`/v1/bom/projects/${projectId}/nodes`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateBOMNode(nodeId: string, body: Record<string, any>) {
+  return request<BOMNode>(`/v1/bom/nodes/${nodeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteBOMNode(projectId: string, nodeId: string) {
+  return request<void>(`/v1/bom/projects/${projectId}/nodes/${nodeId}`, {
+    method: 'DELETE',
+  });
+}
+
+export interface OrderClusterInfo {
+  id: string;
+  ext_id: string | null;
+  specification_name: string | null;
+  status: string;
+  group_id: string | null;
+  pool_id: string | null;
+  parent_order_id: string | null;
+  has_cpm: boolean;
+  in_pool: boolean;
+  relation: 'self' | 'child' | 'parent';
+}
+
+export interface OrderClusterResult {
+  order_id: string;
+  orders: OrderClusterInfo[];
+  total: number;
+  parents: string[];
+  children: string[];
+}
+
+export function getOrderCluster(projectId: string, orderId: string) {
+  return request<OrderClusterResult>(`/v1/bom/projects/${projectId}/orders/${orderId}/cluster`);
+}
+
 export function explodeBOM(projectId: string, projectQuantity?: number) {
   return request<{
     operations: any[];
@@ -217,6 +262,8 @@ export interface BOMNode {
   is_phantom: boolean;
   sort_order: number;
   routing_id: string | null;
+  order_id: string | null;
+  ext_id: string | null;
   notes: string | null;
 }
 

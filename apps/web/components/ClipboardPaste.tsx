@@ -17,12 +17,13 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   due_date: ['финиш', 'конец', 'до', 'по', 'end', 'finish', 'to', 'due', 'окончание', 'дата окончания'],
   priority: ['приоритет', 'важность', 'priority', 'срочность', 'срочно'],
   notes: ['примечание', 'комментарий', 'notes', 'comment', 'описание', 'заметки'],
+  parent_order_id: ['родительский заказ', 'родитель', 'подчиненный', 'подчинённый', 'родительский id', 'parent_order', 'parent order', 'родительский номер'],
 };
 
 const FIELD_LABELS: Record<string, string> = {
   ext_id: 'ID заказа', specification_name: 'Продукт', quantity: 'Кол-во',
   unit: 'Ед. изм.', client: 'Клиент', start_date: 'Старт', due_date: 'Финиш',
-  priority: 'Приоритет', notes: 'Примечание',
+  priority: 'Приоритет', notes: 'Примечание', parent_order_id: 'Родительский заказ',
 };
 
 function guessField(header: string): string | null {

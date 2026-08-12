@@ -21,6 +21,7 @@ class ProductionOrderCreate(BaseModel):
     priority: str = "normal"
     client: Optional[str] = None
     notes: Optional[str] = None
+    parent_order_id: Optional[str] = None
 
 
 class ProductionOrderOut(BaseModel):
@@ -40,6 +41,7 @@ class ProductionOrderOut(BaseModel):
     status: str
     group_id: Optional[str] = None
     pool_id: Optional[str] = None
+    parent_order_id: Optional[str] = None
     exploded_at: Optional[datetime] = None
     operations_created: Optional[int] = None
     created_at: datetime
@@ -59,6 +61,7 @@ class ExcelOrderRow(BaseModel):
     due_date: Optional[str] = None
     priority: str = "normal"
     client: str = ""
+    parent_order_id: Optional[str] = None  # ext_id родительского заказа (куст)
 
 
 # ── Excel Import — Вкладка 2: BOM ─────────────────────────────
@@ -74,6 +77,7 @@ class ExcelBOMRow(BaseModel):
     qty_per_parent: float = 1.0
     procurement_days: Optional[float] = None
     is_phantom: bool = False
+    order_id: Optional[str] = None  # ext_id заказа-производителя (куст заказов)
 
 
 # ── Excel Import — Вкладка 3: Маршруты ────────────────────────

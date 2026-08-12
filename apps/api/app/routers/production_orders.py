@@ -118,8 +118,14 @@ async def _import_orders(
     ws, project_id: Optional[str], tenant_id: str,
     db: AsyncSession, result: ExcelImportResult,
 ) -> ExcelImportResult:
-    """Парсинг вкладки 'Заказы'."""
+    """Парсинг вкладки 'Заказы'.
+
+    Колонки: ext_id | specification_name | specification_id | quantity |
+             start_date | due_date | priority | client | parent_order_id(ext_id)
+    """
     rows = list(ws.iter_rows(min_row=2, values_only=True))  # skip header
+    ext_to_id: dict[str, UUID] = {}
+    pending_parent: list[tuple[ProductionOrder, str]] = []  # (order, parent_ext_id)
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
             continue
@@ -139,6 +145,12 @@ async def _import_orders(
                 status="draft",
             )
             db.add(order)
+            if order.ext_id:
+                ext_to_id[order.ext_id] = order.id
+            # parent_order_id — ext_id родителя, разрешаем после создания всех заказов
+            parent_ext = _str(row[8]) if len(row) > 8 else ""
+            if parent_ext:
+                pending_parent.append((order, parent_ext))
             result.orders_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
@@ -146,16 +158,45 @@ async def _import_orders(
                 message=str(e),
             ))
     await db.flush()
+
+    # Разрешаем parent_order_id (ext_id → UUID)
+    for order, parent_ext in pending_parent:
+        pid = ext_to_id.get(parent_ext)
+        if pid:
+            order.parent_order_id = pid
+        else:
+            result.warnings.append(
+                f"Заказ {order.ext_id}: родительский заказ '{parent_ext}' не найден — пропущен"
+            )
+    await db.flush()
     return result
 
 
 async def _import_bom(
     ws, tenant_id: str, project_id: Optional[str], db: AsyncSession, result: ExcelImportResult,
 ) -> ExcelImportResult:
-    """Парсинг вкладки 'Состав (BOM)'."""
+    """Парсинг вкладки 'Состав (BOM)'.
+
+    Колонки: spec_name | node_ext_id | parent_ext_id | node_type | nomenclature_name |
+             unit | qty_per_parent | procurement_days | order_id(ext_id заказа-производителя)
+    """
     rows = list(ws.iter_rows(min_row=2, values_only=True))
     # First pass: create all nodes
     node_map = {}  # ext_id → UUID
+
+    # Карта заказов проекта: ext_id → order UUID (для привязки order_id)
+    ext_to_order: dict[str, UUID] = {}
+    orders_q = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == (UUID(project_id) if project_id else None),
+        )
+    )).scalars().all()
+    for o in orders_q:
+        if o.ext_id:
+            ext_to_order[o.ext_id] = o.id
+
+    pending_order_link: list[tuple[ProductStructure, str]] = []  # (node, order_ext_id)
 
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
@@ -186,6 +227,12 @@ async def _import_bom(
             node.path = f"{spec_name}/{node_ext_id}" if spec_name else node_ext_id
             db.add(node)
             node_map[node_ext_id] = node.id
+
+            # order_id — ext_id заказа-производителя (куст заказов)
+            order_ext = _str(row[8]) if len(row) > 8 else ""
+            if order_ext:
+                pending_order_link.append((node, order_ext))
+
             result.bom_nodes_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
@@ -194,6 +241,16 @@ async def _import_bom(
             ))
 
     await db.flush()
+
+    # Привязываем order_id (ext_id → order UUID)
+    for node, order_ext in pending_order_link:
+        oid = ext_to_order.get(order_ext)
+        if oid:
+            node.order_id = oid
+        else:
+            result.warnings.append(
+                f"BOM-узел {node.nomenclature_id}: заказ-производитель '{order_ext}' не найден — пропущен"
+            )
 
     # Second pass: set parent relationships
     for i, row in enumerate(rows):
@@ -319,6 +376,41 @@ async def list_orders(
     return [_order_to_out(o) for o in orders]
 
 
+async def _resolve_parent_order(
+    value: Optional[str],
+    project_id: Optional[str],
+    tenant_id: str,
+    db: AsyncSession,
+) -> Optional[UUID]:
+    """Разрешает parent_order_id: принимает UUID или ext_id заказа.
+
+    Возвращает UUID родительского заказа или None.
+    """
+    if not value:
+        return None
+    v = value.strip()
+    # 1. Это валидный UUID?
+    try:
+        pid = UUID(v)
+        # Проверим, что такой заказ существует
+        exists = (await db.execute(
+            select(ProductionOrder.id).where(ProductionOrder.id == pid)
+        )).scalar_one_or_none()
+        return pid if exists else None
+    except ValueError:
+        pass
+    # 2. Это ext_id — ищем заказ по ext_id в рамках проекта/арендатора
+    stmt = select(ProductionOrder).where(
+        ProductionOrder.tenant_id == tenant_id,
+        ProductionOrder.ext_id == v,
+    )
+    if project_id:
+        stmt = stmt.where(ProductionOrder.project_id == UUID(project_id))
+    res = await db.execute(stmt)
+    order = res.scalars().first()
+    return order.id if order else None
+
+
 # ── POST / ─────────────────────────────────────────────────────
 
 @router.post("/", response_model=ProductionOrderOut, status_code=201)
@@ -330,6 +422,7 @@ async def create_order(
 ):
     """Создать один заказ на производство."""
     from uuid import UUID
+    parent_id = await _resolve_parent_order(body.parent_order_id, project_id, tenant_id, db)
     order = ProductionOrder(
         id=uuid4(),
         tenant_id=tenant_id,
@@ -343,11 +436,53 @@ async def create_order(
         priority=body.priority,
         client=body.client,
         notes=body.notes,
+        parent_order_id=parent_id,
     )
     db.add(order)
     await db.commit()
     await db.refresh(order)
     return _order_to_out(order)
+
+
+# ── GET /check-duplicate ───────────────────────────────────────
+# (должен быть объявлен ДО /{order_id}, иначе "check-duplicate" попадёт в UUID-парсер)
+
+@router.get("/check-duplicate")
+async def check_duplicate(
+    project_id: str,
+    ext_id: Optional[str] = None,
+    specification_name: Optional[str] = None,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Проверить возможный дубликат заказа по ext_id + specification_name.
+
+    Возвращает список существующих заказов с совпадающими полями (в рамках проекта).
+    """
+    if not ext_id and not specification_name:
+        return {"duplicate": False, "existing": []}
+    stmt = select(ProductionOrder).where(
+        ProductionOrder.tenant_id == tenant_id,
+        ProductionOrder.project_id == UUID(project_id),
+    )
+    if specification_name:
+        stmt = stmt.where(ProductionOrder.specification_name == specification_name)
+    if ext_id:
+        stmt = stmt.where(ProductionOrder.ext_id == ext_id)
+    res = await db.execute(stmt)
+    dups = res.scalars().all()
+    return {
+        "duplicate": len(dups) > 0,
+        "existing": [
+            {
+                "id": str(o.id),
+                "ext_id": o.ext_id,
+                "specification_name": o.specification_name,
+                "status": o.status,
+            }
+            for o in dups
+        ],
+    }
 
 
 # ── GET /{id} ──────────────────────────────────────────────────
@@ -387,6 +522,7 @@ def _order_to_out(o: ProductionOrder) -> ProductionOrderOut:
         status=o.status,
         group_id=str(o.group_id) if o.group_id else None,
         pool_id=str(o.pool_id) if o.pool_id else None,
+        parent_order_id=str(o.parent_order_id) if o.parent_order_id else None,
         exploded_at=o.exploded_at,
         operations_created=o.operations_created,
         created_at=o.created_at,
@@ -518,6 +654,11 @@ async def update_order(
         order.start_date = body.start_date
     if body.due_date is not None:
         order.due_date = body.due_date
+    if body.parent_order_id is not None:
+        order.parent_order_id = await _resolve_parent_order(
+            body.parent_order_id, str(order.project_id) if order.project_id else None,
+            tenant_id, db
+        )
     await db.commit()
     await db.refresh(order)
     return _order_to_out(order)

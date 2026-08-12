@@ -79,3 +79,12 @@ class ProductionOrder(BaseModel):
         ForeignKey("order_pools.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    # Куст заказов: родительский заказ (self-FK).
+    # Явная связь «этот заказ — подчинённый заказа X».
+    # Может быть также выведена из order_id на BOM-узлах, но храним явно для надёжности.
+    parent_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("production_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )

@@ -24,6 +24,7 @@ interface PoolEditorProps {
   orders: Order[];
   onClose: () => void;
   onRefresh: () => void;
+  onMoveOrders?: (orderIds: string[], poolId: string | null) => Promise<void>;
 }
 
 const btnStyle = (w: number): React.CSSProperties => ({
@@ -66,7 +67,7 @@ async function moveOrders(orderIds: string[], poolId: string | null) {
   }
 }
 
-export default function PoolEditor({ pool, orders, onClose, onRefresh }: PoolEditorProps) {
+export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrders }: PoolEditorProps) {
   const poolOrders = orders.filter(o => o.pool_id === pool.id);
   const freeOrders = orders.filter(o => !o.pool_id);
   const poolIds = poolOrders.map(o => o.id);
@@ -110,7 +111,10 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh }: PoolEdi
 
   const addToPool = async (orderIds: string[]) => {
     setSaving(true);
-    try { await moveOrders(orderIds, pool.id); }
+    try {
+      if (onMoveOrders) await onMoveOrders(orderIds, pool.id);
+      else await moveOrders(orderIds, pool.id);
+    }
     catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); setSaving(false); return; }
     setSaving(false);
     setSelFree(new Set());
@@ -119,7 +123,10 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh }: PoolEdi
 
   const removeFromPool = async (orderIds: string[]) => {
     setSaving(true);
-    try { await moveOrders(orderIds, null); }
+    try {
+      if (onMoveOrders) await onMoveOrders(orderIds, null);
+      else await moveOrders(orderIds, null);
+    }
     catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); setSaving(false); return; }
     setSaving(false);
     setSelPool(new Set());
