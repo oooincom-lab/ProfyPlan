@@ -216,6 +216,28 @@ async def delete_pool(
     return {"ok": True}
 
 
+# ── Move pool ──────────────────────────────────────────────────────
+class PoolMoveRequest(BaseModel):
+    group_id: Optional[uuid.UUID] = None  # None = убрать из группы
+
+@groups_router.patch("/order-pools/{pool_id}/move")
+async def move_pool(
+    pool_id: uuid.UUID,
+    body: PoolMoveRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(OrderPool).where(OrderPool.id == pool_id, OrderPool.tenant_id == tenant_id)
+    )
+    pool = result.scalar_one_or_none()
+    if not pool:
+        raise HTTPException(404, "Пул не найден")
+    pool.group_id = body.group_id
+    await db.commit()
+    return {"ok": True, "group_id": str(pool.group_id) if pool.group_id else None}
+
+
 # ── Move order ──────────────────────────────────────────────────────
 @groups_router.post("/orders/{order_id}/move")
 async def move_order(

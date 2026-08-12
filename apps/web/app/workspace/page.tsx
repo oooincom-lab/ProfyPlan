@@ -6,7 +6,10 @@ import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import Sidebar from '@/components/sidebar';
+import PoolEditor from '@/components/pooleditor';
+import GroupEditor from '@/components/groupeditor';
 import DeleteCheckDialog from '@/components/DeleteCheckDialog';
+import ExcelImportWizard from '@/components/ExcelImportWizard';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -59,7 +62,7 @@ export default function AppShell() {
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
   // ── Context menu ──
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project: any } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project?: any; pool?: any; group?: any } | null>(null);
   const [sidebarCtx, setSidebarCtx] = useState<{ x: number; y: number; view: string } | null>(null);
   const [directoryModal, setDirectoryModal] = useState<string | null>(null); // e.g. 'nomenclature'
 
@@ -68,6 +71,15 @@ export default function AppShell() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newPoolInput, setNewPoolInput] = useState(false);
   const [newPoolName, setNewPoolName] = useState('');
+
+  // ── Pool detail (dual-list) ──
+  const [selectedPool, setSelectedPool] = useState<any>(null);
+  const [editingPool, setEditingPool] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [editingGroup, setEditingGroup] = useState(false);
+  const [importProjectId, setImportProjectId] = useState<string | null>(null);
+  const [selPoolOrders, setSelPoolOrders] = useState<Set<string>>(new Set());
+  const [selFreeOrders, setSelFreeOrders] = useState<Set<string>>(new Set());
 
   // ── Order CRUD ──
   const loadProjectOrders = async (projId: string) => {
@@ -105,6 +117,37 @@ export default function AppShell() {
       await refresh();
       if (selectedProject) { setExpandedOrders(null); loadProjectOrders(selectedProject.id); }
     } catch (e: any) { alert('Ошибка перемещения: ' + (e.message || String(e))); }
+  };
+
+  // Batch pool operations
+  const addToPool = async (orderIds: string[], poolId: string) => {
+    for (const oid of orderIds) {
+      try { await apiF(`/production-orders/${oid}/move`, { method: 'PATCH', body: JSON.stringify({ pool_id: poolId }) }); }
+      catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); return; }
+    }
+    await refresh();
+    setSelFreeOrders(new Set());
+  };
+
+  const removeFromPool = async (orderIds: string[]) => {
+    for (const oid of orderIds) {
+      try { await apiF(`/production-orders/${oid}/move`, { method: 'PATCH', body: JSON.stringify({ pool_id: null }) }); }
+      catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); return; }
+    }
+    await refresh();
+    setSelPoolOrders(new Set());
+  };
+
+  const fillPool = async (poolId: string) => {
+    const free = orders.filter((o: any) => !o.pool_id);
+    if (free.length === 0) return;
+    await addToPool(free.map(o => o.id), poolId);
+  };
+
+  const clearPool = async (poolId: string) => {
+    const poolOrders = orders.filter((o: any) => o.pool_id === poolId);
+    if (poolOrders.length === 0) return;
+    await removeFromPool(poolOrders.map(o => o.id));
   };
 
   const updateOrder = async (orderId: string) => {
@@ -311,6 +354,9 @@ export default function AppShell() {
   const refresh = () => {
     if (!selectedProject) return;
     if (view === 'project-orders') loadProjectOrdersView(selectedProject);
+    else if (view === 'project-pools') loadProjectPools(selectedProject);
+    else if (view === 'project-groups') loadProjectGroups(selectedProject);
+    else if (view === 'project-gantt') loadProjectGantt(selectedProject);
     else loadProjectDashboard(selectedProject);
   };
 
@@ -331,11 +377,12 @@ export default function AppShell() {
   const loadProjectGroups = async (p: any) => {
     setSelectedProject(p); setView('project-groups');
     try {
-      const [o, g] = await Promise.all([
+      const [o, g, pl] = await Promise.all([
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
         apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
+        apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
       ]);
-      setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items }));
+      setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
       setMsg(`${g.items.length} групп`);
     } catch (e: any) { setMsg(String(e)); }
   };
@@ -529,6 +576,12 @@ export default function AppShell() {
         setCtxMenu={setCtxMenu}
         setSidebarCtx={setSidebarCtx}
         moveOrder={moveOrder}
+        delGroup={(id, name) => runDeleteCheck('order_group', id, name)}
+        delPool={(id, name) => runDeleteCheck('order_pool', id, name)}
+        selectedPool={selectedPool}
+        onSelectPool={(pool, project) => { if (pool) { setSelectedPool(pool); setSelectedProject(project); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${project.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${project.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [project.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); } else { setSelectedPool(null); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false); } }}
+        selectedGroup={selectedGroup}
+        onSelectGroup={(group, project) => { if (group) { setSelectedGroup(group); setSelectedProject(project); setView('project-groups'); setEditingGroup(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${project.id}`); const gs = await apiF<{ items: any[] }>(`/projects/${project.id}/groups`); const pr = await apiF<{ items: any[] }>(`/projects/${project.id}/pools`); setOrders(o); setGroups(prev => ({ ...prev, [project.id]: gs.items })); setPools(prev => ({ ...prev, [project.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); } else { setSelectedGroup(null); setEditingGroup(false); } }}
         setDirectoryModal={setDirectoryModal}
         setSelectedProject={setSelectedProject}
         setView={setView}
@@ -600,7 +653,7 @@ export default function AppShell() {
                   <div className="pc-meta">{p.status} · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     <button className="btn btn-primary btn-sm" onClick={() => loadProjectDashboard(p)}>Открыть</button>
-                    <button className="btn btn-secondary btn-sm">📥 Импорт</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setImportProjectId(p.id)}>📥 Импорт</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedProject(p); setView('settings'); }}>⚙️</button>
                     <button className="btn btn-danger btn-sm" onClick={() => deleteProject(p)}>🗑</button>
                   </div>
@@ -963,7 +1016,7 @@ export default function AppShell() {
           )}
 
           {/* ═══ PROJECT GROUPS ═══ */}
-          {view === 'project-groups' && (
+          {view === 'project-groups' && !selectedGroup && (
             <>
               <div className="panel">
                 <div className="panel-hdr">
@@ -980,26 +1033,50 @@ export default function AppShell() {
                 )}
                 {projGroups.map((g: any) => {
                   const grOrders = orders.filter((o: any) => o.group_id === g.id);
+                  const grPools = projPools.filter((p: any) => p.group_id === g.id);
+                  const grUnified = [
+                    ...grPools.map((p: any) => ({ kind: 'pool', data: p })),
+                    ...grOrders.map((o: any) => ({ kind: 'order', data: o })),
+                  ];
                   return (
-                    <div key={g.id} className="group-card" style={{ borderColor: 'rgba(59,130,246,.3)', background: 'rgba(59,130,246,.04)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: grOrders.length > 0 ? 12 : 0 }}>
+                    <div key={g.id} className="group-card" style={{ borderColor: 'rgba(59,130,246,.3)', background: 'rgba(59,130,246,.04)', cursor: 'pointer' }}
+                      onClick={() => { setSelectedGroup(g); setEditingGroup(false); }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(59,130,246,.5)'; e.currentTarget.style.background = 'rgba(59,130,246,.08)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(59,130,246,.3)'; e.currentTarget.style.background = 'rgba(59,130,246,.04)'; }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: grUnified.length > 0 ? 12 : 0 }}>
                         <div>
                           <span style={{ fontWeight: 600, fontSize: 15 }}>📁 {g.name}</span>
                           <span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{grOrders.length} заказов</span>
+                          {grPools.length > 0 && <span className="t-mono" style={{ marginLeft: 8, fontSize: 12, color: '#A78BFA' }}>{grPools.length} пулов</span>}
                         </div>
-                        <button onClick={() => delGroup(g.id, g.name)} className="btn btn-danger btn-sm">🗑 Удалить группу</button>
+                        <button onClick={(e) => { e.stopPropagation(); delGroup(g.id, g.name); }} className="btn btn-danger btn-sm">🗑 Удалить группу</button>
                       </div>
-                      {grOrders.length > 0 && (
+                      {grUnified.length > 0 && (
                         <table className="tbl">
                           <thead><tr>
-                            <th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th>
+                            <th style={{ width: 50 }}>Тип</th><th>Название</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th>
                             <th style={{ width: 40 }}></th>
                           </tr></thead>
-                          <tbody>{grOrders.map((o: any) => {
-                            const isDyn = !!o.exploded_at;
+                          <tbody>{grUnified.map(item => {
+                            if (item.kind === 'pool') {
+                              const p = item.data;
+                              const pOrders = orders.filter((o: any) => o.pool_id === p.id);
+                              return (
+                                <tr key={'gp-' + p.id} style={{ background: 'rgba(139,92,246,.04)' }}>
+                                  <td><span style={{ fontSize: 14 }}>📦</span></td>
+                                  <td className="t-name" style={{ color: '#A78BFA', fontWeight: 600 }}>{p.name}</td>
+                                  <td style={{ color: '#8B5CF6', fontSize: 11 }}>Пул</td>
+                                  <td className="t-mono" style={{ color: '#A78BFA' }}>{pOrders.length}</td>
+                                  <td></td>
+                                  <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Пул</span></td>
+                                  <td></td>
+                                </tr>
+                              );
+                            }
+                            const o = item.data;
                             return (
                               <tr key={o.id} draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab' }}>
-                                <td className="t-mono">{o.ext_id || '—'}</td>
+                                <td><span style={{ fontSize: 14 }}>📋</span></td>
                                 <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
                                 <td>{o.client || '—'}</td>
                                 <td className="t-mono">{o.quantity} {o.unit}</td>
@@ -1045,7 +1122,7 @@ export default function AppShell() {
           )}
 
           {/* ═══ PROJECT POOLS ═══ */}
-          {view === 'project-pools' && (
+          {view === 'project-pools' && !selectedPool && (
             <>
               {/* ── Dashboard KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
@@ -1055,125 +1132,198 @@ export default function AppShell() {
                 <div className="kpi-card"><div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
               </div>
 
-              {/* ── Split: Left pools · Right free orders ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16, alignItems: 'start' }}>
-                {/* LEFT: Pools list */}
-                <div className="panel">
-                  <div className="panel-hdr">
-                    <div>
-                      <span className="panel-title">📦 Пулы</span>
-                      <span className="panel-sub" style={{ marginLeft: 8 }}>{selectedProject?.name}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {newPoolInput ? (
-                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                          <input value={newPoolName} onChange={e => setNewPoolName(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Escape') setNewPoolInput(false); else if (e.key === 'Enter') addPool(); }}
-                            placeholder="Название пула" autoFocus
-                            style={{ background: '#0A1628', border: '1px solid #3B82F6', borderRadius: 6, color: '#E8EEF5', padding: '4px 8px', fontSize: 12, width: 140, outline: 'none' }} />
-                          <button onClick={addPool} className="btn btn-primary btn-sm" style={{ padding: '4px 8px', fontSize: 12 }}>✓</button>
-                          <button onClick={() => setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: 12 }}>✕</button>
-                        </span>
-                      ) : (
-                        <button onClick={() => { setNewPoolInput(true); setNewPoolName(''); }} className="btn btn-primary btn-sm">+ Пул</button>
-                      )}
-                    </div>
+              {/* ── Pool cards grid ── */}
+              <div className="panel">
+                <div className="panel-hdr">
+                  <div><span className="panel-title">📦 Пулы</span><span className="panel-sub" style={{ marginLeft: 8 }}>{selectedProject?.name}</span></div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {newPoolInput ? (
+                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                        <input value={newPoolName} onChange={e => setNewPoolName(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Escape') setNewPoolInput(false); else if (e.key === 'Enter') addPool(); }}
+                          placeholder="Название" autoFocus
+                          style={{ background: '#0A1628', border: '1px solid #3B82F6', borderRadius: 6, color: '#E8EEF5', padding: '4px 8px', fontSize: 12, width: 130, outline: 'none' }} />
+                        <button onClick={addPool} className="btn btn-primary btn-sm" style={{ padding: '4px 8px', fontSize: 12 }}>✓</button>
+                        <button onClick={() => setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: 12 }}>✕</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => { setNewPoolInput(true); setNewPoolName(''); }} className="btn btn-primary btn-sm">+ Пул</button>
+                    )}
                   </div>
-                  {projPools.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
-                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Пулов нет</div>
-                      <div>Создайте пул — CCM-объединение для совместного планирования заказов с общими ресурсами.</div>
-                    </div>
-                  )}
-                  {projPools.map((p: any) => {
-                    const plOrders = orders.filter((o: any) => o.pool_id === p.id);
-                    return (
-                      <div key={p.id} className="group-card" style={{ borderColor: 'rgba(139,92,246,.3)', background: 'rgba(139,92,246,.04)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: plOrders.length > 0 ? 8 : 0 }}>
-                          <div>
-                            <span style={{ fontWeight: 600, fontSize: 14 }}>📦 {p.name}</span>
-                            <span className="t-mono" style={{ marginLeft: 10, fontSize: 11, color: '#8FA3BD' }}>{plOrders.length} зак.</span>
-                          </div>
-                          <button onClick={() => delPool(p.id, p.name)} className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}>🗑</button>
-                        </div>
-                        {plOrders.length > 0 && (
-                          <table className="tbl" style={{ fontSize: 12 }}>
-                            <thead><tr>
-                              <th style={{ width: 60 }}>ID</th><th>Продукт</th><th style={{ width: 50 }}>Кол-во</th><th style={{ width: 70 }}>Статус</th><th style={{ width: 32 }}></th>
-                            </tr></thead>
-                            <tbody>{plOrders.map((o: any) => (
-                              <tr key={o.id} draggable
-                                onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
-                                style={{ cursor: 'grab' }}>
-                                <td className="t-mono" style={{ fontSize: 11 }}>{o.ext_id || '—'}</td>
-                                <td className="t-name" style={{ fontSize: 12 }}>{o.specification_name || o.ext_id || '—'}</td>
-                                <td className="t-mono" style={{ fontSize: 11 }}>{o.quantity} {o.unit}</td>
-                                <td><span className={`badge ${o.status}`} style={{ fontSize: 10 }}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'В раб.'}</span></td>
-                                <td><button onClick={() => { moveOrder(o.id, null, null); }}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.5, padding: 0 }}
-                                  title="Убрать из пула">↩</button></td>
-                              </tr>
-                            ))}</tbody>
-                          </table>
-                        )}
-                        {/* Drop zone: drag free order into this pool */}
-                        <div style={{ marginTop: plOrders.length > 0 ? 8 : 0, padding: '6px 10px', borderRadius: 6, border: '1px dashed rgba(139,92,246,.25)', textAlign: 'center', fontSize: 11, color: '#8FA3BD' }}
-                          onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(139,92,246,.06)'; }}
-                          onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
-                          onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}>
-                          Перетащите заказ сюда
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
-
-                {/* RIGHT: Free orders panel */}
-                <div className="panel" style={{ position: 'sticky', top: 12 }}>
-                  <div className="panel-hdr">
-                    <span className="panel-title">📋 Свободные заказы</span>
-                    <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD' }}>{orders.filter((o: any) => !o.pool_id).length}</span>
+                {projPools.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Пулов нет</div>
+                    <div>Создайте пул для CCM-объединения заказов с общими ресурсами.</div>
                   </div>
-                  {orders.filter((o: any) => !o.pool_id).length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 32, color: '#5A7090', fontSize: 13 }}>
-                      Все заказы распределены по пулам
-                    </div>
-                  ) : (
-                    <div style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto' }}>
-                      {orders.filter((o: any) => !o.pool_id).map((o: any) => (
-                        <div key={o.id} draggable
-                          onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
-                          style={{
-                            cursor: 'grab', padding: '10px 12px', borderBottom: '1px solid rgba(30,50,82,.4)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                            transition: 'background .15s'
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(59,130,246,.04)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {o.specification_name || o.ext_id || '—'}
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                    {projPools.map((p: any) => {
+                      const plOrders = orders.filter((o: any) => o.pool_id === p.id);
+                      return (
+                        <div key={p.id} onClick={() => { setSelectedPool(p); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); }}
+                          style={{ cursor: 'pointer', borderRadius: 10, border: '1px solid rgba(139,92,246,.25)', background: 'rgba(139,92,246,.04)', padding: 16, transition: 'border-color .15s, background .15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(139,92,246,.5)'; e.currentTarget.style.background = 'rgba(139,92,246,.08)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(139,92,246,.25)'; e.currentTarget.style.background = 'rgba(139,92,246,.04)'; }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 15 }}>📦 {p.name}</div>
+                              <div style={{ fontSize: 12, color: '#8FA3BD', marginTop: 4 }}>{plOrders.length} заказов</div>
                             </div>
-                            <div style={{ fontSize: 10, color: '#8FA3BD', marginTop: 2 }}>
-                              {o.client || '—'}
-                              {o.group_id && <span style={{ marginLeft: 6 }}>· {projGroups.find((g: any) => g.id === o.group_id)?.name || '—'}</span>}
-                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); delPool(p.id, p.name); }} className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}>🗑</button>
                           </div>
-                          <span className="t-mono" style={{ fontSize: 10, color: '#5A7090', whiteSpace: 'nowrap' }}>{o.quantity} {o.unit}</span>
-                          <span className={`badge ${o.status}`} style={{ fontSize: 9, whiteSpace: 'nowrap' }}>
-                            {o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}
-                          </span>
+                          {plOrders.length > 0 && (
+                            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {plOrders.slice(0, 5).map((o: any) => (
+                                <span key={o.id} style={{ fontSize: 10, background: 'rgba(139,92,246,.1)', borderRadius: 4, padding: '2px 6px', color: '#B0C4DE' }}>{o.specification_name || o.ext_id || '—'}</span>
+                              ))}
+                              {plOrders.length > 5 && <span style={{ fontSize: 10, color: '#5A7090', padding: '2px 4px' }}>+{plOrders.length - 5}</span>}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </>
           )}
 
-          {/* ═══ DIRECTORIES ═══ */}
+          {/* ═══ POOL DETAIL — Dual-list ═══ */}
+          {view === 'project-pools' && selectedPool && !editingPool && (() => {
+            const poolOrders = orders.filter((o: any) => o.pool_id === selectedPool.id);
+            return (<>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <button onClick={() => { setSelectedPool(null); }} className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>← К пулам</button>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>📦 {selectedPool.name}</span>
+                  <span className="t-mono" style={{ marginLeft: 10, fontSize: 12, color: '#8FA3BD' }}>{poolOrders.length} заказов</span>
+                </div>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => { delPool(selectedPool.id, selectedPool.name); setSelectedPool(null); }} className="btn btn-danger btn-sm">🗑 Удалить пул</button>
+                <button onClick={() => setEditingPool(true)} style={{ background: 'var(--btn-primary-bg, #3B82F6)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>✏️ Изменить</button>
+              </div>
+              <div className="panel" style={{ overflow: 'hidden' }}>
+                <div className="panel-hdr">
+                  <div><span className="panel-title">📦 Состав пула</span><span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{poolOrders.length}</span></div>
+                </div>
+                {poolOrders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 60, color: '#5A7090', fontSize: 13 }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
+                    <div>Пул пуст. Нажмите «Изменить» чтобы добавить заказы.</div>
+                  </div>
+                ) : (
+                  <table className="tbl">
+                    <thead><tr>
+                      <th>Заказ</th><th>Клиент</th><th style={{ width: 80 }}>Кол-во</th><th style={{ width: 80 }}>Статус</th>
+                    </tr></thead>
+                    <tbody>
+                      {poolOrders.map((o: any) => (
+                        <tr key={o.id}>
+                          <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
+                          <td style={{ color: '#B0C4DE' }}>{o.client || '—'}</td>
+                          <td className="t-mono">{o.quantity} {o.unit}</td>
+                          <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>);
+          })()}
+
+          {view === 'project-pools' && selectedPool && editingPool && (
+            <PoolEditor
+              pool={selectedPool}
+              orders={orders}
+              onClose={() => setEditingPool(false)}
+              onRefresh={() => { (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+            />
+          )}
+
+                    {/* ═══ GROUP DETAIL ═══ */}
+          {view === 'project-groups' && selectedGroup && !editingGroup && (() => {
+            const gOrders = orders.filter((o: any) => o.group_id === selectedGroup.id);
+            const gPools = projPools.filter((p: any) => p.group_id === selectedGroup.id);
+            // Unified list: pools + orders sorted by start_date
+            const unified = [
+              ...gPools.map((p: any) => ({ kind: 'pool', id: p.id, data: p, sortKey: p.created_at || '' })),
+              ...gOrders.map((o: any) => ({ kind: 'order', id: o.id, data: o, sortKey: o.planned_start || o.created_at || '' })),
+            ].sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+            return (<>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <button onClick={() => { setSelectedGroup(null); }} className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>← К группам</button>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>📁 {selectedGroup.name}</span>
+                  <span className="t-mono" style={{ marginLeft: 10, fontSize: 12, color: '#8FA3BD' }}>{gOrders.length + gPools.length} элементов</span>
+                </div>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => { runDeleteCheck('order_group', selectedGroup.id, selectedGroup.name); setSelectedGroup(null); }} className="btn btn-danger btn-sm">🗑 Удалить</button>
+                <button onClick={() => setEditingGroup(true)} style={{ background: 'var(--btn-primary-bg, #3B82F6)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>✏️ Изменить</button>
+              </div>
+              <div className="panel" style={{ overflow: 'hidden' }}>
+                <div className="panel-hdr">
+                  <div><span className="panel-title">📁 Состав группы</span><span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{unified.length}</span></div>
+                </div>
+                {unified.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 60, color: '#5A7090', fontSize: 13 }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>📁</div>
+                    <div>Группа пуста. Нажмите «Изменить» чтобы добавить заказы и пулы.</div>
+                  </div>
+                ) : (
+                  <table className="tbl">
+                    <thead><tr>
+                      <th style={{ width: 60 }}>Тип</th>
+                      <th>Название</th>
+                      <th style={{ width: 100 }}>Кол-во / Заказов</th>
+                      <th style={{ width: 80 }}>Статус</th>
+                    </tr></thead>
+                    <tbody>
+                      {unified.map(item => {
+                        if (item.kind === 'pool') {
+                          const p = item.data;
+                          const pOrders = orders.filter((o: any) => o.pool_id === p.id);
+                          return (
+                            <tr key={'gp-' + p.id} style={{ background: 'rgba(139,92,246,.04)' }}>
+                              <td><span style={{ fontSize: 16 }}>📦</span></td>
+                              <td className="t-name" style={{ color: '#A78BFA', fontWeight: 600 }}>{p.name}</td>
+                              <td className="t-mono" style={{ color: '#A78BFA' }}>{pOrders.length}</td>
+                              <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Пул</span></td>
+                            </tr>
+                          );
+                        } else {
+                          const o = item.data;
+                          return (
+                            <tr key={'go-' + o.id}>
+                              <td><span style={{ fontSize: 14 }}>📋</span></td>
+                              <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
+                              <td className="t-mono">{o.quantity} {o.unit}</td>
+                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
+                            </tr>
+                          );
+                        }
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>);
+          })()}
+
+          {/* ═══ GROUP EDITOR ═══ */}
+          {view === 'project-groups' && selectedGroup && editingGroup && (
+            <GroupEditor
+              group={selectedGroup}
+              orders={orders}
+              pools={projPools}
+              onClose={() => setEditingGroup(false)}
+              onRefresh={() => { (async () => { try { const [o, g] = await Promise.all([ apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`), apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`), ]); setOrders(o); setGroups(prev => ({ ...prev, [selectedProject.id]: g.items })); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+            />
+          )}
+
+{/* ═══ DIRECTORIES ═══ */}
           {view === 'directories' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
               {[
@@ -1428,24 +1578,51 @@ export default function AppShell() {
           borderRadius: 10, padding: '4px 0', minWidth: 200,
           boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
         }}>
-          <div style={{ padding: '8px 14px', fontSize: 13, color: '#B0C4DE', borderBottom: '1px solid #1E3252', marginBottom: 4 }}>
-            📁 {ctxMenu.project.name}
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); const btn = e.target as HTMLElement; btn.style.display = 'none'; const inp = btn.nextElementSibling as HTMLInputElement; if (inp) { inp.style.display = 'block'; inp.value = ctxMenu.project.name; inp.focus(); inp.select(); } }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-            ✏️ Переименовать
-          </button>
-          <input style={{ display: 'none', width: 'calc(100% - 28px)', margin: '0 14px 8px', background: '#0A1628', border: '1px solid #3B82F6', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}
-            onKeyDown={(e) => { if (e.key === 'Escape') { setCtxMenu(null); } if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v && v !== ctxMenu.project.name) { renameProject(ctxMenu.project, v); } setCtxMenu(null); } }}
-            onBlur={() => setCtxMenu(null)}
-          />
-          <button onClick={() => { archiveProject(ctxMenu.project); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-            {ctxMenu.project.status === 'archived' ? '📂 Восстановить' : '📦 В архив'}
-          </button>
-          <button onClick={() => { deleteProject(ctxMenu.project); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-            🗑 Удалить
-          </button>
+          {ctxMenu.project && !ctxMenu.pool && !ctxMenu.group && (<>
+            <div style={{ padding: '8px 14px', fontSize: 13, color: '#B0C4DE', borderBottom: '1px solid #1E3252', marginBottom: 4 }}>
+              📁 {ctxMenu.project.name}
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); const btn = e.target as HTMLElement; btn.style.display = 'none'; const inp = btn.nextElementSibling as HTMLInputElement; if (inp) { inp.style.display = 'block'; inp.value = ctxMenu.project.name; inp.focus(); inp.select(); } }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              ✏️ Переименовать
+            </button>
+            <input style={{ display: 'none', width: 'calc(100% - 28px)', margin: '0 14px 8px', background: '#0A1628', border: '1px solid #3B82F6', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setCtxMenu(null); } if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v && v !== ctxMenu.project.name) { renameProject(ctxMenu.project, v); } setCtxMenu(null); } }}
+              onBlur={() => setCtxMenu(null)}
+            />
+            <button onClick={() => { archiveProject(ctxMenu.project); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              {ctxMenu.project.status === 'archived' ? '📂 Восстановить' : '📦 В архив'}
+            </button>
+            <button onClick={() => { deleteProject(ctxMenu.project); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              🗑 Удалить
+            </button>
+          </>)}
+          {ctxMenu.pool && (<>
+            <div style={{ padding: '8px 14px', fontSize: 13, color: '#B0C4DE', borderBottom: '1px solid #1E3252', marginBottom: 4 }}>
+              📦 {ctxMenu.pool.name}
+            </div>
+            <button onClick={() => { const pl = ctxMenu.pool; setCtxMenu(null); runDeleteCheck('order_pool', pl.id, pl.name); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              🗑 Удалить
+            </button>
+          </>)}
+          {ctxMenu.group && (<>
+            <div style={{ padding: '8px 14px', fontSize: 13, color: '#B0C4DE', borderBottom: '1px solid #1E3252', marginBottom: 4 }}>
+              📋 {ctxMenu.group.name}
+            </div>
+            <button onClick={() => { const gr = ctxMenu.group; setCtxMenu(null); runDeleteCheck('order_group', gr.id, gr.name); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#EF4444', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              🗑 Удалить
+            </button>
+          </>)}
         </div>
       </>
+    )}
+
+    {/* Excel Import Wizard */}
+    {importProjectId && (
+      <ExcelImportWizard
+        projectId={importProjectId}
+        onClose={() => setImportProjectId(null)}
+        onComplete={() => { setImportProjectId(null); refresh(); }}
+      />
     )}
 
     {/* Delete Check Dialog */}
@@ -1464,8 +1641,10 @@ export default function AppShell() {
           } else if (deleteCheckEntity.type === 'order') {
             refresh();
           } else if (deleteCheckEntity.type === 'order_group') {
+            setSelectedGroup(null);
             loadProjectGroups(selectedProject);
           } else if (deleteCheckEntity.type === 'order_pool') {
+            setSelectedPool(null);
             loadProjectPools(selectedProject);
           } else {
             load();

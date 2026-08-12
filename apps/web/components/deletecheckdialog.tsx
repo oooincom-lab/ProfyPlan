@@ -6,6 +6,7 @@ interface DeleteCheckResult {
   entity: { type: string; id: string; name: string; label: string };
   cascade: Array<{ key: string; label: string; count: number; items: Array<{ name: string; field?: string }> }>;
   blocking: Array<{ key: string; label: string; count: number; items: Array<{ name: string; field?: string }> }>;
+  detach: Array<{ key: string; label: string; count: number; items: Array<{ name: string; field?: string }>; message: string }>;
   can_delete: boolean;
 }
 
@@ -112,7 +113,18 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
               ))}
             </>
           )}
-          {result && result.can_delete && totalCascade === 0 && (
+          {result?.detach && result.detach.length > 0 && (
+            <>
+              {result.detach.map(d => (
+                <div key={d.key} style={{ background: 'rgba(139,92,246,.08)', border: '1px solid rgba(139,92,246,.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', margin: '0 0 6px', color: '#A78BFA' }}>{d.label} ({d.count}) — {d.message}</div>
+                  {d.items.slice(0, 5).map((item, i) => <div key={i} className="dc-row">{item.name}</div>)}
+                  {d.count > 5 && <div className="dc-row-more">...и ещё {d.count - 5}</div>}
+                </div>
+              ))}
+            </>
+          )}
+          {result && result.can_delete && totalCascade === 0 && (!result.detach || result.detach.length === 0) && (
             <div className="dc-safe"><div className="dc-safe-text">Объект нигде не используется. Удаление безопасно.</div></div>
           )}
         </div>
@@ -120,7 +132,7 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
           <button className="dc-btn dc-btn-cancel" onClick={onClose} disabled={deleting}>{result?.can_delete === false ? 'OK' : 'Отмена'}</button>
           {result?.can_delete && (
             <button className="dc-btn dc-btn-danger" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Удаление...' : 'Удалить' + (totalCascade > 0 ? ' всё (' + (totalCascade + 1) + ')' : '')}
+              {deleting ? 'Удаление...' : (totalCascade > 0 ? 'Удалить всё (' + (totalCascade + 1) + ')' : (result?.detach?.length ? 'Удалить пул (освободить ' + result.detach.reduce((s, d) => s + d.count, 0) + ')' : 'Удалить'))}
             </button>
           )}
         </div>

@@ -19,12 +19,17 @@ Thumbs.db
 
 # Build
 .next/
+.next_bak_*/
+.next_old/
 dist/
 build/
 
 # Docker
 pgdata/
 redisdata/
+
+# Deploy artifacts
+.openclaw/
 
 # Secrets
 *.pem

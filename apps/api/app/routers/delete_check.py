@@ -86,7 +86,8 @@ DEPENDENCY_MAP = {
         "label": "Пул заказов",
         "name_field": "name",
         "cascade": [],
-        "blocking": [
+        "blocking": [],
+        "detach": [
             ("orders", ProductionOrder, "pool_id", "specification_name"),
         ],
     },
@@ -253,6 +254,19 @@ async def delete_check(
                 "count": count, "items": items,
             })
             result["can_delete"] = False
+
+    # Detach (will be freed, not deleted) — only for order_pool
+    for key, dep_model, fk_field, name_col in info.get("detach", []):
+        count = await _count(db, dep_model, fk_field, entity_id)
+        if count > 0:
+            rows = await _fetch_rows(db, dep_model, fk_field, entity_id)
+            items = [_describe_row(r, name_col) for r in rows]
+            result["detach"] = result.get("detach", [])
+            result["detach"].append({
+                "key": key, "label": BLOCKING_LABELS.get(key, key),
+                "count": count, "items": items,
+                "message": "Будут освобождены из пула, не удалены",
+            })
 
     # Custom: nomenclature → product_structures by ext_id
     if entity_type == "nomenclature":

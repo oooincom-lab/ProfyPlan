@@ -28,6 +28,12 @@ interface SidebarProps {
   setCtxMenu: (m: any) => void;
   setSidebarCtx: (m: any) => void;
   moveOrder: (orderId: string, groupId: string | null, poolId: string | null) => void;
+  delGroup: (id: string, name: string) => void;
+  delPool: (id: string, name: string) => void;
+  selectedPool: any;
+  onSelectPool: (pool: any | null, project: any) => void;
+  selectedGroup: any;
+  onSelectGroup: (group: any | null, project: any) => void;
   setDirectoryModal: (m: string | null) => void;
   setSelectedProject: (p: any) => void;
   setView: (v: View) => void;
@@ -40,7 +46,10 @@ export default function Sidebar(props: SidebarProps) {
     loadProjectDashboard, loadProjectOrdersView, loadProjectGantt,
     loadProjectPools, loadProjectGroups, loadProjectOrders,
     setCtxMenu, setSidebarCtx, moveOrder,
+    delGroup, delPool,
     setDirectoryModal, setSelectedProject, setView,
+    selectedPool, onSelectPool,
+    selectedGroup, onSelectGroup,
   } = props;
 
   // Internal expand state — independent multiselect
@@ -240,16 +249,16 @@ export default function Sidebar(props: SidebarProps) {
                     📋 Заказы
                   </span>
                   <span className="s-count">
-                    {projectOrders[p.id]?.length ?? (expandedOrders === p.id ? '...' : (p.order_count || '—'))}
+                    {(() => { const free = (projectOrders[p.id] || []).filter((o: any) => !o.group_id && !o.pool_id); return free.length || (expandedOrders === p.id ? '...' : (p.order_count || '—')); })()}
                   </span>
                 </div>
 
                 {expandedOrders === p.id && projectOrders[p.id] && (
                   <>
-                    {projectOrders[p.id].length === 0 && (
-                      <div className="s-sub" style={{ color: 'var(--s-fg-sub)' }}>нет заказов</div>
+                    {(projectOrders[p.id].filter((o: any) => !o.group_id && !o.pool_id)).length === 0 && (
+                      <div className="s-sub" style={{ color: 'var(--s-fg-sub)' }}>нет свободных заказов</div>
                     )}
-                    {projectOrders[p.id].map((o: any) => (
+                    {projectOrders[p.id].filter((o: any) => !o.group_id && !o.pool_id).map((o: any) => (
                       <div
                         key={o.id}
                         draggable
@@ -278,7 +287,7 @@ export default function Sidebar(props: SidebarProps) {
                   </span>
                   <span
                     className="s-proj-name"
-                    onClick={() => loadProjectGroups(p)}
+                    onClick={() => { onSelectGroup(null, p); loadProjectGroups(p); }}
                     style={{ cursor: 'pointer' }}
                   >
                     📁 Группы
@@ -290,10 +299,12 @@ export default function Sidebar(props: SidebarProps) {
                   <div
                     key={'sg-' + g.id}
                     className="s-sub"
-                    style={{ paddingLeft: 72, fontSize: 11 }}
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
+                    style={{ paddingLeft: 72, fontSize: 11, cursor: 'pointer', color: selectedGroup?.id === g.id ? 'var(--s-fg-active)' : undefined, fontWeight: selectedGroup?.id === g.id ? 600 : undefined }}
+                    onClick={() => onSelectGroup(g, p)}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, group: g, project: p }); }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
-                    onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}
+                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, g.id, null); }}
                   >
                     {g.name}
                   </div>
@@ -312,23 +323,25 @@ export default function Sidebar(props: SidebarProps) {
                   </span>
                   <span
                     className="s-proj-name"
-                    onClick={() => loadProjectPools(p)}
+                    onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}
                     style={{ cursor: 'pointer' }}
                   >
                     📦 Пулы
                   </span>
                 </div>
 
-                {expandedProjPools.has(p.id) && (pools[p.id] || []).map((p: any) => (
+                {expandedProjPools.has(p.id) && (pools[p.id] || []).map((pl: any) => (
                   <div
-                    key={'sp-' + p.id}
+                    key={'sp-' + pl.id}
                     className="s-sub"
-                    style={{ paddingLeft: 72, fontSize: 11 }}
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
+                    style={{ paddingLeft: 72, fontSize: 11, cursor: 'context-menu', color: selectedPool?.id === pl.id ? 'var(--s-fg-active)' : undefined, fontWeight: selectedPool?.id === pl.id ? 600 : undefined }}
+                    onClick={() => onSelectPool(pl, p)}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, pool: pl, project: p }); }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
-                    onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, p.id); }}
+                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.background = ''; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, pl.id); }}
                   >
-                    {p.name}
+                    {pl.name}
                   </div>
                 ))}
 

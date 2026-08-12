@@ -39,8 +39,34 @@ html.light {
   --warning: #F59E0B;
 }
 
-body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: 'Inter', system-ui, sans-serif;
+/* Unified scrollbar — thin dark style, consistent everywhere */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A4060;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3B82F6;
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2A4060 transparent;
+}
+
+/* Light theme overrides */
+html.light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+html.light * {
+  scrollbar-color: #CBD5E1 transparent;
 }
