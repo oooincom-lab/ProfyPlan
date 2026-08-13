@@ -8,7 +8,7 @@ type NomenclatureSearchFn = (query: string) => Promise<NomenclatureMatch[]>;
 
 // ── Column synonym dictionary ──
 const FIELD_SYNONYMS: Record<string, string[]> = {
-  ext_id: ['номер', 'id', 'код', '№', 'артикул', 'order', 'order_id', 'ext_id', 'заказ'],
+  ext_id: ['номер', 'id', 'код', '№', 'артикул', 'order', 'order_id', 'ext_id', 'заказ', 'код заказа'],
   specification_name: ['название', 'продукт', 'изделие', 'номенклатура', 'name', 'product', 'spec', 'specification_name', 'продукция'],
   quantity: ['кол-во', 'количество', 'штук', 'объём', 'qty', 'quantity', 'amount', 'count', 'число'],
   unit: ['ед', 'единица', 'unit', 'шт', 'pcs', 'кг', 'м', 'изм'],
@@ -17,13 +17,13 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   due_date: ['финиш', 'конец', 'до', 'по', 'end', 'finish', 'to', 'due', 'окончание', 'дата окончания'],
   priority: ['приоритет', 'важность', 'priority', 'срочность', 'срочно'],
   notes: ['примечание', 'комментарий', 'notes', 'comment', 'описание', 'заметки'],
-  parent_order_id: ['родительский заказ', 'родитель', 'подчиненный', 'подчинённый', 'родительский id', 'parent_order', 'parent order', 'родительский номер'],
+  parent_order_id: ['родительский заказ', 'родитель', 'подчиненный', 'подчинённый', 'родительский id', 'parent_order', 'parent order', 'родительский номер', 'код заказа родителя'],
 };
 
 const FIELD_LABELS: Record<string, string> = {
-  ext_id: 'ID заказа', specification_name: 'Продукт', quantity: 'Кол-во',
+  ext_id: 'Код заказа', specification_name: 'Продукт', quantity: 'Кол-во',
   unit: 'Ед. изм.', client: 'Клиент', start_date: 'Старт', due_date: 'Финиш',
-  priority: 'Приоритет', notes: 'Примечание', parent_order_id: 'Родительский заказ',
+  priority: 'Приоритет', notes: 'Примечание', parent_order_id: 'Код заказа родителя',
 };
 
 function guessField(header: string): string | null {

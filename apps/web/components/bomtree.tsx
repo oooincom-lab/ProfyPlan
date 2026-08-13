@@ -228,7 +228,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
               <select
                 value={n.order_id || ''}
                 onChange={e => onNodeOrderChange?.(n.id, e.target.value || null)}
-                title={linkedOrderLabel ? `Заказ-производитель: ${linkedOrderLabel}` : 'Выбрать заказ-производитель'}
+                title={linkedOrderLabel ? `Код заказа: ${linkedOrderLabel}` : 'Выбрать код заказа'}
                 style={{
                   width: '100%', background: n.order_id ? 'rgba(139,92,246,.15)' : '#0A1628',
                   border: `1px solid ${n.order_id ? 'rgba(139,92,246,.4)' : '#1E3252'}`,

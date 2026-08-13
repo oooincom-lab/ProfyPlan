@@ -157,8 +157,8 @@ async def _import_orders(
         spec_name = _str(row[1]) if len(row) > 1 else ""
         if not ext_id:
             result.errors.append(ImportValidationError(
-                row=i + 2, sheet="Заказы", field="order_id",
-                message="обязательное поле 'order_id' не заполнено",
+                row=i + 2, sheet="Заказы", field="Код заказа",
+                message="обязательное поле 'Код заказа' не заполнено",
             ))
             continue
         if not spec_name:
@@ -210,7 +210,7 @@ async def _import_orders(
             order.parent_order_id = pid
         else:
             result.warnings.append(
-                f"Заказ {order.ext_id}: родительский заказ '{parent_ext}' не найден — пропущен"
+                f"Заказ {order.ext_id}: код заказа родителя '{parent_ext}' не найден — пропущен"
             )
     await db.flush()
     return result
@@ -322,7 +322,7 @@ async def _import_bom(
             node.order_id = oid
         else:
             result.warnings.append(
-                f"BOM-узел {node.nomenclature_id}: заказ-производитель '{order_ext}' не найден — пропущен"
+                f"BOM-узел {node.nomenclature_id}: код заказа '{order_ext}' не найден — пропущен"
             )
 
     # Second pass: set parent relationships
