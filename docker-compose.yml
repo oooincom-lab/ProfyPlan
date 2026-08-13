@@ -65,6 +65,8 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./nginx/landing.html:/usr/share/nginx/landing/landing.html:ro
+      - ./nginx/plan.html:/usr/share/nginx/html/plan.html:ro
+      - ./nginx/report.html:/usr/share/nginx/html/report.html:ro
 
   web:
     build:

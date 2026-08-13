@@ -1,0 +1,43 @@
+# ProfyPlan: Delivery Report · 06.08.2026
+
+## E2E Pipeline Status: ✅ COMPLETE
+
+| Этап | Статус | Результат |
+|---|---|---|
+| Excel Import (3 sheets) | ✅ | 1 order, 3 BOM, 2 routings, 4 ops, 0 errors |
+| BOM project_id link | ✅ | 67 узлов → 0df678b9 (UPDATE SQL) |
+| Expand (BOM → Operations) | ✅ | 18 ops, 12 deps |
+| CPM Calculation | ✅ | 34.18h makespan, critical path |
+| Resource Leveling (SGS) | ✅ | SGS method, calendar-aware |
+| Базовая Ганта (визуализация) | ✅ | Фронтенд CCM Dashboard v2 |
+| Auth | ✅ | login/logout/register, JWT |
+| CRUD Projects/Resources | ✅ | project_focus, tenant isolation |
+| CRUD Calendars | ✅ | GET auto-create 24/7, PUT upsert |
+
+## Level 2 Completion: 100%
+
+### Реализовано
+- **ProductionOrder** модель + миграция (11 полей, project_id nullable)
+- **Excel-импорт**: 3 вкладки (Заказы / BOM / Маршруты), русские + английские имена
+- **Расшифровка BOM → CPM**: `run_explosion()` — рекурсивный обход, развёртка маршрутов, связи закупок
+- **CPM-расчёт**: ранние/поздние старты, критический путь
+- **Resource Leveling**: SGS с календарями доступности
+- **Docker**: numpy<2 lock в pyproject.toml (AVX2 fix)
+
+### Баги исправлены
+1. `project_id` через `Form(None)` (query param не работал с UploadFile)
+2. `_get_children()` / `_load_routing()` — заглушки заменены на `run_explosion`
+3. BOM `project_id = NULL` → UPDATE SQL до фикса кода
+4. Docker `--force-recreate` для подхвата изменений
+5. Несколько `--no-cache` ребилдов до успешного
+
+### Известные ограничения
+- Старые тестовые BOM-узлы без маршрутов дают warnings (штатно)
+- `explode_bom_to_operations` в `bom_explosion.py` всё ещё содержит заглушки (не используется после фикса)
+
+## Production
+- URL: https://profyplan.ru
+- Auth: planner@demo.ru / demo123
+- Контейнеры: 5/5 healthy (db, redis, api, web, nginx)
+- План: https://profyplan.ru/plan.html
+- Промт v2.0: https://profyplan.ru/promt-ccm-multiproject.md
