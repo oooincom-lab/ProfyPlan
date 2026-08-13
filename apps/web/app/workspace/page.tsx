@@ -11,6 +11,7 @@ import GroupEditor from '@/components/groupeditor';
 import DeleteCheckDialog from '@/components/DeleteCheckDialog';
 import ExcelImportWizard from '@/components/ExcelImportWizard';
 import BomTree from '@/components/bomtree';
+import { importProductionOrders } from '@/lib/api';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -861,6 +862,10 @@ export default function AppShell() {
           {/* ═══ PROJECTS ═══ */}
           {view === 'projects' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+              <div onClick={() => navTo('new-project')} style={{ border: '1.5px dashed #3B82F6', borderRadius: 12, background: 'rgba(59,130,246,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 150, cursor: 'pointer', transition: 'all 0.15s' }}>
+                <div style={{ fontSize: 34, color: '#3B82F6', lineHeight: 1, fontWeight: 300 }}>+</div>
+                <div style={{ fontWeight: 600, color: '#60A5FA', fontSize: 14 }}>Новый проект</div>
+              </div>
               {projects.filter((p: any) => p.status !== 'archived').map((p: any) => (
                 <div key={p.id} className="proj-card">
                   <div className="pc-name">📁 {p.name}</div>
@@ -2199,6 +2204,8 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
   const [nomenMatches, setNomenMatches] = useState<Record<string, { id: string; name: string } | null>>({});
   const [showManual, setShowManual] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Nomenclature search function for ClipboardPaste
   const searchNomenclature = async (q: string) => {
@@ -2210,6 +2217,7 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
 
   return (
     <div style={{ maxWidth: 560 }}>
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setExcelFile(f); e.target.value = ''; }} />
       {/* Steps indicator */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 28 }}>
         {[1, 2, 3].map(s => (
@@ -2288,7 +2296,7 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
           <div className="panel-title" style={{ marginBottom: 20 }}>Шаг 2: Загрузка данных</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { icon: '📥', title: 'Импорт из Excel', desc: 'Загрузите .xlsx файл' },
+              { icon: '📥', title: 'Импорт из Excel', desc: excelFile ? `✓ ${excelFile.name}` : 'Загрузите .xlsx файл', action: () => fileInputRef.current?.click() },
               { icon: '📋', title: 'Google Таблицы', desc: 'Синхронизация с Sheets' },
               { icon: '🔌', title: 'API / 1С', desc: 'Интеграция с ERP' },
               { icon: '✍️', title: 'Вручную', desc: 'Заполнить в интерфейсе', action: () => setShowManual(true) },
@@ -2335,7 +2343,7 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
               <div style={{ color: '#5A7090' }}>Страна</div><div>{country}</div>
               <div style={{ color: '#5A7090' }}>Данные</div>
               <div>
-                <div>{manualRows.length > 0 ? `${manualRows.length} строк вручную` : 'Будут добавлены позже'}</div>
+                <div>{manualRows.length > 0 ? `${manualRows.length} строк вручную` : excelFile ? `Excel: ${excelFile.name}` : 'Будут добавлены позже'}</div>
                 {Object.values(nomenMatches).filter(Boolean).length > 0 && (
                   <div style={{ fontSize: 11, color: '#10B981', marginTop: 4 }}>
                     ✓ Сопоставлено с номенклатурой: {Object.values(nomenMatches).filter(Boolean).length} продуктов
@@ -2357,7 +2365,7 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
         ) : step < 3 ? (
           <div></div>
         ) : (
-          <button className="btn btn-primary" disabled={creating} onClick={async () => { setCreating(true); try { const proj = await apiF<any>('/projects', { method: 'POST', body: JSON.stringify({ name: name || 'Без названия', mode: mode === 'quick' ? 'quick' : 'project', default_method: mode === 'pert' ? 'pert_cpm' : 'cpm', country_code: country }) }); if (manualRows.length > 0 && proj?.id) { for (const row of manualRows) { await apiF(`/production-orders/?project_id=${proj.id}`, { method: 'POST', body: JSON.stringify({ ext_id: row.ext_id || null, specification_name: row.specification_name || null, quantity: Number(row.quantity) || 1, unit: row.unit || 'pcs', start_date: row.start_date || null, due_date: row.due_date || null, priority: row.priority || 'normal', client: row.client || null, notes: row.notes || null, parent_order_id: row.parent_order_id || null }) }); } } onCreated(); } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); } }}>
+          <button className="btn btn-primary" disabled={creating} onClick={async () => { setCreating(true); try { const proj = await apiF<any>('/projects', { method: 'POST', body: JSON.stringify({ name: name || 'Без названия', mode: mode === 'quick' ? 'quick' : 'project', default_method: mode === 'pert' ? 'pert_cpm' : 'cpm', country_code: country }) }); if (manualRows.length > 0 && proj?.id) { for (const row of manualRows) { await apiF(`/production-orders/?project_id=${proj.id}`, { method: 'POST', body: JSON.stringify({ ext_id: row.ext_id || null, specification_name: row.specification_name || null, quantity: Number(row.quantity) || 1, unit: row.unit || 'pcs', start_date: row.start_date || null, due_date: row.due_date || null, priority: row.priority || 'normal', client: row.client || null, notes: row.notes || null, parent_order_id: row.parent_order_id || null }) }); } } if (excelFile && proj?.id) { const imp: any = await importProductionOrders(excelFile, proj.id); if (imp?.errors && imp.errors.length > 0) { alert(`Импорт с ошибками (${imp.errors.length}): ${imp.errors[0]?.message || ''}`); } } onCreated(); } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); } }}>
             {creating ? 'Создание...' : 'Создать проект'}
           </button>
         )}
