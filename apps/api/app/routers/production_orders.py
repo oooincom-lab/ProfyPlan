@@ -167,6 +167,12 @@ async def _import_orders(
                 message="обязательное поле 'Продукт' не заполнено",
             ))
             continue
+        if not _str(row[3] if len(row) > 3 else None):
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="Заказы", field="Кол-во",
+                message="обязательное поле 'Кол-во' не заполнено",
+            ))
+            continue
         try:
             order = ProductionOrder(
                 id=uuid4(),
@@ -258,6 +264,18 @@ async def _import_bom(
             result.errors.append(ImportValidationError(
                 row=i + 2, sheet="BOM", field="Номенклатура",
                 message="обязательное поле 'Номенклатура' не заполнено",
+            ))
+            continue
+        if not _str(row[3] if len(row) > 3 else None):
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="BOM", field="Тип",
+                message="обязательное поле 'Тип' не заполнено",
+            ))
+            continue
+        if not _str(row[6] if len(row) > 6 else None):
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="BOM", field="Норма на 1",
+                message="обязательное поле 'Норма на 1' не заполнено",
             ))
             continue
         try:
