@@ -153,13 +153,27 @@ async def _import_orders(
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
             continue
+        ext_id = _str(row[0]) if len(row) > 0 else ""
+        spec_name = _str(row[1]) if len(row) > 1 else ""
+        if not ext_id:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="Заказы", field="order_id",
+                message="обязательное поле 'order_id' не заполнено",
+            ))
+            continue
+        if not spec_name:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="Заказы", field="Продукт",
+                message="обязательное поле 'Продукт' не заполнено",
+            ))
+            continue
         try:
             order = ProductionOrder(
                 id=uuid4(),
                 tenant_id=tenant_id,
                 project_id=project_id or None,
-                ext_id=_str(row[0]) if len(row) > 0 else None,
-                specification_name=_str(row[1]) if len(row) > 1 else "",
+                ext_id=ext_id,
+                specification_name=spec_name,
                 specification_id=_str(row[2]) if len(row) > 2 else None,
                 quantity=_parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1")),
                 start_date=_parse_date(row[4] if len(row) > 4 else None),
@@ -225,11 +239,28 @@ async def _import_bom(
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
             continue
+        spec_name = _str(row[0]) if len(row) > 0 else ""
+        node_ext_id = _str(row[1]) if len(row) > 1 else ""
+        nomenclature_name = _str(row[4]) if len(row) > 4 else ""
+        if not spec_name:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="BOM", field="Спецификация",
+                message="обязательное поле 'Спецификация' не заполнено",
+            ))
+            continue
+        if not node_ext_id:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="BOM", field="Узел ID",
+                message="обязательное поле 'Узел ID' не заполнено",
+            ))
+            continue
+        if not nomenclature_name:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="BOM", field="Номенклатура",
+                message="обязательное поле 'Номенклатура' не заполнено",
+            ))
+            continue
         try:
-            node_ext_id = _str(row[1]) if len(row) > 1 else ""
-            if not node_ext_id:
-                continue
-
             node_type_raw = _str(row[3]).lower() if len(row) > 3 else "material"
             node_type = NODE_TYPE_MAP_RU.get(node_type_raw, "material")
             is_phantom = (node_type_raw in ("phantom", "фантом"))
@@ -239,7 +270,7 @@ async def _import_bom(
                 tenant_id=tenant_id,
                 project_id=UUID(project_id) if project_id else None,
                 nomenclature_id=node_ext_id,
-                nomenclature_name=_str(row[4]) if len(row) > 4 else "",
+                nomenclature_name=nomenclature_name,
                 node_type=node_type,
                 is_phantom=is_phantom,
                 quantity_per_parent=_parse_decimal(row[6] if len(row) > 6 else 1, Decimal("1")),
@@ -248,7 +279,6 @@ async def _import_bom(
                 is_make_or_buy="make" if node_type in ("assembly","semi_finished") else "buy",
             )
             # Используем id родительской спецификации (spec) как путь
-            spec_name = _str(row[0]) if len(row) > 0 else ""
             node.path = f"{spec_name}/{node_ext_id}" if spec_name else node_ext_id
             db.add(node)
             node_map[node_ext_id] = node.id
