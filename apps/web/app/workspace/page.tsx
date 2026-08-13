@@ -2205,7 +2205,6 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
   const [showManual, setShowManual] = useState(false);
   const [creating, setCreating] = useState(false);
   const [excelFile, setExcelFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Nomenclature search function for ClipboardPaste
   const searchNomenclature = async (q: string) => {
@@ -2217,7 +2216,6 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setExcelFile(f); e.target.value = ''; }} />
       {/* Steps indicator */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 28 }}>
         {[1, 2, 3].map(s => (
@@ -2295,8 +2293,15 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
         <div className="panel">
           <div className="panel-title" style={{ marginBottom: 20 }}>Шаг 2: Загрузка данных</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <label className="dir-card" style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 14, padding: 16, cursor: 'pointer' }}>
+              <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setExcelFile(f); e.target.value = ''; }} />
+              <div style={{ fontSize: 28 }}>📥</div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Импорт из Excel</div>
+                <div style={{ fontSize: 12, color: '#5A7090' }}>{excelFile ? `✓ ${excelFile.name}` : 'Загрузите .xlsx файл'}</div>
+              </div>
+            </label>
             {[
-              { icon: '📥', title: 'Импорт из Excel', desc: excelFile ? `✓ ${excelFile.name}` : 'Загрузите .xlsx файл', action: () => fileInputRef.current?.click() },
               { icon: '📋', title: 'Google Таблицы', desc: 'Синхронизация с Sheets' },
               { icon: '🔌', title: 'API / 1С', desc: 'Интеграция с ERP' },
               { icon: '✍️', title: 'Вручную', desc: 'Заполнить в интерфейсе', action: () => setShowManual(true) },
