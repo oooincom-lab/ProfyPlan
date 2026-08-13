@@ -129,7 +129,7 @@ async def import_excel(
     ws = _pick_sheet(wb, ["5-Маршруты", "Маршруты", "Routes"])
     is_7tab = ws is not None and ws.title == "5-Маршруты"
     if ws is not None:
-        result = await _import_routes(ws, tenant_id, db, result, is_7tab=is_7tab)
+        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab)
 
     await db.commit()
     return result
@@ -297,7 +297,7 @@ async def _import_bom(
 
 async def _import_routes(
     ws, tenant_id: str, db: AsyncSession, result: ExcelImportResult,
-    is_7tab: bool = False,
+    project_id: Optional[str] = None, is_7tab: bool = False,
 ) -> ExcelImportResult:
     """Парсинг вкладки 'Маршруты'.
 
@@ -326,6 +326,7 @@ async def _import_routes(
             stmt = select(ProductStructure).where(
                 ProductStructure.nomenclature_id == node_ext_id,
                 ProductStructure.tenant_id == tenant_id,
+                ProductStructure.project_id == (UUID(project_id) if project_id else None),
             )
             res = await db.execute(stmt)
             bom_node = res.scalar_one_or_none()
