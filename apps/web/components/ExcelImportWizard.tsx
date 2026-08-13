@@ -1,6 +1,6 @@
 /**
- * ExcelImportWizard — drag-and-drop загрузка .xlsx с 3 вкладками:
- *   Заказы / BOM / Маршруты
+ * ExcelImportWizard — drag-and-drop загрузка .xlsx (7-вкладочный или 3-вкладочный формат).
+ *   Рабочие вкладки: 2-Заказы / 3-BOM / 5-Маршруты.
  */
 'use client';
 
@@ -146,7 +146,7 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
           {step === 'upload' && (
             <>
               <p style={{ margin: '0 0 16px', fontSize: 13 }}>
-                Загрузите Excel-файл с тремя вкладками: <strong>Заказы</strong>, <strong>BOM</strong> и <strong>Маршруты</strong>.
+                Загрузите Excel-файл с вкладками <strong>2-Заказы</strong>, <strong>3-BOM</strong> и <strong>5-Маршруты</strong> (дополнительные вкладки «1-Настройки», «4-Ресурсы», «6-Этапы», «7-Подразделения» — справочные).
               </p>
 
               <div

@@ -58,6 +58,31 @@ def _str(raw) -> str:
     return str(raw).strip()
 
 
+# ── Карты русских значений (7-вкладочный формат) ──────────────
+
+PRIORITY_MAP_RU = {
+    "высокий": "high", "high": "high",
+    "обычный": "normal", "normal": "normal",
+    "низкий": "low", "low": "low",
+    "критичный": "critical", "critical": "critical",
+    "": "normal", None: "normal",
+}
+
+NODE_TYPE_MAP_RU = {
+    "сборка": "assembly", "assembly": "assembly",
+    "полуфабрикат": "semi_finished", "semi_finished": "semi_finished",
+    "материал": "material", "material": "material",
+    "фантом": "phantom", "phantom": "phantom",
+}
+
+
+def _pick_sheet(wb, names):
+    for n in names:
+        if n in wb.sheetnames:
+            return wb[n]
+    return None
+
+
 # ── POST /import ───────────────────────────────────────────────
 
 @router.post("/import", response_model=ExcelImportResult)
@@ -89,23 +114,22 @@ async def import_excel(
 
     result = ExcelImportResult()
 
-    # ── Вкладка 1: Заказы ──────────────────────────────────
-    if "Заказы" in sheet_names or "Orders" in sheet_names:
-        ws_name = "Заказы" if "Заказы" in sheet_names else "Orders"
-        ws = wb[ws_name]
+    # ── Вкладка 1: Заказы (Заказы / Orders / 2-Заказы) ─────
+    ws = _pick_sheet(wb, ["Заказы", "Orders", "2-Заказы"])
+    if ws is not None:
         result = await _import_orders(ws, project_id, tenant_id, db, result)
 
-    # ── Вкладка 2: BOM ─────────────────────────────────────
-    if "Состав" in sheet_names or "BOM" in sheet_names:
-        ws_name = "Состав" if "Состав" in sheet_names else "BOM"
-        ws = wb[ws_name]
+    # ── Вкладка 2: BOM (Состав / BOM / 3-BOM) ──────────────
+    ws = _pick_sheet(wb, ["Состав", "BOM", "3-BOM"])
+    if ws is not None:
         result = await _import_bom(ws, tenant_id, project_id, db, result)
 
-    # ── Вкладка 3: Маршруты ────────────────────────────────
-    if "Маршруты" in sheet_names or "Routes" in sheet_names:
-        ws_name = "Маршруты" if "Маршруты" in sheet_names else "Routes"
-        ws = wb[ws_name]
-        result = await _import_routes(ws, tenant_id, db, result)
+    # ── Вкладка 3: Маршруты (5-Маршруты / Маршруты / Routes) ─
+    # В 7-вкладочном формате у «5-Маршруты» сдвиг колонок +2 (есть Этап и Подразделение)
+    ws = _pick_sheet(wb, ["5-Маршруты", "Маршруты", "Routes"])
+    is_7tab = ws is not None and ws.title == "5-Маршруты"
+    if ws is not None:
+        result = await _import_routes(ws, tenant_id, db, result, is_7tab=is_7tab)
 
     await db.commit()
     return result
@@ -140,7 +164,7 @@ async def _import_orders(
                 quantity=_parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1")),
                 start_date=_parse_date(row[4] if len(row) > 4 else None),
                 due_date=_parse_date(row[5] if len(row) > 5 else None),
-                priority=_str(row[6]) if len(row) > 6 and _str(row[6]) in ("low","normal","high","critical") else "normal",
+                priority=PRIORITY_MAP_RU.get(_str(row[6]).lower(), "normal"),
                 client=_str(row[7]) if len(row) > 7 else None,
                 status="draft",
             )
@@ -206,8 +230,9 @@ async def _import_bom(
             if not node_ext_id:
                 continue
 
-            node_type = _str(row[3]) if len(row) > 3 else "material"
-            is_phantom = (node_type == "phantom")
+            node_type_raw = _str(row[3]).lower() if len(row) > 3 else "material"
+            node_type = NODE_TYPE_MAP_RU.get(node_type_raw, "material")
+            is_phantom = (node_type_raw in ("phantom", "фантом"))
 
             node = ProductStructure(
                 id=uuid4(),
@@ -215,7 +240,7 @@ async def _import_bom(
                 project_id=UUID(project_id) if project_id else None,
                 nomenclature_id=node_ext_id,
                 nomenclature_name=_str(row[4]) if len(row) > 4 else "",
-                node_type=node_type if node_type in ("assembly","semi_finished","material") else "material",
+                node_type=node_type,
                 is_phantom=is_phantom,
                 quantity_per_parent=_parse_decimal(row[6] if len(row) > 6 else 1, Decimal("1")),
                 unit=_str(row[5]) if len(row) > 5 else "pcs",
@@ -272,8 +297,18 @@ async def _import_bom(
 
 async def _import_routes(
     ws, tenant_id: str, db: AsyncSession, result: ExcelImportResult,
+    is_7tab: bool = False,
 ) -> ExcelImportResult:
-    """Парсинг вкладки 'Маршруты'."""
+    """Парсинг вкладки 'Маршруты'.
+
+    В 7-вкладочном формате колонки сдвинуты на +2 (есть «Этап» и «Подразделение»):
+      Длит.ч → col 6, Предш.оп. → col 7, Доп.материал → col 8, Расход → col 9, Вых.год. → col 10.
+    """
+    if is_7tab:
+        # 7-вкладочный: длительность на 6, предш.оп. на 7, материалы 8-9, вых.год. 10
+        c_dur, c_out, c_pred, c_mat, c_qty, c_yield = 6, None, 7, 8, 9, 10
+    else:
+        c_dur, c_out, c_pred, c_mat, c_qty, c_yield = 4, 5, 6, 7, 8, 9
     # Группируем строки по node_id
     rows = list(ws.iter_rows(min_row=2, values_only=True))
     routings_by_node = {}  # node_ext_id → [(row_idx, row_data)]
@@ -318,19 +353,21 @@ async def _import_routes(
                         routing_id=routing.id,
                         sequence_number=int(row[1]) if len(row) > 1 and row[1] else 1,
                         name=_str(row[2]) if len(row) > 2 else "",
-                        duration_hours=_parse_decimal(row[4] if len(row) > 4 else 0),
+                        duration_hours=_parse_decimal(row[c_dur] if len(row) > c_dur else 0),
                         setup_hours=Decimal("0"),
                         resource_type_id=_str(row[3]) if len(row) > 3 else None,
-                        output_product=_str(row[5]) if len(row) > 5 and _str(row[5]) else None,
+                        output_product=(
+                            _str(row[c_out]) if c_out is not None and len(row) > c_out and _str(row[c_out]) else None
+                        ),
                         output_quantity=_parse_decimal(Decimal("1")),
-                        yield_rate=_parse_decimal(row[9] if len(row) > 9 else 1, Decimal("1")),
-                        predecessors=_str(row[6]) if len(row) > 6 and row[6] else None,
+                        yield_rate=_parse_decimal(row[c_yield] if len(row) > c_yield else 1, Decimal("1")),
+                        predecessors=_str(row[c_pred]) if len(row) > c_pred and row[c_pred] else None,
                     )
                     db.add(rop)
 
                     # Дополнительные материалы
-                    extra_mat = _str(row[7]) if len(row) > 7 else ""
-                    extra_qty = float(row[8]) if len(row) > 8 and row[8] else 0
+                    extra_mat = _str(row[c_mat]) if len(row) > c_mat else ""
+                    extra_qty = float(row[c_qty]) if len(row) > c_qty and row[c_qty] else 0
                     if extra_mat and extra_qty > 0:
                         import json
                         rop.input_materials = json.dumps([{
