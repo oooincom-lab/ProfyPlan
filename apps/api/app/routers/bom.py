@@ -1358,11 +1358,15 @@ async def create_missing_orders(
     errors: list[dict] = []
     i = 0
     for node in nodes:
-        if node.node_type != "semi_finished" or node.is_phantom or node.order_id is not None:
+        if node.node_type != "semi_finished" or node.is_phantom:
             continue
         owner = _owner_for_node(node, list(orders))
-        if not body.strict and owner is not None and node.order_id == owner.id:
-            continue
+        if node.order_id is not None:
+            if node.order_id != (owner.id if owner else None):
+                continue  # уже привязан к другому заказу — не трогаем
+            if not body.strict:
+                continue  # в гибком режиме «свой заказ» допустим
+        # сюда попадают: без привязки ИЛИ «свой заказ» в strict-режиме (нужен отдельный подчинённый)
 
         # ext_id: код узла, если свободен, иначе префикс + счётчик
         ext_id = None
