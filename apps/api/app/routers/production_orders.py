@@ -396,8 +396,11 @@ def _build_bom_link_graph(
     """
     order_by_spec: dict[str, ProductionOrder] = {}
     for o in orders:
+        # «Спецификация» в BOM = specification_id заказа (колонка «Спецификация»), возможен и name
+        if o.specification_id:
+            order_by_spec[o.specification_id.strip()] = o
         if o.specification_name:
-            order_by_spec[o.specification_name.strip()] = o
+            order_by_spec.setdefault(o.specification_name.strip(), o)
     graph: dict[UUID, set[UUID]] = {}
     ext_by_id: dict[UUID, str] = {}
     for o in orders:

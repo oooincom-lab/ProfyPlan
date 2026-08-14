@@ -1086,10 +1086,12 @@ async def validate_node_link(
     if not node:
         return {"ok": False, "message": "узел BOM не найден"}
 
-    # Заказ-владелец узла — по спецификации из path
+    # Заказ-владелец узла — по спецификации из path (specification_id или specification_name)
     spec = node.path.rsplit("/", 1)[0] if node.path and "/" in node.path else ""
     owner = next(
-        (o for o in orders if o.specification_name and o.specification_name.strip() == spec.strip()),
+        (o for o in orders
+         if (o.specification_id and o.specification_id.strip() == spec.strip())
+         or (o.specification_name and o.specification_name.strip() == spec.strip())),
         None,
     )
     if not owner:
