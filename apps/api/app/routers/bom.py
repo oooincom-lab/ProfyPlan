@@ -16,7 +16,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.product_structure import ProductStructure
 from app.models.production_order import ProductionOrder
-from app.routers.production_orders import _build_bom_link_graph
+from app.routers.production_orders import _build_bom_link_graph, _order_to_out
+from app.schemas.production_order import ProductionOrderOut
 from app.models.routing import Routing, RoutingOperation
 from app.models.operation import Operation, OperationDependency
 from app.schemas.bom import (
@@ -1125,3 +1126,285 @@ async def validate_node_link(
             stack.append((nxt, path + [nxt]))
 
     return {"ok": True}
+
+
+# ── Проверка структуры: полуфабрикаты должны иметь маршрут и подчинённый заказ ──
+
+class StructureIssue(BaseModel):
+    """Одна аномалия структуры."""
+    node_id: str
+    ext_id: Optional[str] = None
+    name: str
+    path: Optional[str] = None
+    category: str  # no_routing | no_order | self_order
+    reason: str
+
+
+class StructureValidationOut(BaseModel):
+    checked_nodes: int
+    issues: list[StructureIssue]
+    no_routing: list[StructureIssue]
+    no_order: list[StructureIssue]
+    self_order: list[StructureIssue]
+    total_issues: int
+
+
+class CreateOrderFromNodeRequest(BaseModel):
+    ext_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CreateMissingOrdersRequest(BaseModel):
+    """Массовое создание подчинённых заказов для полуфабрикатов.
+
+    strict=True — заказ нужен и тем, кто производится в рамках своего же заказа (self_order).
+    strict=False — только совсем без привязки (no_order).
+    """
+    strict: bool = True
+    ext_prefix: str = "ПФ-"
+
+
+def _owner_for_node(node: ProductStructure, orders: list[ProductionOrder]) -> Optional[ProductionOrder]:
+    """Заказ-владелец узла: по спецификации из path (specification_id или specification_name)."""
+    spec = node.path.rsplit("/", 1)[0] if node.path and "/" in node.path else ""
+    if not spec:
+        return None
+    return next(
+        (o for o in orders
+         if (o.specification_id and o.specification_id.strip() == spec.strip())
+         or (o.specification_name and o.specification_name.strip() == spec.strip())),
+        None,
+    )
+
+
+def _semi_issues(
+    nodes: list[ProductStructure],
+    orders: list[ProductionOrder],
+    routing_ids_with_ops: set[UUID],
+) -> list[StructureIssue]:
+    """Собрать аномалии по полуфабрикатам (semi_finished, не фантом)."""
+    issues: list[StructureIssue] = []
+    for n in nodes:
+        if n.node_type != "semi_finished" or n.is_phantom:
+            continue
+        common = {
+            "node_id": str(n.id),
+            "ext_id": n.ext_id,
+            "name": n.nomenclature_name,
+            "path": n.path,
+        }
+        # Правило 1: маршрут обязателен
+        if n.routing_id is None or n.routing_id not in routing_ids_with_ops:
+            issues.append(StructureIssue(
+                **common, category="no_routing",
+                reason="у полуфабриката нет маршрута с операциями — срок не вычислим",
+            ))
+        # Правило 2: привязка к заказу-производителю
+        if n.order_id is None:
+            issues.append(StructureIssue(
+                **common, category="no_order",
+                reason="полуфабрикат не привязан к подчинённому заказу",
+            ))
+        else:
+            owner = _owner_for_node(n, orders)
+            if owner is not None and n.order_id == owner.id:
+                issues.append(StructureIssue(
+                    **common, category="self_order",
+                    reason="полуфабрикат производится в рамках своего же заказа — по строгому правилу нужен отдельный подчинённый заказ",
+                ))
+    return issues
+
+
+@bom_router.post("/projects/{project_id}/validate-structure", response_model=StructureValidationOut)
+async def validate_structure(
+    project_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Проверить структуру проекта: у полуфабрикатов есть маршрут и подчинённый заказ."""
+    pid = UUID(project_id)
+    nodes = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == pid,
+        )
+    )).scalars().all()
+    orders = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == pid,
+        )
+    )).scalars().all()
+
+    routings = (await db.execute(
+        select(Routing.id).where(Routing.tenant_id == tenant_id)
+    )).scalars().all()
+    if routings:
+        ops_rows = (await db.execute(
+            select(RoutingOperation.routing_id)
+            .where(RoutingOperation.routing_id.in_(routings))
+            .distinct()
+        )).scalars().all()
+        routing_ids_with_ops = set(ops_rows)
+    else:
+        routing_ids_with_ops = set()
+
+    issues = _semi_issues(list(nodes), list(orders), routing_ids_with_ops)
+    no_routing = [i for i in issues if i.category == "no_routing"]
+    no_order = [i for i in issues if i.category == "no_order"]
+    self_order = [i for i in issues if i.category == "self_order"]
+    return StructureValidationOut(
+        checked_nodes=len(nodes),
+        issues=issues,
+        no_routing=no_routing,
+        no_order=no_order,
+        self_order=self_order,
+        total_issues=len(issues),
+    )
+
+
+@bom_router.post("/projects/{project_id}/nodes/{node_id}/create-order")
+async def create_order_from_node(
+    project_id: str,
+    node_id: str,
+    body: CreateOrderFromNodeRequest,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Создать подчинённый заказ из узла-полуфабриката и привязать узел к нему."""
+    pid = UUID(project_id)
+    node = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == pid,
+            ProductStructure.id == UUID(node_id),
+        )
+    )).scalar_one_or_none()
+    if not node:
+        raise HTTPException(404, "узел BOM не найден")
+    if node.node_type != "semi_finished":
+        raise HTTPException(400, "заказ можно создать только для узла-полуфабриката")
+    if node.order_id is not None:
+        raise HTTPException(409, "узел уже привязан к заказу")
+
+    orders = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == pid,
+        )
+    )).scalars().all()
+    owner = _owner_for_node(node, list(orders))
+
+    ext_id = (body.ext_id or "").strip() or node.ext_id
+    if ext_id:
+        dup = next((o for o in orders if o.ext_id and o.ext_id.strip() == ext_id), None)
+        if dup:
+            raise HTTPException(409, f"заказ с кодом «{ext_id}» уже существует")
+
+    order = ProductionOrder(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        project_id=pid,
+        ext_id=ext_id,
+        specification_id=node.ext_id,
+        specification_name=node.nomenclature_name,
+        quantity=node.quantity_per_parent,
+        unit=node.unit,
+        priority="normal",
+        status="draft",
+        parent_order_id=owner.id if owner else None,
+        notes=body.notes or "Создан из узла BOM",
+    )
+    db.add(order)
+    await db.flush()
+    node.order_id = order.id
+    await db.commit()
+    await db.refresh(order)
+
+    return {
+        "message": f"Создан подчинённый заказ {ext_id or order.id} и привязан к узлу",
+        "order": _order_to_out(order),
+        "node_id": str(node.id),
+        "node_name": node.nomenclature_name,
+    }
+
+
+@bom_router.post("/projects/{project_id}/create-missing-orders")
+async def create_missing_orders(
+    project_id: str,
+    body: CreateMissingOrdersRequest,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Массово создать подчинённые заказы для полуфабрикатов без привязки."""
+    pid = UUID(project_id)
+    nodes = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == pid,
+        )
+    )).scalars().all()
+    orders = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == pid,
+        )
+    )).scalars().all()
+
+    prefix = body.ext_prefix.strip() or "ПФ-"
+    used = {o.ext_id.strip() for o in orders if o.ext_id}
+
+    created: list[dict] = []
+    errors: list[dict] = []
+    i = 0
+    for node in nodes:
+        if node.node_type != "semi_finished" or node.is_phantom or node.order_id is not None:
+            continue
+        owner = _owner_for_node(node, list(orders))
+        if not body.strict and owner is not None and node.order_id == owner.id:
+            continue
+
+        # ext_id: код узла, если свободен, иначе префикс + счётчик
+        ext_id = None
+        if node.ext_id and node.ext_id not in used:
+            ext_id = node.ext_id
+        else:
+            while True:
+                i += 1
+                cand = f"{prefix}{i}"
+                if cand not in used:
+                    ext_id = cand
+                    break
+        used.add(ext_id)
+
+        order = ProductionOrder(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            project_id=pid,
+            ext_id=ext_id,
+            specification_id=node.ext_id,
+            specification_name=node.nomenclature_name,
+            quantity=node.quantity_per_parent,
+            unit=node.unit,
+            priority="normal",
+            status="draft",
+            parent_order_id=owner.id if owner else None,
+            notes="Создан из узла BOM (массово)",
+        )
+        db.add(order)
+        await db.flush()
+        node.order_id = order.id
+        created.append({
+            "node_id": str(node.id),
+            "node_name": node.nomenclature_name,
+            "order_id": str(order.id),
+            "ext_id": ext_id,
+        })
+
+    await db.commit()
+    return {
+        "message": f"Создано заказов: {len(created)}" + (f", ошибок: {len(errors)}" if errors else ""),
+        "created": created,
+        "errors": errors,
+        "count": len(created),
+    }

@@ -111,6 +111,62 @@ export default function AppShell() {
     if (typeof window !== 'undefined') localStorage.setItem('profyplan_order_chain_control', mode);
   };
 
+  // ── Полуфабрикаты: политика цепочки (строго / гибко) ──
+  const [semiPolicy, setSemiPolicy] = useState<'strict' | 'flexible'>(() => {
+    if (typeof window === 'undefined') return 'strict';
+    const v = localStorage.getItem('profyplan_semifinished_policy');
+    return v === 'flexible' ? 'flexible' : 'strict';
+  });
+  const [bomAnomalies, setBomAnomalies] = useState<null | {
+    checked_nodes: number;
+    no_routing: any[];
+    no_order: any[];
+    self_order: any[];
+    total_issues: number;
+  }>(null);
+  const [bomAnomaliesLoading, setBomAnomaliesLoading] = useState(false);
+
+  const setSemiPolicyMode = (mode: 'strict' | 'flexible') => {
+    setSemiPolicy(mode);
+    if (typeof window !== 'undefined') localStorage.setItem('profyplan_semifinished_policy', mode);
+    if (selectedProject) loadBomAnomalies(selectedProject.id);
+  };
+
+  const loadBomAnomalies = async (projId: string) => {
+    setBomAnomaliesLoading(true);
+    try {
+      const res = await apiF<any>(`/bom/projects/${projId}/validate-structure`, { method: 'POST' });
+      setBomAnomalies(res || null);
+    } catch { setBomAnomalies(null); }
+    finally { setBomAnomaliesLoading(false); }
+  };
+
+  const createOrderFromNode = async (nodeId: string) => {
+    if (!selectedProject) return;
+    try {
+      const res = await apiF<any>(`/bom/projects/${selectedProject.id}/nodes/${nodeId}/create-order`, {
+        method: 'POST', body: JSON.stringify({}),
+      });
+      setMsg('✅ ' + (res?.message || 'Заказ создан'));
+      await reloadBomTree(selectedProject.id);
+      await loadProjectOrders(selectedProject.id);
+      await loadBomAnomalies(selectedProject.id);
+    } catch (e: any) { setMsg('⛔ Ошибка создания заказа: ' + (e.message || String(e))); }
+  };
+
+  const createMissingOrders = async () => {
+    if (!selectedProject) return;
+    try {
+      const res = await apiF<any>(`/bom/projects/${selectedProject.id}/create-missing-orders`, {
+        method: 'POST', body: JSON.stringify({ strict: semiPolicy === 'strict' }),
+      });
+      setMsg('✅ ' + (res?.message || 'Готово'));
+      await reloadBomTree(selectedProject.id);
+      await loadProjectOrders(selectedProject.id);
+      await loadBomAnomalies(selectedProject.id);
+    } catch (e: any) { setMsg('⛔ Ошибка: ' + (e.message || String(e))); }
+  };
+
   // ── Order CRUD ──
   const loadProjectOrders = async (projId: string) => {
     if (projectOrders[projId]) return;
@@ -169,6 +225,7 @@ export default function AppShell() {
     setBomTimeline(null);
     setBomTimelineLoading(false);
     if (selectedProject) loadProjectOrders(selectedProject.id);
+    if (selectedProject) loadBomAnomalies(selectedProject.id);
   };
 
   const handleNodeOrderChange = async (nodeId: string, orderId: string | null) => {
@@ -1878,6 +1935,32 @@ export default function AppShell() {
                     💡 Связанные заказы — это те, что связаны через поле «Код заказа» в BOM или «Код заказа родителя». При переносе куста связанные заказы отвязываются от своих прежних групп/пулов, и расчёты по ним (включая расчёты пулов) аннулируются.
                   </div>
                 </div>
+
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🏭 Полуфабрикаты в цепочке</div>
+                  <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                    Правило: узел-полуфабрикат должен иметь маршрут (операции) и заказ-производитель. Здесь выбирается, может ли полуфабрикат изготавливаться в рамках своего же заказа или для каждого нужен отдельный подчинённый заказ.
+                  </div>
+                  {([
+                    { v: 'strict', icon: '🔒', title: 'Строго — всегда отдельный заказ', desc: 'Каждый полуфабрикат производится отдельным подчинённым заказом. Полуфабрикат «внутри своего заказа» — аномалия, система предложит создать заказ.' },
+                    { v: 'flexible', icon: '⚙️', title: 'Гибко — можно в рамках заказа', desc: 'Разрешён полуфабрикат, изготавливаемый внутри своего заказа. Аномалиями считаются только отсутствие маршрута и отсутствие привязки к заказу.' },
+                  ] as const).map(opt => (
+                    <label key={opt.v} style={{
+                      display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px',
+                      borderRadius: 9, border: `1px solid ${semiPolicy === opt.v ? 'rgba(59,130,246,.5)' : '#1E3252'}`, background: semiPolicy === opt.v ? 'rgba(59,130,246,.08)' : '#0A1628',
+                      cursor: 'pointer', marginBottom: 8,
+                    }}>
+                      <input type="radio" name="semi-policy" checked={semiPolicy === opt.v} onChange={() => setSemiPolicyMode(opt.v)} style={{ marginTop: 3, accentColor: '#3B82F6' }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.icon} {opt.title}</div>
+                        <div style={{ fontSize: 12, color: '#8FA3BD', marginTop: 2, lineHeight: 1.45 }}>{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                  <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 8, lineHeight: 1.5, background: 'rgba(245,158,11,.06)', border: '1px solid rgba(245,158,11,.15)', borderRadius: 8, padding: '10px 12px' }}>
+                    ⚠ Проверка выполняется при открытии BOM заказа: полуфабрикаты без маршрута и без подчинённого заказа подсвечиваются, создание заказа — одним кликом. Полуфабрикаты-«фантомы» (прозрачные узлы) исключены из проверки.
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2126,6 +2209,60 @@ export default function AppShell() {
             <span style={{ opacity: .85 }}>⛓ Цветные узлы с бейджем заказа — BOM подчинённых заказов цепочки.</span>
             <span style={{ opacity: .85 }}>Переключатель «Только свой BOM / Вся цепочка» — сверху.</span>
           </div>
+
+          {(() => {
+            if (bomAnomaliesLoading) {
+              return <div style={{ fontSize: 12, color: '#5A7090', padding: '8px 12px', marginBottom: 10 }}>Проверка структуры…</div>;
+            }
+            if (!bomAnomalies) return null;
+            const visible = semiPolicy === 'strict'
+              ? [...bomAnomalies.no_routing, ...bomAnomalies.no_order, ...bomAnomalies.self_order]
+              : [...bomAnomalies.no_routing, ...bomAnomalies.no_order];
+            if (!visible.length) return null;
+            const catLabel: Record<string, string> = {
+              no_routing: 'нет маршрута',
+              no_order: 'нет заказа',
+              self_order: 'свой заказ',
+            };
+            const canCreate = visible.filter((a: any) => a.category !== 'no_routing');
+            return (
+              <div style={{ marginBottom: 10, padding: '10px 12px', background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#FCA5A5' }}>⚠ Аномалии структуры: {visible.length}</span>
+                  <span style={{ fontSize: 11, color: '#8FA3BD' }}>полуфабрикаты без маршрута или без подчинённого заказа</span>
+                  <div style={{ flex: 1 }} />
+                  {canCreate.length > 0 && (
+                    <button
+                      onClick={createMissingOrders}
+                      style={{ background: '#3B82F6', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Создать заказы ({canCreate.length})
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gap: 4, maxHeight: 150, overflow: 'auto' }}>
+                  {visible.slice(0, 15).map((a: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 8px', background: 'rgba(4,10,20,.4)', borderRadius: 5 }}>
+                      <span style={{ color: '#FCA5A5', fontWeight: 600, flex: '0 0 86px' }}>{catLabel[a.category] || a.category}</span>
+                      <span style={{ color: '#E8EEF5', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.path || a.name}>
+                        {a.name}
+                      </span>
+                      {a.category !== 'no_routing' && (
+                        <button
+                          onClick={() => createOrderFromNode(a.node_id)}
+                          style={{ background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 5, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                        >
+                          Создать заказ
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {visible.length > 15 && <div style={{ fontSize: 11, color: '#5A7090', padding: '2px 8px' }}>…и ещё {visible.length - 15}</div>}
+                </div>
+              </div>
+            );
+          })()}
+
           <BomTree
             nodes={orderBomNodesWithSuborders(bomModalOrder)}
             orderName={bomModalOrder.specification_name}
@@ -2137,6 +2274,13 @@ export default function AppShell() {
             onNodeOrderChange={handleNodeOrderChange}
             chainControl
             currentOrderId={bomModalOrder.id}
+            anomalyIds={(() => {
+              if (!bomAnomalies) return undefined;
+              const visible = semiPolicy === 'strict'
+                ? [...bomAnomalies.no_routing, ...bomAnomalies.no_order, ...bomAnomalies.self_order]
+                : [...bomAnomalies.no_routing, ...bomAnomalies.no_order];
+              return new Set(visible.map((a: any) => a.node_id));
+            })()}
           />
         </div>
       </div>

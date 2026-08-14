@@ -45,6 +45,8 @@ interface BomTreeProps {
   chainControl?: boolean;
   /** id текущего заказа (для цветовой группировки и фильтра) */
   currentOrderId?: string;
+  /** id узлов с аномалиями структуры (нет маршрута / нет подчинённого заказа) */
+  anomalyIds?: Set<string>;
 }
 
 export interface TimelineOp {
@@ -111,7 +113,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId, anomalyIds }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -235,6 +237,15 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           <span style={{ flex: 1, minWidth: 0 }}>
             <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#E8EEF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {n.nomenclature_name}
+              {anomalyIds && anomalyIds.has(n.id) && (
+                <span title="Аномалия структуры: нет маршрута или нет подчинённого заказа" style={{
+                  color: '#FCA5A5', fontSize: 10.5, marginLeft: 6, fontWeight: 700,
+                  background: 'rgba(239,68,68,.14)', border: '1px solid rgba(239,68,68,.4)', borderRadius: 4,
+                  padding: '1px 5px', whiteSpace: 'nowrap',
+                }}>
+                  ⚠ аномалия
+                </span>
+              )}
               {n.is_phantom ? <span style={{ color: '#5A7090', fontSize: 11, marginLeft: 6 }}>фантом</span> : null}
               {isSub && ownerName && (
                 <span title={`BOM заказа ${ownerName}`} style={{
