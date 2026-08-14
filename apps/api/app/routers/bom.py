@@ -1295,7 +1295,7 @@ async def create_order_from_node(
     )).scalars().all()
     owner = _owner_for_node(node, list(orders))
 
-    ext_id = (body.ext_id or "").strip() or node.ext_id
+    ext_id = (body.ext_id or "").strip() or node.ext_id or node.nomenclature_id
     if ext_id:
         dup = next((o for o in orders if o.ext_id and o.ext_id.strip() == ext_id), None)
         if dup:
@@ -1306,7 +1306,7 @@ async def create_order_from_node(
         tenant_id=tenant_id,
         project_id=pid,
         ext_id=ext_id,
-        specification_id=node.ext_id,
+        specification_id=node.nomenclature_id or node.ext_id,
         specification_name=node.nomenclature_name,
         quantity=node.quantity_per_parent,
         unit=node.unit,
@@ -1386,7 +1386,7 @@ async def create_missing_orders(
             tenant_id=tenant_id,
             project_id=pid,
             ext_id=ext_id,
-            specification_id=node.ext_id,
+            specification_id=node.nomenclature_id or node.ext_id,
             specification_name=node.nomenclature_name,
             quantity=node.quantity_per_parent,
             unit=node.unit,

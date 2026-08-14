@@ -203,20 +203,32 @@ export default function AppShell() {
     const specName = (o.specification_name || '').toLowerCase().trim();
     const specId = (o.specification_id || '').toLowerCase().trim();
     const roots = all.filter(n => !n.parent_id);
-    const matched = roots.filter(r => {
-      const rn = (r.nomenclature_name || '').toLowerCase().trim();
-      const rid = (r.nomenclature_id || '').toLowerCase().trim();
-      const rext = (r.ext_id || '').toLowerCase().trim();
-      if (specName && rn === specName) return true;
-      if (specId && (rid === specId || rext === specId)) return true;
-      return false;
-    });
-    const keep = matched.length ? matched : roots;
     const childrenMap: Record<string, any[]> = {};
     for (const n of all) if (n.parent_id) (childrenMap[n.parent_id] ||= []).push(n);
     const kept = new Set<string>();
-    const walk = (n: any) => { kept.add(n.id); for (const c of childrenMap[n.id] || []) walk(c); };
-    for (const r of keep) walk(r);
+    const walk = (start: any) => { kept.add(start.id); for (const c of childrenMap[start.id] || []) walk(c); };
+    const specOf = (n: any) => (n.path && n.path.includes('/')) ? n.path.split('/')[0].toLowerCase().trim() : '';
+
+    // 1) корни по имени номенклатуры (спецификация заказа = имя корневого изделия)
+    const byName = roots.filter(r => specName && (r.nomenclature_name || '').toLowerCase().trim() === specName);
+    if (byName.length) { byName.forEach(walk); return all.filter(n => kept.has(n.id)); }
+
+    // 2) узел (не только корень) по коду = specification_id — заказ, созданный из полуфабриката
+    if (specId) {
+      const node = all.find(n => (n.nomenclature_id || '').toLowerCase().trim() === specId
+        || (n.ext_id || '').toLowerCase().trim() === specId);
+      if (node) { walk(node); return all.filter(n => kept.has(n.id)); }
+    }
+
+    // 3) корни, чья спецификация из path == specification_id (импортированные данные: path = Спец/Узел)
+    const byPath = roots.filter(r => specId && specOf(r) === specId);
+    if (byPath.length) { byPath.forEach(walk); return all.filter(n => kept.has(n.id)); }
+
+    // 4) спецификация задана, но не найдена — пустой BOM, а не «весь проект»
+    if (specName || specId) return [];
+
+    // 5) без спецификации — все корни (ручные заказы без привязки к BOM)
+    roots.forEach(walk);
     return all.filter(n => kept.has(n.id));
   };
 
@@ -260,16 +272,22 @@ export default function AppShell() {
     const result: any[] = [...own];
 
     // Получить корни BOM подчинённого заказа по его id
-    const subOrderRoots = (orderId: string): any[] => {
+    const subOrderRoots = (orderId: string, skipId?: string): any[] => {
       const sub = ordersList.find((x: any) => x.id === orderId);
       if (!sub) return [];
-      return orderBomNodes(sub)
-        .filter((n: any) => !n.parent_id)
-        .map((n: any) => ({
-          ...n,
-          _ownerId: sub.id,
-          _ownerExtId: sub.ext_id || sub.specification_name || '',
-        }));
+      const roots = orderBomNodes(sub).filter((n: any) => !n.parent_id);
+      const mapped = roots.map((n: any) => ({
+        ...n,
+        _ownerId: sub.id,
+        _ownerExtId: sub.ext_id || sub.specification_name || '',
+      }));
+      // Заказ создан из самого узла (корень его BOM = этот узел): встраиваем детей, а не копию узла
+      if (skipId && mapped.length === 1 && mapped[0].id === skipId) {
+        return all
+          .filter((c: any) => c.parent_id === skipId)
+          .map((c: any) => ({ ...c, _ownerId: sub.id, _ownerExtId: sub.ext_id || sub.specification_name || '' }));
+      }
+      return mapped;
     };
 
     // Рекурсивно встраиваем узлы подчинённого заказа как дочерние (цветные, сгруппированы по заказам)
@@ -283,7 +301,7 @@ export default function AppShell() {
         if (n.order_id && n.order_id !== o.id && !visited.has(n.order_id)) {
           const nextVisited = new Set(visited);
           nextVisited.add(n.order_id);
-          const deeper = subOrderRoots(n.order_id);
+          const deeper = subOrderRoots(n.order_id, n.id);
           if (deeper.length) inject(deeper, synthId, Math.min(dimLevel + 1, 2), nextVisited);
         }
       }
@@ -292,7 +310,7 @@ export default function AppShell() {
     for (const n of own) {
       if (n.order_id && n.order_id !== o.id) {
         const visited = new Set<string>([o.id]);
-        const subRoots = subOrderRoots(n.order_id);
+        const subRoots = subOrderRoots(n.order_id, n.id);
         if (subRoots.length) inject(subRoots, n.id, 1, visited);
       }
     }
