@@ -193,7 +193,11 @@ export default function AppShell() {
     const projId = selectedProject?.id || '';
     const all = bomTrees[projId] || [];
     if (!all.length) return [];
-    const own = orderBomNodes(o);
+    const own = orderBomNodes(o).map((n: any) => ({
+      ...n,
+      _ownerId: o.id,
+      _ownerExtId: o.ext_id || o.specification_name || '',
+    }));
     const ordersList = projectOrders[projId] || [];
 
     const result: any[] = [...own];
@@ -202,17 +206,23 @@ export default function AppShell() {
     const subOrderRoots = (orderId: string): any[] => {
       const sub = ordersList.find((x: any) => x.id === orderId);
       if (!sub) return [];
-      return orderBomNodes(sub).filter((n: any) => !n.parent_id);
+      return orderBomNodes(sub)
+        .filter((n: any) => !n.parent_id)
+        .map((n: any) => ({
+          ...n,
+          _ownerId: sub.id,
+          _ownerExtId: sub.ext_id || sub.specification_name || '',
+        }));
     };
 
-    // Рекурсивно встраиваем узлы подчинённого заказа как дочерние (тусклые)
+    // Рекурсивно встраиваем узлы подчинённого заказа как дочерние (цветные, сгруппированы по заказам)
     const inject = (nodes: any[], parentId: string, dimLevel: number, visited: Set<string>) => {
       for (const n of nodes) {
         const synthId = `sub_${parentId}_${n.id}_${dimLevel}`;
         const clone: any = { ...n, id: synthId, parent_id: parentId, dimmed: dimLevel };
         result.push(clone);
         const realChildren = all.filter((c: any) => c.parent_id === n.id);
-        if (realChildren.length) inject(realChildren, synthId, dimLevel, visited);
+        if (realChildren.length) inject(realChildren.map((c: any) => ({ ...c, _ownerId: clone._ownerId, _ownerExtId: clone._ownerExtId })), synthId, dimLevel, visited);
         if (n.order_id && n.order_id !== o.id && !visited.has(n.order_id)) {
           const nextVisited = new Set(visited);
           nextVisited.add(n.order_id);
@@ -1204,6 +1214,64 @@ export default function AppShell() {
                   <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
                 </div>
               </div>
+              {(() => {
+                const allOrders = projectOrders[selectedProject?.id || ''] || [];
+                if (!allOrders.length) return null;
+                const byId = new Map(allOrders.map((x: any) => [x.id, x]));
+                const childrenMap = new Map<string, any[]>();
+                const roots: any[] = [];
+                for (const o of allOrders) {
+                  const pid = o.parent_order_id;
+                  if (pid && byId.has(pid)) {
+                    const arr = childrenMap.get(pid) || [];
+                    arr.push(o);
+                    childrenMap.set(pid, arr);
+                  } else roots.push(o);
+                }
+                const CHAIN_COLORS = ['#10B981', '#A78BFA', '#F59E0B', '#EC4899', '#14B8A6', '#F97316'];
+                const colorOf = new Map<string, string>();
+                let ci = 0;
+                for (const r of roots) {
+                  const col = CHAIN_COLORS[ci % CHAIN_COLORS.length];
+                  ci++;
+                  colorOf.set(r.id, col);
+                  const stack = [...(childrenMap.get(r.id) || [])];
+                  while (stack.length) {
+                    const c = stack.pop()!;
+                    colorOf.set(c.id, col);
+                    stack.push(...(childrenMap.get(c.id) || []));
+                  }
+                }
+                const renderChain = (o: any, depth: number) => {
+                  const kids = childrenMap.get(o.id) || [];
+                  const col = colorOf.get(o.id) || '#3B82F6';
+                  return (
+                    <div key={o.id} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: depth * 18, minWidth: 0 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: col, flex: '0 0 8px' }} />
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#E8EEF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.ext_id || '—'}</span>
+                        <span style={{ fontSize: 10.5, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.specification_name}</span>
+                        {kids.length > 0 && <span style={{ fontSize: 10, color: col, fontWeight: 600 }}>· {kids.length}</span>}
+                      </div>
+                      {kids.length > 0 && <div style={{ display: 'flex', flexDirection: 'column' }}>{kids.map((k) => renderChain(k, depth + 1))}</div>}
+                    </div>
+                  );
+                };
+                return (
+                  <div style={{ marginBottom: 14, padding: 12, background: 'rgba(59,130,246,.04)', border: '1px solid #1E3252', borderRadius: 10 }}>
+                    <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600, marginBottom: 8 }}>
+                      ⛓ Цепочки заказов проекта
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
+                      {roots.map((r) => (
+                        <div key={'ch' + r.id} style={{ background: '#0F1E36', border: '1px solid #1E3252', borderRadius: 8, padding: 10 }}>
+                          {renderChain(r, 0)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {ganttLoading && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Загрузка данных CPM...</div>}
               {!ganttLoading && !ganttData && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Нет данных. Запустите CPM-расчёт для проекта.</div>}
               {!ganttLoading && ganttData && (
@@ -2055,7 +2123,8 @@ export default function AppShell() {
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10, fontSize: 11, color: '#8FA3BD', padding: '8px 12px', background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.18)', borderRadius: 8 }}>
             <span>🔗 Колонка «Заказ» — какой заказ производит этот узел (связывает куст заказов).</span>
-            <span style={{ opacity: .6 }}>Тусклые узлы — BOM подчинённых заказов.</span>
+            <span style={{ opacity: .85 }}>⛓ Цветные узлы с бейджем заказа — BOM подчинённых заказов цепочки.</span>
+            <span style={{ opacity: .85 }}>Переключатель «Только свой BOM / Вся цепочка» — сверху.</span>
           </div>
           <BomTree
             nodes={orderBomNodesWithSuborders(bomModalOrder)}
@@ -2066,6 +2135,8 @@ export default function AppShell() {
             editable
             orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
             onNodeOrderChange={handleNodeOrderChange}
+            chainControl
+            currentOrderId={bomModalOrder.id}
           />
         </div>
       </div>

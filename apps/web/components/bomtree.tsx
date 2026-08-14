@@ -18,6 +18,9 @@ export interface BomTreeNode {
   order_id: string | null;
   ext_id: string | null;
   dimmed?: number; // 0/undefined = обычный; 1 = подчинённый 1-го уровня; 2 = 2-го уровня
+  // Вариант А: владелец узла (какой заказ «производит» этот узел в цепочке)
+  _ownerId?: string;
+  _ownerExtId?: string;
 }
 
 export interface OrderOption {
@@ -38,6 +41,10 @@ interface BomTreeProps {
   editable?: boolean;
   orders?: OrderOption[];
   onNodeOrderChange?: (nodeId: string, orderId: string | null) => void;
+  /** Вариант А: показывать управление «только свой BOM / вся цепочка» (тяжёлый модал) */
+  chainControl?: boolean;
+  /** id текущего заказа (для цветовой группировки и фильтра) */
+  currentOrderId?: string;
 }
 
 export interface TimelineOp {
@@ -104,12 +111,36 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [showTimeline, setShowTimeline] = useState(true);
+  const [chainAll, setChainAll] = useState(true);
+
+  // Вариант А: при «только свой BOM» отфильтровываем узлы подчинённых заказов
+  const effectiveNodes = useMemo(() => {
+    if (!chainControl || chainAll || !currentOrderId) return nodes;
+    return nodes.filter((n) => !n._ownerId || n._ownerId === currentOrderId);
+  }, [nodes, chainControl, chainAll, currentOrderId]);
+
+  // Палитра по заказам-владельцам (устойчивая по порядку первого вхождения)
+  const ownerColors = useMemo(() => {
+    const palette = ['#10B981', '#A78BFA', '#F59E0B', '#EC4899', '#14B8A6', '#F97316', '#22D3EE'];
+    const map = new Map<string, string>();
+    let i = 0;
+    for (const n of nodes) {
+      const oid = n._ownerId;
+      if (oid && oid !== currentOrderId && !map.has(oid)) {
+        map.set(oid, palette[i % palette.length]);
+        i++;
+      }
+    }
+    return map;
+  }, [nodes, currentOrderId]);
+
+  const ownerLabel = (n: BomTreeNode): string => n._ownerExtId || '';
 
   const hasCpm = !!timeline && timeline.length > 0;
   const cpmTotalDur = hasCpm ? Math.max(...timeline!.map(o => o.early_finish || 0), 1) : 1;
@@ -119,7 +150,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
   const tree = useMemo(() => {
     const childrenMap: Record<string, BomTreeNode[]> = {};
     const roots: BomTreeNode[] = [];
-    for (const n of nodes) {
+    for (const n of effectiveNodes) {
       if (n.parent_id) {
         (childrenMap[n.parent_id] ||= []).push(n);
       } else {
@@ -131,7 +162,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
       childrenMap[k].sort((a, b) => a.nomenclature_name.localeCompare(b.nomenclature_name));
     }
     return { childrenMap, roots };
-  }, [nodes]);
+  }, [effectiveNodes]);
 
   const toggleNode = (id: string) => {
     setCollapsed(prev => {
@@ -170,6 +201,10 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     const dimLevel = n.dimmed || 0;
     const dimOpacity = dimLevel >= 2 ? 0.4 : dimLevel === 1 ? 0.6 : 1;
     const linkedOrderLabel = orderLabel(orders, n.order_id);
+    // Вариант А: узел из BOM подчинённого заказа — своя подсветка по заказу-владельцу
+    const isSub = !!currentOrderId && !!n._ownerId && n._ownerId !== currentOrderId;
+    const ownerCol = isSub ? ownerColors.get(n._ownerId!) || '#10B981' : '';
+    const ownerName = isSub ? ownerLabel(n) : '';
 
     return (
       <div key={n.id}>
@@ -177,12 +212,15 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           className="bom-node"
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '5px 8px',
+            paddingLeft: isSub ? 10 : 8,
             borderRadius: 7, cursor: hasChildren ? 'pointer' : 'default',
             transition: 'background .12s',
             opacity: dimOpacity,
+            background: isSub ? `${ownerCol}12` : 'transparent',
+            borderLeft: isSub ? `3px solid ${ownerCol}` : '3px solid transparent',
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#162844')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          onMouseEnter={e => (e.currentTarget.style.background = isSub ? `${ownerCol}22` : '#162844')}
+          onMouseLeave={e => (e.currentTarget.style.background = isSub ? `${ownerCol}12` : 'transparent')}
           onClick={() => hasChildren && toggleNode(n.id)}
         >
           <span style={{ width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#5A7090', flex: '0 0 16px' }}>
@@ -198,7 +236,24 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
             <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#E8EEF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {n.nomenclature_name}
               {n.is_phantom ? <span style={{ color: '#5A7090', fontSize: 11, marginLeft: 6 }}>фантом</span> : null}
-              {n.order_id && <span style={{ color: '#A78BFA', fontSize: 10, marginLeft: 6, fontWeight: 600 }}>🔗</span>}
+              {isSub && ownerName && (
+                <span title={`BOM заказа ${ownerName}`} style={{
+                  color: ownerCol, fontSize: 10, marginLeft: 6, fontWeight: 600,
+                  background: `${ownerCol}1c`, border: `1px solid ${ownerCol}45`, borderRadius: 4,
+                  padding: '1px 5px', whiteSpace: 'nowrap',
+                }}>
+                  ⛓ {ownerName}
+                </span>
+              )}
+              {linkedOrderLabel && (
+                <span title={`Этот узел производит заказ ${linkedOrderLabel}`} style={{
+                  color: '#A78BFA', fontSize: 10, marginLeft: 6, fontWeight: 600,
+                  background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.35)', borderRadius: 4,
+                  padding: '1px 5px', whiteSpace: 'nowrap',
+                }}>
+                  производит: {linkedOrderLabel}
+                </span>
+              )}
             </span>
             <span style={{ display: 'block', fontSize: 11, color: '#5A7090', fontFamily: "'IBM Plex Mono', monospace" }}>
               {n.nomenclature_id || n.ext_id || '—'}
@@ -254,7 +309,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           )}
         </div>
         {hasChildren && !isCollapsed && (
-          <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: '1px solid #2A4060' }}>
+          <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: isSub && ownerCol ? `1px solid ${ownerCol}55` : '1px solid #2A4060' }}>
             {children.map(c => renderNode(c, depth + 1))}
           </div>
         )}
@@ -273,10 +328,12 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     return tree.roots.filter(keep);
   }, [tree, query, typeFilter]);
 
-  if (nodes.length === 0) {
+  if (effectiveNodes.length === 0) {
     return (
       <div style={{ padding: '14px 10px', color: '#5A7090', fontSize: 12, textAlign: 'center' }}>
-        BOM не загружен. Загрузите структуру изделия (BOM).
+        {chainControl && !chainAll
+          ? 'У этого заказа нет собственного BOM — в цепочке он использует BOM подчинённых заказов.'
+          : 'BOM не загружен. Загрузите структуру изделия (BOM).'}
       </div>
     );
   }
@@ -308,6 +365,32 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
                 );
               })}
             </div>
+            {chainControl && (
+              <div style={{ display: 'inline-flex', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 9, padding: 3, gap: 2 }}>
+                <button
+                  onClick={() => setChainAll(false)}
+                  title="Показать только узлы собственного BOM заказа"
+                  style={{
+                    border: 0, background: !chainAll ? '#8B5CF6' : 'transparent',
+                    color: !chainAll ? '#fff' : '#8FA3BD',
+                    fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                    padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                  }}>
+                  Только свой BOM
+                </button>
+                <button
+                  onClick={() => setChainAll(true)}
+                  title="Показать единое дерево всей цепочки заказов"
+                  style={{
+                    border: 0, background: chainAll ? '#8B5CF6' : 'transparent',
+                    color: chainAll ? '#fff' : '#8FA3BD',
+                    fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                    padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                  }}>
+                  Вся цепочка
+                </button>
+              </div>
+            )}
             <div style={{ flex: 1 }} />
             <button onClick={expandAll} style={toolbarBtn}>Развернуть</button>
             <button onClick={collapseAll} style={toolbarBtn}>Свернуть</button>

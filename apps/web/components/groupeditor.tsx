@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import OrderTree, { TreeChevron } from './OrderTree';
 
 interface Order {
   id: string;
@@ -12,6 +13,7 @@ interface Order {
   status?: string;
   pool_id?: string | null;
   group_id?: string | null;
+  parent_order_id?: string | null;
 }
 
 interface Pool {
@@ -89,7 +91,10 @@ async function movePools(poolIds: string[], groupId: string | null) {
   }
 }
 
-function OrderCard({ o, selected, onToggle, colorSet }: { o: Order; selected: boolean; onToggle: (e: React.MouseEvent) => void; colorSet: 'blue' | 'amber' }) {
+function OrderCard({ o, selected, onToggle, colorSet, depth = 0, hasChildren = false, expanded = false, onExpand }: {
+  o: Order; selected: boolean; onToggle: (e: React.MouseEvent) => void; colorSet: 'blue' | 'amber';
+  depth?: number; hasChildren?: boolean; expanded?: boolean; onExpand?: () => void;
+}) {
   const ac = colorSet === 'blue' ? '#3B82F6' : '#F59E0B';
   const bg = colorSet === 'blue' ? 'rgba(59,130,246,.1)' : 'rgba(245,158,11,.1)';
   const border = colorSet === 'blue' ? 'rgba(59,130,246,.25)' : 'rgba(245,158,11,.25)';
@@ -103,12 +108,13 @@ function OrderCard({ o, selected, onToggle, colorSet }: { o: Order; selected: bo
       onDragEnd={() => { document.body.style.cursor = ''; }}
       onClick={onToggle}
       style={{
-        cursor: 'pointer', padding: '8px 10px', margin: '2px 0', borderRadius: 6,
+        cursor: 'pointer', padding: '8px 10px', paddingLeft: 10 + depth * 16, margin: '2px 0', borderRadius: 6,
         display: 'flex', alignItems: 'center', gap: 8,
         background: selected ? bg : 'transparent',
         border: selected ? `1px solid ${border}` : '1px solid transparent',
         transition: 'background .1s', userSelect: 'none'
       }}>
+      {hasChildren && <TreeChevron expanded={expanded} onClick={() => onExpand && onExpand()} />}
       <input type="checkbox" checked={selected} onChange={() => {}} style={{ accentColor: ac, width: 14, height: 14, pointerEvents: 'none' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.specification_name || o.ext_id || '—'}</div>
@@ -242,7 +248,13 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
                   Перетащите заказы сюда
                 </div>
               ) : (
-                groupOrders.map(o => <OrderCard key={'go-' + o.id} o={o} selected={selGroup.orders.has(o.id)} onToggle={() => toggleGroupOrder(o.id)} colorSet="amber" />)
+                <OrderTree
+                  orders={groupOrders}
+                  renderRow={(o, ctx) => (
+                    <OrderCard key={'go-' + o.id} o={o} selected={selGroup.orders.has(o.id)} onToggle={() => toggleGroupOrder(o.id)} colorSet="amber"
+                      depth={ctx.depth} hasChildren={ctx.hasChildren} expanded={ctx.expanded} onExpand={ctx.toggle} />
+                  )}
+                />
               )}
             </div>
           </div>
@@ -359,7 +371,13 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
                   Все заказы распределены
                 </div>
               ) : (
-                freeOrders.map(o => <OrderCard key={'fo-' + o.id} o={o} selected={selFree.orders.has(o.id)} onToggle={() => toggleFreeOrder(o.id)} colorSet="blue" />)
+                <OrderTree
+                  orders={freeOrders}
+                  renderRow={(o, ctx) => (
+                    <OrderCard key={'fo-' + o.id} o={o} selected={selFree.orders.has(o.id)} onToggle={() => toggleFreeOrder(o.id)} colorSet="blue"
+                      depth={ctx.depth} hasChildren={ctx.hasChildren} expanded={ctx.expanded} onExpand={ctx.toggle} />
+                  )}
+                />
               )}
             </div>
           </div>

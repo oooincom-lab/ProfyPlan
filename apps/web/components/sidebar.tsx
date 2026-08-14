@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import OrderTree, { TreeChevron } from './OrderTree';
 
 type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
@@ -258,19 +259,32 @@ export default function Sidebar(props: SidebarProps) {
                     {(projectOrders[p.id].filter((o: any) => !o.group_id && !o.pool_id)).length === 0 && (
                       <div className="s-sub" style={{ color: 'var(--s-fg-sub)' }}>нет свободных заказов</div>
                     )}
-                    {projectOrders[p.id].filter((o: any) => !o.group_id && !o.pool_id).map((o: any) => (
-                      <div
-                        key={o.id}
-                        draggable
-                        onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
-                        className="s-sub"
-                        style={{ paddingLeft: 72, fontSize: 11, cursor: 'grab' }}
-                        title={o.specification_name}
-                      >
-                        {o.specification_name || o.ext_id || '—'}{' '}
-                        <span style={{ color: 'var(--s-badge-fg)', marginLeft: 4 }}>×{o.quantity}</span>
-                      </div>
-                    ))}
+                    <OrderTree
+                      orders={projectOrders[p.id].filter((o: any) => !o.group_id && !o.pool_id)}
+                      renderRow={(o: any, ctx) => (
+                        <div
+                          key={o.id}
+                          draggable
+                          onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }}
+                          className="s-sub"
+                          style={{ paddingLeft: 72 + ctx.depth * 14, fontSize: 11, cursor: 'grab', display: 'flex', alignItems: 'center', gap: 4 }}
+                          title={o.specification_name}
+                        >
+                          {ctx.hasChildren && (
+                            <TreeChevron expanded={ctx.expanded} onClick={() => ctx.toggle()} size={9} />
+                          )}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {o.specification_name || o.ext_id || '—'}
+                          </span>
+                          <span style={{ color: 'var(--s-badge-fg)', marginLeft: 2 }}>×{o.quantity}</span>
+                          {ctx.hasChildren && (
+                            <span style={{ color: 'var(--s-fg-sub)', fontSize: 10 }}>
+                              ({ctx.expanded ? '' : '…'})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    />
                   </>
                 )}
 

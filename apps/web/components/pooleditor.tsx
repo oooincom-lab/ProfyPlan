@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import OrderTree, { TreeChevron } from './OrderTree';
 
 interface Order {
   id: string;
@@ -12,6 +13,7 @@ interface Order {
   status?: string;
   pool_id?: string | null;
   group_id?: string | null;
+  parent_order_id?: string | null;
 }
 
 interface Pool {
@@ -183,32 +185,36 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrd
                 Перетащите заказы сюда
               </div>
             ) : (
-              poolOrders.map(o => (
-                <div key={o.id} draggable
-                  onDragStart={e => {
-                    const ids = selPool.has(o.id) ? Array.from(selPool) : [o.id];
-                    e.dataTransfer.setData('orderIds', JSON.stringify(ids));
-                    e.dataTransfer.effectAllowed = 'move';
-                    document.body.style.cursor = 'grabbing';
-                  }}
-                  onDragEnd={() => { document.body.style.cursor = ''; }}
-                  onClick={e => togglePool(o.id, e)}
-                  style={{
-                    cursor: 'pointer', padding: '8px 10px', margin: '2px 0', borderRadius: 6,
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    background: selPool.has(o.id) ? 'rgba(139,92,246,.14)' : 'transparent',
-                    border: selPool.has(o.id) ? '1px solid rgba(139,92,246,.35)' : '1px solid transparent',
-                    transition: 'background .1s', userSelect: 'none'
-                  }}>
-                  <input type="checkbox" checked={selPool.has(o.id)} onChange={() => {}} style={{ accentColor: '#8B5CF6', width: 14, height: 14, pointerEvents: 'none' }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.specification_name || o.ext_id || '—'}</div>
-                    <div style={{ fontSize: 10, color: '#8FA3BD' }}>{o.client || '—'}</div>
+              <OrderTree
+                orders={poolOrders}
+                renderRow={(o, ctx) => (
+                  <div key={o.id} draggable
+                    onDragStart={e => {
+                      const ids = selPool.has(o.id) ? Array.from(selPool) : [o.id];
+                      e.dataTransfer.setData('orderIds', JSON.stringify(ids));
+                      e.dataTransfer.effectAllowed = 'move';
+                      document.body.style.cursor = 'grabbing';
+                    }}
+                    onDragEnd={() => { document.body.style.cursor = ''; }}
+                    onClick={e => togglePool(o.id, e)}
+                    style={{
+                      cursor: 'pointer', padding: '8px 10px', paddingLeft: 10 + ctx.depth * 16, margin: '2px 0', borderRadius: 6,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: selPool.has(o.id) ? 'rgba(139,92,246,.14)' : 'transparent',
+                      border: selPool.has(o.id) ? '1px solid rgba(139,92,246,.35)' : '1px solid transparent',
+                      transition: 'background .1s', userSelect: 'none'
+                    }}>
+                    {ctx.hasChildren && <TreeChevron expanded={ctx.expanded} onClick={() => ctx.toggle()} />}
+                    <input type="checkbox" checked={selPool.has(o.id)} onChange={() => {}} style={{ accentColor: '#8B5CF6', width: 14, height: 14, pointerEvents: 'none' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.specification_name || o.ext_id || '—'}</div>
+                      <div style={{ fontSize: 10, color: '#8FA3BD' }}>{o.client || '—'}</div>
+                    </div>
+                    <span className="t-mono" style={{ fontSize: 10, color: '#5A7090', whiteSpace: 'nowrap' }}>{o.quantity} {o.unit}</span>
+                    <span className={`badge ${o.status}`} style={{ fontSize: 9, whiteSpace: 'nowrap' }}>{statusLabel(o.status)}</span>
                   </div>
-                  <span className="t-mono" style={{ fontSize: 10, color: '#5A7090', whiteSpace: 'nowrap' }}>{o.quantity} {o.unit}</span>
-                  <span className={`badge ${o.status}`} style={{ fontSize: 9, whiteSpace: 'nowrap' }}>{statusLabel(o.status)}</span>
-                </div>
-              ))
+                )}
+              />
             )}
           </div>
         </div>
@@ -272,32 +278,36 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrd
                 Все заказы распределены
               </div>
             ) : (
-              freeOrders.map(o => (
-                <div key={o.id} draggable
-                  onDragStart={e => {
-                    const ids = selFree.has(o.id) ? Array.from(selFree) : [o.id];
-                    e.dataTransfer.setData('orderIds', JSON.stringify(ids));
-                    e.dataTransfer.effectAllowed = 'move';
-                    document.body.style.cursor = 'grabbing';
-                  }}
-                  onDragEnd={() => { document.body.style.cursor = ''; }}
-                  onClick={e => toggleFree(o.id, e)}
-                  style={{
-                    cursor: 'pointer', padding: '8px 10px', margin: '2px 0', borderRadius: 6,
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    background: selFree.has(o.id) ? 'rgba(59,130,246,.1)' : 'transparent',
-                    border: selFree.has(o.id) ? '1px solid rgba(59,130,246,.25)' : '1px solid transparent',
-                    transition: 'background .1s', userSelect: 'none'
-                  }}>
-                  <input type="checkbox" checked={selFree.has(o.id)} onChange={() => {}} style={{ accentColor: '#3B82F6', width: 14, height: 14, pointerEvents: 'none' }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.specification_name || o.ext_id || '—'}</div>
-                    <div style={{ fontSize: 10, color: '#8FA3BD' }}>{o.client || '—'}</div>
+              <OrderTree
+                orders={freeOrders}
+                renderRow={(o, ctx) => (
+                  <div key={o.id} draggable
+                    onDragStart={e => {
+                      const ids = selFree.has(o.id) ? Array.from(selFree) : [o.id];
+                      e.dataTransfer.setData('orderIds', JSON.stringify(ids));
+                      e.dataTransfer.effectAllowed = 'move';
+                      document.body.style.cursor = 'grabbing';
+                    }}
+                    onDragEnd={() => { document.body.style.cursor = ''; }}
+                    onClick={e => toggleFree(o.id, e)}
+                    style={{
+                      cursor: 'pointer', padding: '8px 10px', paddingLeft: 10 + ctx.depth * 16, margin: '2px 0', borderRadius: 6,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: selFree.has(o.id) ? 'rgba(59,130,246,.1)' : 'transparent',
+                      border: selFree.has(o.id) ? '1px solid rgba(59,130,246,.25)' : '1px solid transparent',
+                      transition: 'background .1s', userSelect: 'none'
+                    }}>
+                    {ctx.hasChildren && <TreeChevron expanded={ctx.expanded} onClick={() => ctx.toggle()} />}
+                    <input type="checkbox" checked={selFree.has(o.id)} onChange={() => {}} style={{ accentColor: '#3B82F6', width: 14, height: 14, pointerEvents: 'none' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.specification_name || o.ext_id || '—'}</div>
+                      <div style={{ fontSize: 10, color: '#8FA3BD' }}>{o.client || '—'}</div>
+                    </div>
+                    <span className="t-mono" style={{ fontSize: 10, color: '#5A7090', whiteSpace: 'nowrap' }}>{o.quantity} {o.unit}</span>
+                    <span className={`badge ${o.status}`} style={{ fontSize: 9, whiteSpace: 'nowrap' }}>{statusLabel(o.status)}</span>
                   </div>
-                  <span className="t-mono" style={{ fontSize: 10, color: '#5A7090', whiteSpace: 'nowrap' }}>{o.quantity} {o.unit}</span>
-                  <span className={`badge ${o.status}`} style={{ fontSize: 9, whiteSpace: 'nowrap' }}>{statusLabel(o.status)}</span>
-                </div>
-              ))
+                )}
+              />
             )}
           </div>
         </div>
