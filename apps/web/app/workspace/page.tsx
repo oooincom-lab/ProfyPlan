@@ -174,6 +174,15 @@ export default function AppShell() {
   const handleNodeOrderChange = async (nodeId: string, orderId: string | null) => {
     if (!selectedProject) return;
     try {
+      if (orderId) {
+        const chk = await apiF<any>(`/bom/projects/${selectedProject.id}/validate-node-link`, {
+          method: 'POST', body: JSON.stringify({ node_id: nodeId, order_id: orderId })
+        });
+        if (chk && chk.ok === false) {
+          setMsg('⛔ ' + (chk.message || 'Нельзя привязать заказ — создаст цикл в цепочке'));
+          return;
+        }
+      }
       await apiF(`/bom/nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify({ order_id: orderId }) });
       await reloadBomTree(selectedProject.id);
     } catch (e: any) { setMsg('Ошибка привязки заказа: ' + (e.message || String(e))); }

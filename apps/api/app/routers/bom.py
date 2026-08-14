@@ -10,9 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
+
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.product_structure import ProductStructure
+from app.models.production_order import ProductionOrder
+from app.routers.production_orders import _build_bom_link_graph
 from app.models.routing import Routing, RoutingOperation
 from app.models.operation import Operation, OperationDependency
 from app.schemas.bom import (
@@ -1050,3 +1054,72 @@ async def get_order_cluster(
         "parents": [str(x) for x in parent_ids],
         "children": [str(x) for x in child_ids],
     }
+
+
+class NodeOrderLinkCheck(BaseModel):
+    node_id: UUID
+    order_id: Optional[UUID] = None
+
+
+@bom_router.post("/projects/{project_id}/validate-node-link")
+async def validate_node_link(
+    project_id: str,
+    body: NodeOrderLinkCheck,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Онлайн-проверка привязки узла BOM к заказу: не создаёт ли она цикл в цепочке заказов."""
+    orders = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == UUID(project_id),
+        )
+    )).scalars().all()
+    nodes = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == UUID(project_id),
+        )
+    )).scalars().all()
+
+    node = next((n for n in nodes if n.id == body.node_id), None)
+    if not node:
+        return {"ok": False, "message": "узел BOM не найден"}
+
+    # Заказ-владелец узла — по спецификации из path
+    spec = node.path.rsplit("/", 1)[0] if node.path and "/" in node.path else ""
+    owner = next(
+        (o for o in orders if o.specification_name and o.specification_name.strip() == spec.strip()),
+        None,
+    )
+    if not owner:
+        return {"ok": False, "message": "не удалось определить заказ-владельца узла"}
+
+    if body.order_id is not None and body.order_id not in {o.id for o in orders}:
+        return {"ok": False, "message": "код заказа не найден в проекте"}
+
+    # Привязка к своему же заказу — допустима (не создаёт цикл)
+    if body.order_id is not None and body.order_id == owner.id:
+        return {"ok": True}
+
+    # Граф без текущей связи узла (сам узел исключаем) + пробная новая связь
+    graph, ext_by_id = _build_bom_link_graph(orders, [n for n in nodes if n.id != body.node_id])
+    if body.order_id is not None:
+        graph[owner.id].add(body.order_id)
+
+    # Если из owner снова можно достичь owner — привязка создаёт цикл
+    stack: list[tuple[UUID, list[UUID]]] = [(owner.id, [owner.id])]
+    visited: set[UUID] = set()
+    while stack:
+        cur, path = stack.pop()
+        if cur in visited:
+            continue
+        visited.add(cur)
+        for nxt in graph.get(cur, set()):
+            if nxt == owner.id:
+                cyc = path + [nxt]
+                chain = " → ".join(ext_by_id.get(c, str(c)[:8]) for c in cyc)
+                return {"ok": False, "message": f"привязка создаст цикл: {chain}", "cycle": chain}
+            stack.append((nxt, path + [nxt]))
+
+    return {"ok": True}

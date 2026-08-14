@@ -131,6 +131,9 @@ async def import_excel(
     if ws is not None:
         result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab)
 
+    # Правила цепочки заказов: циклы parent_order_id и циклы BOM-связей
+    await _validate_order_chain(project_id, tenant_id, db, result)
+
     await db.commit()
     return result
 
@@ -149,7 +152,7 @@ async def _import_orders(
     """
     rows = list(ws.iter_rows(min_row=2, values_only=True))  # skip header
     ext_to_id: dict[str, UUID] = {}
-    pending_parent: list[tuple[ProductionOrder, str]] = []  # (order, parent_ext_id)
+    pending_parent: list[tuple[ProductionOrder, str, int]] = []  # (order, parent_ext_id, row)
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
             continue
@@ -194,7 +197,13 @@ async def _import_orders(
             # parent_order_id — ext_id родителя, разрешаем после создания всех заказов
             parent_ext = _str(row[8]) if len(row) > 8 else ""
             if parent_ext:
-                pending_parent.append((order, parent_ext))
+                if parent_ext == ext_id:
+                    result.errors.append(ImportValidationError(
+                        row=i + 2, sheet="Заказы", field="Код заказа родителя",
+                        message=f"заказ '{ext_id}' не может быть родителем самому себе",
+                    ))
+                else:
+                    pending_parent.append((order, parent_ext, i + 2))
             result.orders_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
@@ -203,15 +212,28 @@ async def _import_orders(
             ))
     await db.flush()
 
-    # Разрешаем parent_order_id (ext_id → UUID)
-    for order, parent_ext in pending_parent:
+    # Разрешаем parent_order_id: сначала импортированные заказы, затем уже существующие в БД проекта
+    if project_id:
+        db_orders = (await db.execute(
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id,
+                ProductionOrder.project_id == UUID(project_id),
+                ProductionOrder.ext_id.isnot(None),
+            )
+        )).scalars().all()
+        for o in db_orders:
+            if o.ext_id and o.ext_id not in ext_to_id:
+                ext_to_id[o.ext_id] = o.id
+
+    for order, parent_ext, row_no in pending_parent:
         pid = ext_to_id.get(parent_ext)
         if pid:
             order.parent_order_id = pid
         else:
-            result.warnings.append(
-                f"Заказ {order.ext_id}: код заказа родителя '{parent_ext}' не найден — пропущен"
-            )
+            result.errors.append(ImportValidationError(
+                row=row_no, sheet="Заказы", field="Код заказа родителя",
+                message=f"код заказа родителя '{parent_ext}' не найден",
+            ))
     await db.flush()
     return result
 
@@ -240,7 +262,7 @@ async def _import_bom(
         if o.ext_id:
             ext_to_order[o.ext_id] = o.id
 
-    pending_order_link: list[tuple[ProductStructure, str]] = []  # (node, order_ext_id)
+    pending_order_link: list[tuple[ProductStructure, str, int]] = []  # (node, order_ext_id, row)
 
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
@@ -304,7 +326,7 @@ async def _import_bom(
             # order_id — ext_id заказа-производителя (куст заказов)
             order_ext = _str(row[8]) if len(row) > 8 else ""
             if order_ext:
-                pending_order_link.append((node, order_ext))
+                pending_order_link.append((node, order_ext, i + 2))
 
             result.bom_nodes_created += 1
         except Exception as e:
@@ -316,14 +338,15 @@ async def _import_bom(
     await db.flush()
 
     # Привязываем order_id (ext_id → order UUID)
-    for node, order_ext in pending_order_link:
+    for node, order_ext, row_no in pending_order_link:
         oid = ext_to_order.get(order_ext)
         if oid:
             node.order_id = oid
         else:
-            result.warnings.append(
-                f"BOM-узел {node.nomenclature_id}: код заказа '{order_ext}' не найден — пропущен"
-            )
+            result.errors.append(ImportValidationError(
+                row=row_no, sheet="BOM", field="Код заказа",
+                message=f"код заказа '{order_ext}' не найден",
+            ))
 
     # Second pass: set parent relationships
     for i, row in enumerate(rows):
@@ -341,6 +364,106 @@ async def _import_bom(
 
     await db.flush()
     return result
+
+
+def _find_cycles_multi(graph: dict[UUID, set[UUID]]) -> list[list[UUID]]:
+    """Поиск уникальных циклов в ориентированном мультиграфе (DFS)."""
+    cycles: list[list[UUID]] = []
+    seen: set[frozenset] = set()
+    for start in graph:
+        stack: list[tuple[UUID, list[UUID], set[UUID]]] = [(start, [start], {start})]
+        while stack:
+            node, path, path_set = stack.pop()
+            for nxt in graph.get(node, set()):
+                if nxt in path_set:
+                    idx = path.index(nxt)
+                    cyc = path[idx:] + [nxt]
+                    key = frozenset(cyc)
+                    if key not in seen:
+                        seen.add(key)
+                        cycles.append(cyc)
+                elif nxt in graph:
+                    stack.append((nxt, path + [nxt], path_set | {nxt}))
+    return cycles
+
+
+def _build_bom_link_graph(
+    orders: list[ProductionOrder], nodes: list[ProductStructure],
+) -> tuple[dict[UUID, set[UUID]], dict[UUID, str]]:
+    """Граф связей BOM: владелец узла (по спецификации из path) → заказ-производитель узла.
+
+    Возвращает (graph, ext_by_id).
+    """
+    order_by_spec: dict[str, ProductionOrder] = {}
+    for o in orders:
+        if o.specification_name:
+            order_by_spec[o.specification_name.strip()] = o
+    graph: dict[UUID, set[UUID]] = {}
+    ext_by_id: dict[UUID, str] = {}
+    for o in orders:
+        graph.setdefault(o.id, set())
+        ext_by_id[o.id] = o.ext_id or str(o.id)[:8]
+    for n in nodes:
+        if not n.order_id or n.order_id not in graph:
+            continue
+        spec = ""
+        if n.path and "/" in n.path:
+            spec = n.path.rsplit("/", 1)[0]
+        owner = order_by_spec.get(spec.strip())
+        if owner:
+            if n.order_id == owner.id:
+                continue  # ссылка на свой же заказ — допустима, цикла не создаёт
+            graph[owner.id].add(n.order_id)
+    return graph, ext_by_id
+
+
+async def _validate_order_chain(
+    project_id: Optional[str], tenant_id: str, db: AsyncSession, result: ExcelImportResult,
+) -> None:
+    """Проверка цепочки заказов после импорта.
+
+    Правила:
+      - в цепочке parent_order_id не должно быть циклов (нельзя ссылаться на себя или на потомка);
+      - в связях BOM (order_id на узлах) не должно быть циклов между заказами.
+    """
+    if not project_id:
+        return
+    orders = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == UUID(project_id),
+        )
+    )).scalars().all()
+    by_id = {o.id: o for o in orders}
+    ext_by_id = {o.id: o.ext_id or str(o.id)[:8] for o in orders}
+
+    # 1) Циклы в цепочке parent_order_id
+    parent_graph: dict[UUID, set[UUID]] = {o.id: set() for o in orders}
+    for o in orders:
+        if o.parent_order_id and o.parent_order_id in by_id:
+            parent_graph[o.id].add(o.parent_order_id)
+    for cyc in _find_cycles_multi(parent_graph):
+        chain = " → ".join(ext_by_id.get(c, str(c)[:8]) for c in cyc)
+        result.errors.append(ImportValidationError(
+            row=0, sheet="Заказы", field="Код заказа родителя",
+            message=f"обнаружен цикл в цепочке заказов: {chain}",
+        ))
+
+    # 2) Циклы в связях BOM (order_id на узлах)
+    nodes = (await db.execute(
+        select(ProductStructure).where(
+            ProductStructure.tenant_id == tenant_id,
+            ProductStructure.project_id == UUID(project_id),
+            ProductStructure.order_id.isnot(None),
+        )
+    )).scalars().all()
+    bom_graph, _ = _build_bom_link_graph(orders, nodes)
+    for cyc in _find_cycles_multi(bom_graph):
+        chain = " → ".join(ext_by_id.get(c, str(c)[:8]) for c in cyc)
+        result.errors.append(ImportValidationError(
+            row=0, sheet="BOM", field="Код заказа",
+            message=f"обнаружен цикл в связях BOM по цепочке заказов: {chain}",
+        ))
 
 
 async def _import_routes(
