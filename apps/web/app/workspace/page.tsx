@@ -58,6 +58,7 @@ export default function AppShell() {
   const [orderSortKey, setOrderSortKey] = useState<string | null>(null);
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('asc');
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('free');
+  const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [ganttData, setGanttData] = useState<any>(null);
   const [ganttLoading, setGanttLoading] = useState(false);
 
@@ -195,6 +196,17 @@ export default function AppShell() {
     const next = expandedBomOrder === o.id ? null : o.id;
     setExpandedBomOrder(next);
     if (next) loadBomTree(selectedProject.id);
+  };
+
+  const toggleOrderCollapse = (id: string) => {
+    setCollapsedOrderIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const setAllOrdersCollapsed = (collapsed: boolean) => {
+    setCollapsedOrderIds(collapsed ? new Set(orders.map((o: any) => o.id)) : new Set());
   };
 
   const orderBomNodes = (o: any) => {
@@ -1083,6 +1095,28 @@ export default function AppShell() {
                 return bVal.localeCompare(aVal);
               });
             }
+            // ── Иерархия: DFS по parent_order_id (защита от циклов) ──
+            const childMap = new Map<string, any[]>();
+            const idSet = new Set<string>(filtered.map((o: any) => o.id));
+            filtered.forEach((o: any) => {
+              if (o.parent_order_id && idSet.has(o.parent_order_id)) {
+                if (!childMap.has(o.parent_order_id)) childMap.set(o.parent_order_id, []);
+                childMap.get(o.parent_order_id)!.push(o);
+              }
+            });
+            const treeRows: { o: any; depth: number; hasChildren: boolean; collapsed: boolean }[] = [];
+            const visitedIds = new Set<string>();
+            const walkTree = (ord: any, depth: number) => {
+              if (visitedIds.has(ord.id)) return;
+              visitedIds.add(ord.id);
+              const children = childMap.get(ord.id) || [];
+              const collapsed = collapsedOrderIds.has(ord.id);
+              treeRows.push({ o: ord, depth, hasChildren: children.length > 0, collapsed });
+              if (collapsed) return;
+              children.forEach((c: any) => walkTree(c, depth + 1));
+            };
+            filtered.forEach((o: any) => { if (!o.parent_order_id || !idSet.has(o.parent_order_id)) walkTree(o, 0); });
+            filtered.forEach((o: any) => { if (!visitedIds.has(o.id)) walkTree(o, 0); });
             const sortArrow = (key: string) => orderSortKey === key ? (orderSortDir === 'asc' ? ' ▼' : ' ▲') : '';
             const doSort = (key: string) => {
               if (orderSortKey === key) {
@@ -1108,6 +1142,7 @@ export default function AppShell() {
                           {projPools.map((p: any) => <option key={'p-'+p.id} value={p.id}>📦 {p.name}</option>)}
                         </select>
                       )}
+                      <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '4px 8px', whiteSpace: 'nowrap' }} title={collapsedOrderIds.size === 0 ? 'Свернуть все поддеревья цепочки' : 'Развернуть все поддеревья цепочки'}>{collapsedOrderIds.size === 0 ? '▾ Свернуть всё' : '▸ Развернуть всё'}</button>
                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
                       <span style={{ fontSize: 11, color: '#5A7090' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090' }}>○ = План</span>
@@ -1201,6 +1236,7 @@ export default function AppShell() {
                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('status')}>Статус{sortArrow('status')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('start_date')}>Старт{sortArrow('start_date')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('due_date')}>Финиш{sortArrow('due_date')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('created_at')}>Загружен{sortArrow('created_at')}</th>
                         <th style={{ width: 40 }}></th>
                       </tr></thead>
                       <tbody>
@@ -1224,7 +1260,7 @@ export default function AppShell() {
                             </td>
                           </tr>
                         )}
-                        {filtered.map((o: any) => {
+                        {treeRows.map(({ o, depth, hasChildren, collapsed }: any) => {
                           const ti = getTypeInfo(o);
                           const bomOpen = expandedBomOrder === o.id;
                           return (
@@ -1242,19 +1278,28 @@ export default function AppShell() {
                               <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
                               <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
-                              <td className="t-mono">{o.ext_id || '—'}</td>
-                              <td className="t-name" style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.specification_name || o.ext_id || '—'}</td>
+                              <td className="t-mono" style={{ paddingLeft: 16 + depth * 18 }}>
+                                {hasChildren ? (
+                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '0 4px 0 0', marginRight: 2 }}>{collapsed ? '▸' : '▾'}</button>
+                                ) : depth > 0 ? (
+                                  <span style={{ color: '#3E5A80', marginRight: 6, fontSize: 12 }}>└</span>
+                                ) : null}
+                                {depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ color: '#A78BFA', marginRight: 4 }}>⛓</span>}
+                                {o.ext_id || '—'}
+                              </td>
+                              <td className="t-name" style={{ paddingLeft: 10 + depth * 10, color: o.pool_id ? '#A78BFA' : undefined }}>{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
                               <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
                               <td className="t-mono">{o.start_date || '—'}</td>
                               <td className="t-mono">{o.due_date || '—'}</td>
+                              <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
                               <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
                             </tr>
                             {bomOpen && (
                               <tr>
-                                <td colSpan={orderShowAll ? 13 : 12} style={{ background: '#0F1E36', padding: 0 }}>
+                                <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
                                   <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                                       <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
@@ -1270,7 +1315,7 @@ export default function AppShell() {
                             </Fragment>
                           );
                         })}
-                        {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 13 : 12} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
+                        {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 14 : 13} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
                       </tbody>
                     </table>
                   </div>
