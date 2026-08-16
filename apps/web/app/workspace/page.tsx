@@ -1274,7 +1274,7 @@ export default function AppShell() {
                           return (
                             <Fragment key={o.id}>
                             <tr draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
-                              <td style={{ textAlign: 'center', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
+                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
                                   title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
@@ -1291,7 +1291,7 @@ export default function AppShell() {
                                 ) : null}
                                 <span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span>
                               </td>
-                              <td className="t-mono" style={{ paddingLeft: 4 + depth * 18 }}>{o.ext_id || '—'}</td>
+                              <td className="t-mono">{o.ext_id || '—'}</td>
                               <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
