@@ -1106,13 +1106,21 @@ export default function AppShell() {
             });
             const treeRows: { o: any; depth: number; hasChildren: boolean; collapsed: boolean }[] = [];
             const visitedIds = new Set<string>();
+            const markVisited = (ord: any) => {
+              const kids = childMap.get(ord.id) || [];
+              kids.forEach((c: any) => {
+                if (visitedIds.has(c.id)) return;
+                visitedIds.add(c.id);
+                markVisited(c);
+              });
+            };
             const walkTree = (ord: any, depth: number) => {
               if (visitedIds.has(ord.id)) return;
               visitedIds.add(ord.id);
               const children = childMap.get(ord.id) || [];
               const collapsed = collapsedOrderIds.has(ord.id);
               treeRows.push({ o: ord, depth, hasChildren: children.length > 0, collapsed });
-              if (collapsed) return;
+              if (collapsed) { markVisited(ord); return; }
               children.forEach((c: any) => walkTree(c, depth + 1));
             };
             filtered.forEach((o: any) => { if (!o.parent_order_id || !idSet.has(o.parent_order_id)) walkTree(o, 0); });
@@ -1266,7 +1274,7 @@ export default function AppShell() {
                           return (
                             <Fragment key={o.id}>
                             <tr draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
-                              <td style={{ textAlign: 'center' }}>
+                              <td style={{ textAlign: 'center', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
                                   title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
@@ -1277,17 +1285,14 @@ export default function AppShell() {
                               </td>
                               <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
-                              <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
-                              <td className="t-mono" style={{ paddingLeft: 16 + depth * 18 }}>
+                              <td className="t-graph">
                                 {hasChildren ? (
-                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '0 4px 0 0', marginRight: 2 }}>{collapsed ? '▸' : '▾'}</button>
-                                ) : depth > 0 ? (
-                                  <span style={{ color: '#3E5A80', marginRight: 6, fontSize: 12 }}>└</span>
+                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: 0, marginRight: 3, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
                                 ) : null}
-                                {depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ color: '#A78BFA', marginRight: 4 }}>⛓</span>}
-                                {o.ext_id || '—'}
+                                <span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span>
                               </td>
-                              <td className="t-name" style={{ paddingLeft: 10 + depth * 10, color: o.pool_id ? '#A78BFA' : undefined }}>{o.specification_name || o.ext_id || '—'}</td>
+                              <td className="t-mono" style={{ paddingLeft: 4 + depth * 18 }}>{o.ext_id || '—'}</td>
+                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
