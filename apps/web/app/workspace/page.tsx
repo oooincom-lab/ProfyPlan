@@ -1275,6 +1275,9 @@ export default function AppShell() {
                             <Fragment key={o.id}>
                             <tr draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
                               <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
+                                {hasChildren ? (
+                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '2px 3px 2px 0', marginRight: 2, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
+                                ) : null}
                                 <button
                                   onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
                                   title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
@@ -1285,12 +1288,7 @@ export default function AppShell() {
                               </td>
                               <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
-                              <td className="t-graph">
-                                {hasChildren ? (
-                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: 0, marginRight: 3, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
-                                ) : null}
-                                <span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span>
-                              </td>
+                              <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
                               <td className="t-mono">{o.ext_id || '—'}</td>
                               <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
