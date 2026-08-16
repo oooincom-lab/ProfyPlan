@@ -1232,7 +1232,7 @@ export default function AppShell() {
                   <div style={{ overflowX: 'auto' }}>
                     <table className="tbl">
                       <thead><tr>
-                        <th style={{ width: 30 }}></th>
+                        <th style={{ width: 56 }}></th>
                         <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
                         {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Пул{sortArrow('_typeName')}</th>}
                         <th className="t-graph">Граф</th>
@@ -1274,7 +1274,7 @@ export default function AppShell() {
                           return (
                             <Fragment key={o.id}>
                             <tr draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
-                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
+                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 56, minWidth: 56, maxWidth: 56, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
                                 {hasChildren ? (
                                   <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '2px 3px 2px 0', marginRight: 2, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
                                 ) : null}
