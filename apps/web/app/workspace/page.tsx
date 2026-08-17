@@ -1618,7 +1618,7 @@ export default function AppShell() {
                     maxHeight: 'calc(100vh - 130px)',
                   };
                   const pStyle: any = isModal
-                    ? { ...base, position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px,92vw)', maxHeight: 'min(720px,90vh)', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
+                    ? { ...base, position: 'fixed', top: 68, left: 275, right: 18, bottom: 58, maxHeight: 'none', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
                     : { ...base, width: panelWidth ?? '40%', minWidth: 300, maxWidth: '62%', position: 'sticky', top: 16 };
                   const tabs: { v: 'order' | 'bom' | 'route' | 'res' | 'plan'; l: string }[] = [
                     { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
