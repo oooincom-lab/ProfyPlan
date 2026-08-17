@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
 
@@ -11,17 +12,25 @@ type WindowsLayerProps = {
   setLay: Dispatch<SetStateAction<LayState | null>>;
   orders: any[];
   resourcesList: any[];
+  groups: any[];
+  pools: any[];
+  isDyn: (o: any) => boolean;
   orderBomNodes: (o: any) => any[];
   routingFor: (o: any) => any;
   resName: (rid: any) => string;
+  onOpenOrder: (o: any) => void;
+  onOpenGroup: (g: any) => void;
+  onOpenPool: (p: any) => void;
+  renderOrdersTable?: () => any;
   onClose: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleMin: (id: string) => void;
+  onMinimizeAll: () => void;
   onReset: (id: string) => void;
+  onToggleMax: (id: string) => void;
   onDrag: (e: any, w: WinRec) => void;
   onResize: (e: any, w: WinRec) => void;
-  onPickLay: (cols: number, rows: number) => void;
-  onPlaceNext: () => void;
+  onApplyCell: (colCount: number, colIndex: number, rowCount: number, rowIndex: number) => void;
   onSaveEdit: (w: WinRec) => void;
 };
 
@@ -34,28 +43,39 @@ const TAB_LIST: { v: OrderTab; l: string }[] = [
 ];
 
 /**
- * Слой оконного режима: floating-окна заказов, подсветка Snap-зоны,
- * панель раскладок (⛶) и панель задач. Чистая презентация — вся логика
- * живёт в useWindows() на стороне page.tsx.
+ * Слой оконного режима: floating-окна заказов И окон-списков (заказы/группы/пулы),
+ * подсветка Snap-зоны, панель раскладок (⛶) и панель задач. Чистая презентация —
+ * вся логика живёт в useWindows() на стороне page.tsx.
  */
 export default function WindowsLayer(props: WindowsLayerProps) {
   const {
     wins, lay, snapZone, setWins, setLay,
-    orders, resourcesList, orderBomNodes, routingFor, resName,
-    onClose, onFocus, onToggleMin, onReset, onDrag, onResize, onPickLay, onPlaceNext, onSaveEdit,
+    orders, resourcesList, groups, pools, isDyn,
+    orderBomNodes, routingFor, resName,
+    onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable,
+    onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
+  const [snapSel, setSnapSel] = useState<{ c: number; r: number } | null>(null);
+  const [snapCell, setSnapCell] = useState(-1);
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
+  const winLabel = (w: WinRec) => {
+    if (w.kind === 'list') return w.title || 'Список';
+    const o = w.data || orderById(w.orderId);
+    return o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
+  };
 
   return (
     <>
       {snapZone && <div className="pp-snapzone" style={{ left: snapZone.x, top: snapZone.y, width: snapZone.w, height: snapZone.h }} />}
 
       {wins.map((w: WinRec) => {
-        const o = orderById(w.orderId);
-        if (!o) return null;
-        const bomNodes = orderBomNodes(o);
+        const isList = w.kind === 'list';
+        const o = isList ? null : (w.data || orderById(w.orderId));
+        if (!isList && !o) return null;
+
+        const bomNodes = o ? orderBomNodes(o) : [];
         const renderBomNode = (n: any, d: number): any => {
           const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
           return (
@@ -72,34 +92,86 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             </div>
           );
         };
-        const rt = routingFor(o);
+        const rt = o ? routingFor(o) : null;
         const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
+
         return (
           <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
             style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
             onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
             <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#3B82F6', flexShrink: 0 }} />
-              <span className="ttl">{o.ext_id || o.id} · {o.specification_name || ''}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : '#3B82F6', flexShrink: 0 }} />
+              <span className="ttl">{isList ? (w.title || 'Список') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
               <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-              <button className="pp-wbtn" title="Раскладка окон (Snap)" onClick={(e) => { e.stopPropagation(); onFocus(w.id); setLay(prev => (prev && prev.winId === w.id && !prev.cols) ? null : { winId: w.id, cols: 0, rows: 0, placed: [] }); }}>⛶</button>
+              <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
+                {w.max
+                  ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="8" width="11" height="11" rx="1" /><path d="M5 15V6a1 1 0 0 1 1-1h9" /></svg>
+                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="5" width="14" height="14" rx="1" /></svg>}
+              </button>
+              <button className="pp-wbtn" title="Раскладка окон (Snap)" onClick={(e) => { e.stopPropagation(); onFocus(w.id); setSnapSel(null); setSnapCell(-1); setLay(prev => (prev && prev.winId === w.id && !prev.cols) ? null : { winId: w.id, cols: 0, rows: 0, placed: [] }); }}>⛶</button>
               <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
             </div>
-            <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
-              {TAB_LIST.map(tb => (
-                <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v, editing: false } : x))}
-                  style={{ flex: 1, border: 0, background: 'transparent', color: w.tab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (w.tab === tb.v ? '#3B82F6' : 'transparent'), padding: '7px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
-              ))}
-            </div>
+
+            {!isList && (
+              <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
+                {TAB_LIST.map(tb => (
+                  <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v, editing: false } : x))}
+                    style={{ flex: 1, border: 0, background: 'transparent', color: w.tab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (w.tab === tb.v ? '#3B82F6' : 'transparent'), padding: '7px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
+                ))}
+              </div>
+            )}
+
             <div style={{ padding: '12px 14px', overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
-              {w.tab === 'order' && !w.editing && (
+              {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
+                <table className="tbl">
+                  <thead><tr>
+                    <th className="t-graph">Граф</th>
+                    <th>ID</th>
+                    <th>Продукт</th>
+                    <th>Клиент</th>
+                    <th>Кол-во</th>
+                    <th>Приоритет</th>
+                    <th>Статус</th>
+                  </tr></thead>
+                  <tbody>
+                    {orders.map((ord: any) => (
+                      <tr key={ord.id} onClick={() => onOpenOrder(ord)} style={{ cursor: 'pointer' }}>
+                        <td className="t-graph"><span className={isDyn(ord) ? 'g-dyn' : 'g-pln'}>{isDyn(ord) ? '⚡' : '○'}</span></td>
+                        <td className="t-mono">{ord.ext_id || '—'}</td>
+                        <td className="t-name">{ord.specification_name || ord.ext_id || '—'}</td>
+                        <td>{ord.client || '—'}</td>
+                        <td className="t-mono">{ord.quantity} {ord.unit}</td>
+                        <td><span className={`badge ${ord.priority}`}>{ord.priority === 'high' ? 'Выс.' : ord.priority === 'critical' ? 'Крит.' : ord.priority === 'low' ? 'Низк.' : 'Обыч.'}</span></td>
+                        <td><span className={`badge ${ord.status}`}>{ord.status === 'draft' ? 'Черновик' : ord.status === 'planned' ? 'План' : ord.status === 'in_progress' ? 'В работе' : ord.status === 'completed' ? 'Завершён' : ord.status}</span></td>
+                      </tr>
+                    ))}
+                    {orders.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
+                  </tbody>
+                </table>
+              ))}
+              {isList && w.listKind === 'groups' && (
+                groups.length ? groups.map((g: any) => (
+                  <div key={g.id} onClick={() => onOpenGroup(g)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderBottom: '1px dashed rgba(30,58,95,.5)', cursor: 'pointer', borderRadius: 6 }}>
+                    <span style={{ flex: 1 }}>📁 {g.name}</span>
+                  </div>
+                )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Групп нет</div>
+              )}
+              {isList && w.listKind === 'pools' && (
+                pools.length ? pools.map((p: any) => (
+                  <div key={p.id} onClick={() => onOpenPool(p)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderBottom: '1px dashed rgba(30,58,95,.5)', cursor: 'pointer', borderRadius: 6 }}>
+                    <span style={{ flex: 1 }}>📦 {p.name}</span>
+                  </div>
+                )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Пулов нет</div>
+              )}
+
+              {!isList && w.tab === 'order' && !w.editing && (
                 <div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client: o.client || '', quantity: String(o.quantity ?? ''), priority: o.priority || 'normal', start_date: o.start_date || '', due_date: o.due_date || '', status: o.status || 'draft' } } : x))}
+                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client: o!.client || '', quantity: String(o!.quantity ?? ''), priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
                       style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                    {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', o.priority || '—'], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Заказ родителя', o.parent_order_id || '—']].map((kv: any) => (
+                    {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', o!.priority || '—'], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
                       <div key={kv[0]} style={{ display: 'contents' }}>
                         <div style={{ color: '#5A7090' }}>{kv[0]}</div>
                         <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
@@ -108,7 +180,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 </div>
               )}
-              {w.tab === 'order' && w.editing && (
+              {!isList && w.tab === 'order' && w.editing && (
                 <div style={{ display: 'grid', gap: 8 }}>
                   {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map((kv) => {
                     const k = kv[0] as string, label = kv[1] as string;
@@ -135,11 +207,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 </div>
               )}
-              {w.tab === 'bom' && (
+              {!isList && w.tab === 'bom' && (
                 bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
-              {w.tab === 'route' && (
+              {!isList && w.tab === 'route' && (
                 rt && rt.operations && rt.operations.length ? (
                   <div>
                     <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
@@ -158,7 +230,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
               )}
-              {w.tab === 'res' && (
+              {!isList && w.tab === 'res' && (
                 resourcesList.length ? (
                   <div>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
@@ -173,7 +245,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
               )}
-              {w.tab === 'plan' && (
+              {!isList && w.tab === 'plan' && (
                 <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
                   План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
                 </div>
@@ -184,54 +256,49 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         );
       })}
 
-      {lay && lay.cols > 0 && (() => {
-        const d = { x: 260, y: 53, w: typeof window !== 'undefined' ? window.innerWidth - 260 : 1140, h: typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 53 - 44) : 800 };
-        const cw = d.w / lay.cols, ch = d.h / lay.rows;
-        const cells: any[] = [];
-        for (let r = 0; r < lay.rows; r++) for (let c = 0; c < lay.cols; c++) cells.push({ x: d.x + c * cw, y: d.y + r * ch, w: cw, h: ch });
-        return (
-          <div className="pp-lay" style={{ right: 16, bottom: 56 }}>
-            <div className="lh">РАСКЛАДКА · {lay.cols * lay.rows} ячейки — клик по свободной ячейке ставит следующее открытое окно</div>
-            <div className="pp-laycells" style={{ gridTemplateColumns: 'repeat(' + lay.cols + ', 1fr)' }}>
-              {cells.map((z: any, i: number) => {
-                const placedW = i === 0 ? wins.find((x: WinRec) => x.id === lay.winId) : (i - 1 < lay.placed.length ? wins.find((x: WinRec) => x.id === lay.placed[i - 1]) : null);
-                const placedO = placedW ? orderById(placedW.orderId) : null;
-                const isFree = i > 0 && i - 1 >= lay.placed.length;
-                const cand = isFree ? wins.find((x: WinRec) => x.id !== lay.winId && !lay.placed.includes(x.id)) : null;
-                const candO = cand ? orderById(cand.orderId) : null;
-                return (
-                  <div key={i} className={'bc' + (placedW ? ' done' : '')} onClick={() => { if (isFree) onPlaceNext(); }}
-                    style={isFree ? { borderStyle: 'dashed' } : undefined}>
-                    {placedW ? <>{placedO ? (placedO.ext_id || placedO.id) : (placedW.orderId.slice(0, 8))}</> : (isFree ? <>{candO ? '→ ' + (candO.ext_id || candO.id) : '—'} <small>клик — поставить сюда</small></> : '')}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
       {lay && !lay.cols && (() => {
-        const L: { n: string; cols: number; rows: number }[] = [
-          { n: '2 окна', cols: 2, rows: 1 },
-          { n: '3 окна', cols: 3, rows: 1 },
-          { n: '4 окна', cols: 2, rows: 2 },
+        const PRESETS: { n: string; c: number; r: number }[] = [
+          { n: 'Весь', c: 1, r: 1 },
+          { n: '2 кол', c: 2, r: 1 },
+          { n: '3 кол', c: 3, r: 1 },
+          { n: '4 кол', c: 4, r: 1 },
+          { n: '2 стр', c: 1, r: 2 },
+          { n: '3 стр', c: 1, r: 3 },
+          { n: '2×2', c: 2, r: 2 },
+          { n: '3×2', c: 3, r: 2 },
+          { n: '2×3', c: 2, r: 3 },
+          { n: '3×3', c: 3, r: 3 },
         ];
         return (
-          <div className="pp-lay" style={{ right: 16, bottom: 56 }}>
-            <div className="lh">РАСКЛАДКА ОКОН — выберите вариант</div>
-            <div className="pp-layrow">
-              {L.map((o2) => (
-                <div key={o2.n} className="pp-layopt" onClick={() => onPickLay(o2.cols, o2.rows)}>
-                  <div className="mini">
-                    {Array.from({ length: o2.rows * o2.cols }).map((_, i) => (
-                      <div key={i} className={'cell' + (o2.cols === 3 && i >= 2 ? ' h' : '')} />
-                    ))}
-                  </div>
-                  <div className="lab">{o2.n}</div>
+          <div className="pp-lay" style={{ right: 16, bottom: 56, width: 320 }}>
+            <div className="lh">{snapSel ? 'РАСКЛАДКА — куда поставить окно' : 'РАСКЛАДКА — выберите схему'}</div>
+            {!snapSel ? (
+              <div>
+                <div style={{ fontSize: 11, color: '#8FA3BD', marginTop: 10 }}>1) Схема деления:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10 }}>
+                  {PRESETS.map(p => (
+                    <button key={p.n} onClick={() => { setSnapSel({ c: p.c, r: p.r }); setSnapCell(-1); }} aria-label={p.n} title={p.n} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}>
+                      <div style={{ width: 46, height: 34, display: 'grid', gridTemplateColumns: 'repeat(' + p.c + ',1fr)', gridTemplateRows: 'repeat(' + p.r + ',1fr)', gap: 2, border: '1.5px solid #2A4060', borderRadius: 5, padding: 3, background: '#0A1628' }}>
+                        {Array.from({ length: p.c * p.r }).map((_, i) => <div key={i} style={{ background: '#16304A', borderRadius: 2 }} />)}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#8FA3BD', marginTop: 3, textAlign: 'center' }}>{p.n}</div>
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <button onClick={() => setSnapSel(null)} style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 5, cursor: 'pointer', fontSize: 12, padding: '3px 8px' }}>← схемы</button>
+                  <span style={{ fontSize: 12, color: '#8FA3BD' }}>2) Клик по ячейке ({snapSel.c} × {snapSel.r}):</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + snapSel.c + ',1fr)', gridTemplateRows: 'repeat(' + snapSel.r + ',1fr)', gap: 4, width: '100%', height: 170, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, padding: 4, marginTop: 10 }}>
+                  {Array.from({ length: snapSel.c * snapSel.r }).map((_, i) => (
+                    <button key={i} onMouseEnter={() => setSnapCell(i)} onMouseLeave={() => setSnapCell(-1)} onClick={() => onApplyCell(snapSel.c, i % snapSel.c, snapSel.r, Math.floor(i / snapSel.c))} aria-label={'ячейка ' + (i + 1)} title={'ячейка ' + (i + 1)} style={{ background: snapCell === i ? '#2563EB' : '#16304A', border: '1px solid #2E4A6E', borderRadius: 3, cursor: 'pointer', padding: 0 }} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -239,17 +306,18 @@ export default function WindowsLayer(props: WindowsLayerProps) {
       {wins.length > 0 && (
         <div className="pp-taskbar">
           {wins.map((w: WinRec) => {
-            const o = orderById(w.orderId);
             const active = w.z === maxZ && !w.min;
             return (
               <div key={w.id} className={'pp-tchip' + (active ? ' active' : '') + (w.min ? ' min' : '')}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : '#3B82F6', flexShrink: 0 }} />
-                {o ? (o.ext_id || o.id) : '—'}
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : '#3B82F6'), flexShrink: 0 }} />
+                {winLabel(w)}
               </div>
             );
           })}
           <span style={{ fontSize: 11, color: '#5A7090', marginLeft: 4, whiteSpace: 'nowrap' }}>Перетаскивайте окна за заголовок — у краёв появится зона прилипания; «⛶» — сетка раскладок.</span>
+          <button onClick={onMinimizeAll} title="Свернуть все окна"
+            style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', lineHeight: 1, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 13 12 18 17 13" /><polyline points="7 6 12 11 17 6" /></svg></button>
         </div>
       )}
     </>

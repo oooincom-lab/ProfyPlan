@@ -6,12 +6,19 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
+  kind: 'order' | 'list';
   orderId: string;
+  data?: any;
+  listKind?: 'orders' | 'groups' | 'pools';
+  title?: string;
+  dockTop?: number;
   x: number;
   y: number;
   w: number;
   h: number;
   min: boolean;
+  max?: boolean;
+  prev?: { x: number; y: number; w: number; h: number };
   z: number;
   tab: OrderTab;
   editing: boolean;
@@ -67,11 +74,43 @@ export function useWindows() {
     const d = deskRect();
     setWins(prev => [...prev, {
       id: 'w' + Date.now().toString(36),
+      kind: 'order' as const,
       orderId: o.id,
+      data: o,
       x: d.x + 40 + (n % 5) * 36,
       y: d.y + 26 + (n % 5) * 34,
       w: Math.min(480, d.w - 60),
       h: Math.min(380, d.h - 60),
+      min: false,
+      z: winZ.current,
+      tab: 'order' as const,
+      editing: false,
+      form: {},
+    }]);
+  };
+
+  const openListWin = (kind: 'orders' | 'groups' | 'pools', title: string, dockTop?: number) => {
+    const d = deskRect();
+    const MX = 28; // симметричный отступ, как у контента дашборда
+    const top = dockTop != null ? dockTop : d.y + 140;
+    const ex = wins.find(w => w.kind === 'list' && w.listKind === kind);
+    if (ex) {
+      winZ.current += 1;
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current, dockTop: top } : w));
+      return;
+    }
+    winZ.current += 1;
+    setWins(prev => [...prev, {
+      id: 'l' + Date.now().toString(36),
+      kind: 'list' as const,
+      orderId: '',
+      listKind: kind,
+      title,
+      dockTop: top,
+      x: d.x + MX,
+      y: top,
+      w: d.w - MX * 2,
+      h: Math.max(160, d.h - (top - d.y) - 16),
       min: false,
       z: winZ.current,
       tab: 'order' as const,
@@ -91,8 +130,38 @@ export function useWindows() {
     setWins(prev => prev.map(w => w.id === id ? { ...w, min: !w.min } : w));
   };
 
+  const minimizeAll = () => {
+    setWins(prev => prev.map(w => (w.min ? w : { ...w, min: true })));
+  };
+
+  const toggleMaxWin = (id: string) => {
+    const d = deskRect();
+    winZ.current += 1;
+    setWins(prev => prev.map(w => {
+      if (w.id !== id) return w;
+      if (w.max) {
+        const p = w.prev || { x: w.x, y: w.y, w: w.w, h: w.h };
+        return { ...w, max: false, x: p.x, y: p.y, w: p.w, h: p.h, z: winZ.current };
+      }
+      return { ...w, max: true, prev: { x: w.x, y: w.y, w: w.w, h: w.h }, x: d.x, y: d.y, w: d.w, h: d.h, min: false, z: winZ.current };
+    }));
+  };
+
   const resetWin = (id: string) => {
     const d = deskRect();
+    const MX = 28;
+    const w = wins.find(x => x.id === id);
+    if (w && w.kind === 'list') {
+      const top = w.dockTop != null ? w.dockTop : d.y + 140;
+      winZ.current += 1;
+      setLay(null);
+      setWins(prev => prev.map(x => x.id === id ? {
+        ...x,
+        x: d.x + MX, y: top, w: d.w - MX * 2, h: Math.max(160, d.h - (top - d.y) - 16),
+        min: false, z: winZ.current,
+      } : x));
+      return;
+    }
     const idx = wins.findIndex(x => x.id === id);
     const n = idx < 0 ? wins.length : idx;
     winZ.current += 1;
@@ -167,9 +236,79 @@ export function useWindows() {
     setLay({ ...lay, placed });
   };
 
+  const snapZones = (kind: string, d: any) => {
+    if (kind === 'full') return [{ x: d.x, y: d.y, w: d.w, h: d.h }];
+    if (kind === 'h2') return [{ x: d.x, y: d.y, w: d.w / 2, h: d.h }, { x: d.x + d.w / 2, y: d.y, w: d.w / 2, h: d.h }];
+    if (kind === 'h3') return [0, 1, 2].map(i => ({ x: d.x + (d.w / 3) * i, y: d.y, w: d.w / 3, h: d.h }));
+    if (kind === 'v2') return [{ x: d.x, y: d.y, w: d.w, h: d.h / 2 }, { x: d.x, y: d.y + d.h / 2, w: d.w, h: d.h / 2 }];
+    if (kind === 'grid22') return [0, 1, 2, 3].map(i => ({ x: d.x + (i % 2) * (d.w / 2), y: d.y + Math.floor(i / 2) * (d.h / 2), w: d.w / 2, h: d.h / 2 }));
+    return [];
+  };
+
+  const applySnap = (kind: string) => {
+    if (!lay) return;
+    const d = deskRect();
+    const zones = snapZones(kind, d);
+    const active = wins.find(w => w.id === lay.winId);
+    const others = wins.filter(w => w.id !== lay.winId && !w.min);
+    const targets = [active, ...others].filter(Boolean) as WinRec[];
+    setWins(prev => prev.map(w => {
+      const idx = targets.findIndex(t => t.id === w.id);
+      if (idx >= 0 && idx < zones.length) {
+        const z = zones[idx];
+        return { ...w, x: z.x, y: z.y, w: z.w, h: z.h, min: false, max: false };
+      }
+      return w;
+    }));
+    setLay(null);
+  };
+
+  const applySnapGrid = (cols: number, rows: number) => {
+    if (!lay) return;
+    const d = deskRect();
+    const zones: any[] = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) zones.push({ x: d.x + c * (d.w / cols), y: d.y + r * (d.h / rows), w: d.w / cols, h: d.h / rows });
+    const active = wins.find(w => w.id === lay.winId);
+    const others = wins.filter(w => w.id !== lay.winId && !w.min);
+    const targets = [active, ...others].filter(Boolean) as WinRec[];
+    setWins(prev => prev.map(w => {
+      const idx = targets.findIndex(t => t.id === w.id);
+      if (idx >= 0 && idx < zones.length) {
+        const z = zones[idx];
+        return { ...w, x: z.x, y: z.y, w: z.w, h: z.h, min: false, max: false };
+      }
+      return w;
+    }));
+    setLay(null);
+  };
+
+  const applySnapCell = (colCount: number, colIndex: number, rowCount: number, rowIndex: number) => {
+    if (!lay) return;
+    const d = deskRect();
+    const cw = d.w / colCount, ch = d.h / rowCount;
+    const zones: any[] = [];
+    for (let r = 0; r < rowCount; r++) for (let c = 0; c < colCount; c++) zones.push({ x: d.x + c * cw, y: d.y + r * ch, w: cw, h: ch });
+    const targetIndex = rowIndex * colCount + colIndex;
+    const others = wins.filter(w => w.id !== lay.winId && !w.min);
+    const rest = zones.filter((_, i) => i !== targetIndex);
+    setWins(prev => prev.map(w => {
+      if (w.id === lay.winId) {
+        const z = zones[targetIndex];
+        return { ...w, x: z.x, y: z.y, w: z.w, h: z.h, min: false, max: false };
+      }
+      const oi = others.findIndex(t => t.id === w.id);
+      if (oi >= 0 && oi < rest.length) {
+        const z = rest[oi];
+        return { ...w, x: z.x, y: z.y, w: z.w, h: z.h, min: false, max: false };
+      }
+      return w;
+    }));
+    setLay(null);
+  };
+
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, closeWin, focusWin, toggleMinWin, resetWin,
-    startDrag, startResize, pickLay, placeNext,
+    openWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMaxWin, resetWin,
+    startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

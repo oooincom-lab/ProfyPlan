@@ -75,6 +75,22 @@ export default function AppShell() {
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
   // Логика и состояние вынесены в useWindows() / WindowsLayer (components/windows).
   const win = useWindows();
+  const [pendingList, setPendingList] = useState<{ kind: 'orders' | 'groups' | 'pools'; title: string } | null>(null);
+  const dashHeadRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pendingList) return;
+    if (!dashHeadRef.current) return;
+    const r = dashHeadRef.current.getBoundingClientRect();
+    const dockTop = Math.max(57, Math.round(r.bottom + 20));
+    win.openListWin(pendingList.kind, pendingList.title, dockTop);
+    setPendingList(null);
+  }, [pendingList, view]);
+
+  // ── «Окна для списков»: список заказов открывается окном поверх дашборда ──
+  const [listWinMode, setListWinModeState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('profyplan_list_windows') === '1';
+  });
 
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
@@ -237,11 +253,13 @@ export default function AppShell() {
   const selOrder = selOrderId ? (orders.find((o: any) => o.id === selOrderId) || null) : null;
 
   const openOrderPanel = (o: any) => {
-    if (panelMode === 'window') { win.openWin(o); return; }
+    if (panelMode === 'window' || listWinMode) { win.openWin(o); return; }
     setSelOrderId(o.id);
     setPanelTab('order');
     setPanelEditing(false);
   };
+
+  const setListWinMode = (v: boolean) => { setListWinModeState(v); try { localStorage.setItem('profyplan_list_windows', v ? '1' : '0'); } catch {} };
 
   const routingFor = (o: any): any | null => {
     if (!routings.length) return null;
@@ -775,8 +793,22 @@ export default function AppShell() {
 
   const loadProjectOrdersView = async (p: any) => {
     setSelectedProject(p);
-    setView('project-orders');
     loadPanelData(p);
+    if (listWinMode) {
+      try {
+        const [o, g, pl] = await Promise.all([
+          apiF<any[]>(`/production-orders/?project_id=${p.id}`),
+          apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
+          apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
+        ]);
+        setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
+        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+      } catch (e: any) { setMsg(String(e)); }
+      setView('project-orders');
+      setPendingList({ kind: 'orders', title: `Заказы — ${p.name}` });
+      return;
+    }
+    setView('project-orders');
     if (!orders.length || selectedProject?.id !== p.id) {
       try {
         const [o, g, pl] = await Promise.all([
@@ -798,7 +830,9 @@ export default function AppShell() {
     else loadProjectDashboard(selectedProject);
   };
 
-  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); };
+  const onRefresh = () => { if (selectedProject) refresh(); else load(); };
+
+  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); if (['directories','nomenclature','units','resources','departments','organizations','calendars'].includes(v)) win.minimizeAll(); };
 
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
@@ -813,7 +847,22 @@ export default function AppShell() {
 
   // ── Groups ──
   const loadProjectGroups = async (p: any) => {
-    setSelectedProject(p); setView('project-groups');
+    setSelectedProject(p);
+    if (listWinMode) {
+      try {
+        const [o, g, pl] = await Promise.all([
+          apiF<any[]>(`/production-orders/?project_id=${p.id}`),
+          apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
+          apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
+        ]);
+        setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
+        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+      } catch (e: any) { setMsg(String(e)); }
+      setView('project-groups');
+      setPendingList({ kind: 'groups', title: `Группы — ${p.name}` });
+      return;
+    }
+    setView('project-groups');
     try {
       const [o, g, pl] = await Promise.all([
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -840,7 +889,22 @@ export default function AppShell() {
 
   // ── Pools ──
   const loadProjectPools = async (p: any) => {
-    setSelectedProject(p); setView('project-pools');
+    setSelectedProject(p);
+    if (listWinMode) {
+      try {
+        const [o, g, pl] = await Promise.all([
+          apiF<any[]>(`/production-orders/?project_id=${p.id}`),
+          apiF<{ items: any[] }>(`/projects/${p.id}/groups`),
+          apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
+        ]);
+        setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
+        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+      } catch (e: any) { setMsg(String(e)); }
+      setView('project-pools');
+      setPendingList({ kind: 'pools', title: `Пулы — ${p.name}` });
+      return;
+    }
+    setView('project-pools');
     try {
       const [o, g, pl] = await Promise.all([
         apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -864,6 +928,466 @@ export default function AppShell() {
   const delPool = (plid: string, plname: string) => {
     runDeleteCheck('order_pool', plid, plname);
   };
+
+  const renderSectionDashboard = () => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div className="kpi-card"><div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
+      <div className="kpi-card"><div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
+      <div className="kpi-card"><div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
+      <div className="kpi-card"><div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
+      <div className="kpi-card"><div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
+    </div>
+  );
+
+const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
+            const getTypeInfo = (o: any) => {
+              if (o.group_id) { const g = projGroups.find(gr => gr.id === o.group_id); return { icon: '📁', label: 'Группа', name: g?.name || '—', id: o.group_id }; }
+              if (o.pool_id) { const p = projPools.find(pl => pl.id === o.pool_id); return { icon: '📦', label: 'Пул', name: p?.name || '—', id: o.pool_id }; }
+              return { icon: '—', label: 'Свободный', name: '—', id: null };
+            };
+            let filtered = orderShowAll ? [...orders] : orders.filter((o: any) => !o.group_id && !o.pool_id);
+            if (orderShowAll && orderTypeFilter !== 'all' && orderTypeFilter !== 'free') {
+              filtered = filtered.filter((o: any) => o.group_id === orderTypeFilter || o.pool_id === orderTypeFilter);
+            }
+            if (orderShowAll && orderTypeFilter === 'free') {
+              filtered = filtered.filter((o: any) => !o.group_id && !o.pool_id);
+            }
+            if (orderSortKey) {
+              filtered.sort((a: any, b: any) => {
+                let aVal: string, bVal: string;
+                if (orderSortKey === '_type') {
+                  aVal = getTypeInfo(a).label; bVal = getTypeInfo(b).label;
+                } else if (orderSortKey === '_typeName') {
+                  aVal = getTypeInfo(a).name; bVal = getTypeInfo(b).name;
+                } else {
+                  aVal = (a[orderSortKey] || '').toString().toLowerCase();
+                  bVal = (b[orderSortKey] || '').toString().toLowerCase();
+                }
+                if (orderSortDir === 'asc') return aVal.localeCompare(bVal);
+                return bVal.localeCompare(aVal);
+              });
+            }
+            // ── Иерархия: DFS по parent_order_id (защита от циклов) ──
+            const childMap = new Map<string, any[]>();
+            const idSet = new Set<string>(filtered.map((o: any) => o.id));
+            filtered.forEach((o: any) => {
+              if (o.parent_order_id && idSet.has(o.parent_order_id)) {
+                if (!childMap.has(o.parent_order_id)) childMap.set(o.parent_order_id, []);
+                childMap.get(o.parent_order_id)!.push(o);
+              }
+            });
+            const treeRows: { o: any; depth: number; hasChildren: boolean; collapsed: boolean }[] = [];
+            const visitedIds = new Set<string>();
+            const markVisited = (ord: any) => {
+              const kids = childMap.get(ord.id) || [];
+              kids.forEach((c: any) => {
+                if (visitedIds.has(c.id)) return;
+                visitedIds.add(c.id);
+                markVisited(c);
+              });
+            };
+            const walkTree = (ord: any, depth: number) => {
+              if (visitedIds.has(ord.id)) return;
+              visitedIds.add(ord.id);
+              const children = childMap.get(ord.id) || [];
+              const collapsed = collapsedOrderIds.has(ord.id);
+              treeRows.push({ o: ord, depth, hasChildren: children.length > 0, collapsed });
+              if (collapsed) { markVisited(ord); return; }
+              children.forEach((c: any) => walkTree(c, depth + 1));
+            };
+            filtered.forEach((o: any) => { if (!o.parent_order_id || !idSet.has(o.parent_order_id)) walkTree(o, 0); });
+            filtered.forEach((o: any) => { if (!visitedIds.has(o.id)) walkTree(o, 0); });
+            const sortArrow = (key: string) => orderSortKey === key ? (orderSortDir === 'asc' ? ' ▼' : ' ▲') : '';
+            const doSort = (key: string) => {
+              if (orderSortKey === key) {
+                if (orderSortDir === 'asc') { setOrderSortDir('desc'); }
+                else { setOrderSortKey(null); setOrderSortDir('asc'); }
+              } else { setOrderSortKey(key); setOrderSortDir('asc'); }
+            };
+            return (
+              <>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', width: '100%' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="panel">
+                  <div className="panel-hdr">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <div><span className="panel-title">Заказы</span><span className="panel-sub">{filtered.length} из {orders.length}</span></div>
+                      <span style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2 }}>
+                        {([['bom', 'Состав'], ['both', 'Состав + Маршруты'], ['routes', 'Маршруты']] as const).map(([v, label]) => (
+                          <button key={v} onClick={() => setTreeMode(v)} style={{ border: 0, background: treeMode === v ? '#3B82F6' : 'transparent', color: treeMode === v ? '#fff' : '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
+                        ))}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 10px', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={orderShowAll} onChange={e => { setOrderShowAll(e.target.checked); if (!e.target.checked) setOrderTypeFilter('free'); else setOrderTypeFilter('all'); }} style={{ accentColor: '#3B82F6' }} />
+                        Показать все заказы
+                      </label>
+                      {orderShowAll && (
+                        <select value={orderTypeFilter} onChange={e => setOrderTypeFilter(e.target.value)} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '4px 8px', fontSize: 12 }}>
+                          <option value="all">Все типы</option>
+                          <option value="free">Свободные</option>
+                          {projGroups.map((g: any) => <option key={'g-'+g.id} value={g.id}>📁 {g.name}</option>)}
+                          {projPools.map((p: any) => <option key={'p-'+p.id} value={p.id}>📦 {p.name}</option>)}
+                        </select>
+                      )}
+                      <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '4px 8px', whiteSpace: 'nowrap' }} title={collapsedOrderIds.size === 0 ? 'Свернуть все поддеревья цепочки' : 'Развернуть все поддеревья цепочки'}>{collapsedOrderIds.size === 0 ? '▾ Свернуть всё' : '▸ Развернуть всё'}</button>
+                      <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
+                      <span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>○ = План</span>
+                    </div>
+                  </div>
+                  <div style={{
+                    padding: '8px 14px', marginBottom: 8, borderRadius: 8,
+                    border: '2px dashed #1E3252', textAlign: 'center',
+                    color: '#5A7090', fontSize: 12, transition: 'all .15s',
+                    cursor: 'default',
+                  }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.background = 'rgba(59,130,246,.06)'; }}
+                    onDragLeave={(e) => { e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; }}
+                    onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }}>
+                    📍 Бросьте заказ сюда — убрать из группы/пула
+                  </div>
+
+                  {/* Bulk paste panel */}
+                  {showBulkPaste && (
+                    <div style={{
+                      background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: 16, marginBottom: 12,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>📋 Вставка заказов из таблицы</span>
+                        <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 16 }}>✕</button>
+                      </div>
+                      <textarea
+                        placeholder="Скопируйте таблицу из Excel (Ctrl+C), затем вставьте сюда (Ctrl+V). Первая строка — заголовки."
+                        value={bulkPasteText}
+                        onChange={e => { const v = e.target.value; setBulkPasteText(v); if (v.includes('\n') || v.includes('\t')) handleBulkPaste(v); }}
+                        onPaste={e => { const t = e.clipboardData.getData('text'); setBulkPasteText(t); handleBulkPaste(t); }}
+                        style={{
+                          width: '100%', minHeight: 80, background: '#0F1E36', border: '1px solid #1E3252',
+                          borderRadius: 8, color: '#B0C4DE', padding: 12, fontSize: 12, resize: 'vertical',
+                          fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10,
+                        }}
+                      />
+                      {bulkMatchLoading && <div style={{ fontSize: 12, color: '#F59E0B', marginBottom: 8 }}>🔍 Сопоставление с номенклатурой...</div>}
+                      {!bulkMatchLoading && Object.keys(bulkNomenMatches).length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 6 }}>
+                            Сопоставление с номенклатурой:
+                            <span style={{ color: '#10B981', marginLeft: 8 }}>
+                              ✓ {Object.values(bulkNomenMatches).filter(Boolean).length}
+                            </span>
+                            <span style={{ color: '#EF4444', marginLeft: 4 }}>
+                              ✗ {Object.values(bulkNomenMatches).filter(v => v === null).length} не найдено
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {Object.entries(bulkNomenMatches).map(([name, match]) => (
+                              <span key={name} style={{
+                                background: match ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                                border: `1px solid ${match ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#B0C4DE',
+                              }}>
+                                {name} {match ? <span style={{ color: '#10B981' }}>→ {match.name}</span> : <span style={{ color: '#EF4444' }}>✗</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={bulkCreateOrders} disabled={!bulkPasteText.trim()}
+                          style={{
+                            background: bulkPasteText.trim() ? 'linear-gradient(135deg, #3B82F6, #2563EB)' : '#1E3252',
+                            color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px',
+                            cursor: bulkPasteText.trim() ? 'pointer' : 'default', fontSize: 13, fontWeight: 600,
+                          }}>
+                          ✓ Создать заказы
+                        </button>
+                        <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }}
+                          style={{ background: 'transparent', border: '1px solid #2A4060', borderRadius: 8, color: '#5A7090', padding: '8px 20px', cursor: 'pointer', fontSize: 13 }}>
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="tbl">
+                      <thead><tr>
+                        <th style={{ width: 56 }}></th>
+                        <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
+                        {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Пул{sortArrow('_typeName')}</th>}
+                        <th className="t-graph">Граф</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('ext_id')}>ID{sortArrow('ext_id')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('specification_name')}>Продукт{sortArrow('specification_name')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('client')}>Клиент{sortArrow('client')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('quantity')}>Кол-во{sortArrow('quantity')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('priority')}>Приоритет{sortArrow('priority')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('status')}>Статус{sortArrow('status')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('start_date')}>Старт{sortArrow('start_date')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('due_date')}>Финиш{sortArrow('due_date')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('created_at')}>Загружен{sortArrow('created_at')}</th>
+                        <th style={{ width: 40 }}></th>
+                      </tr></thead>
+                      <tbody>
+                        {showNewOrder && (
+                          <tr>
+                            <td></td>
+                            <td className="t-mono">—</td>
+                            {orderShowAll && <td className="t-mono">—</td>}
+                            <td className="t-graph"><span className="g-pln">○</span></td>
+                            <td className="t-mono">—</td>
+                            <td><input value={newOrder.specification_name} onChange={e => setNewOrder({ ...newOrder, specification_name: e.target.value })} placeholder="Продукт" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#E8EEF5', padding: '4px 8px', width: 130, fontSize: 12 }} onKeyDown={e => e.key === 'Enter' && createOrder()} autoFocus /></td>
+                            <td><input value={newOrder.client} onChange={e => setNewOrder({ ...newOrder, client: e.target.value })} placeholder="Клиент" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 90, fontSize: 12 }} /></td>
+                            <td><input value={newOrder.quantity} onChange={e => setNewOrder({ ...newOrder, quantity: e.target.value })} type="number" min="1" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 60, fontSize: 12 }} /></td>
+                            <td><select value={newOrder.priority} onChange={e => setNewOrder({ ...newOrder, priority: e.target.value })} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 4px', fontSize: 12 }}><option value="normal">Обычный</option><option value="high">Высокий</option><option value="critical">Критич.</option><option value="low">Низкий</option></select></td>
+                            <td><span className="badge draft">Новый</span></td>
+                            <td className="t-mono">—</td>
+                            <td className="t-mono">—</td>
+                            <td style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={createOrder} style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '3px 8px', fontSize: 11, fontWeight: 600 }}>✓</button>
+                              <button onClick={() => setShowNewOrder(false)} style={{ background: 'transparent', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: 11 }}>✕</button>
+                            </td>
+                          </tr>
+                        )}
+                        {treeRows.map(({ o, depth, hasChildren, collapsed }: any) => {
+                          const ti = getTypeInfo(o);
+                          const bomOpen = expandedBomOrder === o.id;
+                          return (
+                            <Fragment key={o.id}>
+                            <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
+                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 56, minWidth: 56, maxWidth: 56, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
+                                {hasChildren ? (
+                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '2px 3px 2px 0', marginRight: 2, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
+                                ) : null}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+                                  title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+                                >{bomOpen ? '▾' : '▸'}</button>
+                              </td>
+                              <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
+                              {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
+                              <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
+                              <td className="t-mono">{o.ext_id || '—'}</td>
+                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{o.specification_name || o.ext_id || '—'}</td>
+                              <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
+                              <td className="t-mono">{o.quantity} {o.unit}</td>
+                              <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
+                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
+                              <td className="t-mono">{o.start_date || '—'}</td>
+                              <td className="t-mono">{o.due_date || '—'}</td>
+                              <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
+                              <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
+                            </tr>
+                            {bomOpen && (
+                              <tr>
+                                <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
+                                  <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
+                                      {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
+                                      <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
+                                      <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                    </div>
+<BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} timeline={bomTimeline || undefined} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            {treeMode !== 'bom' && (() => {
+                              const rt = routingFor(o);
+                              if (!rt || !rt.operations || !rt.operations.length) return null;
+                              const total = rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+                              return (
+                                <tr>
+                                  <td colSpan={orderShowAll ? 14 : 13} style={{ padding: '4px 14px 8px', background: 'rgba(6,182,212,.04)' }}>
+                                    <div style={{ fontSize: 11, color: '#22D3EE', marginBottom: 4 }}>⛓ Маршрут · {rt.name || '—'} · {rt.operations.length} оп. · {total} ч</div>
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                      {rt.operations.map((op: any) => (
+                                        <span key={op.id || op.sequence_number} style={{ background: '#0B1B33', border: '1px solid #1E3252', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#B0C4DE' }}>
+                                          {op.sequence_number} {op.name} · {resName(op.resource_type_id)} · {Number(op.duration_hours) || 0} ч
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })()}
+                            </Fragment>
+                          );
+                        })}
+                        {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 14 : 13} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                </div>
+                {mode === 'full' && (() => {
+                  const o = selOrder;
+                  const isModal = panelMode === 'modal';
+                  if (panelMode === 'window') return null;
+                  if (isModal && !o) return null;
+                  const base: any = {
+                    background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 12,
+                    overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column',
+                    maxHeight: 'calc(100vh - 130px)',
+                  };
+                  const pStyle: any = isModal
+                    ? { ...base, position: 'fixed', top: 68, left: 275, right: 18, bottom: 58, maxHeight: 'none', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
+                    : { ...base, width: panelWidth ?? '40%', minWidth: 300, maxWidth: '62%', position: 'sticky', top: 16 };
+                  const tabs: { v: 'order' | 'bom' | 'route' | 'res' | 'plan'; l: string }[] = [
+                    { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
+                  ];
+                  const bomNodes = o ? orderBomNodes(o) : [];
+                  const renderBomNode = (n: any, d: number): any => {
+                    const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
+                    return (
+                      <div key={n.id}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
+                          <span style={{ color: n.node_type === 'material' ? '#8FA3BD' : '#E2E8F0' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
+                          <span style={{ color: '#5A7090' }}>×{n.quantity_per_parent ?? '1'}</span>
+                          <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
+                          {n.node_type === 'semi_finished' && <span style={{ background: 'rgba(139,92,246,.15)', color: '#C4B5FD', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>ПФ</span>}
+                          {n.is_phantom && <span style={{ background: 'rgba(6,182,212,.12)', color: '#67E8F9', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>фантом</span>}
+                          {n.routing_id && <span style={{ color: '#22D3EE', fontSize: 10 }}>⛓</span>}
+                        </div>
+                        {kids.map((k: any) => renderBomNode(k, d + 1))}
+                      </div>
+                    );
+                  };
+                  const rt = o ? routingFor(o) : null;
+                  const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
+                  return (
+                    <>
+                      {!isModal && (
+                        <div
+                          style={{ width: 4, flex: 'none', cursor: 'col-resize', alignSelf: 'stretch', borderRadius: 2, background: 'transparent', transition: 'background .15s' }}
+                          title="Перетащите — изменится ширина панели"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const startX = e.clientX;
+                            const cw = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect().width;
+                            const startW = panelWidth ?? Math.round(cw * 0.4);
+                            const onMove = (ev: MouseEvent) => {
+                              const w = Math.max(280, Math.min(cw - 380, startW - (ev.clientX - startX)));
+                              setPanelWidth(Math.round(w));
+                              try { localStorage.setItem('profyplan_panel_width', String(Math.round(w))); } catch {}
+                            };
+                            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                            window.addEventListener('mousemove', onMove);
+                            window.addEventListener('mouseup', onUp);
+                          }}
+                        />
+                      )}
+                      {isModal && <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,8,20,.66)', zIndex: 110 }} onClick={() => setSelOrderId(null)} />}
+                      <div style={pStyle}>
+                        <div style={{ padding: '10px 14px', borderBottom: '1px solid #1E3A5F', background: '#0D1F3A', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.ext_id || o.id) : 'Панель заказа'}</div>
+                            <div style={{ fontSize: 12, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.specification_name || '—') : 'Выберите заказ в списке'}</div>
+                          </div>
+                          {o && panelTab === 'order' && !panelEditing && (
+                            <button onClick={startEditOrder} style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
+                          )}
+                          {isModal && (
+                            <button onClick={() => setSelOrderId(null)} style={{ background: 'transparent', border: 0, color: '#8FA3BD', cursor: 'pointer', fontSize: 15, padding: '2px 6px' }}>✕</button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', borderBottom: '1px solid #1E3252' }}>
+                          {tabs.map(tb => (
+                            <button key={tb.v} onClick={() => { setPanelTab(tb.v); setPanelEditing(false); }} style={{ flex: 1, border: 0, background: 'transparent', color: panelTab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (panelTab === tb.v ? '#3B82F6' : 'transparent'), padding: '8px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
+                          ))}
+                        </div>
+                        <div style={{ padding: '12px 14px', minHeight: 300, overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0' }}>
+                          {!o && !isModal && <div style={{ color: '#5A7090', fontSize: 12.5 }}>Кликните по заказу в списке, чтобы увидеть его карточку: состав, маршрут, ресурсы и план.</div>}
+                          {o && panelTab === 'order' && !panelEditing && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
+                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', o.priority || '—'], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
+                              <div key={k} style={{ display: 'contents' }}>
+                                <div style={{ color: '#5A7090' }}>{k}</div>
+                                <div style={{ color: '#E2E8F0' }}>{v}</div>
+                              </div>
+                              ))}
+                            </div>
+                          )}
+                          {o && panelTab === 'order' && panelEditing && (
+                            <div style={{ display: 'grid', gap: 8 }}>
+                              {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map(([k, label]) => (
+                                <label key={k} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ color: '#8FA3BD', fontSize: 12 }}>{label}</span>
+                                  {k === 'priority' ? (
+                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                      <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                                    </select>
+                                  ) : k === 'status' ? (
+                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                      <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
+                                    </select>
+                                  ) : (
+                                    <input value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                                  )}
+                                </label>
+                              ))}
+                              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                                <button onClick={saveOrderEdit} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Сохранить</button>
+                                <button onClick={() => setPanelEditing(false)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Отмена</button>
+                              </div>
+                            </div>
+                          )}
+                          {o && panelTab === 'bom' && (
+                            bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
+                            : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
+                          )}
+                          {o && panelTab === 'route' && (
+                            rt && rt.operations && rt.operations.length ? (
+                              <div>
+                                <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
+                                {rt.operations.map((op: any) => (
+                                  <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                      <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
+                                      <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                      <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                                    </div>
+                                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
+                                      Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
+                          )}
+                          {o && panelTab === 'res' && (
+                            resourcesList.length ? (
+                              <div>
+                                <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
+                                {resourcesList.map((r: any) => (
+                                  <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
+                                    <span style={{ flex: 1 }}>{r.name}</span>
+                                    <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
+                                    <span style={{ color: '#FCD34D', fontSize: 11 }}>×{r.capacity_per_unit ?? r.capacity_per_day ?? '—'}</span>
+                                    <span style={{ color: '#5A7090', fontSize: 11 }}>{r.capacity_unit || r.unit || ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
+                          )}
+                          {o && panelTab === 'plan' && (
+                            <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
+                              План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+                </div>
+              </>
+            );
+          };
 
   // ── Styles ──
   const css = `
@@ -1064,6 +1588,8 @@ export default function AppShell() {
             <h1>{titles[view]}</h1>
             {view === 'project-dashboard' && <div className="tb-sub">{msg}</div>}
             {view === 'project-orders' && <div className="tb-sub">{msg}</div>}
+            {view === 'project-groups' && <div className="tb-sub">{msg}</div>}
+            {view === 'project-pools' && <div className="tb-sub">{msg}</div>}
             {view === 'projects' && <div className="tb-sub">{projects.length} проектов</div>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -1071,17 +1597,28 @@ export default function AppShell() {
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
               {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
-                <button onClick={refresh} className="btn btn-secondary btn-sm">🔄</button>
               </>
             )}
             {view === 'project-orders' && (
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
               {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
-                <button onClick={refresh} className="btn btn-secondary btn-sm">🔄</button>
+              </>
+            )}
+            {view === 'project-groups' && listWinMode && !selectedGroup && (
+              <>
+                <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
+              {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
+              </>
+            )}
+            {view === 'project-pools' && listWinMode && !selectedPool && (
+              <>
+                <button onClick={addPool} className="btn btn-primary btn-sm">+ Пул</button>
+              {newPoolInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newPoolName} onChange={e=>setNewPoolName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewPoolInput(false);else if(e.key==='Enter')addPool()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addPool} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
               </>
             )}
             <button className="btn btn-primary btn-sm" onClick={() => navTo('new-project')}>+ Новый проект</button>
+            <button onClick={onRefresh} className="btn btn-secondary btn-sm" title="Обновить данные" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></button>
           </div>
         </div>
 
@@ -1215,477 +1752,7 @@ export default function AppShell() {
           )}
 
           {/* ═══ PROJECT ORDERS ═══ */}
-          {view === 'project-orders' && (() => {
-            const getTypeInfo = (o: any) => {
-              if (o.group_id) { const g = projGroups.find(gr => gr.id === o.group_id); return { icon: '📁', label: 'Группа', name: g?.name || '—', id: o.group_id }; }
-              if (o.pool_id) { const p = projPools.find(pl => pl.id === o.pool_id); return { icon: '📦', label: 'Пул', name: p?.name || '—', id: o.pool_id }; }
-              return { icon: '—', label: 'Свободный', name: '—', id: null };
-            };
-            let filtered = orderShowAll ? [...orders] : orders.filter((o: any) => !o.group_id && !o.pool_id);
-            if (orderShowAll && orderTypeFilter !== 'all' && orderTypeFilter !== 'free') {
-              filtered = filtered.filter((o: any) => o.group_id === orderTypeFilter || o.pool_id === orderTypeFilter);
-            }
-            if (orderShowAll && orderTypeFilter === 'free') {
-              filtered = filtered.filter((o: any) => !o.group_id && !o.pool_id);
-            }
-            if (orderSortKey) {
-              filtered.sort((a: any, b: any) => {
-                let aVal: string, bVal: string;
-                if (orderSortKey === '_type') {
-                  aVal = getTypeInfo(a).label; bVal = getTypeInfo(b).label;
-                } else if (orderSortKey === '_typeName') {
-                  aVal = getTypeInfo(a).name; bVal = getTypeInfo(b).name;
-                } else {
-                  aVal = (a[orderSortKey] || '').toString().toLowerCase();
-                  bVal = (b[orderSortKey] || '').toString().toLowerCase();
-                }
-                if (orderSortDir === 'asc') return aVal.localeCompare(bVal);
-                return bVal.localeCompare(aVal);
-              });
-            }
-            // ── Иерархия: DFS по parent_order_id (защита от циклов) ──
-            const childMap = new Map<string, any[]>();
-            const idSet = new Set<string>(filtered.map((o: any) => o.id));
-            filtered.forEach((o: any) => {
-              if (o.parent_order_id && idSet.has(o.parent_order_id)) {
-                if (!childMap.has(o.parent_order_id)) childMap.set(o.parent_order_id, []);
-                childMap.get(o.parent_order_id)!.push(o);
-              }
-            });
-            const treeRows: { o: any; depth: number; hasChildren: boolean; collapsed: boolean }[] = [];
-            const visitedIds = new Set<string>();
-            const markVisited = (ord: any) => {
-              const kids = childMap.get(ord.id) || [];
-              kids.forEach((c: any) => {
-                if (visitedIds.has(c.id)) return;
-                visitedIds.add(c.id);
-                markVisited(c);
-              });
-            };
-            const walkTree = (ord: any, depth: number) => {
-              if (visitedIds.has(ord.id)) return;
-              visitedIds.add(ord.id);
-              const children = childMap.get(ord.id) || [];
-              const collapsed = collapsedOrderIds.has(ord.id);
-              treeRows.push({ o: ord, depth, hasChildren: children.length > 0, collapsed });
-              if (collapsed) { markVisited(ord); return; }
-              children.forEach((c: any) => walkTree(c, depth + 1));
-            };
-            filtered.forEach((o: any) => { if (!o.parent_order_id || !idSet.has(o.parent_order_id)) walkTree(o, 0); });
-            filtered.forEach((o: any) => { if (!visitedIds.has(o.id)) walkTree(o, 0); });
-            const sortArrow = (key: string) => orderSortKey === key ? (orderSortDir === 'asc' ? ' ▼' : ' ▲') : '';
-            const doSort = (key: string) => {
-              if (orderSortKey === key) {
-                if (orderSortDir === 'asc') { setOrderSortDir('desc'); }
-                else { setOrderSortKey(null); setOrderSortDir('asc'); }
-              } else { setOrderSortKey(key); setOrderSortDir('asc'); }
-            };
-            return (
-              <>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="panel">
-                  <div className="panel-hdr">
-                    <div><span className="panel-title">Заказы</span><span className="panel-sub">{filtered.length} из {orders.length}</span></div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 10px', alignItems: 'center', justifyContent: 'flex-end' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={orderShowAll} onChange={e => { setOrderShowAll(e.target.checked); if (!e.target.checked) setOrderTypeFilter('free'); else setOrderTypeFilter('all'); }} style={{ accentColor: '#3B82F6' }} />
-                        Показать все заказы
-                      </label>
-                      {orderShowAll && (
-                        <select value={orderTypeFilter} onChange={e => setOrderTypeFilter(e.target.value)} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '4px 8px', fontSize: 12 }}>
-                          <option value="all">Все типы</option>
-                          <option value="free">Свободные</option>
-                          {projGroups.map((g: any) => <option key={'g-'+g.id} value={g.id}>📁 {g.name}</option>)}
-                          {projPools.map((p: any) => <option key={'p-'+p.id} value={p.id}>📦 {p.name}</option>)}
-                        </select>
-                      )}
-                      <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '4px 8px', whiteSpace: 'nowrap' }} title={collapsedOrderIds.size === 0 ? 'Свернуть все поддеревья цепочки' : 'Развернуть все поддеревья цепочки'}>{collapsedOrderIds.size === 0 ? '▾ Свернуть всё' : '▸ Развернуть всё'}</button>
-                      <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
-                      <span style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2 }}>
-                        {([['bom', 'Состав'], ['both', 'Состав + Маршруты'], ['routes', 'Маршруты']] as const).map(([v, label]) => (
-                          <button key={v} onClick={() => setTreeMode(v)} style={{ border: 0, background: treeMode === v ? '#3B82F6' : 'transparent', color: treeMode === v ? '#fff' : '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
-                        ))}
-                      </span>
-                      <span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>○ = План</span>
-                    </div>
-                  </div>
-                  <div style={{
-                    padding: '8px 14px', marginBottom: 8, borderRadius: 8,
-                    border: '2px dashed #1E3252', textAlign: 'center',
-                    color: '#5A7090', fontSize: 12, transition: 'all .15s',
-                    cursor: 'default',
-                  }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.background = 'rgba(59,130,246,.06)'; }}
-                    onDragLeave={(e) => { e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; }}
-                    onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }}>
-                    📍 Бросьте заказ сюда — убрать из группы/пула
-                  </div>
-
-                  {/* Bulk paste panel */}
-                  {showBulkPaste && (
-                    <div style={{
-                      background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: 16, marginBottom: 12,
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>📋 Вставка заказов из таблицы</span>
-                        <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 16 }}>✕</button>
-                      </div>
-                      <textarea
-                        placeholder="Скопируйте таблицу из Excel (Ctrl+C), затем вставьте сюда (Ctrl+V). Первая строка — заголовки."
-                        value={bulkPasteText}
-                        onChange={e => { const v = e.target.value; setBulkPasteText(v); if (v.includes('\n') || v.includes('\t')) handleBulkPaste(v); }}
-                        onPaste={e => { const t = e.clipboardData.getData('text'); setBulkPasteText(t); handleBulkPaste(t); }}
-                        style={{
-                          width: '100%', minHeight: 80, background: '#0F1E36', border: '1px solid #1E3252',
-                          borderRadius: 8, color: '#B0C4DE', padding: 12, fontSize: 12, resize: 'vertical',
-                          fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10,
-                        }}
-                      />
-                      {bulkMatchLoading && <div style={{ fontSize: 12, color: '#F59E0B', marginBottom: 8 }}>🔍 Сопоставление с номенклатурой...</div>}
-                      {!bulkMatchLoading && Object.keys(bulkNomenMatches).length > 0 && (
-                        <div style={{ marginBottom: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 6 }}>
-                            Сопоставление с номенклатурой:
-                            <span style={{ color: '#10B981', marginLeft: 8 }}>
-                              ✓ {Object.values(bulkNomenMatches).filter(Boolean).length}
-                            </span>
-                            <span style={{ color: '#EF4444', marginLeft: 4 }}>
-                              ✗ {Object.values(bulkNomenMatches).filter(v => v === null).length} не найдено
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {Object.entries(bulkNomenMatches).map(([name, match]) => (
-                              <span key={name} style={{
-                                background: match ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-                                border: `1px solid ${match ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                                borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#B0C4DE',
-                              }}>
-                                {name} {match ? <span style={{ color: '#10B981' }}>→ {match.name}</span> : <span style={{ color: '#EF4444' }}>✗</span>}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={bulkCreateOrders} disabled={!bulkPasteText.trim()}
-                          style={{
-                            background: bulkPasteText.trim() ? 'linear-gradient(135deg, #3B82F6, #2563EB)' : '#1E3252',
-                            color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px',
-                            cursor: bulkPasteText.trim() ? 'pointer' : 'default', fontSize: 13, fontWeight: 600,
-                          }}>
-                          ✓ Создать заказы
-                        </button>
-                        <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }}
-                          style={{ background: 'transparent', border: '1px solid #2A4060', borderRadius: 8, color: '#5A7090', padding: '8px 20px', cursor: 'pointer', fontSize: 13 }}>
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="tbl">
-                      <thead><tr>
-                        <th style={{ width: 56 }}></th>
-                        <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
-                        {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Пул{sortArrow('_typeName')}</th>}
-                        <th className="t-graph">Граф</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('ext_id')}>ID{sortArrow('ext_id')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('specification_name')}>Продукт{sortArrow('specification_name')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('client')}>Клиент{sortArrow('client')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('quantity')}>Кол-во{sortArrow('quantity')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('priority')}>Приоритет{sortArrow('priority')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('status')}>Статус{sortArrow('status')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('start_date')}>Старт{sortArrow('start_date')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('due_date')}>Финиш{sortArrow('due_date')}</th>
-                        <th style={{ cursor: 'pointer' }} onClick={() => doSort('created_at')}>Загружен{sortArrow('created_at')}</th>
-                        <th style={{ width: 40 }}></th>
-                      </tr></thead>
-                      <tbody>
-                        {showNewOrder && (
-                          <tr>
-                            <td></td>
-                            <td className="t-mono">—</td>
-                            {orderShowAll && <td className="t-mono">—</td>}
-                            <td className="t-graph"><span className="g-pln">○</span></td>
-                            <td className="t-mono">—</td>
-                            <td><input value={newOrder.specification_name} onChange={e => setNewOrder({ ...newOrder, specification_name: e.target.value })} placeholder="Продукт" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#E8EEF5', padding: '4px 8px', width: 130, fontSize: 12 }} onKeyDown={e => e.key === 'Enter' && createOrder()} autoFocus /></td>
-                            <td><input value={newOrder.client} onChange={e => setNewOrder({ ...newOrder, client: e.target.value })} placeholder="Клиент" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 90, fontSize: 12 }} /></td>
-                            <td><input value={newOrder.quantity} onChange={e => setNewOrder({ ...newOrder, quantity: e.target.value })} type="number" min="1" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 60, fontSize: 12 }} /></td>
-                            <td><select value={newOrder.priority} onChange={e => setNewOrder({ ...newOrder, priority: e.target.value })} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 4px', fontSize: 12 }}><option value="normal">Обычный</option><option value="high">Высокий</option><option value="critical">Критич.</option><option value="low">Низкий</option></select></td>
-                            <td><span className="badge draft">Новый</span></td>
-                            <td className="t-mono">—</td>
-                            <td className="t-mono">—</td>
-                            <td style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={createOrder} style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '3px 8px', fontSize: 11, fontWeight: 600 }}>✓</button>
-                              <button onClick={() => setShowNewOrder(false)} style={{ background: 'transparent', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: 11 }}>✕</button>
-                            </td>
-                          </tr>
-                        )}
-                        {treeRows.map(({ o, depth, hasChildren, collapsed }: any) => {
-                          const ti = getTypeInfo(o);
-                          const bomOpen = expandedBomOrder === o.id;
-                          return (
-                            <Fragment key={o.id}>
-                            <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
-                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 56, minWidth: 56, maxWidth: 56, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
-                                {hasChildren ? (
-                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '2px 3px 2px 0', marginRight: 2, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
-                                ) : null}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
-                                  title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
-                                  onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
-                                  onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
-                                >{bomOpen ? '▾' : '▸'}</button>
-                              </td>
-                              <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
-                              {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
-                              <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
-                              <td className="t-mono">{o.ext_id || '—'}</td>
-                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{o.specification_name || o.ext_id || '—'}</td>
-                              <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
-                              <td className="t-mono">{o.quantity} {o.unit}</td>
-                              <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
-                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
-                              <td className="t-mono">{o.start_date || '—'}</td>
-                              <td className="t-mono">{o.due_date || '—'}</td>
-                              <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
-                              <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
-                            </tr>
-                            {bomOpen && (
-                              <tr>
-                                <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
-                                  <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
-                                      {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
-                                      <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
-                                      <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
-                                    </div>
-<BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} timeline={bomTimeline || undefined} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                            {treeMode !== 'bom' && (() => {
-                              const rt = routingFor(o);
-                              if (!rt || !rt.operations || !rt.operations.length) return null;
-                              const total = rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
-                              return (
-                                <tr>
-                                  <td colSpan={orderShowAll ? 14 : 13} style={{ padding: '4px 14px 8px', background: 'rgba(6,182,212,.04)' }}>
-                                    <div style={{ fontSize: 11, color: '#22D3EE', marginBottom: 4 }}>⛓ Маршрут · {rt.name || '—'} · {rt.operations.length} оп. · {total} ч</div>
-                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                      {rt.operations.map((op: any) => (
-                                        <span key={op.id || op.sequence_number} style={{ background: '#0B1B33', border: '1px solid #1E3252', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#B0C4DE' }}>
-                                          {op.sequence_number} {op.name} · {resName(op.resource_type_id)} · {Number(op.duration_hours) || 0} ч
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })()}
-                            </Fragment>
-                          );
-                        })}
-                        {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 14 : 13} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                </div>
-                {(() => {
-                  const o = selOrder;
-                  const isModal = panelMode === 'modal';
-                  if (panelMode === 'window') return null;
-                  if (isModal && !o) return null;
-                  const base: any = {
-                    background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 12,
-                    overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column',
-                    maxHeight: 'calc(100vh - 130px)',
-                  };
-                  const pStyle: any = isModal
-                    ? { ...base, position: 'fixed', top: 68, left: 275, right: 18, bottom: 58, maxHeight: 'none', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
-                    : { ...base, width: panelWidth ?? '40%', minWidth: 300, maxWidth: '62%', position: 'sticky', top: 16 };
-                  const tabs: { v: 'order' | 'bom' | 'route' | 'res' | 'plan'; l: string }[] = [
-                    { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
-                  ];
-                  const bomNodes = o ? orderBomNodes(o) : [];
-                  const renderBomNode = (n: any, d: number): any => {
-                    const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
-                    return (
-                      <div key={n.id}>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
-                          <span style={{ color: n.node_type === 'material' ? '#8FA3BD' : '#E2E8F0' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
-                          <span style={{ color: '#5A7090' }}>×{n.quantity_per_parent ?? '1'}</span>
-                          <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
-                          {n.node_type === 'semi_finished' && <span style={{ background: 'rgba(139,92,246,.15)', color: '#C4B5FD', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>ПФ</span>}
-                          {n.is_phantom && <span style={{ background: 'rgba(6,182,212,.12)', color: '#67E8F9', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>фантом</span>}
-                          {n.routing_id && <span style={{ color: '#22D3EE', fontSize: 10 }}>⛓</span>}
-                        </div>
-                        {kids.map((k: any) => renderBomNode(k, d + 1))}
-                      </div>
-                    );
-                  };
-                  const rt = o ? routingFor(o) : null;
-                  const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
-                  return (
-                    <>
-                      {!isModal && (
-                        <div
-                          style={{ width: 4, flex: 'none', cursor: 'col-resize', alignSelf: 'stretch', borderRadius: 2, background: 'transparent', transition: 'background .15s' }}
-                          title="Перетащите — изменится ширина панели"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            const startX = e.clientX;
-                            const cw = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect().width;
-                            const startW = panelWidth ?? Math.round(cw * 0.4);
-                            const onMove = (ev: MouseEvent) => {
-                              const w = Math.max(280, Math.min(cw - 380, startW - (ev.clientX - startX)));
-                              setPanelWidth(Math.round(w));
-                              try { localStorage.setItem('profyplan_panel_width', String(Math.round(w))); } catch {}
-                            };
-                            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                            window.addEventListener('mousemove', onMove);
-                            window.addEventListener('mouseup', onUp);
-                          }}
-                        />
-                      )}
-                      {isModal && <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,8,20,.66)', zIndex: 110 }} onClick={() => setSelOrderId(null)} />}
-                      <div style={pStyle}>
-                        <div style={{ padding: '10px 14px', borderBottom: '1px solid #1E3A5F', background: '#0D1F3A', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.ext_id || o.id) : 'Панель заказа'}</div>
-                            <div style={{ fontSize: 12, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.specification_name || '—') : 'Выберите заказ в списке'}</div>
-                          </div>
-                          {o && panelTab === 'order' && !panelEditing && (
-                            <button onClick={startEditOrder} style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
-                          )}
-                          {isModal && (
-                            <button onClick={() => setSelOrderId(null)} style={{ background: 'transparent', border: 0, color: '#8FA3BD', cursor: 'pointer', fontSize: 15, padding: '2px 6px' }}>✕</button>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', borderBottom: '1px solid #1E3252' }}>
-                          {tabs.map(tb => (
-                            <button key={tb.v} onClick={() => { setPanelTab(tb.v); setPanelEditing(false); }} style={{ flex: 1, border: 0, background: 'transparent', color: panelTab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (panelTab === tb.v ? '#3B82F6' : 'transparent'), padding: '8px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
-                          ))}
-                        </div>
-                        <div style={{ padding: '12px 14px', minHeight: 300, overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0' }}>
-                          {!o && !isModal && <div style={{ color: '#5A7090', fontSize: 12.5 }}>Кликните по заказу в списке, чтобы увидеть его карточку: состав, маршрут, ресурсы и план.</div>}
-                          {o && panelTab === 'order' && !panelEditing && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', o.priority || '—'], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
-                              <div key={k} style={{ display: 'contents' }}>
-                                <div style={{ color: '#5A7090' }}>{k}</div>
-                                <div style={{ color: '#E2E8F0' }}>{v}</div>
-                              </div>
-                              ))}
-                            </div>
-                          )}
-                          {o && panelTab === 'order' && panelEditing && (
-                            <div style={{ display: 'grid', gap: 8 }}>
-                              {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map(([k, label]) => (
-                                <label key={k} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ color: '#8FA3BD', fontSize: 12 }}>{label}</span>
-                                  {k === 'priority' ? (
-                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                                      <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
-                                    </select>
-                                  ) : k === 'status' ? (
-                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                                      <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
-                                    </select>
-                                  ) : (
-                                    <input value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
-                                  )}
-                                </label>
-                              ))}
-                              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                                <button onClick={saveOrderEdit} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Сохранить</button>
-                                <button onClick={() => setPanelEditing(false)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Отмена</button>
-                              </div>
-                            </div>
-                          )}
-                          {o && panelTab === 'bom' && (
-                            bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
-                            : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
-                          )}
-                          {o && panelTab === 'route' && (
-                            rt && rt.operations && rt.operations.length ? (
-                              <div>
-                                <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
-                                {rt.operations.map((op: any) => (
-                                  <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                      <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
-                                      <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
-                                      <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
-                                    </div>
-                                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
-                                      Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
-                          )}
-                          {o && panelTab === 'res' && (
-                            resourcesList.length ? (
-                              <div>
-                                <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
-                                {resourcesList.map((r: any) => (
-                                  <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
-                                    <span style={{ flex: 1 }}>{r.name}</span>
-                                    <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
-                                    <span style={{ color: '#FCD34D', fontSize: 11 }}>×{r.capacity_per_unit ?? r.capacity_per_day ?? '—'}</span>
-                                    <span style={{ color: '#5A7090', fontSize: 11 }}>{r.capacity_unit || r.unit || ''}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
-                          )}
-                          {o && panelTab === 'plan' && (
-                            <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
-                              План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-                </div>
-                {panelMode === 'window' && (
-                  <WindowsLayer
-                    wins={win.wins}
-                    lay={win.lay}
-                    snapZone={win.snapZone}
-                    setWins={win.setWins}
-                    setLay={win.setLay}
-                    orders={orders}
-                    resourcesList={resourcesList}
-                    orderBomNodes={orderBomNodes}
-                    routingFor={routingFor}
-                    resName={resName}
-                    onClose={win.closeWin}
-                    onFocus={win.focusWin}
-                    onToggleMin={win.toggleMinWin}
-                    onReset={win.resetWin}
-                    onDrag={win.startDrag}
-                    onResize={win.startResize}
-                    onPickLay={win.pickLay}
-                    onPlaceNext={win.placeNext}
-                    onSaveEdit={saveWinEdit}
-                  />
-                )}
-
-              </>
-            );
-          })()}
+          {view === 'project-orders' && (listWinMode ? <div ref={dashHeadRef}>{renderSectionDashboard()}</div> : renderOrdersView())}
 
           {/* ═══ PROJECT GANTT ═══ */}
           {view === 'project-gantt' && (
@@ -1824,7 +1891,7 @@ export default function AppShell() {
           )}
 
           {/* ═══ PROJECT GROUPS ═══ */}
-          {view === 'project-groups' && !selectedGroup && (
+          {view === 'project-groups' && !selectedGroup && (listWinMode ? (<div ref={dashHeadRef}>{renderSectionDashboard()}</div>) : (
             <>
               <div className="panel">
                 <div className="panel-hdr">
@@ -1927,10 +1994,10 @@ export default function AppShell() {
                 </div>
               )}
             </>
-          )}
+          ))}
 
           {/* ═══ PROJECT POOLS ═══ */}
-          {view === 'project-pools' && !selectedPool && (
+          {view === 'project-pools' && !selectedPool && (listWinMode ? (<div ref={dashHeadRef}>{renderSectionDashboard()}</div>) : (
             <>
               {/* ── Dashboard KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
@@ -1996,7 +2063,7 @@ export default function AppShell() {
                 )}
               </div>
             </>
-          )}
+          ))}
 
           {/* ═══ POOL DETAIL — Dual-list ═══ */}
           {view === 'project-pools' && selectedPool && !editingPool && (() => {
@@ -2401,6 +2468,19 @@ export default function AppShell() {
                     </div>
                   </div>
                   <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🪟 Окна для списков</div>
+                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                      Открывать списки (заказы, группы, пулы) отдельным окном поверх дашборда вместо полного экрана.
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={listWinMode} onChange={e => setListWinMode(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
+                      <span style={{ fontSize: 13 }}>Включить окна для списков</span>
+                    </label>
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
+                      При включении клик по «📋 Заказы», «📁 Группы» или «📦 Пулы» открывает список в окне поверх дашборда; клик по строке — окно заказа или редактор группы/пула.
+                    </div>
+                  </div>
+                  <div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🌲 Дерево заказов</div>
                     <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
                       Что показывать под заказами в списке по умолчанию.
@@ -2540,6 +2620,40 @@ export default function AppShell() {
           )}
         </div>
       </div>
+
+    {/* Окна заказов + окна-списки (поверх рабочего стола) */}
+    {win.wins.length > 0 && (
+      <WindowsLayer
+        wins={win.wins}
+        lay={win.lay}
+        snapZone={win.snapZone}
+        setWins={win.setWins}
+        setLay={win.setLay}
+        orders={orders}
+        resourcesList={resourcesList}
+        orderBomNodes={orderBomNodes}
+        routingFor={routingFor}
+        resName={resName}
+        groups={projGroups}
+        pools={projPools}
+        isDyn={isDyn}
+        renderOrdersTable={() => renderOrdersView('table')}
+        onOpenOrder={openOrderPanel}
+        onOpenGroup={(g: any) => { if (!selectedProject) return; win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'groups'))); setSelectedGroup(g); setSelectedProject(selectedProject); setView('project-groups'); setEditingGroup(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const gs = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setGroups(prev => ({ ...prev, [selectedProject.id]: gs.items })); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+        onOpenPool={(p: any) => { if (!selectedProject) return; win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'pools'))); setSelectedPool(p); setSelectedProject(selectedProject); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+        onClose={win.closeWin}
+        onFocus={win.focusWin}
+        onToggleMin={win.toggleMinWin}
+        onMinimizeAll={win.minimizeAll}
+        onReset={win.resetWin}
+        onToggleMax={win.toggleMaxWin}
+        onDrag={win.startDrag}
+        onResize={win.startResize}
+        onApplyCell={win.applySnapCell}
+        onSaveEdit={saveWinEdit}
+      />
+    )}
+
 
     {/* Sidebar context menu */}
     {sidebarCtx && (
