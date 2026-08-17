@@ -40,7 +40,6 @@ interface SidebarProps {
   setView: (v: View) => void;
   collapsed: boolean;
   menuMode: 'expanded' | 'manual' | 'auto';
-  onToggleCollapse: () => void;
   onAutoHide: () => void;
 }
 
@@ -55,7 +54,7 @@ export default function Sidebar(props: SidebarProps) {
     setDirectoryModal, setSelectedProject, setView,
     selectedPool, onSelectPool,
     selectedGroup, onSelectGroup,
-    collapsed, menuMode, onToggleCollapse, onAutoHide,
+    collapsed, menuMode, onAutoHide,
   } = props;
 
   // Internal expand state — independent multiselect
@@ -108,16 +107,17 @@ export default function Sidebar(props: SidebarProps) {
   };
 
   if (collapsed) {
+    if (menuMode === 'auto') return null;
     return (
-      <div className="sidebar s-rail" onMouseLeave={menuMode === 'auto' ? onAutoHide : undefined}>
+      <div className="sidebar s-rail">
         <style>{`
           .s-rail{--s-bg:#0F1E36;--s-border:#1E3252;--s-hover-bg:#162844;--s-active-bg:rgba(59,130,246,.12);--s-active-border:#3B82F6;--s-fg:#CBD5E1;--s-fg-sub:#94A3B8;--s-fg-active:#60A5FA;width:64px;background:var(--s-bg);border-right:1px solid var(--s-border);padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;overflow:visible}
           [data-theme="light"] .s-rail{--s-bg:#F1F5F9;--s-border:#E2E8F0;--s-hover-bg:#F8FAFC;--s-active-bg:rgba(59,130,246,.08);--s-active-border:#2563EB;--s-fg:#334155;--s-fg-sub:#64748B;--s-fg-active:#2563EB}
           .s-rail-item{position:relative;width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--s-fg-sub);border:1px solid transparent;font-size:18px;background:none;transition:all .12s;flex-shrink:0;padding:0;text-decoration:none}
           .s-rail-item:hover{background:var(--s-hover-bg);color:var(--s-fg)}
-          .s-rail-item.active{background:var(--s-active-bg);color:var(--s-fg-active);border-color:var(--s-active-border)}
+          .s-rail-item.active{background:#2563EB;color:#fff;border-color:#2563EB}
           .s-rail-avatar{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1E3A5F,#143054);color:#BFDBFE;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
-          .s-rail-item.active .s-rail-avatar{background:linear-gradient(135deg,#2563EB,#3B82F6);color:#DBEAFE}
+          .s-rail-item.active .s-rail-avatar{background:rgba(255,255,255,.22);color:#fff}
           .s-rail-sep{width:32px;height:1px;background:var(--s-border);margin:5px 0;flex-shrink:0}
           .s-tip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);z-index:6000;background:#0B1B33;border:1px solid #2A4060;color:#E8EEF5;font-size:12px;padding:6px 11px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);white-space:nowrap;display:none;pointer-events:none;font-weight:500;letter-spacing:0}
           .s-rail-item:hover .s-tip{display:block}
@@ -142,7 +142,6 @@ export default function Sidebar(props: SidebarProps) {
         <button className={'s-rail-item' + (view === 'reports' ? ' active' : '')} onClick={() => navTo('reports')}><span className="s-tip">Отчёты</span>📋</button>
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
           <button className={'s-rail-item' + (view === 'settings' ? ' active' : '')} onClick={() => navTo('settings')}><span className="s-tip">Настройки</span>⚙️</button>
-          <button className="s-rail-item" style={{ fontSize: 16 }} onClick={onToggleCollapse}><span className="s-tip">Развернуть меню</span>⟨</button>
         </div>
       </div>
     );

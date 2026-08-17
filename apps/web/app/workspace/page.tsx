@@ -80,7 +80,7 @@ export default function AppShell() {
   const [resourcesList, setResourcesList] = useState<any[]>([]);
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
   // Логика и состояние вынесены в useWindows() / WindowsLayer (components/windows).
-  const sidebarWidth = sidebarCollapsed ? 64 : 260;
+  const sidebarWidth = sidebarCollapsed ? (menuMode === 'auto' ? 0 : 64) : 260;
   const win = useWindows(sidebarWidth);
   const [pendingList, setPendingList] = useState<{ kind: 'orders' | 'groups' | 'pools'; title: string } | null>(null);
   const dashHeadRef = useRef<HTMLDivElement>(null);
@@ -1595,7 +1595,6 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         setView={setView}
         collapsed={sidebarCollapsed}
         menuMode={menuMode}
-        onToggleCollapse={() => setSidebarCollapsed(c => !c)}
         onAutoHide={() => setSidebarCollapsed(true)}
       />
 
