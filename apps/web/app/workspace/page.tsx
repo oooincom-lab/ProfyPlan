@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Fragment, useRef } from 'react';
+import { useState, useCallback, Fragment, useRef, useEffect } from 'react';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
@@ -52,6 +52,30 @@ export default function AppShell() {
   const [bomModalOrder, setBomModalOrder] = useState<any>(null);
   const [bomTimeline, setBomTimeline] = useState<any[] | null>(null);
   const [bomTimelineLoading, setBomTimelineLoading] = useState(false);
+  // ── Комбинированный BOM + Маршруты: вид дерева, панель заказа ──
+  const [treeMode, setTreeModeState] = useState<'both' | 'bom' | 'routes'>(() => {
+    if (typeof window === 'undefined') return 'both';
+    const v = localStorage.getItem('profyplan_tree_mode');
+    return (v === 'bom' || v === 'routes') ? v : 'both';
+  });
+  const [panelMode, setPanelModeState] = useState<'side' | 'modal' | 'window'>(() => {
+    if (typeof window === 'undefined') return 'side';
+    const v = localStorage.getItem('profyplan_panel_mode');
+    return v === 'modal' ? 'modal' : v === 'window' ? 'window' : 'side';
+  });
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const [selOrderId, setSelOrderId] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
+  const [panelEditing, setPanelEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [routings, setRoutings] = useState<any[]>([]);
+  const [resourcesList, setResourcesList] = useState<any[]>([]);
+  // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
+  type WinRec = { id: string; orderId: string; x: number; y: number; w: number; h: number; min: boolean; z: number; tab: 'order' | 'bom' | 'route' | 'res' | 'plan'; editing: boolean; form: Record<string, string> };
+  const [wins, setWins] = useState<WinRec[]>([]);
+  const winZ = useRef(10);
+  const [snapZone, setSnapZone] = useState<any>(null);
+  const [lay, setLay] = useState<{ winId: string; cols: number; rows: number; placed: string[] } | null>(null);
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
   const [orderShowAll, setOrderShowAll] = useState(false);
@@ -190,6 +214,207 @@ export default function AppShell() {
     } catch {}
     finally { setBomLoading(prev => ({ ...prev, [projId]: false })); }
   };
+
+  // ── Панель заказа: режимы, данные, действия ──
+  const setTreeMode = (m: 'both' | 'bom' | 'routes') => { setTreeModeState(m); try { localStorage.setItem('profyplan_tree_mode', m); } catch {} };
+  const setPanelMode = (m: 'side' | 'modal' | 'window') => {
+    setPanelModeState(m);
+    try { localStorage.setItem('profyplan_panel_mode', m); } catch {}
+    if (m === 'modal') { setSelOrderId(null); setPanelEditing(false); }
+  };
+
+  const loadPanelData = async (p: any) => {
+    try {
+      const [r, rs] = await Promise.all([
+        apiF<any>('/bom/routings').catch(() => null),
+        apiF<any[]>('/resources').catch(() => []),
+      ]);
+      if (r && Array.isArray(r.items)) setRoutings(r.items);
+      if (Array.isArray(rs)) setResourcesList(rs);
+    } catch {}
+  };
+
+  const selOrder = selOrderId ? (orders.find((o: any) => o.id === selOrderId) || null) : null;
+
+  const openOrderPanel = (o: any) => {
+    if (panelMode === 'window') { openWin(o); return; }
+    setSelOrderId(o.id);
+    setPanelTab('order');
+    setPanelEditing(false);
+  };
+
+  const routingFor = (o: any): any | null => {
+    if (!routings.length) return null;
+    const root = orderBomNodes(o).find((n: any) => !n.parent_id);
+    const key = root?.routing_id || null;
+    if (!key) return null;
+    return routings.find((r: any) => r.id === key) || null;
+  };
+
+  const resName = (rid: any) => {
+    if (!rid) return '—';
+    const r = resourcesList.find((x: any) => x.id === rid);
+    return r ? r.name : String(rid).slice(0, 8) + '…';
+  };
+
+  const startEditOrder = () => {
+    if (!selOrder) return;
+    setEditForm({
+      client: selOrder.client || '',
+      quantity: String(selOrder.quantity ?? ''),
+      priority: selOrder.priority || 'normal',
+      start_date: selOrder.start_date || '',
+      due_date: selOrder.due_date || '',
+      status: selOrder.status || 'draft',
+    });
+    setPanelEditing(true);
+  };
+
+  const saveOrderEdit = async () => {
+    if (!selOrder) return;
+    try {
+      const body: any = { client: editForm.client, quantity: Number(editForm.quantity) || 1, priority: editForm.priority, status: editForm.status };
+      if (editForm.start_date) body.start_date = editForm.start_date;
+      if (editForm.due_date) body.due_date = editForm.due_date;
+      await apiF(`/production-orders/${selOrder.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      setMsg('Заказ обновлён');
+      setPanelEditing(false);
+      if (selectedProject) await loadProjectOrdersView(selectedProject);
+    } catch (e: any) { setMsg('Ошибка сохранения: ' + (e.message || String(e))); }
+  };
+
+  // ── Окна: геометрия, Snap-зоны, drag/resize, раскладки ──
+  const deskRect = () => ({
+    x: 260, y: 53,
+    w: typeof window !== 'undefined' ? window.innerWidth - 260 : 1140,
+    h: typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 53 - 44) : 800,
+  });
+  const zoneFor = (x: number, y: number, w: number, h: number): any => {
+    const d = deskRect();
+    const l = x <= d.x + 26, r = x + w >= d.x + d.w - 26, t = y <= d.y + 26, b = y + h >= d.y + d.h - 26;
+    if (l && r) return { x: d.x, y: d.y, w: d.w, h: d.h };
+    if (l && t) return { x: d.x, y: d.y, w: d.w / 2, h: d.h / 2 };
+    if (r && t) return { x: d.x + d.w / 2, y: d.y, w: d.w / 2, h: d.h / 2 };
+    if (l && b) return { x: d.x, y: d.y + d.h / 2, w: d.w / 2, h: d.h / 2 };
+    if (r && b) return { x: d.x + d.w / 2, y: d.y + d.h / 2, w: d.w / 2, h: d.h / 2 };
+    if (l) return { x: d.x, y: d.y, w: d.w / 2, h: d.h };
+    if (r) return { x: d.x + d.w / 2, y: d.y, w: d.w / 2, h: d.h };
+    if (t) return { x: d.x, y: d.y, w: d.w, h: d.h / 2 };
+    if (b) return { x: d.x, y: d.y + d.h / 2, w: d.w, h: d.h / 2 };
+    return null;
+  };
+  const openWin = (o: any) => {
+    const ex = wins.find((w: any) => w.orderId === o.id);
+    if (ex) {
+      winZ.current += 1;
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current } : w));
+      return;
+    }
+    winZ.current += 1;
+    const n = wins.length;
+    const d = deskRect();
+    setWins(prev => [...prev, {
+      id: 'w' + Date.now().toString(36), orderId: o.id,
+      x: d.x + 40 + (n % 5) * 36, y: d.y + 26 + (n % 5) * 34,
+      w: Math.min(480, d.w - 60), h: Math.min(380, d.h - 60),
+      min: false, z: winZ.current, tab: 'order' as const, editing: false, form: {},
+    }]);
+  };
+  const closeWin = (id: string) => { setWins(prev => prev.filter(w => w.id !== id)); setLay(null); };
+  const focusWin = (id: string) => { winZ.current += 1; setWins(prev => prev.map(w => w.id === id ? { ...w, z: winZ.current, min: false } : w)); };
+  const toggleMinWin = (id: string) => { setWins(prev => prev.map(w => w.id === id ? { ...w, min: !w.min } : w)); };
+  const resetWin = (id: string) => {
+    const d = deskRect();
+    const idx = wins.findIndex(x => x.id === id);
+    const n = idx < 0 ? wins.length : idx;
+    winZ.current += 1;
+    setLay(null);
+    setWins(prev => prev.map(x => x.id === id ? {
+      ...x,
+      x: d.x + 40 + (n % 5) * 36, y: d.y + 26 + (n % 5) * 34,
+      w: Math.min(480, d.w - 60), h: Math.min(380, d.h - 60),
+      min: false, z: winZ.current,
+    } : x));
+  };
+  const saveWinEdit = async (w: WinRec) => {
+    const o = orders.find((x: any) => x.id === w.orderId);
+    if (!o) return;
+    try {
+      const body: any = { client: w.form.client, quantity: Number(w.form.quantity) || 1, priority: w.form.priority, status: w.form.status };
+      if (w.form.start_date) body.start_date = w.form.start_date;
+      if (w.form.due_date) body.due_date = w.form.due_date;
+      await apiF(`/production-orders/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      setMsg('Заказ обновлён');
+      setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x));
+      if (selectedProject) await loadProjectOrdersView(selectedProject);
+    } catch (e: any) { setMsg('Ошибка сохранения: ' + (e.message || String(e))); }
+  };
+  const startDrag = (e: any, w: WinRec) => {
+    if ((e.target as HTMLElement).closest('.pp-wbtn')) return;
+    focusWin(w.id);
+    const sx = e.clientX - w.x, sy = e.clientY - w.y;
+    let zone: any = null;
+    const el = document.getElementById('pp-win-' + w.id);
+    el?.classList.add('dragging');
+    const move = (ev: PointerEvent) => {
+      setWins(prev => prev.map(x => x.id === w.id ? { ...x, x: ev.clientX - sx, y: ev.clientY - sy } : x));
+      zone = zoneFor(ev.clientX - sx, ev.clientY - sy, w.w, w.h);
+      setSnapZone(zone);
+    };
+    const up = () => {
+      el?.classList.remove('dragging');
+      if (zone) setWins(prev => prev.map(x => x.id === w.id ? { ...x, x: zone.x, y: zone.y, w: zone.w, h: zone.h } : x));
+      setSnapZone(null);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const startResize = (e: any, w: WinRec) => {
+    e.preventDefault(); e.stopPropagation();
+    focusWin(w.id);
+    const sx = e.clientX, sy = e.clientY, sw = w.w, sh = w.h;
+    const move = (ev: PointerEvent) => {
+      setWins(prev => prev.map(x => x.id === w.id ? { ...x, w: Math.max(280, sw + ev.clientX - sx), h: Math.max(160, sh + ev.clientY - sy) } : x));
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const pickLay = (cols: number, rows: number) => {
+    if (!lay) return;
+    const d = deskRect();
+    const cw = d.w / cols, ch = d.h / rows;
+    setWins(prev => prev.map(w => w.id === lay.winId ? { ...w, x: d.x, y: d.y, w: cw, h: ch } : w));
+    setLay({ winId: lay.winId, cols, rows, placed: [] });
+  };
+  const placeNext = () => {
+    if (!lay || !lay.cols) return;
+    const d = deskRect();
+    const idx = 1 + lay.placed.length;
+    const total = lay.cols * lay.rows;
+    if (idx >= total) { setLay(null); return; }
+    const others = wins.filter(w => w.id !== lay.winId && !lay.placed.includes(w.id));
+    const next = others[0];
+    if (!next) { setLay(null); return; }
+    const cell = { x: d.x + (idx % lay.cols) * (d.w / lay.cols), y: d.y + Math.floor(idx / lay.cols) * (d.h / lay.rows), w: d.w / lay.cols, h: d.h / lay.rows };
+    setWins(prev => prev.map(w => w.id === next.id ? { ...w, x: cell.x, y: cell.y, w: cell.w, h: cell.h, min: false } : w));
+    const placed = [...lay.placed, next.id];
+    if (placed.length >= total - 1) { setLay(null); return; }
+    setLay({ ...lay, placed });
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (lay) { setLay(null); return; }
+        setPanelEditing(false); setSelOrderId(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lay]);
 
   const toggleBomOrder = (o: any) => {
     if (!selectedProject) return;
@@ -660,6 +885,7 @@ export default function AppShell() {
   const loadProjectOrdersView = async (p: any) => {
     setSelectedProject(p);
     setView('project-orders');
+    loadPanelData(p);
     if (!orders.length || selectedProject?.id !== p.id) {
       try {
         const [o, g, pl] = await Promise.all([
@@ -759,7 +985,7 @@ export default function AppShell() {
     .kpi-val.g{color:#10B981}.kpi-val.r{color:#EF4444}
     .kpi-sub{font-size:12px;color:#5A7090}
     .panel{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:20px;margin-bottom:16px}
-    .panel-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .panel-hdr{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;row-gap:8px;margin-bottom:16px}
     .panel-title{font-size:15px;font-weight:600}
     .panel-sub{font-size:12px;color:#5A7090;font-family:'IBM Plex Mono',monospace;margin-left:8px}
     .tbl{width:100%;border-collapse:collapse;font-size:13px}
@@ -802,6 +1028,37 @@ export default function AppShell() {
     .dir-card .dc-icon{font-size:32px;margin-bottom:10px}
     .dir-card .dc-title{font-size:14px;font-weight:600;margin-bottom:4px}
     .dir-card .dc-count{font-size:12px;color:#5A7090;font-family:'IBM Plex Mono',monospace}
+    /* ── Режим «Окна» ── */
+    .pp-win{position:fixed;display:flex;flex-direction:column;background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3A5F;border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.55);overflow:hidden;transition:left .1s,top .1s,width .1s,height .1s}
+    .pp-win.dragging{transition:none;box-shadow:0 22px 64px rgba(0,0,0,.7)}
+    .pp-win.focus{border-color:rgba(59,130,246,.7)}
+    .pp-win.min{display:none}
+    .pp-win-title{height:34px;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;background:#0D1F3A;border-bottom:1px solid #1E3252;cursor:grab;user-select:none;flex-shrink:0}
+    .pp-win-title .ttl{flex:1;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+    .pp-wbtn{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#8FA3BD;cursor:pointer;background:none;border:0;flex-shrink:0;font-family:inherit}
+    .pp-wbtn:hover{background:rgba(59,130,246,.18);color:#fff}
+    .pp-wbtn.close:hover{background:rgba(239,68,68,.25);color:#fff}
+    .pp-resize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#2A4060 50%,#2A4060 58%,transparent 58%);border-bottom-right-radius:9px}
+    .pp-snapzone{position:fixed;background:rgba(59,130,246,.14);border:2px solid #3B82F6;border-radius:8px;pointer-events:none;z-index:800;transition:all .05s}
+    .pp-taskbar{position:fixed;left:260px;right:0;bottom:0;height:44px;background:#0B1B33;border-top:1px solid #1E3252;display:flex;align-items:center;gap:6px;padding:0 10px;z-index:500;overflow-x:auto}
+    .pp-tchip{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 10px;background:#0F1E36;border:1px solid #1E3252;border-radius:7px;font-size:11.5px;color:#B0C4DE;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit}
+    .pp-tchip:hover{border-color:#3B82F6;color:#fff}
+    .pp-tchip.active{background:rgba(59,130,246,.16);border-color:rgba(59,130,246,.5);color:#fff}
+    .pp-tchip.min{opacity:.55;border-style:dashed}
+    .pp-lay{position:fixed;z-index:900;background:#0B1B33;border:1px solid #2A4060;border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:12px;width:340px}
+    .pp-lay .lh{font-size:11px;color:#60A5FA;letter-spacing:.06em;margin-bottom:10px;font-weight:600}
+    .pp-layrow{display:flex;gap:10px;margin-bottom:10px}
+    .pp-layopt{border:1px solid #1E3252;border-radius:8px;padding:8px;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center}
+    .pp-layopt:hover{border-color:#3B82F6;background:rgba(59,130,246,.06)}
+    .pp-layopt .mini{display:flex;gap:3px;width:74px;height:40px}
+    .pp-layopt .cell{border:1px solid #3B82F6;border-radius:3px;background:rgba(59,130,246,.12);flex:1}
+    .pp-layopt .cell.h{border-color:#2A4060;background:rgba(42,64,96,.15)}
+    .pp-layopt .lab{font-size:10px;color:#8FA3BD}
+    .pp-laycells{display:grid;gap:6px}
+    .pp-laycells .bc{border:1px solid rgba(59,130,246,.5);border-radius:8px;background:rgba(59,130,246,.08);display:flex;align-items:center;justify-content:center;font-size:12px;color:#B0C4DE;cursor:pointer;min-height:60px;flex-direction:column;padding:6px}
+    .pp-laycells .bc:hover{background:rgba(59,130,246,.2);border-color:#60A5FA}
+    .pp-laycells .bc.done{border-color:#10B981;background:rgba(16,185,129,.1);color:#34D399;cursor:default}
+    .pp-laycells .bc small{font-size:10px;color:#5A7090;display:block;margin-top:2px}
   `;
 
   // ── Loading ──
@@ -909,7 +1166,7 @@ export default function AppShell() {
       />
 
       {/* ═══ MAIN ═══ */}
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0 }}>
         {/* Topbar */}
         <div className="topbar">
           <div>
@@ -1134,10 +1391,12 @@ export default function AppShell() {
             };
             return (
               <>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', width: '100%' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="panel">
                   <div className="panel-hdr">
                     <div><span className="panel-title">Заказы</span><span className="panel-sub">{filtered.length} из {orders.length}</span></div>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 10px', alignItems: 'center', justifyContent: 'flex-end' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD', cursor: 'pointer' }}>
                         <input type="checkbox" checked={orderShowAll} onChange={e => { setOrderShowAll(e.target.checked); if (!e.target.checked) setOrderTypeFilter('free'); else setOrderTypeFilter('all'); }} style={{ accentColor: '#3B82F6' }} />
                         Показать все заказы
@@ -1153,7 +1412,12 @@ export default function AppShell() {
                       <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '4px 8px', whiteSpace: 'nowrap' }} title={collapsedOrderIds.size === 0 ? 'Свернуть все поддеревья цепочки' : 'Развернуть все поддеревья цепочки'}>{collapsedOrderIds.size === 0 ? '▾ Свернуть всё' : '▸ Развернуть всё'}</button>
                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
-                      <span style={{ fontSize: 11, color: '#5A7090' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090' }}>○ = План</span>
+                      <span style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2 }}>
+                        {([['bom', 'Состав'], ['both', 'Состав + Маршруты'], ['routes', 'Маршруты']] as const).map(([v, label]) => (
+                          <button key={v} onClick={() => setTreeMode(v)} style={{ border: 0, background: treeMode === v ? '#3B82F6' : 'transparent', color: treeMode === v ? '#fff' : '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
+                        ))}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>○ = План</span>
                     </div>
                   </div>
                   <div style={{
@@ -1273,7 +1537,7 @@ export default function AppShell() {
                           const bomOpen = expandedBomOrder === o.id;
                           return (
                             <Fragment key={o.id}>
-                            <tr draggable onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
+                            <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
                               <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 56, minWidth: 56, maxWidth: 56, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
                                 {hasChildren ? (
                                   <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '2px 3px 2px 0', marginRight: 2, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
@@ -1315,6 +1579,25 @@ export default function AppShell() {
                                 </td>
                               </tr>
                             )}
+                            {treeMode !== 'bom' && (() => {
+                              const rt = routingFor(o);
+                              if (!rt || !rt.operations || !rt.operations.length) return null;
+                              const total = rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+                              return (
+                                <tr>
+                                  <td colSpan={orderShowAll ? 14 : 13} style={{ padding: '4px 14px 8px', background: 'rgba(6,182,212,.04)' }}>
+                                    <div style={{ fontSize: 11, color: '#22D3EE', marginBottom: 4 }}>⛓ Маршрут · {rt.name || '—'} · {rt.operations.length} оп. · {total} ч</div>
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                      {rt.operations.map((op: any) => (
+                                        <span key={op.id || op.sequence_number} style={{ background: '#0B1B33', border: '1px solid #1E3252', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#B0C4DE' }}>
+                                          {op.sequence_number} {op.name} · {resName(op.resource_type_id)} · {Number(op.duration_hours) || 0} ч
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })()}
                             </Fragment>
                           );
                         })}
@@ -1323,6 +1606,377 @@ export default function AppShell() {
                     </table>
                   </div>
                 </div>
+                </div>
+                {(() => {
+                  const o = selOrder;
+                  const isModal = panelMode === 'modal';
+                  if (panelMode === 'window') return null;
+                  if (isModal && !o) return null;
+                  const base: any = {
+                    background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 12,
+                    overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column',
+                    maxHeight: 'calc(100vh - 130px)',
+                  };
+                  const pStyle: any = isModal
+                    ? { ...base, position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px,92vw)', maxHeight: 'min(720px,90vh)', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
+                    : { ...base, width: panelWidth ?? '40%', minWidth: 300, maxWidth: '62%', position: 'sticky', top: 16 };
+                  const tabs: { v: 'order' | 'bom' | 'route' | 'res' | 'plan'; l: string }[] = [
+                    { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
+                  ];
+                  const bomNodes = o ? orderBomNodes(o) : [];
+                  const renderBomNode = (n: any, d: number): any => {
+                    const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
+                    return (
+                      <div key={n.id}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
+                          <span style={{ color: n.node_type === 'material' ? '#8FA3BD' : '#E2E8F0' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
+                          <span style={{ color: '#5A7090' }}>×{n.quantity_per_parent ?? '1'}</span>
+                          <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
+                          {n.node_type === 'semi_finished' && <span style={{ background: 'rgba(139,92,246,.15)', color: '#C4B5FD', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>ПФ</span>}
+                          {n.is_phantom && <span style={{ background: 'rgba(6,182,212,.12)', color: '#67E8F9', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>фантом</span>}
+                          {n.routing_id && <span style={{ color: '#22D3EE', fontSize: 10 }}>⛓</span>}
+                        </div>
+                        {kids.map((k: any) => renderBomNode(k, d + 1))}
+                      </div>
+                    );
+                  };
+                  const rt = o ? routingFor(o) : null;
+                  const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
+                  return (
+                    <>
+                      {!isModal && (
+                        <div
+                          style={{ width: 4, flex: 'none', cursor: 'col-resize', alignSelf: 'stretch', borderRadius: 2, background: 'transparent', transition: 'background .15s' }}
+                          title="Перетащите — изменится ширина панели"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const startX = e.clientX;
+                            const cw = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect().width;
+                            const startW = panelWidth ?? Math.round(cw * 0.4);
+                            const onMove = (ev: MouseEvent) => {
+                              const w = Math.max(280, Math.min(cw - 380, startW - (ev.clientX - startX)));
+                              setPanelWidth(Math.round(w));
+                              try { localStorage.setItem('profyplan_panel_width', String(Math.round(w))); } catch {}
+                            };
+                            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                            window.addEventListener('mousemove', onMove);
+                            window.addEventListener('mouseup', onUp);
+                          }}
+                        />
+                      )}
+                      {isModal && <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,8,20,.66)', zIndex: 110 }} onClick={() => setSelOrderId(null)} />}
+                      <div style={pStyle}>
+                        <div style={{ padding: '10px 14px', borderBottom: '1px solid #1E3A5F', background: '#0D1F3A', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.ext_id || o.id) : 'Панель заказа'}</div>
+                            <div style={{ fontSize: 12, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.specification_name || '—') : 'Выберите заказ в списке'}</div>
+                          </div>
+                          {o && panelTab === 'order' && !panelEditing && (
+                            <button onClick={startEditOrder} style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
+                          )}
+                          {isModal && (
+                            <button onClick={() => setSelOrderId(null)} style={{ background: 'transparent', border: 0, color: '#8FA3BD', cursor: 'pointer', fontSize: 15, padding: '2px 6px' }}>✕</button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', borderBottom: '1px solid #1E3252' }}>
+                          {tabs.map(tb => (
+                            <button key={tb.v} onClick={() => { setPanelTab(tb.v); setPanelEditing(false); }} style={{ flex: 1, border: 0, background: 'transparent', color: panelTab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (panelTab === tb.v ? '#3B82F6' : 'transparent'), padding: '8px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
+                          ))}
+                        </div>
+                        <div style={{ padding: '12px 14px', minHeight: 300, overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0' }}>
+                          {!o && !isModal && <div style={{ color: '#5A7090', fontSize: 12.5 }}>Кликните по заказу в списке, чтобы увидеть его карточку: состав, маршрут, ресурсы и план.</div>}
+                          {o && panelTab === 'order' && !panelEditing && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
+                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', o.priority || '—'], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
+                              <div key={k} style={{ display: 'contents' }}>
+                                <div style={{ color: '#5A7090' }}>{k}</div>
+                                <div style={{ color: '#E2E8F0' }}>{v}</div>
+                              </div>
+                              ))}
+                            </div>
+                          )}
+                          {o && panelTab === 'order' && panelEditing && (
+                            <div style={{ display: 'grid', gap: 8 }}>
+                              {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map(([k, label]) => (
+                                <label key={k} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ color: '#8FA3BD', fontSize: 12 }}>{label}</span>
+                                  {k === 'priority' ? (
+                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                      <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                                    </select>
+                                  ) : k === 'status' ? (
+                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                      <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
+                                    </select>
+                                  ) : (
+                                    <input value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                                  )}
+                                </label>
+                              ))}
+                              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                                <button onClick={saveOrderEdit} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Сохранить</button>
+                                <button onClick={() => setPanelEditing(false)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Отмена</button>
+                              </div>
+                            </div>
+                          )}
+                          {o && panelTab === 'bom' && (
+                            bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
+                            : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
+                          )}
+                          {o && panelTab === 'route' && (
+                            rt && rt.operations && rt.operations.length ? (
+                              <div>
+                                <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
+                                {rt.operations.map((op: any) => (
+                                  <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                      <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
+                                      <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                      <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                                    </div>
+                                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
+                                      Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
+                          )}
+                          {o && panelTab === 'res' && (
+                            resourcesList.length ? (
+                              <div>
+                                <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
+                                {resourcesList.map((r: any) => (
+                                  <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
+                                    <span style={{ flex: 1 }}>{r.name}</span>
+                                    <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
+                                    <span style={{ color: '#FCD34D', fontSize: 11 }}>×{r.capacity_per_unit ?? r.capacity_per_day ?? '—'}</span>
+                                    <span style={{ color: '#5A7090', fontSize: 11 }}>{r.capacity_unit || r.unit || ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
+                          )}
+                          {o && panelTab === 'plan' && (
+                            <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
+                              План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+                </div>
+                {panelMode === 'window' && (() => {
+                  const maxZ = wins.reduce((m: number, w: any) => Math.max(m, w.z), 0);
+                  const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
+                  const tabList: { v: 'order' | 'bom' | 'route' | 'res' | 'plan'; l: string }[] = [
+                    { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
+                  ];
+                  return (
+                    <>
+                      {snapZone && <div className="pp-snapzone" style={{ left: snapZone.x, top: snapZone.y, width: snapZone.w, height: snapZone.h }} />}
+                      {wins.map((w: WinRec) => {
+                        const o = orderById(w.orderId);
+                        if (!o) return null;
+                        const bomNodes = orderBomNodes(o);
+                        const renderBomNode = (n: any, d: number): any => {
+                          const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
+                          return (
+                            <div key={n.id}>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
+                                <span style={{ color: n.node_type === 'material' ? '#8FA3BD' : '#E2E8F0' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
+                                <span style={{ color: '#5A7090' }}>×{n.quantity_per_parent ?? '1'}</span>
+                                <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
+                                {n.node_type === 'semi_finished' && <span style={{ background: 'rgba(139,92,246,.15)', color: '#C4B5FD', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>ПФ</span>}
+                                {n.is_phantom && <span style={{ background: 'rgba(6,182,212,.12)', color: '#67E8F9', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>фантом</span>}
+                                {n.routing_id && <span style={{ color: '#22D3EE', fontSize: 10 }}>⛓</span>}
+                              </div>
+                              {kids.map((k: any) => renderBomNode(k, d + 1))}
+                            </div>
+                          );
+                        };
+                        const rt = routingFor(o);
+                        const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
+                        return (
+                          <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+                            style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+                            onPointerDown={() => { if (w.z !== maxZ) focusWin(w.id); }}>
+                            <div className="pp-win-title" onPointerDown={(e) => startDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; resetWin(w.id); }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#3B82F6', flexShrink: 0 }} />
+                              <span className="ttl">{o.ext_id || o.id} · {o.specification_name || ''}</span>
+                              <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); toggleMinWin(w.id); }}>–</button>
+                              <button className="pp-wbtn" title="Раскладка окон (Snap)" onClick={(e) => { e.stopPropagation(); focusWin(w.id); setLay(prev => (prev && prev.winId === w.id && !prev.cols) ? null : { winId: w.id, cols: 0, rows: 0, placed: [] }); }}>⛶</button>
+                              <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); closeWin(w.id); }}>✕</button>
+                            </div>
+                            <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
+                              {tabList.map(tb => (
+                                <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v, editing: false } : x))}
+                                  style={{ flex: 1, border: 0, background: 'transparent', color: w.tab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (w.tab === tb.v ? '#3B82F6' : 'transparent'), padding: '7px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
+                              ))}
+                            </div>
+                            <div style={{ padding: '12px 14px', overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
+                              {w.tab === 'order' && !w.editing && (
+                                <div>
+                                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client: o.client || '', quantity: String(o.quantity ?? ''), priority: o.priority || 'normal', start_date: o.start_date || '', due_date: o.due_date || '', status: o.status || 'draft' } } : x))}
+                                      style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
+                                    {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', o.priority || '—'], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Заказ родителя', o.parent_order_id || '—']].map((kv: any) => (
+                                      <div key={kv[0]} style={{ display: 'contents' }}>
+                                        <div style={{ color: '#5A7090' }}>{kv[0]}</div>
+                                        <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {w.tab === 'order' && w.editing && (
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                  {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map((kv) => {
+                                    const k = kv[0] as string, label = kv[1] as string;
+                                    return (
+                                      <label key={k} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ color: '#8FA3BD', fontSize: 12 }}>{label}</span>
+                                        {k === 'priority' ? (
+                                          <select value={w.form[k] || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                            <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                                          </select>
+                                        ) : k === 'status' ? (
+                                          <select value={w.form[k] || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                            <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
+                                          </select>
+                                        ) : (
+                                          <input value={w.form[k] || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                                        )}
+                                      </label>
+                                    );
+                                  })}
+                                  <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                                    <button onClick={() => saveWinEdit(w)} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Сохранить</button>
+                                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x))} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Отмена</button>
+                                  </div>
+                                </div>
+                              )}
+                              {w.tab === 'bom' && (
+                                bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
+                                : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
+                              )}
+                              {w.tab === 'route' && (
+                                rt && rt.operations && rt.operations.length ? (
+                                  <div>
+                                    <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
+                                    {rt.operations.map((op: any) => (
+                                      <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                          <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
+                                          <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                          <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                                        </div>
+                                        <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
+                                          Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
+                              )}
+                              {w.tab === 'res' && (
+                                resourcesList.length ? (
+                                  <div>
+                                    <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
+                                    {resourcesList.map((r: any) => (
+                                      <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
+                                        <span style={{ flex: 1 }}>{r.name}</span>
+                                        <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
+                                        <span style={{ color: '#FCD34D', fontSize: 11 }}>×{r.capacity_per_unit ?? r.capacity_per_day ?? '—'}</span>
+                                        <span style={{ color: '#5A7090', fontSize: 11 }}>{r.capacity_unit || r.unit || ''}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
+                              )}
+                              {w.tab === 'plan' && (
+                                <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
+                                  План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
+                                </div>
+                              )}
+                            </div>
+                            <div className="pp-resize" onPointerDown={(e) => startResize(e, w)} />
+                          </div>
+                        );
+                      })}
+                      {lay && lay.cols > 0 && (() => {
+                        const d = deskRect();
+                        const cw = d.w / lay.cols, ch = d.h / lay.rows;
+                        const cells: any[] = [];
+                        for (let r = 0; r < lay.rows; r++) for (let c = 0; c < lay.cols; c++) cells.push({ x: d.x + c * cw, y: d.y + r * ch, w: cw, h: ch });
+                        return (
+                          <div className="pp-lay" style={{ right: 16, bottom: 56 }}>
+                            <div className="lh">РАСКЛАДКА · {lay.cols * lay.rows} ячейки — клик по свободной ячейке ставит следующее открытое окно</div>
+                            <div className="pp-laycells" style={{ gridTemplateColumns: 'repeat(' + lay.cols + ', 1fr)' }}>
+                              {cells.map((z: any, i: number) => {
+                                const placedW = i === 0 ? wins.find((x: any) => x.id === lay.winId) : (i - 1 < lay.placed.length ? wins.find((x: any) => x.id === lay.placed[i - 1]) : null);
+                                const placedO = placedW ? orderById(placedW.orderId) : null;
+                                const isFree = i > 0 && i - 1 >= lay.placed.length;
+                                const cand = isFree ? wins.find((x: any) => x.id !== lay.winId && !lay.placed.includes(x.id)) : null;
+                                const candO = cand ? orderById(cand.orderId) : null;
+                                return (
+                                  <div key={i} className={'bc' + (placedW ? ' done' : '')} onClick={() => { if (isFree) placeNext(); }}
+                                    style={isFree ? { borderStyle: 'dashed' } : undefined}>
+                                    {placedW ? <>{placedO ? (placedO.ext_id || placedO.id) : (placedW.orderId.slice(0, 8))}</> : (isFree ? <>{candO ? '→ ' + (candO.ext_id || candO.id) : '—'} <small>клик — поставить сюда</small></> : '')}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {lay && !lay.cols && (() => {
+                        const L: { n: string; cols: number; rows: number }[] = [
+                          { n: '2 окна', cols: 2, rows: 1 },
+                          { n: '3 окна', cols: 3, rows: 1 },
+                          { n: '4 окна', cols: 2, rows: 2 },
+                        ];
+                        return (
+                          <div className="pp-lay" style={{ right: 16, bottom: 56 }}>
+                            <div className="lh">РАСКЛАДКА ОКОН — выберите вариант</div>
+                            <div className="pp-layrow">
+                              {L.map((o2) => (
+                                <div key={o2.n} className="pp-layopt" onClick={() => pickLay(o2.cols, o2.rows)}>
+                                  <div className="mini">
+                                    {Array.from({ length: o2.rows * o2.cols }).map((_, i) => (
+                                      <div key={i} className={'cell' + (o2.cols === 3 && i >= 2 ? ' h' : '')} />
+                                    ))}
+                                  </div>
+                                  <div className="lab">{o2.n}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {wins.length > 0 && (
+                        <div className="pp-taskbar">
+                          {wins.map((w: WinRec) => {
+                            const o = orderById(w.orderId);
+                            const active = w.z === maxZ && !w.min;
+                            return (
+                              <div key={w.id} className={'pp-tchip' + (active ? ' active' : '') + (w.min ? ' min' : '')}
+                                onClick={() => { if (w.min || !active) focusWin(w.id); else toggleMinWin(w.id); }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : '#3B82F6', flexShrink: 0 }} />
+                                {o ? (o.ext_id || o.id) : '—'}
+                              </div>
+                            );
+                          })}
+                          <span style={{ fontSize: 11, color: '#5A7090', marginLeft: 4, whiteSpace: 'nowrap' }}>Перетаскивайте окна за заголовок — у краёв появится зона прилипания; «⛶» — сетка раскладок.</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             );
           })()}
@@ -2025,6 +2679,32 @@ export default function AppShell() {
                   ))}
                   <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 8, lineHeight: 1.5, background: 'rgba(245,158,11,.06)', border: '1px solid rgba(245,158,11,.15)', borderRadius: 8, padding: '10px 12px' }}>
                     ⚠ Проверка выполняется при открытии BOM заказа: полуфабрикаты без маршрута и без подчинённого заказа подсвечиваются, создание заказа — одним кликом. Полуфабрикаты-«фантомы» (прозрачные узлы) исключены из проверки.
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🗂 Панель заказа</div>
+                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                      Как открывать окно заказа при клике на заказ в списке.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {([['side', 'Сбоку'], ['modal', 'Модальное'], ['window', 'Окна']] as const).map((kv) => (
+                        <button key={kv[0]} onClick={() => setPanelMode(kv[0])} style={{ flex: 1, border: '1px solid ' + (panelMode === kv[0] ? 'rgba(59,130,246,.6)' : '#1E3252'), background: panelMode === kv[0] ? 'rgba(59,130,246,.14)' : '#0A1628', color: panelMode === kv[0] ? '#fff' : '#8FA3BD', borderRadius: 8, padding: '9px 10px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{kv[1]}</button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
+                      {panelMode === 'window' ? 'Окна: несколько заказов одновременно, перетаскивание, прилипание к краям (Snap), сетка раскладок «⛶», панель задач внизу.' : panelMode === 'modal' ? 'Модальное — поверх списка, закрытие по ✕ или Esc.' : 'Сбоку — панель закреплена справа от списка, ширину меняют перетаскиванием разделителя.'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🌲 Дерево заказов</div>
+                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                      Что показывать под заказами в списке по умолчанию.
+                    </div>
+                    <select value={treeMode} onChange={e => setTreeMode(e.target.value as any)} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '6px 10px', fontSize: 12.5, width: '100%' }}>
+                      <option value="bom">Состав (BOM)</option>
+                      <option value="both">Состав + Маршруты</option>
+                      <option value="routes">Маршруты</option>
+                    </select>
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6 }}>Режим можно быстро переключать и в самом списке заказов.</div>
                   </div>
                 </div>
               </div>

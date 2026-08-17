@@ -70,3 +70,10 @@ html.light ::-webkit-scrollbar-thumb:hover {
 html.light * {
   scrollbar-color: #CBD5E1 transparent;
 }
+
+/* Полосы прокрутки — в стиле разделителя панели заказа */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 4px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #3B82F6; border: 2px solid transparent; background-clip: content-box; }
+* { scrollbar-width: thin; scrollbar-color: #1E3A5F transparent; }
