@@ -32,7 +32,7 @@ export type LayState = { winId: string; cols: number; rows: number; placed: stri
  * сетка раскладок, панель задач. Вынесено из page.tsx, чтобы не раздувать
  * основной компонент рабочего стола.
  */
-export function useWindows() {
+export function useWindows(sidebarWidth: number = 260) {
   const [wins, setWins] = useState<WinRec[]>([]);
   const winZ = useRef(10);
   const [snapZone, setSnapZone] = useState<any>(null);
@@ -41,9 +41,9 @@ export function useWindows() {
   // Рабочая область окон: правее левого меню (260px), ниже шапки (53px),
   // выше панели задач (44px).
   const deskRect = () => ({
-    x: 260,
+    x: sidebarWidth,
     y: 53,
-    w: typeof window !== 'undefined' ? window.innerWidth - 260 : 1140,
+    w: typeof window !== 'undefined' ? window.innerWidth - sidebarWidth : 1140,
     h: typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 53 - 44) : 800,
   });
 

@@ -65,6 +65,12 @@ export default function AppShell() {
     const v = localStorage.getItem('profyplan_panel_mode');
     return v === 'modal' ? 'modal' : v === 'window' ? 'window' : 'side';
   });
+  const [menuMode, setMenuModeState] = useState<'expanded' | 'manual' | 'auto'>(() => {
+    if (typeof window === 'undefined') return 'expanded';
+    const v = localStorage.getItem('profyplan_menu_mode');
+    return v === 'manual' ? 'manual' : v === 'auto' ? 'auto' : 'expanded';
+  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [selOrderId, setSelOrderId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
@@ -74,7 +80,8 @@ export default function AppShell() {
   const [resourcesList, setResourcesList] = useState<any[]>([]);
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
   // Логика и состояние вынесены в useWindows() / WindowsLayer (components/windows).
-  const win = useWindows();
+  const sidebarWidth = sidebarCollapsed ? 64 : 260;
+  const win = useWindows(sidebarWidth);
   const [pendingList, setPendingList] = useState<{ kind: 'orders' | 'groups' | 'pools'; title: string } | null>(null);
   const dashHeadRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -237,6 +244,11 @@ export default function AppShell() {
     setPanelModeState(m);
     try { localStorage.setItem('profyplan_panel_mode', m); } catch {}
     if (m === 'modal') { setSelOrderId(null); setPanelEditing(false); }
+  };
+  const setMenuMode = (m: 'expanded' | 'manual' | 'auto') => {
+    setMenuModeState(m);
+    try { localStorage.setItem('profyplan_menu_mode', m); } catch {}
+    if (m === 'expanded') { setSidebarCollapsed(false); }
   };
 
   const loadPanelData = async (p: any) => {
@@ -1455,7 +1467,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     .pp-wbtn.close:hover{background:rgba(239,68,68,.25);color:#fff}
     .pp-resize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#2A4060 50%,#2A4060 58%,transparent 58%);border-bottom-right-radius:9px}
     .pp-snapzone{position:fixed;background:rgba(59,130,246,.14);border:2px solid #3B82F6;border-radius:8px;pointer-events:none;z-index:800;transition:all .05s}
-    .pp-taskbar{position:fixed;left:260px;right:0;bottom:0;height:44px;background:#0B1B33;border-top:1px solid #1E3252;display:flex;align-items:center;gap:6px;padding:0 10px;z-index:500;overflow-x:auto}
+    .pp-taskbar{position:fixed;left:var(--sbw,260px);right:0;bottom:0;height:44px;background:#0B1B33;border-top:1px solid #1E3252;display:flex;align-items:center;gap:6px;padding:0 10px;z-index:500;overflow-x:auto}
     .pp-tchip{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 10px;background:#0F1E36;border:1px solid #1E3252;border-radius:7px;font-size:11.5px;color:#B0C4DE;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit}
     .pp-tchip:hover{border-color:#3B82F6;color:#fff}
     .pp-tchip.active{background:rgba(59,130,246,.16);border-color:rgba(59,130,246,.5);color:#fff}
@@ -1547,7 +1559,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
   const projPools = selectedProject ? (pools[selectedProject.id] || []) : [];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', minHeight: '100vh' }}>
+    <div
+      style={{ display: 'grid', gridTemplateColumns: sidebarWidth + 'px 1fr', minHeight: '100vh', ['--sbw' as any]: sidebarWidth + 'px' }}
+      onMouseMove={(e) => { if (menuMode === 'auto' && sidebarCollapsed && e.clientX < 8) setSidebarCollapsed(false); }}
+    >
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
       <Sidebar
@@ -1578,12 +1593,23 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         setDirectoryModal={setDirectoryModal}
         setSelectedProject={setSelectedProject}
         setView={setView}
+        collapsed={sidebarCollapsed}
+        menuMode={menuMode}
+        onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+        onAutoHide={() => setSidebarCollapsed(true)}
       />
 
       {/* ═══ MAIN ═══ */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0 }}>
         {/* Topbar */}
         <div className="topbar">
+          {menuMode !== 'expanded' && (
+            <button
+              onClick={() => setSidebarCollapsed(c => !c)}
+              title={sidebarCollapsed ? 'Развернуть меню' : 'Свернуть меню в значки'}
+              style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #2A4060', background: '#0B1B33', color: '#8FA3BD', cursor: 'pointer', fontSize: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 4 }}
+            >⟨</button>
+          )}
           <div>
             <h1>{titles[view]}</h1>
             {view === 'project-dashboard' && <div className="tb-sub">{msg}</div>}
@@ -2465,6 +2491,20 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     </div>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
                       {panelMode === 'window' ? 'Окна: несколько заказов одновременно, перетаскивание, прилипание к краям (Snap), сетка раскладок «⛶», панель задач внизу.' : panelMode === 'modal' ? 'Модальное — поверх списка, закрытие по ✕ или Esc.' : 'Сбоку — панель закреплена справа от списка, ширину меняют перетаскиванием разделителя.'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>☰ Меню</div>
+                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                      Как сворачивать левое меню.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {([['expanded', 'Развёрнуто'], ['manual', 'Вручную'], ['auto', 'Авто-скрытие']] as const).map((kv) => (
+                        <button key={kv[0]} onClick={() => setMenuMode(kv[0])} style={{ flex: 1, border: '1px solid ' + (menuMode === kv[0] ? 'rgba(59,130,246,.6)' : '#1E3252'), background: menuMode === kv[0] ? 'rgba(59,130,246,.14)' : '#0A1628', color: menuMode === kv[0] ? '#fff' : '#8FA3BD', borderRadius: 8, padding: '9px 10px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{kv[1]}</button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
+                      {menuMode === 'auto' ? 'Авто-скрытие: меню свёрнуто, при наведении мыши к левому краю — выплывает.' : menuMode === 'manual' ? 'Вручную: кнопка «⟨» в шапке сворачивает меню в значки и разворачивает обратно.' : 'Меню всегда развёрнуто, без кнопки скрытия.'}
                     </div>
                   </div>
                   <div>
