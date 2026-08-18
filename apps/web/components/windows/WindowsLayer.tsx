@@ -69,6 +69,12 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     return o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
   };
 
+  const winFullTitle = (w: WinRec) => {
+    if (w.kind === 'list') return w.title || 'Список';
+    const o = w.data || orderById(w.orderId);
+    return o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
+  };
+
   const reorderWins = (from: number, to: number) => {
     setWins(prev => {
       const arr = [...prev];
@@ -328,7 +334,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 onDragLeave={() => { if (overIdx === idx) setOverIdx(null); }}
                 onDrop={(e) => { e.preventDefault(); if (dragIdx !== null && dragIdx !== idx) reorderWins(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-                title={winLabel(w)}
+                title={winFullTitle(w)}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : '#3B82F6'), flexShrink: 0 }} />
                 {winLabel(w)}
