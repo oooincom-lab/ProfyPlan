@@ -108,45 +108,113 @@ export default function Sidebar(props: SidebarProps) {
 
   if (collapsed) {
     if (menuMode === 'auto') return null;
+    const activeProjects = projects.filter((p: any) => p.status !== 'archived');
+    const archivedProjects = projects.filter((p: any) => p.status === 'archived');
+    const openProj = selectedProject && selectedProject.status !== 'archived' ? selectedProject : null;
+    const otherProjects = activeProjects.filter((p: any) => openProj ? p.id !== openProj.id : true);
+    const ini = (p: any) => (p.name || '??').slice(0, 2).toUpperCase();
+    const projSub = (p: any) => (
+      <span className="s-flyout">
+        <span className="s-fh">{p.name}</span>
+        <span className="s-fi" onClick={() => loadProjectOrdersView(p)}>📋 Заказы</span>
+        <span className="s-fi" onClick={() => { onSelectGroup(null, p); loadProjectGroups(p); }}>📁 Группы</span>
+        <span className="s-fi" onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}>📦 Пулы</span>
+        <span className="s-fi" onClick={() => { setSelectedProject(p); setView('settings'); }}>⚙️ Настройки</span>
+        <span className="s-fi" onClick={() => loadProjectGantt(p)}>📊 Диаграмма Ганта</span>
+      </span>
+    );
     return (
       <div className="sidebar s-rail">
         <style>{`
-          .s-rail{--s-bg:#0F1E36;--s-border:#1E3252;--s-hover-bg:#162844;--s-active-bg:rgba(59,130,246,.12);--s-active-border:#3B82F6;--s-fg:#CBD5E1;--s-fg-sub:#94A3B8;--s-fg-active:#60A5FA;width:64px;background:var(--s-bg);border-right:1px solid var(--s-border);padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;overflow:visible}
-          [data-theme="light"] .s-rail{--s-bg:#F1F5F9;--s-border:#E2E8F0;--s-hover-bg:#F8FAFC;--s-active-bg:rgba(59,130,246,.08);--s-active-border:#2563EB;--s-fg:#334155;--s-fg-sub:#64748B;--s-fg-active:#2563EB}
+          .s-rail{--s-bg:#0F1E36;--s-border:#1E3252;--s-hover-bg:#162844;--s-fg:#CBD5E1;--s-fg-sub:#94A3B8;--s-fg-active:#60A5FA;width:64px;background:var(--s-bg);border-right:1px solid var(--s-border);padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;overflow:visible}
+          [data-theme="light"] .s-rail{--s-bg:#F1F5F9;--s-border:#E2E8F0;--s-hover-bg:#F8FAFC;--s-fg:#334155;--s-fg-sub:#64748B;--s-fg-active:#2563EB}
           .s-rail-item{position:relative;width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--s-fg-sub);border:1px solid transparent;font-size:18px;background:none;transition:all .12s;flex-shrink:0;padding:0;text-decoration:none}
           .s-rail-item:hover{background:var(--s-hover-bg);color:var(--s-fg)}
           .s-rail-item.active{background:#2563EB;color:#fff;border-color:#2563EB}
+          .s-rail-item.root{background:rgba(59,130,246,.14);color:#fff;border:1px solid rgba(59,130,246,.45)}
           .s-rail-avatar{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1E3A5F,#143054);color:#BFDBFE;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
           .s-rail-item.active .s-rail-avatar{background:rgba(255,255,255,.22);color:#fff}
           .s-rail-sep{width:32px;height:1px;background:var(--s-border);margin:5px 0;flex-shrink:0}
+          .s-rail-group{display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid rgba(34,211,238,.22);border-radius:12px;padding:6px 3px;background:rgba(34,211,238,.04);flex-shrink:0}
+          .s-rail-group .s-rail-item{width:38px;height:34px;font-size:15px;border-radius:8px}
+          .s-rail-group .s-rail-avatar{background:linear-gradient(135deg,#0E7490,#155E75);color:#A5F3FC}
+          .s-rail-bottom{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:7px}
           .s-tip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);z-index:6000;background:#0B1B33;border:1px solid #2A4060;color:#E8EEF5;font-size:12px;padding:6px 11px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);white-space:nowrap;display:none;pointer-events:none;font-weight:500;letter-spacing:0}
           .s-rail-item:hover .s-tip{display:block}
+          .s-flyout{position:absolute;left:calc(100% + 6px);top:0;z-index:7000;width:252px;max-height:72vh;overflow-y:auto;background:#0B1B33;border:1px solid #2A4060;border-radius:10px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:10px;display:none;text-align:left}
+          .s-rail-item:hover .s-flyout{display:block}
+          .s-fh{display:block;font-size:12px;font-weight:700;color:#fff;padding:2px 10px 7px;font-family:Inter,sans-serif}
+          .s-fh small{color:#5A7090;font-weight:500;margin-left:6px}
+          .s-fi{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;color:#CBD5E1;font-size:13px;cursor:pointer;white-space:nowrap}
+          .s-fi:hover{background:rgba(59,130,246,.1);color:#fff}
+          .s-fi.active{background:rgba(59,130,246,.18);color:#fff}
         `}</style>
-        <button className={'s-rail-item' + (view === 'dashboard' ? ' active' : '')} onClick={() => navTo('dashboard')}><span className="s-tip">Рабочий стол</span>📊</button>
+        <button className={'s-rail-item' + (view === 'dashboard' ? ' active' : '')} onClick={() => navTo('dashboard')}>
+          📊
+          <span className="s-flyout"><span className="s-fh">Рабочий стол</span><span className="s-fi active">📊 Рабочий стол</span></span>
+        </button>
         <div className="s-rail-sep" />
-        <button className={'s-rail-item' + (view === 'projects' ? ' active' : '')} onClick={() => navTo('projects')}><span className="s-tip">Все проекты</span><span className="s-rail-avatar" style={{ background: '#2563EB', color: '#fff' }}>⌂</span></button>
-        {projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
-          const isOpen = selectedProject?.id === p.id;
-          const initials = (p.name || '??').slice(0, 2).toUpperCase();
-          return (
-            <button key={p.id} className={'s-rail-item' + (isOpen ? ' active' : '')} onClick={() => loadProjectDashboard(p)}>
-              <span className="s-tip">{p.name}</span>
-              <span className="s-rail-avatar">{initials}</span>
+        <button className={'s-rail-item root' + (view === 'projects' ? ' active' : '')} onClick={() => navTo('projects')}>
+          <span className="s-rail-avatar" style={{ background: '#2563EB', color: '#fff' }}>⌂</span>
+          <span className="s-flyout">
+            <span className="s-fh">Все проекты</span>
+            {activeProjects.map((p: any) => <span key={p.id} className="s-fi" onClick={() => loadProjectDashboard(p)}>{p.name}</span>)}
+            {archivedProjects.map((p: any) => <span key={p.id} className="s-fi" onClick={() => loadProjectDashboard(p)}>📦 {p.name}</span>)}
+          </span>
+        </button>
+        {otherProjects.map((p: any) => (
+          <button key={p.id} className="s-rail-item" onClick={() => loadProjectDashboard(p)}>
+            <span className="s-rail-avatar">{ini(p)}</span>
+            {projSub(p)}
+          </button>
+        ))}
+        {openProj && (
+          <div className="s-rail-group">
+            <button className="s-rail-item active" onClick={() => loadProjectDashboard(openProj)}>
+              <span className="s-rail-avatar">{ini(openProj)}</span>
+              <span className="s-flyout">
+                <span className="s-fh">{openProj.name}<small>открыт</small></span>
+                <span className="s-fi active" onClick={() => loadProjectOrdersView(openProj)}>📋 Заказы</span>
+                <span className="s-fi" onClick={() => { onSelectGroup(null, openProj); loadProjectGroups(openProj); }}>📁 Группы</span>
+                <span className="s-fi" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}>📦 Пулы</span>
+                <span className="s-fi" onClick={() => { setSelectedProject(openProj); setView('settings'); }}>⚙️ Настройки</span>
+                <span className="s-fi" onClick={() => loadProjectGantt(openProj)}>📊 Диаграмма Ганта</span>
+              </span>
             </button>
-          );
-        })}
-        <button className={'s-rail-item' + (view === 'archive' ? ' active' : '')} onClick={() => navTo('archive')}><span className="s-tip">Архив</span><span className="s-rail-avatar">Ар</span></button>
+            <button className="s-rail-item" onClick={() => loadProjectOrdersView(openProj)}><span className="s-tip">Заказы</span>📋</button>
+            <button className="s-rail-item" onClick={() => { onSelectGroup(null, openProj); loadProjectGroups(openProj); }}><span className="s-tip">Группы</span>📁</button>
+            <button className="s-rail-item" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}><span className="s-tip">Пулы</span>📦</button>
+            <button className="s-rail-item" onClick={() => { setSelectedProject(openProj); setView('settings'); }}><span className="s-tip">Настройки</span>⚙️</button>
+            <button className="s-rail-item" onClick={() => loadProjectGantt(openProj)}><span className="s-tip">Диаграмма Ганта</span>📊</button>
+          </div>
+        )}
+        {archivedProjects.map((p: any) => (
+          <button key={p.id} className="s-rail-item" onClick={() => loadProjectDashboard(p)}>
+            <span className="s-tip">{p.name}</span>
+            <span className="s-rail-avatar">{ini(p)}</span>
+          </button>
+        ))}
         <div className="s-rail-sep" />
-        <button className={'s-rail-item' + (view === 'directories' || view === 'nomenclature' || view === 'units' || view === 'resources' || view === 'departments' || view === 'organizations' || view === 'calendars' ? ' active' : '')} onClick={() => navTo('directories')}><span className="s-tip">Справочники</span>📚</button>
+        <button className={'s-rail-item' + (dirViews.includes(view) ? ' active' : '')} onClick={() => navTo('directories')}>
+          📚
+          <span className="s-flyout">
+            <span className="s-fh">Справочники</span>
+            <span className="s-fi" onClick={() => navTo('nomenclature')}>📦 Номенклатура</span>
+            <span className="s-fi" onClick={() => navTo('units')}>📏 Единицы измерения</span>
+            <span className="s-fi" onClick={() => navTo('resources')}>🔧 Ресурсы</span>
+            <span className="s-fi" onClick={() => navTo('departments')}>🏢 Подразделения</span>
+            <span className="s-fi" onClick={() => navTo('organizations')}>🏭 Организации</span>
+            <span className="s-fi" onClick={() => navTo('calendars')}>🗓 Календари</span>
+          </span>
+        </button>
         <a href="/ccm-v2" className="s-rail-item" style={{ textDecoration: 'none' }}><span className="s-tip">CCM</span>📈</a>
         <button className={'s-rail-item' + (view === 'reports' ? ' active' : '')} onClick={() => navTo('reports')}><span className="s-tip">Отчёты</span>📋</button>
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+        <div className="s-rail-bottom">
           <button className={'s-rail-item' + (view === 'settings' ? ' active' : '')} onClick={() => navTo('settings')}><span className="s-tip">Настройки</span>⚙️</button>
         </div>
       </div>
     );
   }
-
   return (
     <div className="sidebar" onMouseLeave={menuMode === 'auto' ? onAutoHide : undefined}>
       {/* Inline CSS — self-contained */}
