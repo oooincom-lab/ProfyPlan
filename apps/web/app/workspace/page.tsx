@@ -302,6 +302,13 @@ export default function AppShell() {
     return routings.find((r: any) => r.id === key) || null;
   };
 
+  const routingsFor = (o: any): any[] => {
+    if (!routings.length) return [];
+    const nodes = orderBomNodes(o);
+    const ids = Array.from(new Set(nodes.filter((n: any) => n.routing_id).map((n: any) => n.routing_id)));
+    return routings.filter((r: any) => ids.includes(r.id));
+  };
+
   const resName = (rid: any) => {
     if (!rid) return '—';
     const r = resourcesList.find((x: any) => x.id === rid);
@@ -1214,7 +1221,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
                               <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
                             </tr>
-                            {bomOpen && (
+                            {bomOpen && treeMode !== 'routes' && (
                               <tr>
                                 <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
                                   <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
@@ -1230,20 +1237,29 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               </tr>
                             )}
                             {treeMode !== 'bom' && (() => {
-                              const rt = routingFor(o);
-                              if (!rt || !rt.operations || !rt.operations.length) return null;
-                              const total = rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+                              const rts = routingsFor(o);
+                              if (!rts.length) return null;
                               return (
                                 <tr>
                                   <td colSpan={orderShowAll ? 14 : 13} style={{ padding: '4px 14px 8px', background: 'rgba(6,182,212,.04)' }}>
-                                    <div style={{ fontSize: 11, color: '#22D3EE', marginBottom: 4 }}>⛓ Маршрут · {rt.name || '—'} · {rt.operations.length} оп. · {total} ч</div>
-                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                      {rt.operations.map((op: any) => (
-                                        <span key={op.id || op.sequence_number} style={{ background: '#0B1B33', border: '1px solid #1E3252', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#B0C4DE' }}>
-                                          {op.sequence_number} {op.name} · {resName(op.resource_type_id)} · {Number(op.duration_hours) || 0} ч
-                                        </span>
-                                      ))}
-                                    </div>
+                                    {rts.map((rt: any) => {
+                                      const ops = rt.operations || [];
+                                      const total = ops.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+                                      return (
+                                        <div key={rt.id} style={{ marginBottom: 6 }}>
+                                          <div style={{ fontSize: 11, color: '#22D3EE', marginBottom: 4 }}>⛓ Маршрут · {rt.name || '—'} · {ops.length ? ops.length + ' оп. · ' + total + ' ч' : 'нет операций'}</div>
+                                          {ops.length > 0 && (
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                              {ops.map((op: any) => (
+                                                <span key={op.id || op.sequence_number} style={{ background: '#0B1B33', border: '1px solid #1E3252', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#B0C4DE' }}>
+                                                  {op.sequence_number} {op.name} · {resName(op.resource_type_id)} · {Number(op.duration_hours) || 0} ч
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </td>
                                 </tr>
                               );
