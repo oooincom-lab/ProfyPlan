@@ -60,11 +60,22 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const allMin = wins.length > 0 && wins.every(w => w.min);
   const [snapSel, setSnapSel] = useState<{ c: number; r: number } | null>(null);
   const [snapCell, setSnapCell] = useState(-1);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
     const o = w.data || orderById(w.orderId);
     return o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
+  };
+
+  const reorderWins = (from: number, to: number) => {
+    setWins(prev => {
+      const arr = [...prev];
+      const [m] = arr.splice(from, 1);
+      arr.splice(to, 0, m);
+      return arr;
+    });
   };
 
   return (
@@ -306,17 +317,25 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
       {wins.length > 0 && (
         <div className="pp-taskbar">
-          {wins.map((w: WinRec) => {
+          {wins.map((w: WinRec, idx: number) => {
             const active = w.z === maxZ && !w.min;
             return (
-              <div key={w.id} className={'pp-tchip' + (active ? ' active' : '') + (w.min ? ' min' : '')}
+              <div key={w.id}
+                className={'pp-tchip' + (active ? ' active' : '') + (w.min ? ' min' : '') + (overIdx === idx ? ' over' : '')}
+                draggable
+                onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overIdx !== idx) setOverIdx(idx); }}
+                onDragLeave={() => { if (overIdx === idx) setOverIdx(null); }}
+                onDrop={(e) => { e.preventDefault(); if (dragIdx !== null && dragIdx !== idx) reorderWins(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
+                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : '#3B82F6'), flexShrink: 0 }} />
                 {winLabel(w)}
+                <span className="pp-tchip-x" title="Закрыть"
+                  onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>×</span>
               </div>
             );
           })}
-          <span style={{ fontSize: 11, color: '#5A7090', marginLeft: 4, whiteSpace: 'nowrap' }}>Перетаскивайте окна за заголовок — у краёв появится зона прилипания; «⛶» — сетка раскладок.</span>
           <button onClick={onMinimizeAll} title={allMin ? 'Развернуть все окна' : 'Свернуть все окна'}
             style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', lineHeight: 1, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{allMin ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11" /><polyline points="17 18 12 13 7 18" /></svg> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 13 12 18 17 13" /><polyline points="7 6 12 11 17 6" /></svg>}</button>
         </div>

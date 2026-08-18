@@ -1479,6 +1479,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     .pp-tchip:hover{border-color:#3B82F6;color:#fff}
     .pp-tchip.active{background:rgba(59,130,246,.16);border-color:rgba(59,130,246,.5);color:#fff}
     .pp-tchip.min{opacity:.55;border-style:dashed}
+    .pp-tchip.over{border-color:#22D3EE;box-shadow:0 0 0 1px #22D3EE}
+    .pp-tchip-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:2px;border-radius:4px;color:#5A7090;font-size:13px;line-height:1;transition:background .15s,color .15s}
+    .pp-tchip-x:hover{background:rgba(239,68,68,.22);color:#FCA5A5}
     .pp-lay{position:fixed;z-index:900;background:#0B1B33;border:1px solid #2A4060;border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:12px;width:340px}
     .pp-lay .lh{font-size:11px;color:#60A5FA;letter-spacing:.06em;margin-bottom:10px;font-weight:600}
     .pp-layrow{display:flex;gap:10px;margin-bottom:10px}
