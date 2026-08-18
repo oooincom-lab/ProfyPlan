@@ -35,6 +35,9 @@ interface SidebarProps {
   onSelectPool: (pool: any | null, project: any) => void;
   selectedGroup: any;
   onSelectGroup: (group: any | null, project: any) => void;
+  onOpenOrder: (o: any) => void;
+  onOpenGroup: (g: any) => void;
+  onOpenPool: (p: any) => void;
   setDirectoryModal: (m: string | null) => void;
   setSelectedProject: (p: any) => void;
   setView: (v: View) => void;
@@ -54,6 +57,7 @@ export default function Sidebar(props: SidebarProps) {
     setDirectoryModal, setSelectedProject, setView,
     selectedPool, onSelectPool,
     selectedGroup, onSelectGroup,
+    onOpenOrder, onOpenGroup, onOpenPool,
     collapsed, menuMode, onAutoHide,
   } = props;
 
@@ -383,6 +387,7 @@ export default function Sidebar(props: SidebarProps) {
                           className="s-sub"
                           style={{ paddingLeft: 72 + ctx.depth * 14, fontSize: 11, cursor: 'grab', display: 'flex', alignItems: 'center', gap: 4 }}
                           title={o.specification_name}
+                          onDoubleClick={() => onOpenOrder(o)}
                         >
                           {ctx.hasChildren && (
                             <TreeChevron expanded={ctx.expanded} onClick={() => ctx.toggle()} size={9} />
@@ -429,6 +434,7 @@ export default function Sidebar(props: SidebarProps) {
                     className="s-sub"
                     style={{ paddingLeft: 72, fontSize: 11, cursor: 'pointer', color: selectedGroup?.id === g.id ? 'var(--s-fg-active)' : undefined, fontWeight: selectedGroup?.id === g.id ? 600 : undefined }}
                     onClick={() => onSelectGroup(g, p)}
+                    onDoubleClick={() => onOpenGroup(g)}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, group: g, project: p }); }}
                     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
@@ -464,6 +470,7 @@ export default function Sidebar(props: SidebarProps) {
                     className="s-sub"
                     style={{ paddingLeft: 72, fontSize: 11, cursor: 'context-menu', color: selectedPool?.id === pl.id ? 'var(--s-fg-active)' : undefined, fontWeight: selectedPool?.id === pl.id ? 600 : undefined }}
                     onClick={() => onSelectPool(pl, p)}
+                    onDoubleClick={() => onOpenPool(pl)}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, pool: pl, project: p }); }}
                     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.background = 'var(--s-dragover-bg)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.background = ''; }}

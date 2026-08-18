@@ -278,6 +278,20 @@ export default function AppShell() {
     setPanelEditing(false);
   };
 
+  const openGroupEditor = (g: any) => {
+    if (!selectedProject) return;
+    win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'groups')));
+    setSelectedGroup(g); setSelectedProject(selectedProject); setView('project-groups'); setEditingGroup(false);
+    (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const gs = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setGroups(prev => ({ ...prev, [selectedProject.id]: gs.items })); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })();
+  };
+
+  const openPoolEditor = (p: any) => {
+    if (!selectedProject) return;
+    win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'pools')));
+    setSelectedPool(p); setSelectedProject(selectedProject); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false);
+    (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })();
+  };
+
   const setListWinMode = (v: boolean) => { setListWinModeState(v); try { localStorage.setItem('profyplan_list_windows', v ? '1' : '0'); } catch {} };
 
   const routingFor = (o: any): any | null => {
@@ -1601,6 +1615,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onSelectPool={(pool, project) => { if (pool) { setSelectedPool(pool); setSelectedProject(project); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${project.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${project.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [project.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); } else { setSelectedPool(null); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false); } }}
         selectedGroup={selectedGroup}
         onSelectGroup={(group, project) => { if (group) { setSelectedGroup(group); setSelectedProject(project); setView('project-groups'); setEditingGroup(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${project.id}`); const gs = await apiF<{ items: any[] }>(`/projects/${project.id}/groups`); const pr = await apiF<{ items: any[] }>(`/projects/${project.id}/pools`); setOrders(o); setGroups(prev => ({ ...prev, [project.id]: gs.items })); setPools(prev => ({ ...prev, [project.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); } else { setSelectedGroup(null); setEditingGroup(false); } }}
+        onOpenOrder={openOrderPanel}
+        onOpenGroup={openGroupEditor}
+        onOpenPool={openPoolEditor}
         setDirectoryModal={setDirectoryModal}
         setSelectedProject={setSelectedProject}
         setView={setView}
@@ -2708,8 +2725,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         isDyn={isDyn}
         renderOrdersTable={() => renderOrdersView('table')}
         onOpenOrder={openOrderPanel}
-        onOpenGroup={(g: any) => { if (!selectedProject) return; win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'groups'))); setSelectedGroup(g); setSelectedProject(selectedProject); setView('project-groups'); setEditingGroup(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const gs = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setGroups(prev => ({ ...prev, [selectedProject.id]: gs.items })); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
-        onOpenPool={(p: any) => { if (!selectedProject) return; win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'pools'))); setSelectedPool(p); setSelectedProject(selectedProject); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false); (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
+        onOpenGroup={openGroupEditor}
+        onOpenPool={openPoolEditor}
         onClose={win.closeWin}
         onFocus={win.focusWin}
         onToggleMin={win.toggleMinWin}
