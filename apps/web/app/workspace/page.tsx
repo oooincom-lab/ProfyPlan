@@ -851,7 +851,7 @@ export default function AppShell() {
 
   const onRefresh = () => { if (selectedProject) refresh(); else load(); };
 
-  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); if (['directories','nomenclature','units','resources','departments','organizations','calendars'].includes(v)) win.minimizeAll(); };
+  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); if (['directories','nomenclature','units','resources','departments','organizations','calendars','settings'].includes(v)) win.minimizeAll(); };
 
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
