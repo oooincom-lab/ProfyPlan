@@ -70,7 +70,11 @@ export default function AppShell() {
     const v = localStorage.getItem('profyplan_menu_mode');
     return v === 'manual' ? 'manual' : v === 'auto' ? 'auto' : 'expanded';
   });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('profyplan_menu_mode') === 'auto';
+  });
+  const [autoEnabled, setAutoEnabled] = useState(true); // авто-скрытие включено (режим «Авто»): true — выплывает по наведению, false — закреплено развёрнуто
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [selOrderId, setSelOrderId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
@@ -81,6 +85,7 @@ export default function AppShell() {
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
   // Логика и состояние вынесены в useWindows() / WindowsLayer (components/windows).
   const sidebarWidth = menuMode === 'auto' ? 0 : (sidebarCollapsed ? 64 : 260);
+  const effCollapsed = menuMode === 'auto' ? (autoEnabled && sidebarCollapsed) : sidebarCollapsed;
   const win = useWindows(sidebarWidth);
   const [pendingList, setPendingList] = useState<{ kind: 'orders' | 'groups' | 'pools'; title: string } | null>(null);
   const dashHeadRef = useRef<HTMLDivElement>(null);
@@ -249,6 +254,8 @@ export default function AppShell() {
     setMenuModeState(m);
     try { localStorage.setItem('profyplan_menu_mode', m); } catch {}
     if (m === 'expanded') { setSidebarCollapsed(false); }
+    if (m === 'manual') { setSidebarCollapsed(false); }
+    if (m === 'auto') { setAutoEnabled(true); setSidebarCollapsed(true); }
   };
 
   const loadPanelData = async (p: any) => {
@@ -1561,7 +1568,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
   return (
     <div
       style={{ display: 'grid', gridTemplateColumns: sidebarWidth + 'px 1fr', minHeight: '100vh', ['--sbw' as any]: sidebarWidth + 'px' }}
-      onMouseMove={(e) => { if (menuMode === 'auto' && sidebarCollapsed && e.clientX < 8) setSidebarCollapsed(false); }}
+      onMouseMove={(e) => { if (menuMode === 'auto' && autoEnabled && sidebarCollapsed && e.clientX < 8) setSidebarCollapsed(false); }}
     >
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
@@ -1593,20 +1600,26 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         setDirectoryModal={setDirectoryModal}
         setSelectedProject={setSelectedProject}
         setView={setView}
-        collapsed={sidebarCollapsed}
+        collapsed={effCollapsed}
         menuMode={menuMode}
-        onAutoHide={() => setSidebarCollapsed(true)}
+        onAutoHide={() => { if (autoEnabled) setSidebarCollapsed(true); }}
       />
 
       {/* ═══ MAIN ═══ */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, gridColumn: 2 }}>
         {/* Topbar */}
-        <div className="topbar">
+        <div className="topbar" style={menuMode === 'auto' ? { paddingLeft: effCollapsed ? 52 : 8, transition: 'padding-left .22s ease' } : undefined}>
           {menuMode !== 'expanded' && (
             <button
-              onClick={() => setSidebarCollapsed(c => !c)}
-              title={sidebarCollapsed ? 'Развернуть меню' : 'Свернуть меню в значки'}
-              style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #2A4060', background: '#0B1B33', color: '#8FA3BD', cursor: 'pointer', fontSize: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 4 }}
+              onClick={() => {
+                if (menuMode === 'auto') {
+                  setAutoEnabled(prev => { const next = !prev; setSidebarCollapsed(next); return next; });
+                } else {
+                  setSidebarCollapsed(c => !c);
+                }
+              }}
+              title={menuMode === 'auto' ? (autoEnabled ? 'Закрепить меню (выключить авто-скрытие)' : 'Включить авто-скрытие') : (sidebarCollapsed ? 'Развернуть меню' : 'Свернуть меню в значки')}
+              style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #2A4060', background: '#0B1B33', color: '#8FA3BD', cursor: 'pointer', fontSize: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 4, ...(menuMode === 'auto' ? { position: 'fixed', left: effCollapsed ? 8 : 272, top: 14, zIndex: 3500, marginRight: 0, transition: 'left .22s ease' } : {}) }}
             >⟨</button>
           )}
           <div>
