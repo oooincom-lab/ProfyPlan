@@ -328,9 +328,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 onDragLeave={() => { if (overIdx === idx) setOverIdx(null); }}
                 onDrop={(e) => { e.preventDefault(); if (dragIdx !== null && dragIdx !== idx) reorderWins(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                title={winLabel(w)}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : '#3B82F6'), flexShrink: 0 }} />
                 {winLabel(w)}
+                {w.editing && <span className="pp-tchip-dirty" title="Есть несохранённые изменения" />}
                 <span className="pp-tchip-x" title="Закрыть"
                   onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>×</span>
               </div>

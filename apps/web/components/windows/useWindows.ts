@@ -37,6 +37,13 @@ export function useWindows(sidebarWidth: number = 260) {
   const winZ = useRef(10);
   const [snapZone, setSnapZone] = useState<any>(null);
   const [lay, setLay] = useState<LayState | null>(null);
+  const [snapEnabled, setSnapEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const v = localStorage.getItem('profyplan_snap');
+      return v !== '0';
+    }
+    return true;
+  });
 
   // Рабочая область окон: правее левого меню (260px), ниже шапки (53px),
   // выше панели задач (44px).
@@ -139,6 +146,11 @@ export function useWindows(sidebarWidth: number = 260) {
     setWins(prev => prev.map(w => (allMin ? { ...w, min: false } : { ...w, min: true })));
   };
 
+  const toggleSnap = (v: boolean) => {
+    setSnapEnabled(v);
+    if (typeof window !== 'undefined') localStorage.setItem('profyplan_snap', v ? '1' : '0');
+  };
+
   const toggleMaxWin = (id: string) => {
     const d = deskRect();
     winZ.current += 1;
@@ -191,7 +203,7 @@ export function useWindows(sidebarWidth: number = 260) {
     el?.classList.add('dragging');
     const move = (ev: PointerEvent) => {
       setWins(prev => prev.map(x => x.id === w.id ? { ...x, x: ev.clientX - sx, y: ev.clientY - sy } : x));
-      zone = zoneFor(ev.clientX - sx, ev.clientY - sy, w.w, w.h);
+      zone = snapEnabled ? zoneFor(ev.clientX - sx, ev.clientY - sy, w.w, w.h) : null;
       setSnapZone(zone);
     };
     const up = () => {
@@ -313,7 +325,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin,
+    openWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

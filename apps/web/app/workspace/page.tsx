@@ -1482,6 +1482,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     .pp-tchip.over{border-color:#22D3EE;box-shadow:0 0 0 1px #22D3EE}
     .pp-tchip-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:2px;border-radius:4px;color:#5A7090;font-size:13px;line-height:1;transition:background .15s,color .15s}
     .pp-tchip-x:hover{background:rgba(239,68,68,.22);color:#FCA5A5}
+    .pp-tchip-dirty{width:7px;height:7px;border-radius:50%;background:#F87171;flex-shrink:0;box-shadow:0 0 0 2px rgba(248,113,113,.22)}
     .pp-lay{position:fixed;z-index:900;background:#0B1B33;border:1px solid #2A4060;border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:12px;width:340px}
     .pp-lay .lh{font-size:11px;color:#60A5FA;letter-spacing:.06em;margin-bottom:10px;font-weight:600}
     .pp-layrow{display:flex;gap:10px;margin-bottom:10px}
@@ -2520,6 +2521,19 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     </div>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
                       {menuMode === 'auto' ? 'Авто-скрытие: меню свёрнуто, при наведении мыши к левому краю — выплывает.' : menuMode === 'manual' ? 'Вручную: кнопка «⟨» в шапке сворачивает меню в значки и разворачивает обратно.' : 'Меню всегда развёрнуто, без кнопки скрытия.'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>📐 Прилипание к краям</div>
+                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                      При перетаскивании окна к краю рабочей области — подсвечивать зону прилипания (Snap) и раскладку.
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={win.snapEnabled} onChange={e => win.toggleSnap(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
+                      <span style={{ fontSize: 13 }}>Включить прилипание к краям</span>
+                    </label>
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
+                      При выключении окна перетаскиваются свободно, без прилипания к краям и без раскладки Snap.
                     </div>
                   </div>
                   <div>
