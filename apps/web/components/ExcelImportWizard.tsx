@@ -236,6 +236,18 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.routing_ops_created}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Операций</div>
                 </div>
+                <div style={style.statBox}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.nomenclature_created}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Номенклатуры создано</div>
+                </div>
+                <div style={style.statBox}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.nomenclature_linked}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Номенклатуры связано</div>
+                </div>
+                <div style={style.statBox}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.resources_created}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Ресурсов</div>
+                </div>
               </div>
 
               {/* Explode result */}
@@ -248,6 +260,20 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
                       <span>📐 <strong>{cpmResult.total_duration?.toFixed(1)}</strong>ч makespan</span>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {result.warnings?.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#FFB300', marginBottom: 8 }}>
+                    ⚠ Предупреждения ({result.warnings.length})
+                  </div>
+                  {result.warnings.map((w, i) => (
+                    <div key={i} style={{ padding: '6px 10px', background: 'rgba(255,179,0,0.1)', borderRadius: 6, marginBottom: 6, fontSize: 12 }}>
+                      {w}
+                    </div>
+                  ))}
                 </div>
               )}
 

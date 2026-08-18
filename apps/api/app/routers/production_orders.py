@@ -8,7 +8,7 @@ from typing import List, Optional
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -16,6 +16,8 @@ from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
+from app.models.nomenclature import Nomenclature
+from app.models.resource import Resource
 from app.schemas.production_order import (
     ProductionOrderCreate,
     ProductionOrderOut,
@@ -58,6 +60,77 @@ def _str(raw) -> str:
     return str(raw).strip()
 
 
+_NTYPE_MAP = {
+    "assembly": "product",
+    "semi_finished": "semi_finished",
+    "material": "material",
+    "phantom": "material",
+    "service": "service",
+}
+
+
+def _normalize_name(name: str) -> str:
+    """Нормализация имени для сопоставления: lower, trim, ё→е, коллапс пробелов."""
+    s = (name or "").strip().lower().replace("ё", "е")
+    return " ".join(s.split())
+
+
+async def _get_or_create_nomenclature(
+    db: AsyncSession,
+    tenant_id,
+    name: str,
+    code: Optional[str],
+    node_type: str,
+    unit: str,
+) -> tuple[Optional[UUID], str]:
+    """Найти запись номенклатуры или создать новую.
+
+    Приоритет сопоставления: code (ext_id) → нормализованное имя.
+    Возвращает (nomenclature_id, action), где action ∈ {created, linked, skip}.
+    """
+    norm_name = _normalize_name(name)
+    if not norm_name:
+        return None, "skip"
+
+    # 1. По внутреннему коду (ext_id узла как code)
+    if code:
+        row = (
+            await db.execute(
+                select(Nomenclature).where(
+                    Nomenclature.tenant_id == tenant_id,
+                    Nomenclature.code == code,
+                )
+            )
+        ).scalars().first()
+        if row:
+            return row.id, "linked"
+
+    # 2. По нормализованному имени (точное)
+    row = (
+        await db.execute(
+            select(Nomenclature).where(
+                Nomenclature.tenant_id == tenant_id,
+                func.lower(Nomenclature.name) == norm_name,
+            )
+        )
+    ).scalars().first()
+    if row:
+        return row.id, "linked"
+
+    # 3. Создать новую
+    n = Nomenclature(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        name=(name or "").strip(),
+        code=code or None,
+        ntype=_NTYPE_MAP.get(node_type, "material"),
+        unit=unit or "pcs",
+    )
+    db.add(n)
+    await db.flush()
+    return n.id, "created"
+
+
 # ── Карты русских значений (7-вкладочный формат) ──────────────
 
 PRIORITY_MAP_RU = {
@@ -73,6 +146,14 @@ NODE_TYPE_MAP_RU = {
     "полуфабрикат": "semi_finished", "semi_finished": "semi_finished",
     "материал": "material", "material": "material",
     "фантом": "phantom", "phantom": "phantom",
+}
+
+RESOURCE_TYPE_MAP_RU = {
+    "оборудование": "equipment", "equipment": "equipment",
+    "персонал": "labor", "labor": "labor", "employee": "labor",
+    "бригада": "team", "team": "team",
+    "инструмент": "tool", "tool": "tool",
+    "транспорт": "vehicle", "vehicle": "vehicle",
 }
 
 
@@ -124,12 +205,39 @@ async def import_excel(
     if ws is not None:
         result = await _import_bom(ws, tenant_id, project_id, db, result)
 
+    # ── Вкладка 4: Ресурсы (4-Ресурсы / Ресурсы) ────────
+    ws = _pick_sheet(wb, ["4-Ресурсы", "Ресурсы"])
+    if ws is not None:
+        result = await _import_resources(ws, tenant_id, project_id, db, result)
+
     # ── Вкладка 3: Маршруты (5-Маршруты / Маршруты / Routes) ─
     # В 7-вкладочном формате у «5-Маршруты» сдвиг колонок +2 (есть Этап и Подразделение)
     ws = _pick_sheet(wb, ["5-Маршруты", "Маршруты", "Routes"])
     is_7tab = ws is not None and ws.title == "5-Маршруты"
     if ws is not None:
         result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab)
+
+    # Предупреждение: нет ресурсов
+    if result.resources_created == 0:
+        result.warnings.append(
+            "Ресурсы не указаны (вкладка «4-Ресурсы» пуста или отсутствует) — загрузка выполнена, но расчёт ресурсов и критической цепи будет ограничен. Ресурсы можно ввести вручную в справочнике."
+        )
+
+    # Проверка наличия маршрутов для make-узлов (сборка/полуфабрикат)
+    if project_id:
+        make_nodes = (await db.execute(
+            select(ProductStructure).where(
+                ProductStructure.tenant_id == tenant_id,
+                ProductStructure.project_id == UUID(project_id),
+                ProductStructure.node_type.in_(("assembly", "semi_finished")),
+                ProductStructure.is_phantom == False,  # noqa: E712
+                ProductStructure.routing_id.is_(None),
+            )
+        )).scalars().all()
+        if make_nodes:
+            result.warnings.append(
+                f"У {len(make_nodes)} узлов сборки/полуфабриката нет маршрута — они не попадут в расчёт. Маршруты можно добавить вручную."
+            )
 
     # Правила цепочки заказов: циклы parent_order_id и циклы BOM-связей
     await _validate_order_chain(project_id, tenant_id, db, result)
@@ -304,17 +412,27 @@ async def _import_bom(
             node_type_raw = _str(row[3]).lower() if len(row) > 3 else "material"
             node_type = NODE_TYPE_MAP_RU.get(node_type_raw, "material")
             is_phantom = (node_type_raw in ("phantom", "фантом"))
+            unit_str = _str(row[5]) if len(row) > 5 else "pcs"
+
+            nref_id, nact = await _get_or_create_nomenclature(
+                db, tenant_id, nomenclature_name, node_ext_id, node_type, unit_str
+            )
+            if nact == "created":
+                result.nomenclature_created += 1
+            elif nact == "linked":
+                result.nomenclature_linked += 1
 
             node = ProductStructure(
                 id=uuid4(),
                 tenant_id=tenant_id,
                 project_id=UUID(project_id) if project_id else None,
                 nomenclature_id=node_ext_id,
+                nomenclature_ref_id=nref_id,
                 nomenclature_name=nomenclature_name,
                 node_type=node_type,
                 is_phantom=is_phantom,
                 quantity_per_parent=_parse_decimal(row[6] if len(row) > 6 else 1, Decimal("1")),
-                unit=_str(row[5]) if len(row) > 5 else "pcs",
+                unit=unit_str,
                 procurement_lead_time_days=_parse_decimal(row[7] if len(row) > 7 else None, None),
                 is_make_or_buy="make" if node_type in ("assembly","semi_finished") else "buy",
             )
@@ -362,6 +480,51 @@ async def _import_bom(
         except Exception:
             pass
 
+    await db.flush()
+    return result
+
+
+async def _import_resources(
+    ws, tenant_id: str, project_id: Optional[str], db: AsyncSession, result: ExcelImportResult,
+) -> ExcelImportResult:
+    """Парсинг вкладки 'Ресурсы'.
+
+    Колонки: ID ресурса | Название | Тип | Подразделение | Доступно | Ед.
+    """
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+    for i, row in enumerate(rows):
+        if not row or not any(c for c in row):
+            continue
+        name = _str(row[1]) if len(row) > 1 else ""
+        if not name:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="Ресурсы", field="Название",
+                message="обязательное поле 'Название' не заполнено",
+            ))
+            continue
+        rtype_raw = _str(row[2]).lower() if len(row) > 2 else "equipment"
+        rtype = RESOURCE_TYPE_MAP_RU.get(rtype_raw, "equipment")
+        available = _parse_decimal(row[4] if len(row) > 4 else 1, Decimal("1"))
+        unit = _str(row[5]) if len(row) > 5 else "pcs"
+        try:
+            res = Resource(
+                id=uuid4(),
+                tenant_id=tenant_id,
+                project_id=UUID(project_id) if project_id else None,
+                name=name,
+                resource_type=rtype,
+                capacity_per_unit=available,
+                capacity_unit="hour",
+                unit=unit,
+                ext_id=_str(row[0]) if len(row) > 0 else None,
+            )
+            db.add(res)
+            result.resources_created += 1
+        except Exception as e:
+            result.errors.append(ImportValidationError(
+                row=i + 2, sheet="Ресурсы", field="*",
+                message=str(e),
+            ))
     await db.flush()
     return result
 
@@ -486,6 +649,7 @@ async def _import_routes(
     # Группируем строки по node_id
     rows = list(ws.iter_rows(min_row=2, values_only=True))
     routings_by_node = {}  # node_ext_id → [(row_idx, row_data)]
+    ops_without_resource = 0
 
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
@@ -522,15 +686,27 @@ async def _import_routes(
 
             # Создаём RoutingOperation для каждой строки
             for row_idx, row in node_rows:
+                seq_val = row[1] if len(row) > 1 else None
+                name_val = _str(row[2]) if len(row) > 2 else ""
+                dur_val = row[c_dur] if len(row) > c_dur else None
+                if not seq_val or not name_val or dur_val is None or _str(dur_val) == "":
+                    result.errors.append(ImportValidationError(
+                        row=row_idx + 2, sheet="Маршруты", field="№ оп./Операция/Длит.",
+                        message="обязательные поля '№ оп.', 'Операция', 'Длит.,ч' не заполнены",
+                    ))
+                    continue
+                res_name = _str(row[3]) if len(row) > 3 else ""
+                if not res_name:
+                    ops_without_resource += 1
                 try:
                     rop = RoutingOperation(
                         id=uuid4(),
                         routing_id=routing.id,
-                        sequence_number=int(row[1]) if len(row) > 1 and row[1] else 1,
-                        name=_str(row[2]) if len(row) > 2 else "",
-                        duration_hours=_parse_decimal(row[c_dur] if len(row) > c_dur else 0),
+                        sequence_number=int(seq_val) if seq_val else 1,
+                        name=name_val,
+                        duration_hours=_parse_decimal(dur_val),
                         setup_hours=Decimal("0"),
-                        resource_type_id=_str(row[3]) if len(row) > 3 else None,
+                        resource_type_id=res_name or None,
                         output_product=(
                             _str(row[c_out]) if c_out is not None and len(row) > c_out and _str(row[c_out]) else None
                         ),
@@ -565,6 +741,11 @@ async def _import_routes(
                 row=0, sheet="Маршруты", field="node_id",
                 message=f"Узел {node_ext_id}: {e}",
             ))
+
+    if ops_without_resource > 0:
+        result.warnings.append(
+            f"В {ops_without_resource} операциях не указан ресурс — загрузка выполнена, но расчёт ресурсов будет неполным. Ресурсы можно добавить вручную в справочнике."
+        )
 
     await db.flush()
     return result

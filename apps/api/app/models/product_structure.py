@@ -40,6 +40,12 @@ class ProductStructure(BaseModel):
     nomenclature_id: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )  # ext_id из ERP (1С)
+    nomenclature_ref_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("nomenclature.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Ссылка на справочник номенклатуры (FK)",
+    )
     nomenclature_name: Mapped[str] = mapped_column(
         String(255), nullable=False
     )

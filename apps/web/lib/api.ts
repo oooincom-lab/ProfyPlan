@@ -281,7 +281,11 @@ export interface ExcelImportResult {
   bom_nodes_created: number;
   routings_created: number;
   routing_ops_created: number;
+  nomenclature_created: number;
+  nomenclature_linked: number;
+  resources_created: number;
   errors: ImportValidationError[];
+  warnings: string[];
 }
 
 export function importProductionOrders(file: File, projectId?: string) {

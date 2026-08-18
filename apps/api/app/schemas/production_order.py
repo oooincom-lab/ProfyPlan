@@ -110,5 +110,8 @@ class ExcelImportResult(BaseModel):
     bom_nodes_created: int = 0
     routings_created: int = 0
     routing_ops_created: int = 0
+    nomenclature_created: int = 0
+    nomenclature_linked: int = 0
+    resources_created: int = 0
     errors: List[ImportValidationError] = []
     warnings: List[str] = []
