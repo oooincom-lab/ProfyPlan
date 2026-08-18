@@ -216,7 +216,7 @@ export default function Sidebar(props: SidebarProps) {
     );
   }
   return (
-    <div className="sidebar" onMouseLeave={menuMode === 'auto' ? onAutoHide : undefined}>
+    <div className={menuMode === 'auto' ? 'sidebar sidebar-overlay' : 'sidebar'} onMouseLeave={menuMode === 'auto' ? onAutoHide : undefined}>
       {/* Inline CSS — self-contained */}
       <style>{`
         .sidebar{
@@ -265,6 +265,7 @@ export default function Sidebar(props: SidebarProps) {
         .sidebar::-webkit-scrollbar-track{background:var(--s-bg)}
         .sidebar::-webkit-scrollbar-thumb{background:var(--s-fg-sub);border-radius:3px}
         .sidebar::-webkit-scrollbar-thumb:hover{background:var(--s-fg)}
+        .sidebar-overlay{position:fixed;left:0;top:0;bottom:0;width:260px;height:auto;z-index:3000;box-shadow:8px 0 32px rgba(0,0,0,.35)}
       `}</style>
 
       {/* Brand */}
