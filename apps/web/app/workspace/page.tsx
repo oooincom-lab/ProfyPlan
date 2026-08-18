@@ -2696,7 +2696,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onClose={win.closeWin}
         onFocus={win.focusWin}
         onToggleMin={win.toggleMinWin}
-        onMinimizeAll={win.minimizeAll}
+        onMinimizeAll={win.toggleMinimizeAll}
         onReset={win.resetWin}
         onToggleMax={win.toggleMaxWin}
         onDrag={win.startDrag}

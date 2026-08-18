@@ -134,6 +134,11 @@ export function useWindows(sidebarWidth: number = 260) {
     setWins(prev => prev.map(w => (w.min ? w : { ...w, min: true })));
   };
 
+  const toggleMinimizeAll = () => {
+    const allMin = wins.length > 0 && wins.every(w => w.min);
+    setWins(prev => prev.map(w => (allMin ? { ...w, min: false } : { ...w, min: true })));
+  };
+
   const toggleMaxWin = (id: string) => {
     const d = deskRect();
     winZ.current += 1;
@@ -308,7 +313,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMaxWin, resetWin,
+    openWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

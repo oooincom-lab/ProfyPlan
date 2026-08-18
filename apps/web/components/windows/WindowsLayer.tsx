@@ -57,6 +57,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
+  const allMin = wins.length > 0 && wins.every(w => w.min);
   const [snapSel, setSnapSel] = useState<{ c: number; r: number } | null>(null);
   const [snapCell, setSnapCell] = useState(-1);
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
@@ -316,8 +317,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             );
           })}
           <span style={{ fontSize: 11, color: '#5A7090', marginLeft: 4, whiteSpace: 'nowrap' }}>Перетаскивайте окна за заголовок — у краёв появится зона прилипания; «⛶» — сетка раскладок.</span>
-          <button onClick={onMinimizeAll} title="Свернуть все окна"
-            style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', lineHeight: 1, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 13 12 18 17 13" /><polyline points="7 6 12 11 17 6" /></svg></button>
+          <button onClick={onMinimizeAll} title={allMin ? 'Развернуть все окна' : 'Свернуть все окна'}
+            style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', lineHeight: 1, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{allMin ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11" /><polyline points="17 18 12 13 7 18" /></svg> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 13 12 18 17 13" /><polyline points="7 6 12 11 17 6" /></svg>}</button>
         </div>
       )}
     </>
