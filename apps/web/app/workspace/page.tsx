@@ -11,6 +11,7 @@ import GroupEditor from '@/components/groupeditor';
 import DeleteCheckDialog from '@/components/DeleteCheckDialog';
 import ExcelImportWizard from '@/components/ExcelImportWizard';
 import BomTree from '@/components/bomtree';
+import BomExpand from '@/components/bomexpand';
 import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
@@ -390,16 +391,33 @@ export default function AppShell() {
   const orderBomNodes = (o: any) => {
     const all = bomTrees[selectedProject?.id || ''] || [];
     if (!all.length) return [];
+    const oid = o.id;
     const specName = (o.specification_name || '').toLowerCase().trim();
     const specId = (o.specification_id || '').toLowerCase().trim();
-    const roots = all.filter(n => !n.parent_id);
     const childrenMap: Record<string, any[]> = {};
     for (const n of all) if (n.parent_id) (childrenMap[n.parent_id] ||= []).push(n);
     const kept = new Set<string>();
-    const walk = (start: any) => { kept.add(start.id); for (const c of childrenMap[start.id] || []) walk(c); };
-    const specOf = (n: any) => (n.path && n.path.includes('/')) ? n.path.split('/')[0].toLowerCase().trim() : '';
+
+    // Обход поддерева с учётом границ куста заказов:
+    // не переходим в узлы, привязанные через order_id к другому заказу.
+    const walk = (start: any) => {
+      if (kept.has(start.id)) return;
+      kept.add(start.id);
+      for (const c of childrenMap[start.id] || []) {
+        if (c.order_id && c.order_id !== oid) continue;
+        walk(c);
+      }
+    };
+
+    // 0) узлы, напрямую привязанные к заказу через order_id (полуфабрикаты куста)
+    const ownByOrder = all.filter(n => n.order_id && n.order_id === oid);
+    if (ownByOrder.length) {
+      ownByOrder.forEach(walk);
+      return all.filter(n => kept.has(n.id));
+    }
 
     // 1) корни по имени номенклатуры (спецификация заказа = имя корневого изделия)
+    const roots = all.filter(n => !n.parent_id);
     const byName = roots.filter(r => specName && (r.nomenclature_name || '').toLowerCase().trim() === specName);
     if (byName.length) { byName.forEach(walk); return all.filter(n => kept.has(n.id)); }
 
@@ -411,6 +429,7 @@ export default function AppShell() {
     }
 
     // 3) корни, чья спецификация из path == specification_id (импортированные данные: path = Спец/Узел)
+    const specOf = (n: any) => (n.path && n.path.includes('/')) ? n.path.split('/')[0].toLowerCase().trim() : '';
     const byPath = roots.filter(r => specId && specOf(r) === specId);
     if (byPath.length) { byPath.forEach(walk); return all.filter(n => kept.has(n.id)); }
 
@@ -423,11 +442,12 @@ export default function AppShell() {
   };
 
   const openBomModal = (o: any) => {
-    setBomModalOrder(o);
     setBomTimeline(null);
     setBomTimelineLoading(false);
     if (selectedProject) loadProjectOrders(selectedProject.id);
     if (selectedProject) loadBomAnomalies(selectedProject.id);
+    if (panelMode === 'window' || listWinMode) { win.openBomWin(o); return; }
+    setBomModalOrder(o);
   };
 
   const handleNodeOrderChange = async (nodeId: string, orderId: string | null) => {
@@ -497,15 +517,55 @@ export default function AppShell() {
       }
     };
 
-    for (const n of own) {
-      if (n.order_id && n.order_id !== o.id) {
-        const visited = new Set<string>([o.id]);
-        const subRoots = subOrderRoots(n.order_id, n.id);
-        if (subRoots.length) inject(subRoots, n.id, 1, visited);
+    const ownIds = new Set(own.map((n: any) => n.id));
+    const childrenOf: Record<string, any[]> = {};
+    for (const n of all) if (n.parent_id) (childrenOf[n.parent_id] ||= []).push(n);
+    const orderLabel = (orderId: string) => {
+      const s = ordersList.find((x: any) => x.id === orderId);
+      return (s && (s.ext_id || s.specification_name)) || '';
+    };
+
+    // Обходим своё поддерево по реальным детям из `all`: узлы-ссылки на подчинённые
+    // заказы (order_id ≠ своего) включаем в цепочку и встраиваем под ними их BOM.
+    const visit = (nodeId: string) => {
+      for (const c of childrenOf[nodeId] || []) {
+        if (c.order_id && c.order_id !== o.id) {
+          result.push({ ...c, _ownerId: c.order_id, _ownerExtId: orderLabel(c.order_id) });
+          const visited = new Set<string>([o.id, c.order_id]);
+          const subRoots = subOrderRoots(c.order_id, c.id);
+          if (subRoots.length) inject(subRoots, c.id, 1, visited);
+        } else if (ownIds.has(c.id)) {
+          visit(c.id);
+        }
       }
-    }
+    };
+    for (const n of own) visit(n.id);
 
     return result;
+  };
+
+  // Содержимое BOM-окна (оконный режим): то же, что в модалке «Развернуть полностью»
+  const renderBomWindow = (w: any) => {
+    const o = w.data || orders.find((x: any) => x.id === w.orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === w.orderId);
+    if (!o) return null;
+    return (
+      <BomExpand
+        order={o}
+        nodes={orderBomNodesWithSuborders(o)}
+        orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
+        anomalies={bomAnomalies}
+        anomaliesLoading={bomAnomaliesLoading}
+        semiPolicy={semiPolicy}
+        timeline={bomTimeline || undefined}
+        timelineLoading={bomTimelineLoading}
+        onLoadTimeline={loadBomTimeline}
+        onNodeOrderChange={handleNodeOrderChange}
+        onCreateMissingOrders={createMissingOrders}
+        onCreateOrderFromNode={createOrderFromNode}
+        routings={routings}
+        resName={resName}
+      />
+    );
   };
 
   const loadBomTimeline = async () => {
@@ -1050,9 +1110,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             };
             return (
               <>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="panel">
+                <div style={mode === 'table' ? { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: 420, overflow: 'hidden' } : { display: 'flex', gap: 6, alignItems: 'flex-start', width: '100%' }}>
+                <div style={mode === 'table' ? { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' } : { flex: 1, minWidth: 0 }}>
+                <div className="panel" style={mode === 'table' ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, overflow: 'hidden' } : undefined}>
                   <div className="panel-hdr">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <div><span className="panel-title">Заказы</span><span className="panel-sub">{filtered.length} из {orders.length}</span></div>
@@ -1154,8 +1214,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     </div>
                   )}
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="tbl">
+                  <div style={mode === 'table' ? { flex: 1, minHeight: 250, overflow: 'auto' } : { overflowX: 'auto' }}>
+                    <table className="tbl" style={{ width: 'max-content' }}>
                       <thead><tr>
                         <th style={{ width: 56 }}></th>
                         <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
@@ -2746,6 +2806,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         pools={projPools}
         isDyn={isDyn}
         renderOrdersTable={() => renderOrdersView('table')}
+        renderBomWindow={renderBomWindow}
         onOpenOrder={openOrderPanel}
         onOpenGroup={openGroupEditor}
         onOpenPool={openPoolEditor}
@@ -2869,96 +2930,39 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     )}
 
     {/* BOM heavy modal */}
-    {bomModalOrder && (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,10,20,.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setBomModalOrder(null)}>
-        <div style={{ background: '#0F1E36', border: '1px solid #1E3252', borderRadius: 14, width: '100%', maxWidth: 880, maxHeight: '88vh', overflow: 'auto', padding: 22 }} onClick={e => e.stopPropagation()}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600 }}>BOM · Развёртка</span>
-            <span style={{ fontSize: 17, fontWeight: 600, color: '#E8EEF5' }}>{bomModalOrder.specification_name || bomModalOrder.ext_id || '—'}</span>
-            <div style={{ flex: 1 }} />
-            <button onClick={() => setBomModalOrder(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 20 }}>✕</button>
+    {bomModalOrder && (() => {
+      const nodes = orderBomNodesWithSuborders(bomModalOrder);
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,10,20,.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: `24px 20px 24px ${sidebarWidth + 20}px` }} onClick={() => setBomModalOrder(null)}>
+          <div style={{ background: '#0F1E36', border: '1px solid #1E3252', borderRadius: 14, width: '100%', maxWidth: 920, maxHeight: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 22px 0', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600 }}>BOM · Развёртка</span>
+              <span style={{ fontSize: 17, fontWeight: 600, color: '#E8EEF5' }}>{bomModalOrder.specification_name || bomModalOrder.ext_id || '—'}</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setBomModalOrder(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 20 }}>✕</button>
+            </div>
+            <div style={{ padding: '16px 22px 22px', overflow: 'auto' }}>
+              <BomExpand
+                order={bomModalOrder}
+                nodes={nodes}
+                orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
+                anomalies={bomAnomalies}
+                anomaliesLoading={bomAnomaliesLoading}
+                semiPolicy={semiPolicy}
+                timeline={bomTimeline || undefined}
+                timelineLoading={bomTimelineLoading}
+                onLoadTimeline={loadBomTimeline}
+                onNodeOrderChange={handleNodeOrderChange}
+                onCreateMissingOrders={createMissingOrders}
+                onCreateOrderFromNode={createOrderFromNode}
+                routings={routings}
+                resName={resName}
+              />
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10, fontSize: 11, color: '#8FA3BD', padding: '8px 12px', background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.18)', borderRadius: 8 }}>
-            <span>🔗 Колонка «Заказ» — какой заказ производит этот узел (связывает куст заказов).</span>
-            <span style={{ opacity: .85 }}>⛓ Цветные узлы с бейджем заказа — BOM подчинённых заказов цепочки.</span>
-            <span style={{ opacity: .85 }}>Переключатель «Только свой BOM / Вся цепочка» — сверху.</span>
-          </div>
-
-          {(() => {
-            if (bomAnomaliesLoading) {
-              return <div style={{ fontSize: 12, color: '#5A7090', padding: '8px 12px', marginBottom: 10 }}>Проверка структуры…</div>;
-            }
-            if (!bomAnomalies) return null;
-            const visible = semiPolicy === 'strict'
-              ? [...bomAnomalies.no_routing, ...bomAnomalies.no_order, ...bomAnomalies.self_order]
-              : [...bomAnomalies.no_routing, ...bomAnomalies.no_order];
-            if (!visible.length) return null;
-            const catLabel: Record<string, string> = {
-              no_routing: 'нет маршрута',
-              no_order: 'нет заказа',
-              self_order: 'свой заказ',
-            };
-            const canCreate = visible.filter((a: any) => a.category !== 'no_routing');
-            return (
-              <div style={{ marginBottom: 10, padding: '10px 12px', background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#FCA5A5' }}>⚠ Аномалии структуры: {visible.length}</span>
-                  <span style={{ fontSize: 11, color: '#8FA3BD' }}>полуфабрикаты без маршрута или без подчинённого заказа</span>
-                  <div style={{ flex: 1 }} />
-                  {canCreate.length > 0 && (
-                    <button
-                      onClick={createMissingOrders}
-                      style={{ background: '#3B82F6', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      Создать заказы ({canCreate.length})
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gap: 4, maxHeight: 150, overflow: 'auto' }}>
-                  {visible.slice(0, 15).map((a: any, idx: number) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 8px', background: 'rgba(4,10,20,.4)', borderRadius: 5 }}>
-                      <span style={{ color: '#FCA5A5', fontWeight: 600, flex: '0 0 86px' }}>{catLabel[a.category] || a.category}</span>
-                      <span style={{ color: '#E8EEF5', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.path || a.name}>
-                        {a.name}
-                      </span>
-                      {a.category !== 'no_routing' && (
-                        <button
-                          onClick={() => createOrderFromNode(a.node_id)}
-                          style={{ background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 5, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                        >
-                          Создать заказ
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {visible.length > 15 && <div style={{ fontSize: 11, color: '#5A7090', padding: '2px 8px' }}>…и ещё {visible.length - 15}</div>}
-                </div>
-              </div>
-            );
-          })()}
-
-          <BomTree
-            nodes={orderBomNodesWithSuborders(bomModalOrder)}
-            orderName={bomModalOrder.specification_name}
-            timeline={bomTimeline || undefined}
-            timelineLoading={bomTimelineLoading}
-            onLoadTimeline={loadBomTimeline}
-            editable
-            orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
-            onNodeOrderChange={handleNodeOrderChange}
-            chainControl
-            currentOrderId={bomModalOrder.id}
-            anomalyIds={(() => {
-              if (!bomAnomalies) return undefined;
-              const visible = semiPolicy === 'strict'
-                ? [...bomAnomalies.no_routing, ...bomAnomalies.no_order, ...bomAnomalies.self_order]
-                : [...bomAnomalies.no_routing, ...bomAnomalies.no_order];
-              return new Set(visible.map((a: any) => a.node_id));
-            })()}
-          />
         </div>
-      </div>
-    )}
+      );
+    })()}
 
     {/* Chain control dialog (куст заказов при перемещении) */}
     {chainDialog && (() => {

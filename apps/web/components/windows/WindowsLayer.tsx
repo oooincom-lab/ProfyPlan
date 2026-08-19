@@ -22,6 +22,7 @@ type WindowsLayerProps = {
   onOpenGroup: (g: any) => void;
   onOpenPool: (p: any) => void;
   renderOrdersTable?: () => any;
+  renderBomWindow?: (w: WinRec) => any;
   onClose: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleMin: (id: string) => void;
@@ -52,7 +53,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     wins, lay, snapZone, setWins, setLay,
     orders, resourcesList, groups, pools, isDyn,
     orderBomNodes, routingFor, resName,
-    onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable,
+    onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
   } = props;
 
@@ -66,13 +67,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
     const o = w.data || orderById(w.orderId);
-    return o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
+    const base = o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
+    return w.kind === 'bom' ? 'BOM · ' + base : base;
   };
 
   const winFullTitle = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
     const o = w.data || orderById(w.orderId);
-    return o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
+    const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
+    return w.kind === 'bom' ? 'BOM · ' + full : full;
   };
 
   const reorderWins = (from: number, to: number) => {
@@ -90,6 +93,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
       {wins.map((w: WinRec) => {
         const isList = w.kind === 'list';
+        const isBom = w.kind === 'bom';
         const o = isList ? null : (w.data || orderById(w.orderId));
         if (!isList && !o) return null;
 
@@ -118,7 +122,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
             onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
             <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : '#3B82F6', flexShrink: 0 }} />
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : '#3B82F6', flexShrink: 0 }} />
               <span className="ttl">{isList ? (w.title || 'Список') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
               <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
               <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
@@ -130,7 +134,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
             </div>
 
-            {!isList && (
+            {!isList && !isBom && (
               <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
                 {TAB_LIST.map(tb => (
                   <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v, editing: false } : x))}
@@ -139,7 +143,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               </div>
             )}
 
-            <div style={{ padding: '12px 14px', overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
+            <div style={{ padding: '12px 14px', overflow: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
+              {isBom && (renderBomWindow ? renderBomWindow(w) : null)}
               {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
                 <table className="tbl">
                   <thead><tr>
@@ -182,7 +187,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Пулов нет</div>
               )}
 
-              {!isList && w.tab === 'order' && !w.editing && (
+              {!isList && !isBom && w.tab === 'order' && !w.editing && (
                 <div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                     <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client: o!.client || '', quantity: String(o!.quantity ?? ''), priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
@@ -198,7 +203,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 </div>
               )}
-              {!isList && w.tab === 'order' && w.editing && (
+              {!isList && !isBom && w.tab === 'order' && w.editing && (
                 <div style={{ display: 'grid', gap: 8 }}>
                   {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map((kv) => {
                     const k = kv[0] as string, label = kv[1] as string;
@@ -225,11 +230,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 </div>
               )}
-              {!isList && w.tab === 'bom' && (
+              {!isList && !isBom && w.tab === 'bom' && (
                 bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
-              {!isList && w.tab === 'route' && (
+              {!isList && !isBom && w.tab === 'route' && (
                 rt && rt.operations && rt.operations.length ? (
                   <div>
                     <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
@@ -248,7 +253,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
               )}
-              {!isList && w.tab === 'res' && (
+              {!isList && !isBom && w.tab === 'res' && (
                 resourcesList.length ? (
                   <div>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
@@ -263,7 +268,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
               )}
-              {!isList && w.tab === 'plan' && (
+              {!isList && !isBom && w.tab === 'plan' && (
                 <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
                   План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
                 </div>
@@ -336,7 +341,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 title={winFullTitle(w)}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : '#3B82F6'), flexShrink: 0 }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : w.kind === 'bom' ? '#A78BFA' : '#3B82F6'), flexShrink: 0 }} />
                 {winLabel(w)}
                 {w.editing && <span className="pp-tchip-dirty" title="Есть несохранённые изменения" />}
                 <span className="pp-tchip-x" title="Закрыть"

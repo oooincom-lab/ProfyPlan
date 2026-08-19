@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list';
+  kind: 'order' | 'list' | 'bom';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -91,6 +91,35 @@ export function useWindows(sidebarWidth: number = 260) {
       min: false,
       z: winZ.current,
       tab: 'order' as const,
+      editing: false,
+      form: {},
+    }]);
+  };
+
+  const openBomWin = (o: any) => {
+    const ex = wins.find((w: WinRec) => w.kind === 'bom' && w.orderId === o.id);
+    if (ex) {
+      winZ.current += 1;
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, data: o, z: winZ.current } : w));
+      return;
+    }
+    winZ.current += 1;
+    const d = deskRect();
+    const MX = 28;
+    const w = Math.min(920, d.w - MX * 2);
+    const h = Math.min(720, d.h - MX * 2);
+    setWins(prev => [...prev, {
+      id: 'b' + Date.now().toString(36),
+      kind: 'bom' as const,
+      orderId: o.id,
+      data: o,
+      x: d.x + Math.max(MX, (d.w - w) / 2),
+      y: d.y + Math.max(18, (d.h - h) / 2),
+      w,
+      h,
+      min: false,
+      z: winZ.current,
+      tab: 'bom' as const,
       editing: false,
       form: {},
     }]);
@@ -325,7 +354,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }
