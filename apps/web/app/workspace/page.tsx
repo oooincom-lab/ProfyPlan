@@ -316,7 +316,7 @@ export default function AppShell() {
 
   const resName = (rid: any) => {
     if (!rid) return '—';
-    const r = resourcesList.find((x: any) => x.id === rid);
+    const r = resourcesList.find((x: any) => x.id === rid || x.name === rid);
     return r ? r.name : String(rid).slice(0, 8) + '…';
   };
 
@@ -481,42 +481,6 @@ export default function AppShell() {
 
     const result: any[] = [...own];
 
-    // Получить корни BOM подчинённого заказа по его id
-    const subOrderRoots = (orderId: string, skipId?: string): any[] => {
-      const sub = ordersList.find((x: any) => x.id === orderId);
-      if (!sub) return [];
-      const roots = orderBomNodes(sub).filter((n: any) => !n.parent_id);
-      const mapped = roots.map((n: any) => ({
-        ...n,
-        _ownerId: sub.id,
-        _ownerExtId: sub.ext_id || sub.specification_name || '',
-      }));
-      // Заказ создан из самого узла (корень его BOM = этот узел): встраиваем детей, а не копию узла
-      if (skipId && mapped.length === 1 && mapped[0].id === skipId) {
-        return all
-          .filter((c: any) => c.parent_id === skipId)
-          .map((c: any) => ({ ...c, _ownerId: sub.id, _ownerExtId: sub.ext_id || sub.specification_name || '' }));
-      }
-      return mapped;
-    };
-
-    // Рекурсивно встраиваем узлы подчинённого заказа как дочерние (цветные, сгруппированы по заказам)
-    const inject = (nodes: any[], parentId: string, dimLevel: number, visited: Set<string>) => {
-      for (const n of nodes) {
-        const synthId = `sub_${parentId}_${n.id}_${dimLevel}`;
-        const clone: any = { ...n, id: synthId, parent_id: parentId, dimmed: dimLevel };
-        result.push(clone);
-        const realChildren = all.filter((c: any) => c.parent_id === n.id);
-        if (realChildren.length) inject(realChildren.map((c: any) => ({ ...c, _ownerId: clone._ownerId, _ownerExtId: clone._ownerExtId })), synthId, dimLevel, visited);
-        if (n.order_id && n.order_id !== o.id && !visited.has(n.order_id)) {
-          const nextVisited = new Set(visited);
-          nextVisited.add(n.order_id);
-          const deeper = subOrderRoots(n.order_id, n.id);
-          if (deeper.length) inject(deeper, synthId, Math.min(dimLevel + 1, 2), nextVisited);
-        }
-      }
-    };
-
     const ownIds = new Set(own.map((n: any) => n.id));
     const childrenOf: Record<string, any[]> = {};
     for (const n of all) if (n.parent_id) (childrenOf[n.parent_id] ||= []).push(n);
@@ -525,15 +489,33 @@ export default function AppShell() {
       return (s && (s.ext_id || s.specification_name)) || '';
     };
 
+    // Рекурсивно встраиваем поддерево узла-ссылки подчинённого заказа (dimmed).
+    // На вложенных уровнях тоже могут быть узлы-ссылки (order_id чужого заказа) —
+    // тогда переключаем владельца на более глубокий подчинённый заказ.
+    const injectSubtree = (nodeId: string, parentId: string, ownerId: string, dimLevel: number, visited: Set<string>) => {
+      for (const c of childrenOf[nodeId] || []) {
+        let owner = ownerId;
+        let ownerExt = orderLabel(ownerId);
+        if (c.order_id && c.order_id !== o.id) {
+          if (visited.has(c.order_id)) continue;
+          owner = c.order_id;
+          ownerExt = orderLabel(c.order_id);
+          visited.add(c.order_id);
+        }
+        const synthId = `sub_${parentId}_${c.id}_${dimLevel}`;
+        const clone: any = { ...c, id: synthId, parent_id: parentId, dimmed: dimLevel, _ownerId: owner, _ownerExtId: ownerExt };
+        result.push(clone);
+        injectSubtree(c.id, synthId, owner, dimLevel, visited);
+      }
+    };
+
     // Обходим своё поддерево по реальным детям из `all`: узлы-ссылки на подчинённые
     // заказы (order_id ≠ своего) включаем в цепочку и встраиваем под ними их BOM.
     const visit = (nodeId: string) => {
       for (const c of childrenOf[nodeId] || []) {
         if (c.order_id && c.order_id !== o.id) {
           result.push({ ...c, _ownerId: c.order_id, _ownerExtId: orderLabel(c.order_id) });
-          const visited = new Set<string>([o.id, c.order_id]);
-          const subRoots = subOrderRoots(c.order_id, c.id);
-          if (subRoots.length) inject(subRoots, c.id, 1, visited);
+          injectSubtree(c.id, c.id, c.order_id, 1, new Set<string>([o.id, c.order_id]));
         } else if (ownIds.has(c.id)) {
           visit(c.id);
         }
