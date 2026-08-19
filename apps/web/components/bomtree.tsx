@@ -47,6 +47,14 @@ interface BomTreeProps {
   currentOrderId?: string;
   /** id узлов с аномалиями структуры (нет маршрута / нет подчинённого заказа) */
   anomalyIds?: Set<string>;
+  /** Маршруты (с operations) — для встраивания операций в дерево */
+  routings?: any[];
+  /** Показывать операции маршрутов под узлами (режимы «Маршруты» / «Состав + Маршруты») */
+  showOps?: boolean;
+  /** Показывать материал-узлы (false — режим «Маршруты», только узлы с маршрутами) */
+  showMaterials?: boolean;
+  /** Имя ресурса по resource_type_id для операций */
+  resName?: (rid: any) => string;
 }
 
 export interface TimelineOp {
@@ -113,7 +121,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId, anomalyIds }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -195,8 +203,14 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
   // Recursive render — but filter-aware: a node shows if it matches OR any descendant matches.
   const renderNode = (n: BomTreeNode, depth: number): React.ReactNode => {
     const meta = TYPE_META[n.node_type] || TYPE_META.material;
-    const children = tree.childrenMap[n.id] || [];
+    if (!showMaterials && n.node_type === 'material') return null;
+    const rawChildren = tree.childrenMap[n.id] || [];
+    const children = showMaterials ? rawChildren : rawChildren.filter((c: BomTreeNode) => c.node_type !== 'material');
     const hasChildren = children.length > 0;
+    const rt = showOps && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
+    const ops = rt ? (rt.operations || []) : [];
+    const hasOps = showOps && ops.length > 0;
+    const expandable = hasChildren || hasOps;
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
     const lead = fmtNum(n.procurement_lead_time_days);
@@ -215,7 +229,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '5px 8px',
             paddingLeft: isSub ? 10 : 8,
-            borderRadius: 7, cursor: hasChildren ? 'pointer' : 'default',
+            borderRadius: 7, cursor: expandable ? 'pointer' : 'default',
             transition: 'background .12s',
             opacity: dimOpacity,
             background: isSub ? `${ownerCol}12` : 'transparent',
@@ -223,10 +237,10 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           }}
           onMouseEnter={e => (e.currentTarget.style.background = isSub ? `${ownerCol}22` : '#162844')}
           onMouseLeave={e => (e.currentTarget.style.background = isSub ? `${ownerCol}12` : 'transparent')}
-          onClick={() => hasChildren && toggleNode(n.id)}
+          onClick={() => expandable && toggleNode(n.id)}
         >
           <span style={{ width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#5A7090', flex: '0 0 16px' }}>
-            {hasChildren ? <Chevron open={!isCollapsed} /> : null}
+            {expandable ? <Chevron open={!isCollapsed} /> : null}
           </span>
           <span style={{
             width: 20, height: 20, borderRadius: 5, display: 'inline-flex', alignItems: 'center',
@@ -319,8 +333,26 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
             </span>
           )}
         </div>
-        {hasChildren && !isCollapsed && (
+        {expandable && !isCollapsed && (
           <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: isSub && ownerCol ? `1px solid ${ownerCol}55` : '1px solid #2A4060' }}>
+            {hasOps && ops.map((op: any) => {
+              const det = [
+                op.predecessors ? 'Предш.: ' + op.predecessors : '',
+                op.setup_hours ? 'Наладка ' + op.setup_hours + ' ч' : '',
+                op.teardown_hours ? 'Снятие ' + op.teardown_hours + ' ч' : '',
+                Number(op.output_quantity) ? 'Вых. годн. ' + op.output_quantity : '',
+              ].filter(Boolean).join(' · ');
+              return (
+                <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 6 }}>
+                  <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName ? resName(op.resource_type_id) : op.resource_type_id}{det ? ' · ' + det : ''}</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
+                </div>
+              );
+            })}
             {children.map(c => renderNode(c, depth + 1))}
           </div>
         )}

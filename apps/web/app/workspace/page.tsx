@@ -261,8 +261,8 @@ export default function AppShell() {
   const loadPanelData = async (p: any) => {
     try {
       const [r, rs] = await Promise.all([
-        apiF<any>('/bom/routings').catch(() => null),
-        apiF<any[]>('/resources').catch(() => []),
+        apiF<any>('/bom/routings?page_size=200').catch(() => null),
+        p?.id ? apiF<any[]>(`/projects/${p.id}/resources`).catch(() => []) : Promise.resolve([]),
       ]);
       if (r && Array.isArray(r.items)) setRoutings(r.items);
       if (Array.isArray(rs)) setResourcesList(rs);
@@ -276,6 +276,10 @@ export default function AppShell() {
     setSelOrderId(o.id);
     setPanelTab('order');
     setPanelEditing(false);
+    if (selectedProject) {
+      loadBomTree(selectedProject.id);
+      loadPanelData(selectedProject);
+    }
   };
 
   const openGroupEditor = (g: any) => {
@@ -1221,49 +1225,22 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
                               <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
                             </tr>
-                            {bomOpen && treeMode !== 'routes' && (
+                            {bomOpen && (
                               <tr>
                                 <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
                                   <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM · {o.specification_name || o.ext_id || '—'}</span>
+                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>{treeMode === 'bom' ? 'BOM' : treeMode === 'routes' ? 'Маршруты' : 'Состав + Маршруты'} · {o.specification_name || o.ext_id || '—'}</span>
                                       {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
-                                      <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
+                                      <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-<BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} timeline={bomTimeline || undefined} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} timeline={bomTimeline || undefined} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
                             )}
-                            {treeMode !== 'bom' && (() => {
-                              const rts = routingsFor(o);
-                              if (!rts.length) return null;
-                              return (
-                                <tr>
-                                  <td colSpan={orderShowAll ? 14 : 13} style={{ padding: '4px 14px 8px', background: 'rgba(6,182,212,.04)' }}>
-                                    {rts.map((rt: any) => {
-                                      const ops = rt.operations || [];
-                                      const total = ops.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
-                                      return (
-                                        <div key={rt.id} style={{ marginBottom: 6 }}>
-                                          <div style={{ fontSize: 11, color: '#22D3EE', marginBottom: 4 }}>⛓ Маршрут · {rt.name || '—'} · {ops.length ? ops.length + ' оп. · ' + total + ' ч' : 'нет операций'}</div>
-                                          {ops.length > 0 && (
-                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                              {ops.map((op: any) => (
-                                                <span key={op.id || op.sequence_number} style={{ background: '#0B1B33', border: '1px solid #1E3252', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#B0C4DE' }}>
-                                                  {op.sequence_number} {op.name} · {resName(op.resource_type_id)} · {Number(op.duration_hours) || 0} ч
-                                                </span>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </td>
-                                </tr>
-                              );
-                            })()}
+
                             </Fragment>
                           );
                         })}
@@ -1290,22 +1267,6 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
                   ];
                   const bomNodes = o ? orderBomNodes(o) : [];
-                  const renderBomNode = (n: any, d: number): any => {
-                    const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
-                    return (
-                      <div key={n.id}>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
-                          <span style={{ color: n.node_type === 'material' ? '#8FA3BD' : '#E2E8F0' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
-                          <span style={{ color: '#5A7090' }}>×{n.quantity_per_parent ?? '1'}</span>
-                          <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
-                          {n.node_type === 'semi_finished' && <span style={{ background: 'rgba(139,92,246,.15)', color: '#C4B5FD', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>ПФ</span>}
-                          {n.is_phantom && <span style={{ background: 'rgba(6,182,212,.12)', color: '#67E8F9', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>фантом</span>}
-                          {n.routing_id && <span style={{ color: '#22D3EE', fontSize: 10 }}>⛓</span>}
-                        </div>
-                        {kids.map((k: any) => renderBomNode(k, d + 1))}
-                      </div>
-                    );
-                  };
                   const rt = o ? routingFor(o) : null;
                   const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
                   return (
@@ -1386,28 +1347,73 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
-                            bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
-                            : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
+                            bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o.specification_name} />
+                            : <div style={{ color: '#5A7090' }}>{bomLoading[selectedProject?.id || ''] ? 'Загрузка состава…' : 'Состав пуст — у заказа нет спецификации (BOM).'}</div>
                           )}
-                          {o && panelTab === 'route' && (
-                            rt && rt.operations && rt.operations.length ? (
-                              <div>
-                                <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
-                                {rt.operations.map((op: any) => (
-                                  <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                      <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
-                                      <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
-                                      <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
-                                    </div>
-                                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
-                                      Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
-                                    </div>
+                          {o && panelTab === 'route' && (() => {
+                            const rts = routingsFor(o);
+                            if (!rts.length) return <div style={{ color: '#5A7090' }}>Маршруты не заданы. Привяжите маршруты к узлам спецификации (BOM → узел → routing_id).</div>;
+                            const nodes = bomNodes;
+                            const rtById: Record<string, any> = {};
+                            rts.forEach((r: any) => { rtById[r.id] = r; });
+                            const kidsOf = (id: string): any[] => nodes.filter((n: any) => n.parent_id === id);
+                            const TYPE_META: Record<string, { c: string; bg: string; l: string }> = {
+                              assembly: { c: '#60A5FA', bg: 'rgba(59,130,246,.15)', l: 'Сборка' },
+                              semi_finished: { c: '#34D399', bg: 'rgba(16,185,129,.14)', l: 'Полуфабрикат' },
+                              material: { c: '#A8B6C8', bg: 'rgba(138,151,173,.13)', l: 'Материал' },
+                            };
+                            const hasRouteBelow = (n: any): boolean => n.routing_id ? true : kidsOf(n.id).some(k => hasRouteBelow(k));
+                            const renderRouteNode = (n: any): any => {
+                              const rt = rtById[n.routing_id];
+                              const ops = rt ? (rt.operations || []) : [];
+                              const tot = ops.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+                              const kids = kidsOf(n.id).filter((k: any) => hasRouteBelow(k));
+                              const meta = TYPE_META[n.node_type] || TYPE_META.material;
+                              const hasBody = ops.length > 0 || kids.length > 0;
+                              const det = (op: any) => [
+                                op.predecessors ? 'Предш.: ' + op.predecessors : '',
+                                op.setup_hours ? 'Наладка ' + op.setup_hours + ' ч' : '',
+                                op.teardown_hours ? 'Снятие ' + op.teardown_hours + ' ч' : '',
+                                Number(op.output_quantity) ? 'Вых. годн. ' + op.output_quantity : '',
+                              ].filter(Boolean).join(' · ');
+                              return (
+                                <div key={n.id}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 7 }}>
+                                    <span style={{ width: 20, height: 20, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 20px', background: meta.bg, color: meta.c, fontSize: 11, fontWeight: 700 }}>{meta.l.slice(0, 1)}</span>
+                                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: '#E8EEF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
+                                    {n.routing_id ? (
+                                      <>
+                                        <span style={{ fontSize: 11, color: '#22D3EE', whiteSpace: 'nowrap' }}>⛓ {ops.length} оп.</span>
+                                        <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 700, whiteSpace: 'nowrap' }}>{tot} ч</span>
+                                      </>
+                                    ) : (
+                                      <span style={{ fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap' }}>{meta.l}</span>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
-                            ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
-                          )}
+                                  {hasBody && (
+                                    <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: '1px solid #2A4060' }}>
+                                      {ops.map((op: any) => {
+                                        const d = det(op);
+                                        return (
+                                          <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 6 }}>
+                                            <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
+                                            <span style={{ flex: 1, minWidth: 0 }}>
+                                              <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
+                                              <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName(op.resource_type_id)}{d ? ' · ' + d : ''}</span>
+                                            </span>
+                                            <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
+                                          </div>
+                                        );
+                                      })}
+                                      {kids.map((k: any) => renderRouteNode(k))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            };
+                            const roots = nodes.filter((n: any) => !n.parent_id);
+                            return <div>{roots.filter((r: any) => hasRouteBelow(r)).map((r: any) => renderRouteNode(r))}</div>;
+                          })()}
                           {o && panelTab === 'res' && (
                             resourcesList.length ? (
                               <div>

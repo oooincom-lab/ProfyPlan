@@ -218,7 +218,8 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
 
           {(step === 'done' || step === 'result') && result && (
             <>
-              {/* Stats */}
+              {/* Загружено */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)', marginBottom: 8 }}>Загружено</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                 <div style={style.statBox}>
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.orders_created}</div>
@@ -237,16 +238,21 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
                   <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Операций</div>
                 </div>
                 <div style={style.statBox}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.resources_created}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Ресурсов</div>
+                </div>
+              </div>
+
+              {/* Сопоставлено со справочником */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)', marginBottom: 8 }}>Сопоставлено со справочником</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                <div style={style.statBox}>
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.nomenclature_created}</div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Номенклатуры создано</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Позиций создано</div>
                 </div>
                 <div style={style.statBox}>
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.nomenclature_linked}</div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Номенклатуры связано</div>
-                </div>
-                <div style={style.statBox}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg-1, #E0E8F0)' }}>{result.resources_created}</div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Ресурсов</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3, #7A8FA8)' }}>Позиций связано</div>
                 </div>
               </div>
 
@@ -263,25 +269,11 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
                 </div>
               )}
 
-              {/* Warnings */}
-              {result.warnings?.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#FFB300', marginBottom: 8 }}>
-                    ⚠ Предупреждения ({result.warnings.length})
-                  </div>
-                  {result.warnings.map((w, i) => (
-                    <div key={i} style={{ padding: '6px 10px', background: 'rgba(255,179,0,0.1)', borderRadius: 6, marginBottom: 6, fontSize: 12 }}>
-                      {w}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Errors */}
+              {/* Ошибки */}
               {result.errors.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#EF5350', marginBottom: 8 }}>
-                    ⚠ Ошибки ({result.errors.length})
+                    Ошибки ({result.errors.length})
                   </div>
                   {result.errors.slice(0, 5).map((e, i) => (
                     <div key={i} style={style.errorRow}>
@@ -294,6 +286,20 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
                       ...и ещё {result.errors.length - 5}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Предупреждения */}
+              {result.warnings?.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#FFB300', marginBottom: 8 }}>
+                    Предупреждения ({result.warnings.length})
+                  </div>
+                  {result.warnings.map((w, i) => (
+                    <div key={i} style={{ padding: '6px 10px', background: 'rgba(255,179,0,0.1)', borderRadius: 6, marginBottom: 6, fontSize: 12 }}>
+                      {w}
+                    </div>
+                  ))}
                 </div>
               )}
 

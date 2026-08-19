@@ -393,16 +393,24 @@ async def create_routing(
 async def list_routings(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    project_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
-    """Список техмаршрутов."""
+    """Список техмаршрутов. При project_id — только маршруты узлов этого проекта."""
+    conds = [Routing.tenant_id == tenant_id]
+    if project_id:
+        node_ids = select(ProductStructure.id).where(
+            ProductStructure.project_id == UUID(project_id),
+            ProductStructure.tenant_id == tenant_id,
+        )
+        conds.append(Routing.product_node_id.in_(node_ids))
     total = (await db.execute(
-        select(func.count(Routing.id)).where(Routing.tenant_id == tenant_id)
+        select(func.count(Routing.id)).where(*conds)
     )).scalar() or 0
 
     routings = (await db.execute(
-        select(Routing).where(Routing.tenant_id == tenant_id)
+        select(Routing).where(*conds)
         .offset((page - 1) * page_size).limit(page_size)
     )).scalars().all()
 
