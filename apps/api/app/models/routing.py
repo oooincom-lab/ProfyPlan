@@ -74,6 +74,9 @@ class RoutingOperation(BaseModel):
     stage: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, comment="Этап (колонка «Этап» вкладки Маршруты)"
     )
+    stage_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="Название этапа (вкладка «6-Этапы»)"
+    )
     department: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True, comment="Подразделение (колонка «Подразделение» вкладки Маршруты)"
     )

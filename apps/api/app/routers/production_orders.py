@@ -210,12 +210,24 @@ async def import_excel(
     if ws is not None:
         result = await _import_resources(ws, tenant_id, project_id, db, result)
 
+    # ── Вкладка 6: Этапы (6-Этапы) ──
+    stage_map: dict[str, str] = {}
+    ws_stages = _pick_sheet(wb, ["6-Этапы", "Этапы"])
+    if ws_stages is not None:
+        for row in ws_stages.iter_rows(min_row=2, values_only=True):
+            if not row or row[0] is None:
+                continue
+            num = _str(row[0])
+            name = _str(row[1]) if len(row) > 1 else ""
+            if num and name:
+                stage_map[num] = name
+
     # ── Вкладка 3: Маршруты (5-Маршруты / Маршруты / Routes) ─
     # В 7-вкладочном формате у «5-Маршруты» сдвиг колонок +2 (есть Этап и Подразделение)
     ws = _pick_sheet(wb, ["5-Маршруты", "Маршруты", "Routes"])
     is_7tab = ws is not None and ws.title == "5-Маршруты"
     if ws is not None:
-        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab)
+        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab, stage_map=stage_map)
 
     # Предупреждение: нет ресурсов
     if result.resources_created == 0:
@@ -635,6 +647,7 @@ async def _validate_order_chain(
 async def _import_routes(
     ws, tenant_id: str, db: AsyncSession, result: ExcelImportResult,
     project_id: Optional[str] = None, is_7tab: bool = False,
+    stage_map: Optional[dict] = None,
 ) -> ExcelImportResult:
     """Парсинг вкладки 'Маршруты'.
 
@@ -701,6 +714,7 @@ async def _import_routes(
                 res_name = _str(row[3]) if len(row) > 3 else ""
                 stage_val = _str(row[c_stage]) if c_stage is not None and len(row) > c_stage else ""
                 dept_val = _str(row[c_dept]) if c_dept is not None and len(row) > c_dept else ""
+                stage_name_val = (stage_map or {}).get(stage_val, "") if stage_val else ""
                 if not res_name:
                     ops_without_resource += 1
                 try:
@@ -713,6 +727,7 @@ async def _import_routes(
                         setup_hours=Decimal("0"),
                         resource_type_id=res_name or None,
                         stage=stage_val or None,
+                        stage_name=stage_name_val or None,
                         department=dept_val or None,
                         output_product=(
                             _str(row[c_out]) if c_out is not None and len(row) > c_out and _str(row[c_out]) else None

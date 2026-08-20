@@ -348,7 +348,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
                 <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 6 }}>
                   <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
                   {op.stage ? (
-                    <span style={{ flex: '0 0 auto', fontSize: 10, color: '#C4B5FD', background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, padding: '1px 6px', whiteSpace: 'nowrap' }}>Этап {op.stage}</span>
+                    <span style={{ flex: '0 0 auto', fontSize: 10, color: '#C4B5FD', background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, padding: '1px 6px', whiteSpace: 'nowrap' }}>Этап {op.stage}{op.stage_name ? ' · ' + op.stage_name : ''}</span>
                   ) : null}
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
