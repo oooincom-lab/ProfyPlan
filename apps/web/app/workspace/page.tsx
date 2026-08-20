@@ -5,6 +5,7 @@ import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
+import DirectoryManager from '@/components/DirectoryManager';
 import Sidebar from '@/components/sidebar';
 import PoolEditor from '@/components/pooleditor';
 import GroupEditor from '@/components/groupeditor';
@@ -18,6 +19,39 @@ import WindowsLayer from '@/components/windows/WindowsLayer';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
+
+const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number }[] }> = {
+  counterparties: {
+    title: '👥 Контрагенты',
+    columns: [
+      { key: 'name', label: 'Наименование', width: 220 },
+      { key: 'inn', label: 'ИНН', width: 110 },
+      { key: 'kpp', label: 'КПП', width: 100 },
+      { key: 'ogrn', label: 'ОГРН', width: 130 },
+      { key: 'external_code', label: 'Внешний код', width: 120 },
+      { key: 'note', label: 'Примечание' },
+    ],
+  },
+  units: {
+    title: '📏 Единицы измерения',
+    columns: [
+      { key: 'code', label: 'ОКЕИ', width: 80 },
+      { key: 'symbol_int', label: 'Межд.', width: 80 },
+      { key: 'symbol_ru', label: 'Символ', width: 80 },
+      { key: 'name_ru', label: 'Название', width: 160 },
+    ],
+  },
+  nomenclature: {
+    title: '📦 Номенклатура',
+    columns: [
+      { key: 'name', label: 'Название', width: 240 },
+      { key: 'code', label: 'Код', width: 120 },
+      { key: 'article', label: 'Артикул', width: 150 },
+      { key: 'ntype', label: 'Тип', width: 130 },
+      { key: 'unit', label: 'Ед.', width: 70 },
+    ],
+  },
+};
 
 async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -33,7 +67,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -81,6 +115,7 @@ export default function AppShell() {
   const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
   const [panelEditing, setPanelEditing] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[] } | null>(null);
   const [routings, setRoutings] = useState<any[]>([]);
   const [resourcesList, setResourcesList] = useState<any[]>([]);
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
@@ -310,7 +345,7 @@ export default function AppShell() {
   const routingsFor = (o: any): any[] => {
     if (!routings.length) return [];
     const nodes = orderBomNodes(o);
-    const ids = Array.from(new Set(nodes.filter((n: any) => n.routing_id).map((n: any) => n.routing_id)));
+    const ids = Array.from(new Set(nodes.filter((n: any) => n.routing_id && !n._boundary).map((n: any) => n.routing_id)));
     return routings.filter((r: any) => ids.includes(r.id));
   };
 
@@ -320,26 +355,34 @@ export default function AppShell() {
     return r ? r.name : String(rid).slice(0, 8) + '…';
   };
 
+  const openDirectory = (entity: string) => {
+    const cfg = DIR_COLUMNS[entity];
+    if (cfg) setDirManager({ title: cfg.title, entity, columns: cfg.columns });
+  };
+
   const startEditOrder = () => {
     if (!selOrder) return;
     setEditForm({
-      client: selOrder.client || '',
+      client_id: selOrder.client_id || '',
       quantity: String(selOrder.quantity ?? ''),
+      unit: selOrder.unit || '',
       priority: selOrder.priority || 'normal',
       start_date: selOrder.start_date || '',
       due_date: selOrder.due_date || '',
       status: selOrder.status || 'draft',
     });
+    setPanelTab('order');
     setPanelEditing(true);
   };
 
   const saveOrderEdit = async () => {
     if (!selOrder) return;
     try {
-      const body: any = { client: editForm.client, quantity: Number(editForm.quantity) || 1, priority: editForm.priority, status: editForm.status };
+      const body: any = { quantity: Number(editForm.quantity) || 1, priority: editForm.priority, status: editForm.status, unit: editForm.unit || undefined };
+      if (editForm.client_id) body.client_id = editForm.client_id;
       if (editForm.start_date) body.start_date = editForm.start_date;
       if (editForm.due_date) body.due_date = editForm.due_date;
-      await apiF(`/production-orders/${selOrder.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      await apiF(`/production-orders/${selOrder.id}`, { method: 'PUT', body: JSON.stringify(body) });
       setMsg('Заказ обновлён');
       setPanelEditing(false);
       if (selectedProject) await loadProjectOrdersView(selectedProject);
@@ -350,10 +393,11 @@ export default function AppShell() {
     const o = orders.find((x: any) => x.id === w.orderId);
     if (!o) return;
     try {
-      const body: any = { client: w.form.client, quantity: Number(w.form.quantity) || 1, priority: w.form.priority, status: w.form.status };
+      const body: any = { quantity: Number(w.form.quantity) || 1, priority: w.form.priority, status: w.form.status, unit: w.form.unit || undefined };
+      if (w.form.client_id) body.client_id = w.form.client_id;
       if (w.form.start_date) body.start_date = w.form.start_date;
       if (w.form.due_date) body.due_date = w.form.due_date;
-      await apiF(`/production-orders/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      await apiF(`/production-orders/${o.id}`, { method: 'PUT', body: JSON.stringify(body) });
       setMsg('Заказ обновлён');
       win.setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x));
       if (selectedProject) await loadProjectOrdersView(selectedProject);
@@ -397,48 +441,54 @@ export default function AppShell() {
     const childrenMap: Record<string, any[]> = {};
     for (const n of all) if (n.parent_id) (childrenMap[n.parent_id] ||= []).push(n);
     const kept = new Set<string>();
+    const boundary = new Set<string>();
 
     // Обход поддерева с учётом границ куста заказов:
-    // не переходим в узлы, привязанные через order_id к другому заказу.
+    // не переходим в узлы, привязанные через order_id к другому заказу —
+    // включаем их как границы-ссылки (без раскрытия материалов и без операций).
     const walk = (start: any) => {
       if (kept.has(start.id)) return;
       kept.add(start.id);
       for (const c of childrenMap[start.id] || []) {
-        if (c.order_id && c.order_id !== oid) continue;
+        if (c.order_id && c.order_id !== oid) { kept.add(c.id); boundary.add(c.id); continue; }
         walk(c);
       }
     };
+
+    const result = () => all
+      .filter(n => kept.has(n.id))
+      .map(n => boundary.has(n.id) ? { ...n, _boundary: true } : n);
 
     // 0) узлы, напрямую привязанные к заказу через order_id (полуфабрикаты куста)
     const ownByOrder = all.filter(n => n.order_id && n.order_id === oid);
     if (ownByOrder.length) {
       ownByOrder.forEach(walk);
-      return all.filter(n => kept.has(n.id));
+      return result();
     }
 
     // 1) корни по имени номенклатуры (спецификация заказа = имя корневого изделия)
     const roots = all.filter(n => !n.parent_id);
     const byName = roots.filter(r => specName && (r.nomenclature_name || '').toLowerCase().trim() === specName);
-    if (byName.length) { byName.forEach(walk); return all.filter(n => kept.has(n.id)); }
+    if (byName.length) { byName.forEach(walk); return result(); }
 
     // 2) узел (не только корень) по коду = specification_id — заказ, созданный из полуфабриката
     if (specId) {
       const node = all.find(n => (n.nomenclature_id || '').toLowerCase().trim() === specId
         || (n.ext_id || '').toLowerCase().trim() === specId);
-      if (node) { walk(node); return all.filter(n => kept.has(n.id)); }
+      if (node) { walk(node); return result(); }
     }
 
     // 3) корни, чья спецификация из path == specification_id (импортированные данные: path = Спец/Узел)
     const specOf = (n: any) => (n.path && n.path.includes('/')) ? n.path.split('/')[0].toLowerCase().trim() : '';
     const byPath = roots.filter(r => specId && specOf(r) === specId);
-    if (byPath.length) { byPath.forEach(walk); return all.filter(n => kept.has(n.id)); }
+    if (byPath.length) { byPath.forEach(walk); return result(); }
 
     // 4) спецификация задана, но не найдена — пустой BOM, а не «весь проект»
     if (specName || specId) return [];
 
     // 5) без спецификации — все корни (ручные заказы без привязки к BOM)
     roots.forEach(walk);
-    return all.filter(n => kept.has(n.id));
+    return result();
   };
 
   const openBomModal = (o: any) => {
@@ -472,11 +522,13 @@ export default function AppShell() {
     const projId = selectedProject?.id || '';
     const all = bomTrees[projId] || [];
     if (!all.length) return [];
-    const own = orderBomNodes(o).map((n: any) => ({
-      ...n,
-      _ownerId: o.id,
-      _ownerExtId: o.ext_id || o.specification_name || '',
-    }));
+    const own = orderBomNodes(o)
+      .filter((n: any) => !(n.order_id && n.order_id !== o.id))
+      .map((n: any) => ({
+        ...n,
+        _ownerId: o.id,
+        _ownerExtId: o.ext_id || o.specification_name || '',
+      }));
     const ordersList = projectOrders[projId] || [];
 
     const result: any[] = [...own];
@@ -581,6 +633,7 @@ export default function AppShell() {
     const seen = new Set<string>();
     for (const n of order) {
       if (!n.routing_id) continue;
+      if (n._boundary) continue;
       const rt = routings.find((r: any) => r.id === n.routing_id);
       if (!rt || !Array.isArray(rt.operations)) continue;
       const rops = [...rt.operations].sort((a: any, b: any) => (Number(a.sequence_number) || 0) - (Number(b.sequence_number) || 0));
@@ -1238,7 +1291,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   <div style={mode === 'table' ? { flex: 1, minHeight: 250, overflow: 'auto' } : { overflowX: 'auto' }}>
                     <table className="tbl" style={{ width: 'max-content' }}>
                       <thead><tr>
-                        <th style={{ width: 56 }}></th>
+                        <th style={{ width: 96 }}></th>
                         <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
                         {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Пул{sortArrow('_typeName')}</th>}
                         <th className="t-graph">Граф</th>
@@ -1280,14 +1333,16 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           return (
                             <Fragment key={o.id}>
                             <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
-                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 56, minWidth: 56, maxWidth: 56, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
-                                {hasChildren ? (
-                                  <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 12, padding: '2px 3px 2px 0', marginRight: 2, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
-                                ) : null}
+                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 96, minWidth: 96, maxWidth: 96, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
+                                <span style={{ display: 'inline-block', width: 22, textAlign: 'center' }}>
+                                  {hasChildren ? (
+                                    <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 16, padding: 0, margin: 0, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
+                                  ) : null}
+                                </span>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
                                   title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 16, padding: '2px 6px', transition: 'color .15s' }}
                                   onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
                                   onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
                                 >{bomOpen ? '▾' : '▸'}</button>
@@ -1316,7 +1371,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
@@ -1379,8 +1434,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.ext_id || o.id) : 'Панель заказа'}</div>
                             <div style={{ fontSize: 12, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.specification_name || '—') : 'Выберите заказ в списке'}</div>
                           </div>
-                          {o && panelTab === 'order' && !panelEditing && (
+                          {o && !panelEditing && (
                             <button onClick={startEditOrder} style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
+                          )}
+                          {o && panelEditing && (
+                            <>
+                              <button onClick={saveOrderEdit} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ Сохранить</button>
+                              <button onClick={() => setPanelEditing(false)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Отмена</button>
+                            </>
                           )}
                           {isModal && (
                             <button onClick={() => setSelOrderId(null)} style={{ background: 'transparent', border: 0, color: '#8FA3BD', cursor: 'pointer', fontSize: 15, padding: '2px 6px' }}>✕</button>
@@ -1404,27 +1465,39 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'order' && panelEditing && (
-                            <div style={{ display: 'grid', gap: 8 }}>
-                              {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map(([k, label]) => (
-                                <label key={k} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ color: '#8FA3BD', fontSize: 12 }}>{label}</span>
-                                  {k === 'priority' ? (
-                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                                      <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
-                                    </select>
-                                  ) : k === 'status' ? (
-                                    <select value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                                      <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
-                                    </select>
-                                  ) : (
-                                    <input value={editForm[k] || ''} onChange={e => setEditForm(f => ({ ...f, [k]: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
-                                  )}
-                                </label>
-                              ))}
-                              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                                <button onClick={saveOrderEdit} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Сохранить</button>
-                                <button onClick={() => setPanelEditing(false)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Отмена</button>
-                              </div>
+                            <div style={{ display: 'grid', gap: 10 }}>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Клиент</span>
+                                <DirectoryPicker entity="counterparties" apiBase="https://profyplan.ru/api" value={editForm.client_id || null} onChange={(v) => setEditForm(f => ({ ...f, client_id: v }))} placeholder="Выбрать контрагента..." onManage={() => openDirectory('counterparties')} />
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Кол-во</span>
+                                <input type="number" value={editForm.quantity || ''} onChange={e => setEditForm(f => ({ ...f, quantity: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Ед. изм.</span>
+                                <DirectoryPicker entity="units" apiBase="https://profyplan.ru/api" value={editForm.unit || null} onChange={(v) => setEditForm(f => ({ ...f, unit: v }))} displayField="symbol_ru" valueField="symbol_int" subField="symbol_int" placeholder="Выбрать единицу..." onManage={() => openDirectory('units')} />
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритет</span>
+                                <select value={editForm.priority || ''} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                  <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                                </select>
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Старт</span>
+                                <input type="date" value={editForm.start_date || ''} onChange={e => setEditForm(f => ({ ...f, start_date: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Финиш</span>
+                                <input type="date" value={editForm.due_date || ''} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12 }}>Статус</span>
+                                <select value={editForm.status || ''} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                                  <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
+                                </select>
+                              </label>
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
@@ -1499,11 +1572,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             const roots = nodes.filter((n: any) => !n.parent_id);
                             return <div>{roots.filter((r: any) => hasRouteBelow(r)).map((r: any) => renderRouteNode(r))}</div>;
                           })()}
-                          {o && panelTab === 'res' && (
-                            resourcesList.length ? (
+                          {o && panelTab === 'res' && (() => {
+                            const used = new Set<string>();
+                            for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
+                            const ordRes = resourcesList.filter((r: any) => used.has(r.id) || used.has(r.name));
+                            return ordRes.length ? (
                               <div>
-                                <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
-                                {resourcesList.map((r: any) => (
+                                <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Ресурсы заказа: {ordRes.length}</div>
+                                {ordRes.map((r: any) => (
                                   <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
                                     <span style={{ flex: 1 }}>{r.name}</span>
                                     <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
@@ -1512,8 +1588,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                   </div>
                                 ))}
                               </div>
-                            ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
-                          )}
+                            ) : <div style={{ color: '#5A7090' }}>У заказа нет задействованных ресурсов.</div>;
+                          })()}
                           {o && panelTab === 'plan' && (
                             <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
                               План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
@@ -1677,6 +1753,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     'directories': 'Справочники',
     'nomenclature': 'Номенклатура',
     'units': 'Единицы измерения',
+    'counterparties': 'Контрагенты',
     'resources': 'Ресурсы',
     'departments': 'Подразделения',
     'organizations': 'Организации',
@@ -2479,6 +2556,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               {[
                 { id: 'nomenclature', icon: '📦', title: 'Номенклатура', desc: 'Продукты, материалы, узлы' },
                 { id: 'units', icon: '📏', title: 'Единицы измерения', desc: 'Шт, кг, м, л и другие' },
+                { id: 'counterparties', icon: '👥', title: 'Контрагенты', desc: 'Клиенты, поставщики, подрядчики' },
                 { id: 'resources', icon: '🔧', title: 'Ресурсы', desc: 'Станки, люди, бригады' },
                 { id: 'departments', icon: '🏢', title: 'Подразделения', desc: 'Цеха, участки, отделы' },
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
@@ -2531,6 +2609,19 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   { key: 'name_ru', label: 'Название', width: 160 },
                   { key: 'name_en', label: 'English', width: 160 },
                 ]}
+              />
+            </div>
+          )}
+
+          {view === 'counterparties' && (
+            <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+              <div className="panel-hdr" style={{ marginBottom: 16 }}>
+                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>👥 Контрагенты</span>
+              </div>
+              <DirectoryTable
+                entity="counterparties"
+                apiBase="https://profyplan.ru/api"
+                columns={DIR_COLUMNS.counterparties.columns}
               />
             </div>
           )}
@@ -2739,20 +2830,20 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 {/* Modal header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid #1E3252' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20 }}>{directoryModal === 'nomenclature' ? '📦' : directoryModal === 'units' ? '📏' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
+                    <span style={{ fontSize: 20 }}>{directoryModal === 'nomenclature' ? '📦' : directoryModal === 'units' ? '📏' : directoryModal === 'counterparties' ? '👥' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>
-                      {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'units' ? 'Единицы измерения' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
+                      {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'units' ? 'Единицы измерения' : directoryModal === 'counterparties' ? 'Контрагенты' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {['nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'].map(tab => (
+                    {['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations', 'calendars'].map(tab => (
                       <button key={tab} onClick={() => setDirectoryModal(tab)} style={{
                         background: directoryModal === tab ? '#1E3252' : '#162844',
                         color: directoryModal === tab ? '#B0C4DE' : '#5A7090',
                         border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12,
                         cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.12s',
                       }}>
-                        {tab === 'nomenclature' ? 'Номенклатура' : tab === 'units' ? 'Ед. измерения' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
+                        {tab === 'nomenclature' ? 'Номенклатура' : tab === 'units' ? 'Ед. измерения' : tab === 'counterparties' ? 'Контрагенты' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
                       </button>
                     ))}
                     <button onClick={() => setDirectoryModal(null)} style={{
@@ -2792,7 +2883,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       ]}
                     />
                   )}
-                  {directoryModal !== 'nomenclature' && directoryModal !== 'units' && (
+                  {directoryModal === 'counterparties' && (
+                    <DirectoryTable
+                      entity="counterparties"
+                      apiBase="https://profyplan.ru/api"
+                      columns={DIR_COLUMNS.counterparties.columns}
+                    />
+                  )}
+                  {directoryModal !== 'nomenclature' && directoryModal !== 'units' && directoryModal !== 'counterparties' && (
                     <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                       <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
@@ -2845,6 +2943,17 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onResize={win.startResize}
         onApplyCell={win.applySnapCell}
         onSaveEdit={saveWinEdit}
+      />
+    )}
+
+    {/* Универсальный модуль справочника (модальное окно) */}
+    {dirManager && (
+      <DirectoryManager
+        title={dirManager.title}
+        entity={dirManager.entity}
+        columns={dirManager.columns}
+        apiBase="https://profyplan.ru/api"
+        onClose={() => setDirManager(null)}
       />
     )}
 

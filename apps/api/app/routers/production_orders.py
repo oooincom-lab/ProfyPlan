@@ -17,6 +17,7 @@ from app.models.production_order import ProductionOrder
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
 from app.models.nomenclature import Nomenclature
+from app.models.counterparty import Counterparty
 from app.models.resource import Resource
 from app.schemas.production_order import (
     ProductionOrderCreate,
@@ -838,6 +839,16 @@ async def create_order(
     """Создать один заказ на производство."""
     from uuid import UUID
     parent_id = await _resolve_parent_order(body.parent_order_id, project_id, tenant_id, db)
+    client_id = None
+    client_name = body.client
+    if body.client_id:
+        c = (await db.execute(select(Counterparty).where(
+            Counterparty.id == UUID(body.client_id),
+            Counterparty.tenant_id == tenant_id,
+        ))).scalar_one_or_none()
+        if c:
+            client_id = c.id
+            client_name = c.name
     order = ProductionOrder(
         id=uuid4(),
         tenant_id=tenant_id,
@@ -849,7 +860,8 @@ async def create_order(
         start_date=body.start_date,
         due_date=body.due_date,
         priority=body.priority,
-        client=body.client,
+        client=client_name,
+        client_id=client_id,
         notes=body.notes,
         parent_order_id=parent_id,
     )
@@ -933,6 +945,7 @@ def _order_to_out(o: ProductionOrder) -> ProductionOrderOut:
         due_date=o.due_date,
         priority=o.priority,
         client=o.client,
+        client_id=str(o.client_id) if o.client_id else None,
         notes=o.notes,
         status=o.status,
         group_id=str(o.group_id) if o.group_id else None,
@@ -1063,6 +1076,17 @@ async def update_order(
         v = getattr(body, field, None)
         if v is not None:
             setattr(order, field, v)
+    if body.client_id is not None:
+        if body.client_id:
+            c = (await db.execute(select(Counterparty).where(
+                Counterparty.id == UUID(body.client_id),
+                Counterparty.tenant_id == tenant_id,
+            ))).scalar_one_or_none()
+            order.client_id = c.id if c else None
+            if c:
+                order.client = c.name
+        else:
+            order.client_id = None
     if body.quantity is not None:
         order.quantity = body.quantity
     if body.start_date is not None:

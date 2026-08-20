@@ -32,7 +32,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from app.routers import auth, projects, resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, delete_check
+    from app.routers import auth, projects, resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, delete_check
     from app.routers.suppliers import sc_router
     app.include_router(auth.router)
     app.include_router(projects.router)
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(order_groups.groups_router)
     app.include_router(nomenclature.router)
     app.include_router(units.router)
+    app.include_router(counterparties.router)
     app.include_router(delete_check.router)
 
     @app.get("/v1/health")

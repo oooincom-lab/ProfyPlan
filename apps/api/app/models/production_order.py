@@ -55,6 +55,11 @@ class ProductionOrder(BaseModel):
     )  # low / normal / high / critical
 
     client: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("counterparties.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )  # ссылка на справочник контрагентов
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(

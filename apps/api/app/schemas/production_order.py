@@ -20,7 +20,9 @@ class ProductionOrderCreate(BaseModel):
     due_date: Optional[date] = None
     priority: str = "normal"
     client: Optional[str] = None
+    client_id: Optional[str] = None
     notes: Optional[str] = None
+    status: Optional[str] = None
     parent_order_id: Optional[str] = None
 
 
@@ -37,6 +39,7 @@ class ProductionOrderOut(BaseModel):
     due_date: Optional[date] = None
     priority: str
     client: Optional[str] = None
+    client_id: Optional[str] = None
     notes: Optional[str] = None
     status: str
     group_id: Optional[str] = None

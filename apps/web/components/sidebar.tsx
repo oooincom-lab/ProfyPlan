@@ -6,7 +6,7 @@ import OrderTree, { TreeChevron } from './OrderTree';
 type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
-  | 'directories' | 'nomenclature' | 'units' | 'resources'
+  | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources'
   | 'departments' | 'organizations' | 'calendars' | 'ccm'
   | 'reports' | 'settings' | 'new-project';
 
@@ -70,7 +70,7 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedProjPools, setExpandedProjPools] = useState<Set<string>>(new Set());
 
   // Auto-expand directories section when navigating to a directory view
-  const dirViews = ['directories', 'nomenclature', 'units', 'resources', 'departments', 'organizations', 'calendars'];
+  const dirViews = ['directories', 'nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations', 'calendars'];
   useEffect(() => {
     if (dirViews.includes(view)) {
       setExpandedDirectories(true);
@@ -205,6 +205,7 @@ export default function Sidebar(props: SidebarProps) {
             <span className="s-fh">Справочники</span>
             <span className="s-fi" onClick={() => navTo('nomenclature')}>📦 Номенклатура</span>
             <span className="s-fi" onClick={() => navTo('units')}>📏 Единицы измерения</span>
+            <span className="s-fi" onClick={() => navTo('counterparties')}>👥 Контрагенты</span>
             <span className="s-fi" onClick={() => navTo('resources')}>🔧 Ресурсы</span>
             <span className="s-fi" onClick={() => navTo('departments')}>🏢 Подразделения</span>
             <span className="s-fi" onClick={() => navTo('organizations')}>🏭 Организации</span>

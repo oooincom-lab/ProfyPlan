@@ -21,6 +21,8 @@ export interface BomTreeNode {
   // Вариант А: владелец узла (какой заказ «производит» этот узел в цепочке)
   _ownerId?: string;
   _ownerExtId?: string;
+  // Узел-граница: полуфабрикат, производимый другим (подчинённым) заказом — без своих операций здесь
+  _boundary?: boolean;
 }
 
 export interface OrderOption {
@@ -208,7 +210,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     const rawChildren = tree.childrenMap[n.id] || [];
     const children = showMaterials ? rawChildren : rawChildren.filter((c: BomTreeNode) => c.node_type !== 'material');
     const hasChildren = children.length > 0;
-    const rt = showOps && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
+    const rt = showOps && !n._boundary && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
     const ops = rt ? (rt.operations || []) : [];
     const hasOps = showOps && ops.length > 0;
     const expandable = hasChildren || hasOps;
@@ -271,7 +273,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
                   ⛓ {ownerName}
                 </span>
               )}
-              {linkedOrderLabel && (
+              {linkedOrderLabel && (!currentOrderId || n.order_id !== currentOrderId) && (
                 <span title={`Этот узел производит заказ ${linkedOrderLabel}`} style={{
                   color: '#A78BFA', fontSize: 10, marginLeft: 6, fontWeight: 600,
                   background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.35)', borderRadius: 4,
