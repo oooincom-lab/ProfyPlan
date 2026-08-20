@@ -92,6 +92,8 @@ class RoutingOpCreate(BaseModel):
     teardown_hours: Decimal = Field(default=0, ge=0)
     resource_type_id: Optional[str] = None
     alternative_resource_types: Optional[str] = None
+    stage: Optional[str] = None
+    department: Optional[str] = None
     output_product: Optional[str] = None
     output_quantity: Decimal = Field(default=1.0, ge=0)
     yield_rate: Decimal = Field(default=1.0, ge=0, le=1)
@@ -124,6 +126,8 @@ class RoutingOpOut(BaseModel):
     setup_hours: Decimal
     teardown_hours: Decimal
     resource_type_id: Optional[str] = None
+    stage: Optional[str] = None
+    department: Optional[str] = None
     output_product: Optional[str] = None
     output_quantity: Decimal
     yield_rate: Decimal

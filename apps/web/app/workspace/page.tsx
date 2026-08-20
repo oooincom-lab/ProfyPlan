@@ -538,7 +538,8 @@ export default function AppShell() {
         anomalies={bomAnomalies}
         anomaliesLoading={bomAnomaliesLoading}
         semiPolicy={semiPolicy}
-        timeline={bomTimeline || undefined}
+        timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodesWithSuborders(o))}
+        timelineDraft={!bomTimeline?.length}
         timelineLoading={bomTimelineLoading}
         onLoadTimeline={loadBomTimeline}
         onNodeOrderChange={handleNodeOrderChange}
@@ -558,6 +559,44 @@ export default function AppShell() {
       setBomTimeline(r?.nodes || []);
     } catch (e: any) { setMsg('Ошибка расчёта: ' + (e.message || String(e))); }
     setBomTimelineLoading(false);
+  };
+
+  // Черновик таймлайна: операции из маршрутов заказа, разложенные последовательно,
+  // ДО планового CPM-расчёта. Отображается серым.
+  const buildDraftTimeline = (nodes: any[]): any[] => {
+    if (!nodes || !nodes.length) return [];
+    const byId = new Map(nodes.map((n: any) => [n.id, n]));
+    const order: any[] = [];
+    const visited = new Set<string>();
+    const queue = nodes.filter((n: any) => !n.parent_id || !byId.has(n.parent_id));
+    while (queue.length) {
+      const n = queue.shift();
+      if (!n || visited.has(n.id)) continue;
+      visited.add(n.id);
+      order.push(n);
+      for (const c of nodes) if (c.parent_id === n.id && !visited.has(c.id)) queue.push(c);
+    }
+    for (const n of nodes) if (!visited.has(n.id)) order.push(n);
+    const ops: any[] = [];
+    const seen = new Set<string>();
+    for (const n of order) {
+      if (!n.routing_id) continue;
+      const rt = routings.find((r: any) => r.id === n.routing_id);
+      if (!rt || !Array.isArray(rt.operations)) continue;
+      const rops = [...rt.operations].sort((a: any, b: any) => (Number(a.sequence_number) || 0) - (Number(b.sequence_number) || 0));
+      for (const op of rops) {
+        const key = op.id || `${n.routing_id}:${op.sequence_number}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        ops.push({ id: key, name: op.name || `Оп. ${op.sequence_number}`, duration: Number(op.duration_hours) || 0 });
+      }
+    }
+    let acc = 0;
+    return ops.map((op: any) => {
+      const es = acc;
+      acc += op.duration || 0;
+      return { id: op.id, name: op.name, duration: op.duration, early_start: es, early_finish: es + (op.duration || 0) };
+    });
   };
 
   const createOrder = async () => {
@@ -1277,7 +1316,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} timeline={bomTimeline || undefined} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
@@ -1413,6 +1452,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               const meta = TYPE_META[n.node_type] || TYPE_META.material;
                               const hasBody = ops.length > 0 || kids.length > 0;
                               const det = (op: any) => [
+                                op.department ? 'Подразделение: ' + op.department : '',
                                 op.predecessors ? 'Предш.: ' + op.predecessors : '',
                                 op.setup_hours ? 'Наладка ' + op.setup_hours + ' ч' : '',
                                 op.teardown_hours ? 'Снятие ' + op.teardown_hours + ' ч' : '',
@@ -1439,6 +1479,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                         return (
                                           <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 6 }}>
                                             <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
+                                            {op.stage ? (
+                                              <span style={{ flex: '0 0 auto', fontSize: 10, color: '#C4B5FD', background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, padding: '1px 6px', whiteSpace: 'nowrap' }}>Этап {op.stage}</span>
+                                            ) : null}
                                             <span style={{ flex: 1, minWidth: 0 }}>
                                               <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
                                               <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName(op.resource_type_id)}{d ? ' · ' + d : ''}</span>
@@ -2931,7 +2974,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 anomalies={bomAnomalies}
                 anomaliesLoading={bomAnomaliesLoading}
                 semiPolicy={semiPolicy}
-                timeline={bomTimeline || undefined}
+                timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(nodes)}
+                timelineDraft={!bomTimeline?.length}
                 timelineLoading={bomTimelineLoading}
                 onLoadTimeline={loadBomTimeline}
                 onNodeOrderChange={handleNodeOrderChange}

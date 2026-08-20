@@ -71,6 +71,13 @@ class RoutingOperation(BaseModel):
         String(500), nullable=True
     )  # через запятую, для Resource Leveling
 
+    stage: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, comment="Этап (колонка «Этап» вкладки Маршруты)"
+    )
+    department: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="Подразделение (колонка «Подразделение» вкладки Маршруты)"
+    )
+
     output_product: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )

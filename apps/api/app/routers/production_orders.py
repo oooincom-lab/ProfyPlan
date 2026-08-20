@@ -643,9 +643,12 @@ async def _import_routes(
     """
     if is_7tab:
         # 7-вкладочный: длительность на 6, предш.оп. на 7, материалы 8-9, вых.год. 10
+        # этап на 4, подразделение на 5
         c_dur, c_out, c_pred, c_mat, c_qty, c_yield = 6, None, 7, 8, 9, 10
+        c_stage, c_dept = 4, 5
     else:
         c_dur, c_out, c_pred, c_mat, c_qty, c_yield = 4, 5, 6, 7, 8, 9
+        c_stage, c_dept = None, None
     # Группируем строки по node_id
     rows = list(ws.iter_rows(min_row=2, values_only=True))
     routings_by_node = {}  # node_ext_id → [(row_idx, row_data)]
@@ -696,6 +699,8 @@ async def _import_routes(
                     ))
                     continue
                 res_name = _str(row[3]) if len(row) > 3 else ""
+                stage_val = _str(row[c_stage]) if c_stage is not None and len(row) > c_stage else ""
+                dept_val = _str(row[c_dept]) if c_dept is not None and len(row) > c_dept else ""
                 if not res_name:
                     ops_without_resource += 1
                 try:
@@ -707,6 +712,8 @@ async def _import_routes(
                         duration_hours=_parse_decimal(dur_val),
                         setup_hours=Decimal("0"),
                         resource_type_id=res_name or None,
+                        stage=stage_val or None,
+                        department=dept_val or None,
                         output_product=(
                             _str(row[c_out]) if c_out is not None and len(row) > c_out and _str(row[c_out]) else None
                         ),

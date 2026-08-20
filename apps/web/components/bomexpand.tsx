@@ -11,6 +11,7 @@ export type BomExpandProps = {
   anomaliesLoading: boolean;
   semiPolicy: 'strict' | 'flexible';
   timeline?: any;
+  timelineDraft?: boolean;
   timelineLoading?: boolean;
   onLoadTimeline?: () => void;
   onNodeOrderChange: (nodeId: string, orderId: string | null) => void;
@@ -34,7 +35,7 @@ const CAT_LABEL: Record<string, string> = {
 export default function BomExpand(props: BomExpandProps) {
   const {
     order, nodes, orders, anomalies, anomaliesLoading, semiPolicy,
-    timeline, timelineLoading, onLoadTimeline,
+    timeline, timelineDraft, timelineLoading, onLoadTimeline,
     onNodeOrderChange, onCreateMissingOrders, onCreateOrderFromNode,
     routings, resName,
   } = props;
@@ -108,6 +109,7 @@ export default function BomExpand(props: BomExpandProps) {
         nodes={nodes}
         orderName={order.specification_name}
         timeline={timeline}
+        timelineDraft={timelineDraft}
         timelineLoading={timelineLoading}
         onLoadTimeline={onLoadTimeline}
         editable

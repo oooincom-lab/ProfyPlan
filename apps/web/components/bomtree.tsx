@@ -36,6 +36,7 @@ interface BomTreeProps {
   poolName?: string;
   onOpenFull?: () => void;
   timeline?: TimelineOp[];
+  timelineDraft?: boolean;
   timelineLoading?: boolean;
   onLoadTimeline?: () => void;
   editable?: boolean;
@@ -121,7 +122,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -152,7 +153,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
 
   const ownerLabel = (n: BomTreeNode): string => n._ownerExtId || '';
 
-  const hasCpm = !!timeline && timeline.length > 0;
+  const hasCpm = !!timeline && timeline.length > 0 && !timelineDraft;
   const cpmTotalDur = hasCpm ? Math.max(...timeline!.map(o => o.early_finish || 0), 1) : 1;
   const cpmCritCount = hasCpm ? timeline!.filter(o => (o.total_float ?? 0) === 0).length : 0;
 
@@ -337,6 +338,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: isSub && ownerCol ? `1px solid ${ownerCol}55` : '1px solid #2A4060' }}>
             {hasOps && ops.map((op: any) => {
               const det = [
+                op.department ? 'Подразделение: ' + op.department : '',
                 op.predecessors ? 'Предш.: ' + op.predecessors : '',
                 op.setup_hours ? 'Наладка ' + op.setup_hours + ' ч' : '',
                 op.teardown_hours ? 'Снятие ' + op.teardown_hours + ' ч' : '',
@@ -345,6 +347,9 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
               return (
                 <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 6 }}>
                   <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
+                  {op.stage ? (
+                    <span style={{ flex: '0 0 auto', fontSize: 10, color: '#C4B5FD', background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, padding: '1px 6px', whiteSpace: 'nowrap' }}>Этап {op.stage}</span>
+                  ) : null}
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
                     <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName ? resName(op.resource_type_id) : op.resource_type_id}{det ? ' · ' + det : ''}</span>
@@ -523,7 +528,9 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
             <span style={{ fontSize: 11, color: '#5A7090', fontWeight: 500 }}>Таймлайн</span>
             {!timeline || timeline.length === 0
               ? <span style={{ fontSize: 10.5, color: '#4A6080' }}>черновик — без расчёта</span>
-              : <span style={{ fontSize: 10.5, color: '#5A7090' }}>{timeline.length} оп. · КП: {cpmCritCount}</span>}
+              : timelineDraft
+                ? <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>черновик · {timeline.length} оп.</span>
+                : <span style={{ fontSize: 10.5, color: '#5A7090' }}>{timeline.length} оп. · КП: {cpmCritCount}</span>}
           </div>
           {timeline && timeline.length > 0 ? (
             <div>
@@ -533,20 +540,20 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
                 const dur = op.duration || (op.early_finish - op.early_start) || 1;
                 const left = (es / totalDur) * 100;
                 const width = Math.max((dur / totalDur) * 100, 1);
-                const crit = (op.total_float ?? 0) === 0;
+                const crit = !timelineDraft && (op.total_float ?? 0) === 0;
                 return (
                   <div key={op.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <span style={{ width: 130, flex: '0 0 130px', fontSize: 10.5, color: crit ? '#f87171' : '#8FA3BD', fontWeight: crit ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={op.name}>
+                    <span style={{ width: 130, flex: '0 0 130px', fontSize: 10.5, color: timelineDraft ? '#94A3B8' : crit ? '#f87171' : '#8FA3BD', fontWeight: crit ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={op.name}>
                       {op.name}
                     </span>
                     <div style={{ flex: 1, position: 'relative', height: 11, background: '#0A1628', borderRadius: 2, overflow: 'hidden' }}>
                       <div style={{
                         position: 'absolute', left: `${left}%`, width: `${width}%`, height: '100%', borderRadius: 2,
-                        background: crit ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
-                        border: crit ? '1px solid rgba(239,68,68,.4)' : '1px solid rgba(59,130,246,.25)',
+                        background: timelineDraft ? 'linear-gradient(90deg, rgba(148,163,184,.22), rgba(148,163,184,.45))' : crit ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
+                        border: timelineDraft ? '1px solid rgba(148,163,184,.3)' : crit ? '1px solid rgba(239,68,68,.4)' : '1px solid rgba(59,130,246,.25)',
                       }} />
                     </div>
-                    <span style={{ width: 34, flex: '0 0 34px', textAlign: 'right', fontSize: 9.5, fontFamily: "'IBM Plex Mono', monospace", color: crit ? '#f87171' : '#5A7090' }}>
+                    <span style={{ width: 34, flex: '0 0 34px', textAlign: 'right', fontSize: 9.5, fontFamily: "'IBM Plex Mono', monospace", color: timelineDraft ? '#8FA3BD' : crit ? '#f87171' : '#5A7090' }}>
                       {crit ? 'КП' : `${Math.round(dur)}ч`}
                     </span>
                   </div>
@@ -577,7 +584,9 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
             </label>
             {!timeline || timeline.length === 0
               ? <span style={{ fontSize: 11, color: '#5A7090' }}>Черновик — без расчёта</span>
-              : <span style={{ fontSize: 11, color: '#5A7090' }}>после расчёта CPM</span>}
+              : timelineDraft
+                ? <span style={{ fontSize: 11, color: '#8FA3BD' }}>черновик · {timeline.length} оп. по данным</span>
+                : <span style={{ fontSize: 11, color: '#5A7090' }}>после расчёта CPM</span>}
           </div>
           {showTimeline && (timeline && timeline.length > 0 ? (
             <div style={{ marginTop: 8 }}>
@@ -587,28 +596,34 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
                 const dur = op.duration || (op.early_finish - op.early_start) || 1;
                 const left = (es / totalDur) * 100;
                 const width = Math.max((dur / totalDur) * 100, 1);
-                const crit = (op.total_float ?? 0) === 0;
+                const crit = !timelineDraft && (op.total_float ?? 0) === 0;
                 return (
                   <div key={op.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ width: 190, flex: '0 0 190px', fontSize: 11.5, color: crit ? '#f87171' : '#B0C4DE', fontWeight: crit ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={op.name}>
+                    <span style={{ width: 190, flex: '0 0 190px', fontSize: 11.5, color: timelineDraft ? '#94A3B8' : crit ? '#f87171' : '#B0C4DE', fontWeight: crit ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={op.name}>
                       {op.name}
                     </span>
                     <div style={{ flex: 1, position: 'relative', height: 15, background: '#0A1628', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{
                         position: 'absolute', left: `${left}%`, width: `${width}%`, height: '100%', borderRadius: 3,
-                        background: crit ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
-                        border: crit ? '1px solid rgba(239,68,68,.5)' : '1px solid rgba(59,130,246,.3)',
+                        background: timelineDraft ? 'linear-gradient(90deg, rgba(148,163,184,.22), rgba(148,163,184,.45))' : crit ? 'linear-gradient(90deg, rgba(239,68,68,.4), rgba(239,68,68,.7))' : 'linear-gradient(90deg, rgba(59,130,246,.3), rgba(59,130,246,.6))',
+                        border: timelineDraft ? '1px solid rgba(148,163,184,.32)' : crit ? '1px solid rgba(239,68,68,.5)' : '1px solid rgba(59,130,246,.3)',
                       }} />
                     </div>
-                    <span style={{ width: 44, flex: '0 0 44px', textAlign: 'right', fontSize: 10.5, fontFamily: "'IBM Plex Mono', monospace", color: crit ? '#f87171' : '#5A7090' }}>
+                    <span style={{ width: 44, flex: '0 0 44px', textAlign: 'right', fontSize: 10.5, fontFamily: "'IBM Plex Mono', monospace", color: timelineDraft ? '#8FA3BD' : crit ? '#f87171' : '#5A7090' }}>
                       {crit ? 'КП' : `${Math.round(dur)}ч`}
                     </span>
                   </div>
                 );
               })}
               <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 10.5, color: '#5A7090' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(239,68,68,.6)' }} /> критический путь</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(59,130,246,.5)' }} /> некритический</span>
+                {timelineDraft ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(148,163,184,.5)' }} /> черновик (план по данным импорта)</span>
+                ) : (
+                  <>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(239,68,68,.6)' }} /> критический путь</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 4, borderRadius: 2, background: 'rgba(59,130,246,.5)' }} /> некритический</span>
+                  </>
+                )}
               </div>
             </div>
           ) : (
