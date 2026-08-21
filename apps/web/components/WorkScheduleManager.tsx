@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 
 const API = 'https://profyplan.ru/api/v1';
 
@@ -24,7 +24,6 @@ type Schedule = {
 
 const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-// ── time helpers (decimal hours ⇄ HH:MM) ──
 const hhmm = (d: number) => {
   const h = Math.floor(d);
   const m = Math.round((d - h) * 60);
@@ -44,6 +43,8 @@ export default function WorkScheduleManager() {
   const [editing, setEditing] = useState<Schedule | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copyFrom, setCopyFrom] = useState<number | null>(null);
+  const [copyTo, setCopyTo] = useState<number[]>([]);
 
   const af = async (path: string, opts?: RequestInit) => {
     const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -73,40 +74,56 @@ export default function WorkScheduleManager() {
     return d.slots.filter(s => d.fill_mode === 'cycle' ? s.cycle_day === k : s.day_of_week === k);
   };
   const workHours = (d: Schedule) => {
-    return d.slots.filter(s => s.kind === 'work').reduce((acc, s) => acc + (s.end_hour <= s.start_hour ? s.end_hour + 24 - s.start_hour : s.end_hour - s.start_hour), 0);
+    return d.slots.filter(s => s.kind === 'work').reduce((acc, s) => acc + Math.max(0, s.end_hour - s.start_hour), 0);
   };
+  const invalid = (s: Slot) => s.end_hour <= s.start_hour;
 
-  const newDraft = (): Schedule => ({
-    name: '',
-    fill_mode: 'weekdays',
-    cycle_length: 4,
-    timezone: 'Europe/Moscow',
-    slots: [],
-  });
+  const newDraft = (): Schedule => ({ name: '', fill_mode: 'weekdays', cycle_length: 4, timezone: 'Europe/Moscow', slots: [] });
 
   const startNew = () => { setEditing(newDraft()); setIsNew(true); };
   const startEdit = (s: Schedule) => { setEditing({ ...s, slots: s.slots.map(x => ({ ...x })) }); setIsNew(false); };
-  const cancel = () => { setEditing(null); setIsNew(false); };
+  const cancel = () => { setEditing(null); setIsNew(false); setCopyFrom(null); };
 
+  // ── slot mutations ──
   const addSlot = (d: Schedule, dayIdx: number) => {
     const k = dayKey(d, dayIdx);
-    const slot: Slot = { start_hour: 8, end_hour: 17, kind: 'work', ...(d.fill_mode === 'cycle' ? { cycle_day: k } : { day_of_week: k }) };
+    const last = slotsForDay(d, dayIdx).slice(-1)[0];
+    const start = last ? Math.min(last.end_hour, 23) : 8;
+    const end = Math.min(start + 1, 24);
+    const slot: Slot = { start_hour: start, end_hour: end, kind: 'work', ...(d.fill_mode === 'cycle' ? { cycle_day: k } : { day_of_week: k }) };
     setEditing({ ...d, slots: [...d.slots, slot] });
   };
   const updSlot = (d: Schedule, idx: number, patch: Partial<Slot>) => {
-    const slots = d.slots.map((s, i) => i === idx ? { ...s, ...patch } : s);
-    setEditing({ ...d, slots });
+    setEditing({ ...d, slots: d.slots.map((s, i) => i === idx ? { ...s, ...patch } : s) });
   };
-  const rmSlot = (d: Schedule, idx: number) => {
-    setEditing({ ...d, slots: d.slots.filter((_, i) => i !== idx) });
+  const rmSlot = (d: Schedule, idx: number) => setEditing({ ...d, slots: d.slots.filter((_, i) => i !== idx) });
+  const clearDay = (d: Schedule, dayIdx: number) => {
+    const k = dayKey(d, dayIdx);
+    setEditing({ ...d, slots: d.slots.filter(s => d.fill_mode === 'cycle' ? s.cycle_day !== k : s.day_of_week !== k) });
   };
-  const setMode = (d: Schedule, m: 'weekdays' | 'cycle') => {
-    setEditing({ ...d, fill_mode: m, slots: [] });
+  const setMode = (d: Schedule, m: 'weekdays' | 'cycle') => setEditing({ ...d, fill_mode: m, slots: [] });
+
+  // ── copy day ──
+  const openCopy = (i: number) => { setCopyFrom(i); setCopyTo([]); };
+  const toggleCopyTarget = (j: number) => setCopyTo(prev => prev.includes(j) ? prev.filter(x => x !== j) : [...prev, j]);
+  const applyCopy = () => {
+    if (!editing || copyFrom === null) return;
+    const src = slotsForDay(editing, copyFrom);
+    const added: Slot[] = [];
+    for (const j of copyTo) {
+      const k = dayKey(editing, j);
+      for (const s of src) {
+        added.push({ start_hour: s.start_hour, end_hour: s.end_hour, kind: s.kind, ...(editing.fill_mode === 'cycle' ? { cycle_day: k } : { day_of_week: k }) });
+      }
+    }
+    setEditing({ ...editing, slots: [...editing.slots, ...added] });
+    setCopyFrom(null); setCopyTo([]);
   };
 
   const save = async () => {
     if (!editing) return;
     if (!editing.name.trim()) { setError('Укажите наименование графика'); return; }
+    if (editing.slots.some(invalid)) { setError('Есть интервал, у которого конец раньше или равен началу — исправьте.'); return; }
     setSaving(true);
     setError(null);
     try {
@@ -131,24 +148,39 @@ export default function WorkScheduleManager() {
     try { await af(`/work-schedules/${s.id}`, { method: 'DELETE' }); await load(); } catch (e: any) { setError(String(e)); }
   };
 
-  // ── preview bars ──
+  // ── preview ──
   const Preview = ({ d }: { d: Schedule }) => {
     const n = dayCount(d);
+    const ticks = [0, 6, 12, 18, 24];
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 4 }}>
+      <div>
+        <div style={{ display: 'flex', gap: 16, fontSize: 10.5, color: '#8FA3BD', marginBottom: 8 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 10, height: 10, background: 'rgba(59,130,246,.7)', borderRadius: 2, display: 'inline-block' }} /> Работа</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 10, height: 10, background: 'rgba(245,158,11,.7)', borderRadius: 2, display: 'inline-block' }} /> Перерыв</span>
+        </div>
+        <div style={{ display: 'flex', marginLeft: 52, marginBottom: 2 }}>
+          <div style={{ flex: 1, position: 'relative', height: 14 }}>
+            {ticks.map(h => <span key={h} style={{ position: 'absolute', left: `${h / 24 * 100}%`, transform: 'translateX(-50%)', fontSize: 9, color: '#5A7090' }}>{h}ч</span>)}
+          </div>
+        </div>
         {Array.from({ length: n }).map((_, i) => {
-          const segs = slotsForDay(d, i).filter(s => s.kind === 'work');
+          const all = slotsForDay(d, i);
+          const segs = all.filter(s => s.kind === 'work');
+          const text = segs.map(s => `${hhmm(s.start_hour)}–${hhmm(s.end_hour)}`).join(' · ') || 'выходной';
+          const work = segs.reduce((a, s) => a + Math.max(0, s.end_hour - s.start_hour), 0);
           return (
-            <div key={i}>
-              <div style={{ textAlign: 'center', fontSize: 10, color: '#5A7090', marginBottom: 3 }}>{dayLabel(d, i)}</div>
-              <div style={{ height: 40, borderRadius: 5, position: 'relative', background: '#0B1526', border: '1px solid #14243C' }}>
-                {segs.map((s, j) => {
-                  const st = s.start_hour, en = s.end_hour <= s.start_hour ? s.end_hour + 24 : s.end_hour;
-                  const top = (st / 24 * 100).toFixed(1) + '%';
-                  const h = ((en - st) / 24 * 100).toFixed(1) + '%';
-                  return <span key={j} style={{ position: 'absolute', left: 0, right: 0, top, height: h, background: 'rgba(59,130,246,.7)', borderRadius: 3 }} />;
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <span style={{ width: 44, fontSize: 11, color: '#8FA3BD', flexShrink: 0, textAlign: 'right' }}>{dayLabel(d, i)}</span>
+              <div style={{ flex: 1, position: 'relative', height: 22, background: '#0B1526', border: '1px solid #14243C', borderRadius: 4, overflow: 'hidden' }}>
+                {ticks.map(h => <span key={h} style={{ position: 'absolute', left: `${h / 24 * 100}%`, top: 0, bottom: 0, width: 1, background: '#162844' }} />)}
+                {all.map((s, j) => {
+                  const left = `${s.start_hour / 24 * 100}%`;
+                  const w = `${Math.max(0, s.end_hour - s.start_hour) / 24 * 100}%`;
+                  return <span key={j} style={{ position: 'absolute', left, width: w, top: 3, bottom: 3, background: s.kind === 'break' ? 'rgba(245,158,11,.65)' : 'rgba(59,130,246,.65)', borderRadius: 2 }} />;
                 })}
               </div>
+              <span style={{ width: 168, fontSize: 10, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{text}</span>
+              <span style={{ width: 42, fontSize: 10, color: '#60A5FA', textAlign: 'right', flexShrink: 0 }}>{work > 0 ? `${work.toFixed(1)}ч` : ''}</span>
             </div>
           );
         })}
@@ -156,8 +188,9 @@ export default function WorkScheduleManager() {
     );
   };
 
-  const input = (style?: React.CSSProperties): React.CSSProperties => ({ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5, ...style });
-  const btn = (c: string): React.CSSProperties => ({ background: c, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' });
+  const input = (style?: CSSProperties): CSSProperties => ({ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5, ...style });
+  const btn = (c: string): CSSProperties => ({ background: c, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' });
+  const iconBtn = (_title: string): CSSProperties => ({ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 7px', fontSize: 12, cursor: 'pointer', lineHeight: 1 });
 
   return (
     <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
@@ -214,32 +247,35 @@ export default function WorkScheduleManager() {
 
           {/* slots editor */}
           <div>
-            <div style={{ fontSize: 11, color: '#8FA3BD', marginBottom: 8 }}>Интервалы работы и перерывы по дням</div>
+            <div style={{ fontSize: 11, color: '#8FA3BD', marginBottom: 8 }}>Интервалы работы и перерывов по дням — кнопки справа: копировать день, очистить, добавить интервал</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {Array.from({ length: dayCount(editing) }).map((_, i) => {
                 const segs = slotsForDay(editing, i);
                 return (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 7, padding: '7px 10px' }}>
-                    <span style={{ width: 56, fontSize: 12, color: '#8FA3BD', flexShrink: 0 }}>{dayLabel(editing, i)}</span>
-                    <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    <span style={{ width: 52, fontSize: 12, color: '#8FA3BD', flexShrink: 0 }}>{dayLabel(editing, i)}</span>
+                    <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
                       {segs.length === 0 && <span style={{ fontSize: 11.5, color: '#5A7090' }}>выходной</span>}
                       {segs.map((s, j) => {
                         const slotIdx = editing.slots.indexOf(s);
+                        const bad = invalid(s);
                         return (
-                          <span key={j} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.kind === 'break' ? 'rgba(245,158,11,.12)' : 'rgba(59,130,246,.13)', border: s.kind === 'break' ? '1px solid rgba(245,158,11,.35)' : '1px solid rgba(59,130,246,.3)', borderRadius: 6, padding: '2px 6px' }}>
-                            <input type="time" value={hhmm(s.start_hour)} onChange={e => updSlot(editing, slotIdx, { start_hour: dec(e.target.value) })} style={{ background: 'transparent', border: 'none', color: '#E2E8F0', fontSize: 11.5, fontFamily: 'monospace', width: 52 }} />
+                          <span key={j} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: s.kind === 'break' ? 'rgba(245,158,11,.12)' : 'rgba(59,130,246,.13)', border: `1px solid ${bad ? 'rgba(239,68,68,.7)' : s.kind === 'break' ? 'rgba(245,158,11,.35)' : 'rgba(59,130,246,.3)'}`, borderRadius: 6, padding: '2px 5px' }}>
+                            <input type="time" value={hhmm(s.start_hour)} onChange={e => updSlot(editing, slotIdx, { start_hour: dec(e.target.value) })} style={{ background: 'transparent', border: 'none', color: '#E2E8F0', fontSize: 12, padding: 0, width: 66 }} />
                             <span style={{ color: '#5A7090' }}>–</span>
-                            <input type="time" value={hhmm(s.end_hour)} onChange={e => updSlot(editing, slotIdx, { end_hour: dec(e.target.value) })} style={{ background: 'transparent', border: 'none', color: '#E2E8F0', fontSize: 11.5, fontFamily: 'monospace', width: 52 }} />
+                            <input type="time" value={hhmm(s.end_hour)} onChange={e => updSlot(editing, slotIdx, { end_hour: dec(e.target.value) })} style={{ background: 'transparent', border: 'none', color: '#E2E8F0', fontSize: 12, padding: 0, width: 66 }} />
                             <select value={s.kind} onChange={e => updSlot(editing, slotIdx, { kind: e.target.value as 'work' | 'break' })} style={{ background: 'transparent', border: 'none', color: s.kind === 'break' ? '#FCD34D' : '#60A5FA', fontSize: 10.5 }}>
                               <option value="work">работа</option>
                               <option value="break">перерыв</option>
                             </select>
-                            <button onClick={() => rmSlot(editing, slotIdx)} style={{ background: 'transparent', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }}>✕</button>
+                            <button onClick={() => rmSlot(editing, slotIdx)} title="Удалить интервал" style={{ background: 'transparent', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }}>✕</button>
                           </span>
                         );
                       })}
                     </div>
-                    <button onClick={() => addSlot(editing, i)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>＋ интервал</button>
+                    <button onClick={() => openCopy(i)} title="Копировать день" style={iconBtn('copy')}>⧉</button>
+                    <button onClick={() => clearDay(editing, i)} title="Очистить день" style={iconBtn('clear')}>✕</button>
+                    <button onClick={() => addSlot(editing, i)} title="Добавить интервал" style={iconBtn('add')}>＋</button>
                   </div>
                 );
               })}
@@ -248,7 +284,7 @@ export default function WorkScheduleManager() {
 
           {/* preview */}
           <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: 12 }}>
-            <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 8 }}>Предпросмотр</div>
+            <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 10 }}>Предпросмотр недели / цикла</div>
             <Preview d={editing} />
           </div>
 
@@ -256,6 +292,28 @@ export default function WorkScheduleManager() {
             <button onClick={save} disabled={saving} style={btn('#3B82F6')}>{saving ? 'Сохранение…' : '✓ Сохранить'}</button>
             {!isNew && editing.id && <button onClick={() => del(editing)} style={{ ...btn('transparent'), border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5' }}>Удалить</button>}
             <button onClick={cancel} style={{ ...btn('transparent'), border: '1px solid #1E3A5F', color: '#8FA3BD' }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {/* copy-day modal */}
+      {copyFrom !== null && editing && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,12,24,.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#0F1E36', border: '1px solid #1E3A5F', borderRadius: 10, padding: 18, width: 360, maxHeight: '72vh', overflow: 'auto' }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5', marginBottom: 4 }}>Копировать интервалы из «{dayLabel(editing, copyFrom)}»</div>
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 10 }}>Выберите дни, в которые скопировать:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 260, overflow: 'auto' }}>
+              {Array.from({ length: dayCount(editing) }).map((_, j) => j !== copyFrom && (
+                <label key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#CBD5E1', padding: '4px 6px', cursor: 'pointer', borderRadius: 4 }}>
+                  <input type="checkbox" checked={copyTo.includes(j)} onChange={() => toggleCopyTarget(j)} style={{ accentColor: '#3B82F6' }} />
+                  {dayLabel(editing, j)}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={applyCopy} disabled={copyTo.length === 0} style={{ ...btn('#3B82F6'), opacity: copyTo.length === 0 ? 0.5 : 1 }}>Скопировать</button>
+              <button onClick={() => setCopyFrom(null)} style={{ ...btn('transparent'), border: '1px solid #1E3A5F', color: '#8FA3BD' }}>Отмена</button>
+            </div>
           </div>
         </div>
       )}
