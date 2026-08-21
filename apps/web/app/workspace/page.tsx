@@ -283,6 +283,15 @@ export default function AppShell() {
     finally { setBomLoading(prev => ({ ...prev, [projId]: false })); }
   };
 
+  // ── Централизованная загрузка BOM: защита от повторных поломок ──
+  // Раньше loadBomTree вызывалась только в некоторых путях отображения (панель/окно/модалка),
+  // поэтому при добавлении нового режима дерево оставалось пустым — детализация и переключатель ломались.
+  // Теперь BOM грузится один раз при выборе проекта, независимо от того, какой view/mode его рисует.
+  useEffect(() => {
+    if (selectedProject?.id) loadBomTree(selectedProject.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id]);
+
   // ── Панель заказа: режимы, данные, действия ──
   const setTreeMode = (m: 'both' | 'bom' | 'routes') => { setTreeModeState(m); try { localStorage.setItem('profyplan_tree_mode', m); } catch {} };
   const setPanelMode = (m: 'side' | 'modal' | 'window') => {
