@@ -301,7 +301,7 @@ export default function AppShell() {
     try {
       const [r, rs] = await Promise.all([
         apiF<any>('/bom/routings?page_size=200').catch(() => null),
-        p?.id ? apiF<any[]>(`/projects/${p.id}/resources`).catch(() => []) : Promise.resolve([]),
+        apiF<any[]>('/resources').catch(() => []),
       ]);
       if (r && Array.isArray(r.items)) setRoutings(r.items);
       if (Array.isArray(rs)) setResourcesList(rs);

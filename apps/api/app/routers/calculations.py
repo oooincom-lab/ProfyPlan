@@ -18,6 +18,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.operation import Operation, OperationDependency, OperationResource
 from app.models.project import Project
+from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
 from app.services.cpm import CPMResult, calculate_cpm
@@ -182,7 +183,21 @@ async def run_schedule(
         res_rows = await db.execute(select(Resource).where(Resource.id.in_(res_ids)))
         resources = {r.id: r for r in res_rows.scalars().all()}
 
+    # Переопределение графика через регистр ProjectResource (override на проект)
+    override_sched: dict = {}
+    if res_ids:
+        pr_rows = await db.execute(
+            select(ProjectResource).where(
+                ProjectResource.project_id == project_id,
+                ProjectResource.resource_id.in_(res_ids),
+            )
+        )
+        for pr in pr_rows.scalars().all():
+            if pr.schedule_id:
+                override_sched[pr.resource_id] = pr.schedule_id
+
     sched_ids = {r.schedule_id for r in resources.values() if r.schedule_id}
+    sched_ids.update(override_sched.values())
     schedules: dict = {}
     slots_by_sched: dict = defaultdict(list)
     if sched_ids:
@@ -198,8 +213,10 @@ async def run_schedule(
         ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
         for or_ in ors:
             r = resources.get(or_.resource_id)
-            if r and r.schedule_id and r.schedule_id in schedules:
-                return schedule_hours_per_day(schedules[r.schedule_id], slots_by_sched[r.schedule_id])
+            if r:
+                sched_id = override_sched.get(r.id) or r.schedule_id
+                if sched_id and sched_id in schedules:
+                    return schedule_hours_per_day(schedules[sched_id], slots_by_sched[sched_id])
         return DEFAULT_HOURS_PER_DAY
 
     # CPM в рабочих днях

@@ -32,7 +32,7 @@ class ResourceUpdate(BaseModel):
 
 class ResourceOut(BaseModel):
     id: str
-    project_id: str
+    project_id: Optional[str] = None
     name: str
     parent_id: Optional[str] = None
     resource_type: str

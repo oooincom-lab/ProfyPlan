@@ -1203,3 +1203,13 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 - `XOut.model_validate(orm_obj)` падает 500 если в схеме `id: str`/`project_id: str`, а в ORM — UUID: Pydantic v2 НЕ приводит UUID→str в строгой валидации.
 - Паттерн: собирать ответ вручную (`XOut(id=str(o.id), ...)`), как в get/update operations.py.
 - Исправлены: create_operation, create_dependency, list_dependencies (коммит 45003b5).
+
+### 17.10 Глобальный справочник ресурсов + регистр-выделение (решено 2026-08-21, вечер)
+- Решение для коммерческого продукта: ресурсы — **глобальный справочник** (Resource.project_id = NULL, принадлежит всем проектам) + регистр ProjectResource как **«регистр выделения»**, а не просто привязка.
+- Схема регистра (финал): project_id, resource_id, schedule_id (nullable — переопределение графика под проект), **capacity_share** (numeric default 1.0 — доля мощности), **date_from/date_to** (date nullable — период, NULL = весь проект).
+- capacity_share и период ЗАКЛАДЫВАЕМ в схему сейчас (nullable, в логике пока не используем) — чтобы не мигрировать при переходе к выравниванию ресурсов.
+- Цепочка резолва графика: `ProjectResource.schedule_id ?? Resource.schedule_id ?? 8ч/день`. (Движок /calculate/schedule сейчас читает только Resource.schedule_id — исправить на register-override.)
+- Цепочка резолва страны: `Resource.country_code ?? Project.country_code → ProductionCalendar(страна, год даты)` — уже реализовано.
+- Дорожная карта (слои): (1) сейчас — глобальный справочник + регистр с графиком; (2) скоро — capacity_share + период → сквозная загрузка по проектам; (3) потом — выравнивание ресурсов (алгоритм, отдельный продукт).
+- Текущий скоуп (слой 1): глобальный справочник ресурсов (CRUD без project_id, вью на уровне тенанта) + миграция регистра (capacity_share/date_from/date_to) + UI назначения «ресурс→проект» с переопределением графика + фикс движка на register-override + миграция project-scoped ресурсов без потери.
+- НЕ делаем сейчас: слои 2–3 (выравнивание/алгоритм загрузки) — преждевременно до появления кросспроектных данных.

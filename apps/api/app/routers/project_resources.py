@@ -47,6 +47,9 @@ async def list_assignments(
                 project_id=str(pr.project_id),
                 resource_id=str(pr.resource_id),
                 schedule_id=str(pr.schedule_id) if pr.schedule_id else None,
+                capacity_share=pr.capacity_share,
+                date_from=pr.date_from,
+                date_to=pr.date_to,
                 resource_name=rname,
                 schedule_name=sname,
             )
@@ -86,6 +89,9 @@ async def assign_resource(
         project_id=project_id,
         resource_id=UUID(body.resource_id),
         schedule_id=UUID(body.schedule_id) if body.schedule_id else None,
+        capacity_share=body.capacity_share,
+        date_from=body.date_from,
+        date_to=body.date_to,
     )
     db.add(pr)
     await db.commit()
@@ -95,6 +101,9 @@ async def assign_resource(
         project_id=str(pr.project_id),
         resource_id=str(pr.resource_id),
         schedule_id=str(pr.schedule_id) if pr.schedule_id else None,
+        capacity_share=pr.capacity_share,
+        date_from=pr.date_from,
+        date_to=pr.date_to,
         resource_name=resource.name,
         schedule_name=None,
     )
@@ -123,6 +132,12 @@ async def update_assignment(
     data = body.model_dump(exclude_unset=True)
     if "schedule_id" in data:
         pr.schedule_id = UUID(data["schedule_id"]) if data["schedule_id"] else None
+    if "capacity_share" in data:
+        pr.capacity_share = data["capacity_share"]
+    if "date_from" in data:
+        pr.date_from = data["date_from"]
+    if "date_to" in data:
+        pr.date_to = data["date_to"]
 
     await db.commit()
     await db.refresh(pr)
@@ -137,6 +152,9 @@ async def update_assignment(
         project_id=str(pr.project_id),
         resource_id=str(pr.resource_id),
         schedule_id=str(pr.schedule_id) if pr.schedule_id else None,
+        capacity_share=pr.capacity_share,
+        date_from=pr.date_from,
+        date_to=pr.date_to,
         resource_name=rname,
         schedule_name=sname,
     )

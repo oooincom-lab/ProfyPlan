@@ -32,11 +32,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from app.routers import auth, projects, resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check
+    from app.routers import auth, projects, resources, global_resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check
     from app.routers.suppliers import sc_router
     app.include_router(auth.router)
     app.include_router(projects.router)
     app.include_router(resources.router)
+    app.include_router(global_resources.router)
     app.include_router(project_resources.router)
     app.include_router(operations.router)
     app.include_router(operations.dep_router)

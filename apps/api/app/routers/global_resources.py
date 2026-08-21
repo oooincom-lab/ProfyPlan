@@ -1,5 +1,8 @@
 """
-CRUD-роутер для ресурсов.
+Глобальный справочник ресурсов (tenant-уровень, project_id = NULL).
+
+Глобальный ресурс принадлежит всем проектам сразу; привязка к конкретному
+проекту идёт через регистр ProjectResource (/v1/projects/{pid}/project-resources).
 """
 from uuid import UUID
 
@@ -12,7 +15,7 @@ from app.core.deps import get_current_tenant_id
 from app.models.resource import Resource
 from app.schemas.resource import ResourceCreate, ResourceOut, ResourceUpdate
 
-router = APIRouter(prefix="/v1/projects/{project_id}/resources", tags=["resources"])
+router = APIRouter(prefix="/v1/resources", tags=["resources-global"])
 
 
 def _to_out(r: Resource) -> ResourceOut:
@@ -32,34 +35,30 @@ def _to_out(r: Resource) -> ResourceOut:
 
 
 @router.get("", response_model=list[ResourceOut])
-async def list_resources(
-    project_id: UUID,
+async def list_global_resources(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     result = await db.execute(
-        select(Resource).where(
-            Resource.project_id == project_id,
+        select(Resource)
+        .where(
             Resource.tenant_id == tenant_id,
+            Resource.project_id.is_(None),
         )
+        .order_by(Resource.name)
     )
-    items = []
-    for r in result.scalars().all():
-        d = {k: str(v) if isinstance(v, UUID) else v for k, v in r.__dict__.items() if not k.startswith('_')}
-        items.append(ResourceOut(**d))
-    return items
+    return [_to_out(r) for r in result.scalars().all()]
 
 
 @router.post("", response_model=ResourceOut, status_code=status.HTTP_201_CREATED)
-async def create_resource(
-    project_id: UUID,
+async def create_global_resource(
     body: ResourceCreate,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     resource = Resource(
         tenant_id=tenant_id,
-        project_id=project_id,
+        project_id=None,
         schedule_id=UUID(body.schedule_id) if body.schedule_id else None,
         **body.model_dump(exclude={"parent_id", "schedule_id"}),
         parent_id=UUID(body.parent_id) if body.parent_id else None,
@@ -71,8 +70,7 @@ async def create_resource(
 
 
 @router.get("/{resource_id}", response_model=ResourceOut)
-async def get_resource(
-    project_id: UUID,
+async def get_global_resource(
     resource_id: UUID,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
@@ -80,8 +78,8 @@ async def get_resource(
     result = await db.execute(
         select(Resource).where(
             Resource.id == resource_id,
-            Resource.project_id == project_id,
             Resource.tenant_id == tenant_id,
+            Resource.project_id.is_(None),
         )
     )
     resource = result.scalar_one_or_none()
@@ -91,8 +89,7 @@ async def get_resource(
 
 
 @router.put("/{resource_id}", response_model=ResourceOut)
-async def update_resource(
-    project_id: UUID,
+async def update_global_resource(
     resource_id: UUID,
     body: ResourceUpdate,
     db: AsyncSession = Depends(get_db),
@@ -101,8 +98,8 @@ async def update_resource(
     result = await db.execute(
         select(Resource).where(
             Resource.id == resource_id,
-            Resource.project_id == project_id,
             Resource.tenant_id == tenant_id,
+            Resource.project_id.is_(None),
         )
     )
     resource = result.scalar_one_or_none()
@@ -112,6 +109,8 @@ async def update_resource(
     data = body.model_dump(exclude_unset=True)
     if "schedule_id" in data:
         data["schedule_id"] = UUID(data["schedule_id"]) if data["schedule_id"] else None
+    if "parent_id" in data:
+        data["parent_id"] = UUID(data["parent_id"]) if data["parent_id"] else None
     for key, value in data.items():
         setattr(resource, key, value)
 
@@ -121,8 +120,7 @@ async def update_resource(
 
 
 @router.delete("/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_resource(
-    project_id: UUID,
+async def delete_global_resource(
     resource_id: UUID,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
@@ -130,8 +128,8 @@ async def delete_resource(
     result = await db.execute(
         select(Resource).where(
             Resource.id == resource_id,
-            Resource.project_id == project_id,
             Resource.tenant_id == tenant_id,
+            Resource.project_id.is_(None),
         )
     )
     resource = result.scalar_one_or_none()
