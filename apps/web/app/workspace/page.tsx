@@ -6,6 +6,7 @@ import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import DirectoryManager from '@/components/DirectoryManager';
+import WorkScheduleManager from '@/components/WorkScheduleManager';
 import Sidebar from '@/components/sidebar';
 import PoolEditor from '@/components/pooleditor';
 import GroupEditor from '@/components/groupeditor';
@@ -67,7 +68,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -1760,6 +1761,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     'units': 'Единицы измерения',
     'counterparties': 'Контрагенты',
     'resources': 'Ресурсы',
+    'work-schedules': 'Графики работы',
     'departments': 'Подразделения',
     'organizations': 'Организации',
     'calendars': 'Календари',
@@ -2566,8 +2568,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 { id: 'departments', icon: '🏢', title: 'Подразделения', desc: 'Цеха, участки, отделы' },
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
                 { id: 'calendars', icon: '📅', title: 'Календари', desc: 'Праздники, смены, графики' },
+                { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
               ].map(d => (
-                <div key={d.id} className="dir-card" onClick={() => setDirectoryModal(d.id)}>
+                <div key={d.id} className="dir-card" onClick={() => d.id === 'work-schedules' ? navTo('work-schedules') : setDirectoryModal(d.id)}>
                   <div className="dc-icon">{d.icon}</div>
                   <div className="dc-title">{d.title}</div>
                   <div className="dc-count">{d.desc}</div>
@@ -2630,6 +2633,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               />
             </div>
           )}
+
+          {view === 'work-schedules' && <WorkScheduleManager />}
 
           {view === 'resources' && (
             <div className="panel">

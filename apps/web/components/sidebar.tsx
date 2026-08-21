@@ -6,7 +6,7 @@ import OrderTree, { TreeChevron } from './OrderTree';
 type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
-  | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources'
+  | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'calendars' | 'ccm'
   | 'reports' | 'settings' | 'new-project';
 
@@ -70,7 +70,7 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedProjPools, setExpandedProjPools] = useState<Set<string>>(new Set());
 
   // Auto-expand directories section when navigating to a directory view
-  const dirViews = ['directories', 'nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations', 'calendars'];
+  const dirViews = ['directories', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'departments', 'organizations', 'calendars'];
   useEffect(() => {
     if (dirViews.includes(view)) {
       setExpandedDirectories(true);
@@ -207,6 +207,7 @@ export default function Sidebar(props: SidebarProps) {
             <span className="s-fi" onClick={() => navTo('units')}>📏 Единицы измерения</span>
             <span className="s-fi" onClick={() => navTo('counterparties')}>👥 Контрагенты</span>
             <span className="s-fi" onClick={() => navTo('resources')}>🔧 Ресурсы</span>
+            <span className="s-fi" onClick={() => navTo('work-schedules')}>🕒 Графики работы</span>
             <span className="s-fi" onClick={() => navTo('departments')}>🏢 Подразделения</span>
             <span className="s-fi" onClick={() => navTo('organizations')}>🏭 Организации</span>
             <span className="s-fi" onClick={() => navTo('calendars')}>🗓 Календари</span>
@@ -586,6 +587,14 @@ export default function Sidebar(props: SidebarProps) {
             onDoubleClick={() => setDirectoryModal('resources')}
           >
             🔧 Ресурсы
+          </div>
+          <div
+            className={`s-sub ${view === 'work-schedules' ? 'active' : ''}`}
+            style={view === 'work-schedules' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
+            onClick={() => navTo('work-schedules')}
+            onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'work-schedules' }); }}
+          >
+            🕒 Графики работы
           </div>
           <div
             className={`s-sub ${view === 'departments' ? 'active' : ''}`}
