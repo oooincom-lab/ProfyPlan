@@ -15,6 +15,7 @@ class ProjectCreate(BaseModel):
     mode: str = Field(default="quick", pattern="^(quick|project|recurring)$")
     default_method: str = Field(default="cpm", pattern="^(cpm|pert_cpm|cpm_ccm|pert_ccm)$")
     country_code: str = Field(default="RU", min_length=2, max_length=2)
+    start_date: Optional[datetime] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -24,6 +25,7 @@ class ProjectUpdate(BaseModel):
     mode: Optional[str] = Field(default=None, pattern="^(quick|project|recurring)$")
     default_method: Optional[str] = Field(default=None, pattern="^(cpm|pert_cpm|cpm_ccm|pert_ccm)$")
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
+    start_date: Optional[datetime] = None
 
 
 class ProjectOut(BaseModel):
@@ -37,6 +39,8 @@ class ProjectOut(BaseModel):
     mode: str
     default_method: str
     country_code: str
+    start_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

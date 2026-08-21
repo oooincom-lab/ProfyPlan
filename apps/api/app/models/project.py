@@ -35,6 +35,7 @@ class Project(BaseModel):
         String(2), default="RU"
     )
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[str] = mapped_column(String(20), default="normal")
     customer: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
