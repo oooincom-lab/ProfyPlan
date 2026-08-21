@@ -39,6 +39,10 @@ type WindowsLayerProps = {
   onResize: (e: any, w: WinRec) => void;
   onApplyCell: (colCount: number, colIndex: number, rowCount: number, rowIndex: number) => void;
   onSaveEdit: (w: WinRec) => void;
+  onNodeOrderChange: (nodeId: string, orderId: string | null) => void;
+  onBomNodeQuantity: (nodeId: string, value: number) => void;
+  onBomNodeRemove: (nodeId: string) => void;
+  onBomNodeAdd: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
 };
 
 const TAB_LIST: { v: OrderTab; l: string }[] = [
@@ -61,6 +65,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     orderBomNodes, routingFor, routingsFor, resName, routings,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
+    onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
@@ -129,7 +134,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', flexShrink: 0 }}>
                 <span style={{ flex: 1, minWidth: 0, color: '#8FA3BD', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o!.specification_name || o!.ext_id || ''}</span>
                 {!w.editing ? (
-                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: 'order', editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
+                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
                     style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
                 ) : (
                   <>
@@ -243,7 +248,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 </div>
               )}
               {!isList && !isBom && !isDir && w.tab === 'bom' && (
-                bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} />
+                bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} />
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
               {!isList && !isBom && !isDir && w.tab === 'route' && (() => {

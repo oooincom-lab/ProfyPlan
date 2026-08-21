@@ -538,6 +538,36 @@ export default function AppShell() {
     } catch (e: any) { setMsg('Ошибка привязки заказа: ' + (e.message || String(e))); }
   };
 
+  // ── Редактирование BOM-узлов (вкладка «Состав» окна заказа) ──
+  const handleBomNodeQuantity = async (nodeId: string, value: number) => {
+    try {
+      await apiF(`/bom/nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify({ quantity_per_parent: value }) });
+      if (selectedProject) await reloadBomTree(selectedProject.id);
+    } catch (e: any) { setMsg('Ошибка изменения количества: ' + (e.message || String(e))); }
+  };
+
+  const handleBomNodeRemove = async (nodeId: string) => {
+    if (!selectedProject) return;
+    if (!window.confirm('Удалить узел BOM и всех его потомков?')) return;
+    try {
+      await apiF(`/bom/projects/${selectedProject.id}/nodes/${nodeId}`, { method: 'DELETE' });
+      await reloadBomTree(selectedProject.id);
+    } catch (e: any) { setMsg('Ошибка удаления узла: ' + (e.message || String(e))); }
+  };
+
+  const handleBomNodeAdd = async (parentId: string, nodeType: 'material' | 'semi_finished') => {
+    if (!selectedProject) return;
+    const name = window.prompt(nodeType === 'material' ? 'Название материала:' : 'Название полуфабриката:');
+    if (!name || !name.trim()) return;
+    try {
+      await apiF(`/bom/projects/${selectedProject.id}/nodes`, {
+        method: 'POST',
+        body: JSON.stringify({ parent_id: parentId, node_type: nodeType, nomenclature_name: name.trim(), quantity_per_parent: 1, unit: 'pcs' }),
+      });
+      await reloadBomTree(selectedProject.id);
+    } catch (e: any) { setMsg('Ошибка добавления узла: ' + (e.message || String(e))); }
+  };
+
   // BOM-узлы заказа + BOM подчинённых заказов (тусклые, через order_id на узлах)
   const orderBomNodesWithSuborders = (o: any) => {
     const projId = selectedProject?.id || '';
@@ -3018,6 +3048,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onResize={win.startResize}
         onApplyCell={win.applySnapCell}
         onSaveEdit={saveWinEdit}
+        onNodeOrderChange={handleNodeOrderChange}
+        onBomNodeQuantity={handleBomNodeQuantity}
+        onBomNodeRemove={handleBomNodeRemove}
+        onBomNodeAdd={handleBomNodeAdd}
         onOpenDirectory={openDirectory}
       />
     )}

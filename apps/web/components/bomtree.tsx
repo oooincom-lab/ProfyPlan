@@ -44,6 +44,9 @@ interface BomTreeProps {
   editable?: boolean;
   orders?: OrderOption[];
   onNodeOrderChange?: (nodeId: string, orderId: string | null) => void;
+  onNodeQuantityChange?: (nodeId: string, value: number) => void;
+  onNodeRemove?: (nodeId: string) => void;
+  onNodeAdd?: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
   /** Вариант А: показывать управление «только свой BOM / вся цепочка» (тяжёлый модал) */
   chainControl?: boolean;
   /** id текущего заказа (для цветовой группировки и фильтра) */
@@ -124,7 +127,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -287,9 +290,21 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
               {n.nomenclature_id || n.ext_id || '—'}
             </span>
           </span>
-          <span style={{ width: 56, textAlign: 'right', fontSize: 12, color: '#B0C4DE', fontFamily: "'IBM Plex Mono', monospace", whiteSpace: 'nowrap', flex: '0 0 56px' }}>
-            {fmtNum(n.quantity_per_parent)} <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
-          </span>
+          {editable ? (
+            <span style={{ flex: '0 0 66px', width: 66, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+              onClick={e => e.stopPropagation()}>
+              <input type="number" min="0" step="any" defaultValue={fmtNum(n.quantity_per_parent)}
+                key={n.id + ':' + fmtNum(n.quantity_per_parent)}
+                onBlur={e => { const v = Number(e.target.value); if (!Number.isNaN(v)) onNodeQuantityChange?.(n.id, v); }}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 5, color: '#E2E8F0', padding: '2px 4px', fontSize: 12, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", outline: 'none' }} />
+              <span style={{ color: '#5A7090', fontSize: 10, flex: '0 0 auto' }}>{n.unit}</span>
+            </span>
+          ) : (
+            <span style={{ width: 56, textAlign: 'right', fontSize: 12, color: '#B0C4DE', fontFamily: "'IBM Plex Mono', monospace", whiteSpace: 'nowrap', flex: '0 0 56px' }}>
+              {fmtNum(n.quantity_per_parent)} <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
+            </span>
+          )}
           <span style={{
             width: compact ? 74 : 90, flex: `0 0 ${compact ? 74 : 90}px`, textAlign: 'center',
             fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 5,
@@ -305,6 +320,16 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           }}>
             {isBuy ? 'закупка' : 'произв.'}
           </span>
+          {editable && (
+            <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+              <button type="button" title="Добавить материал" onClick={() => onNodeAdd?.(n.id, 'material')}
+                style={{ background: 'rgba(52,211,153,.12)', border: '1px solid rgba(52,211,153,.35)', color: '#34D399', borderRadius: 5, width: 20, height: 20, fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>＋</button>
+              <button type="button" title="Добавить полуфабрикат" onClick={() => onNodeAdd?.(n.id, 'semi_finished')}
+                style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.35)', color: '#A78BFA', borderRadius: 5, width: 20, height: 20, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⇥</button>
+              <button type="button" title="Удалить узел" onClick={() => onNodeRemove?.(n.id)}
+                style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 20, height: 20, fontSize: 11, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
+            </span>
+          )}
           {!compact && editable && orders && (
             <span style={{ flex: '0 0 120px', width: 120, minWidth: 0 }}
               onClick={e => e.stopPropagation()}>
