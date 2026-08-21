@@ -7,7 +7,7 @@ type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
-  | 'departments' | 'organizations' | 'calendars' | 'ccm'
+  | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
   | 'reports' | 'settings' | 'new-project';
 
 interface SidebarProps {
@@ -70,7 +70,7 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedProjPools, setExpandedProjPools] = useState<Set<string>>(new Set());
 
   // Auto-expand directories section when navigating to a directory view
-  const dirViews = ['directories', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'departments', 'organizations', 'calendars'];
+  const dirViews = ['directories', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'production-calendars', 'departments', 'organizations'];
   useEffect(() => {
     if (dirViews.includes(view)) {
       setExpandedDirectories(true);
@@ -210,7 +210,7 @@ export default function Sidebar(props: SidebarProps) {
             <span className="s-fi" onClick={() => navTo('work-schedules')}>🕒 Графики работы</span>
             <span className="s-fi" onClick={() => navTo('departments')}>🏢 Подразделения</span>
             <span className="s-fi" onClick={() => navTo('organizations')}>🏭 Организации</span>
-            <span className="s-fi" onClick={() => navTo('calendars')}>🗓 Календари</span>
+            <span className="s-fi" onClick={() => navTo('production-calendars')}>📅 Производственные календари</span>
           </span>
         </button>
         <a href="/ccm-v2" className="s-rail-item" style={{ textDecoration: 'none' }}><span className="s-tip">CCM</span>📈</a>
@@ -615,13 +615,12 @@ export default function Sidebar(props: SidebarProps) {
             🏭 Организации
           </div>
           <div
-            className={`s-sub ${view === 'calendars' ? 'active' : ''}`}
-            style={view === 'calendars' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
-            onClick={() => navTo('calendars')}
-            onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'calendars' }); }}
-            onDoubleClick={() => setDirectoryModal('calendars')}
+            className={`s-sub ${view === 'production-calendars' ? 'active' : ''}`}
+            style={view === 'production-calendars' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
+            onClick={() => navTo('production-calendars')}
+            onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'production-calendars' }); }}
           >
-            📅 Календари
+            📅 Производственные календари
           </div>
         </>
       )}

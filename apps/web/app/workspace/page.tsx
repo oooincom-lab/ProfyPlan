@@ -7,6 +7,7 @@ import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import DirectoryManager from '@/components/DirectoryManager';
 import WorkScheduleManager from '@/components/WorkScheduleManager';
+import ProductionCalendarManager from '@/components/ProductionCalendarManager';
 import Sidebar from '@/components/sidebar';
 import PoolEditor from '@/components/pooleditor';
 import GroupEditor from '@/components/groupeditor';
@@ -68,7 +69,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -1016,7 +1017,7 @@ export default function AppShell() {
 
   const onRefresh = () => { if (selectedProject) refresh(); else load(); };
 
-  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); if (['directories','nomenclature','units','resources','departments','organizations','calendars','settings'].includes(v)) win.minimizeAll(); };
+  const navTo = (v: View) => { setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({}); if (['directories','nomenclature','units','resources','work-schedules','production-calendars','departments','organizations','settings'].includes(v)) win.minimizeAll(); };
 
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
@@ -1764,7 +1765,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     'work-schedules': 'Графики работы',
     'departments': 'Подразделения',
     'organizations': 'Организации',
-    'calendars': 'Календари',
+    'production-calendars': 'Производственные календари',
     'ccm': 'CCM',
     'reports': 'Отчёты',
     'settings': 'Настройки',
@@ -2567,10 +2568,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 { id: 'resources', icon: '🔧', title: 'Ресурсы', desc: 'Станки, люди, бригады' },
                 { id: 'departments', icon: '🏢', title: 'Подразделения', desc: 'Цеха, участки, отделы' },
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
-                { id: 'calendars', icon: '📅', title: 'Календари', desc: 'Праздники, смены, графики' },
+                { id: 'production-calendars', icon: '📅', title: 'Производственные календари', desc: 'Рабочие и праздничные дни по странам' },
                 { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
               ].map(d => (
-                <div key={d.id} className="dir-card" onClick={() => d.id === 'work-schedules' ? navTo('work-schedules') : setDirectoryModal(d.id)}>
+                <div key={d.id} className="dir-card" onClick={() => ['work-schedules', 'production-calendars'].includes(d.id) ? navTo(d.id as View) : setDirectoryModal(d.id)}>
                   <div className="dc-icon">{d.icon}</div>
                   <div className="dc-title">{d.title}</div>
                   <div className="dc-count">{d.desc}</div>
@@ -2635,6 +2636,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           )}
 
           {view === 'work-schedules' && <WorkScheduleManager />}
+          {view === 'production-calendars' && <ProductionCalendarManager />}
 
           {view === 'resources' && (
             <div className="panel">
@@ -2647,7 +2649,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </div>
           )}
 
-          {['departments', 'organizations', 'calendars'].includes(view) && (
+          {['departments', 'organizations'].includes(view) && (
             <div className="panel">
               <div className="panel-hdr"><span className="panel-title">{titles[view]}</span></div>
               <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
@@ -2846,7 +2848,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations', 'calendars'].map(tab => (
+                    {['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations'].map(tab => (
                       <button key={tab} onClick={() => setDirectoryModal(tab)} style={{
                         background: directoryModal === tab ? '#1E3252' : '#162844',
                         color: directoryModal === tab ? '#B0C4DE' : '#5A7090',
