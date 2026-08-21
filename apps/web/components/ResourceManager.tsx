@@ -14,6 +14,7 @@ type Resource = {
   capacity_unit: string;
   unit?: string | null;
   country_code?: string | null;
+  schedule_id?: string | null;
   is_active: boolean;
 };
 
@@ -41,6 +42,7 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [schedules, setSchedules] = useState<any[]>([]);
 
   useEffect(() => {
     if (!projectId && projects.length) setProjectId(projects[0].id);
@@ -65,6 +67,7 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
     setLoading(false);
   };
   useEffect(() => { load(projectId); }, [projectId]);
+  useEffect(() => { af('/work-schedules/').then(setSchedules).catch(() => {}); }, []);
 
   const project = projects.find(p => p.id === projectId);
   const resolvedCountry = (r?: Partial<Resource>) => {
@@ -75,7 +78,7 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
 
   const openNew = () => {
     setEditingId(null);
-    setForm({ resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour', unit: '', country_code: '' });
+    setForm({ resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour', unit: '', country_code: '', schedule_id: '' });
     setFormOpen(true);
   };
   const openEdit = (r: Resource) => {
@@ -83,7 +86,7 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
     setForm({
       name: r.name, resource_type: r.resource_type,
       capacity_per_unit: String(r.capacity_per_unit ?? 1), capacity_unit: r.capacity_unit,
-      unit: r.unit || '', country_code: r.country_code || '',
+      unit: r.unit || '', country_code: r.country_code || '', schedule_id: r.schedule_id || '',
     });
     setFormOpen(true);
   };
@@ -98,6 +101,7 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
       capacity_unit: form.capacity_unit || 'hour',
       unit: form.unit?.trim() || null,
       country_code: (form.country_code || '').trim().toUpperCase() || null,
+      schedule_id: (form.schedule_id || '').trim() || null,
       is_active: true,
     };
     try {
@@ -167,6 +171,13 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
                 {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>График работы</span>
+              <select value={form.schedule_id || ''} onChange={e => setForm({ ...form, schedule_id: e.target.value })} style={input()}>
+                <option value="">— не задан —</option>
+                {schedules.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button onClick={save} disabled={saving} style={btn('#3B82F6')}>{saving ? 'Сохранение…' : '✓ Сохранить'}</button>
@@ -186,7 +197,7 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
           <table className="tbl" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>
-                {['Название', 'Тип', 'Мощность', 'Ед. мощности', 'Ед. продукции', 'Страна', ''].map((h, i) => (
+                {['Название', 'Тип', 'Мощность', 'Ед. мощности', 'Ед. продукции', 'Страна', 'График', ''].map((h, i) => (
                   <th key={i} style={{ textAlign: 'left', padding: '6px 10px', color: '#60A5FA', fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: '1px solid #1E3252' }}>{h}</th>
                 ))}
               </tr>
@@ -205,6 +216,9 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
                     ) : (
                       <span style={{ fontSize: 11, color: '#5A7090' }} title="Наследует страну проекта">{project?.country_code || '—'}</span>
                     )}
+                  </td>
+                  <td style={{ padding: '8px 10px', color: '#B0C4DE', fontSize: 12 }}>
+                    {r.schedule_id ? (schedules.find((s: any) => s.id === r.schedule_id)?.name || '—') : <span style={{ color: '#5A7090' }}>—</span>}
                   </td>
                   <td style={{ padding: '4px 6px', display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                     <button onClick={() => openEdit(r)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 13 }} title="Редактировать">✎</button>

@@ -15,6 +15,7 @@ class ResourceCreate(BaseModel):
     capacity_unit: str = Field(default="hour")
     unit: Optional[str] = None
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
+    schedule_id: Optional[str] = None
     is_active: bool = True
 
 
@@ -25,6 +26,7 @@ class ResourceUpdate(BaseModel):
     capacity_unit: Optional[str] = None
     unit: Optional[str] = None
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
+    schedule_id: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -38,6 +40,7 @@ class ResourceOut(BaseModel):
     capacity_unit: str
     unit: Optional[str] = None
     country_code: Optional[str] = None
+    schedule_id: Optional[str] = None
     is_active: bool
 
     class Config:

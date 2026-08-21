@@ -15,6 +15,22 @@ from app.schemas.resource import ResourceCreate, ResourceOut, ResourceUpdate
 router = APIRouter(prefix="/v1/projects/{project_id}/resources", tags=["resources"])
 
 
+def _to_out(r: Resource) -> ResourceOut:
+    return ResourceOut(
+        id=str(r.id),
+        project_id=str(r.project_id),
+        name=r.name,
+        parent_id=str(r.parent_id) if r.parent_id else None,
+        resource_type=r.resource_type,
+        capacity_per_unit=r.capacity_per_unit,
+        capacity_unit=r.capacity_unit,
+        unit=r.unit,
+        country_code=r.country_code,
+        schedule_id=str(r.schedule_id) if r.schedule_id else None,
+        is_active=r.is_active,
+    )
+
+
 @router.get("", response_model=list[ResourceOut])
 async def list_resources(
     project_id: UUID,
@@ -44,13 +60,14 @@ async def create_resource(
     resource = Resource(
         tenant_id=tenant_id,
         project_id=project_id,
-        **body.model_dump(exclude={"parent_id"}),
+        schedule_id=UUID(body.schedule_id) if body.schedule_id else None,
+        **body.model_dump(exclude={"parent_id", "schedule_id"}),
         parent_id=UUID(body.parent_id) if body.parent_id else None,
     )
     db.add(resource)
     await db.commit()
     await db.refresh(resource)
-    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, country_code=resource.country_code, is_active=resource.is_active)
+    return _to_out(resource)
 
 
 @router.get("/{resource_id}", response_model=ResourceOut)
@@ -70,7 +87,7 @@ async def get_resource(
     resource = result.scalar_one_or_none()
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
-    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, country_code=resource.country_code, is_active=resource.is_active)
+    return _to_out(resource)
 
 
 @router.put("/{resource_id}", response_model=ResourceOut)
@@ -92,12 +109,15 @@ async def update_resource(
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
 
-    for key, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "schedule_id" in data:
+        data["schedule_id"] = UUID(data["schedule_id"]) if data["schedule_id"] else None
+    for key, value in data.items():
         setattr(resource, key, value)
 
     await db.commit()
     await db.refresh(resource)
-    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, country_code=resource.country_code, is_active=resource.is_active)
+    return _to_out(resource)
 
 
 @router.delete("/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)

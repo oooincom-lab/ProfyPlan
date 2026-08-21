@@ -45,5 +45,8 @@ class Resource(BaseModel):
     country_code: Mapped[Optional[str]] = mapped_column(
         String(2), nullable=True
     )  # страна производственного календаря ресурса (nullable = наследовать от проекта)
+    schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("work_schedules.id", ondelete="SET NULL"), nullable=True
+    )  # график работы по умолчанию
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)

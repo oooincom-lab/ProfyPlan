@@ -3,6 +3,7 @@ from app.models.base import BaseModel  # noqa: F401
 from app.models.tenant import Tenant, User, UserTenant  # noqa: F401
 from app.models.project import Project  # noqa: F401
 from app.models.resource import Resource  # noqa: F401
+from app.models.project_resource import ProjectResource  # noqa: F401
 from app.models.resource_calendar import ResourceCalendar, ResourceCalendarSlot  # noqa: F401
 from app.models.operation import Operation, OperationDependency, OperationResource  # noqa: F401
 from app.models.product_structure import ProductStructure  # noqa: F401
