@@ -8,6 +8,7 @@ import DirectoryPicker from '@/components/DirectoryPicker';
 import DirectoryManager from '@/components/DirectoryManager';
 import WorkScheduleManager from '@/components/WorkScheduleManager';
 import ProductionCalendarManager from '@/components/ProductionCalendarManager';
+import ResourceManager from '@/components/ResourceManager';
 import Sidebar from '@/components/sidebar';
 import PoolEditor from '@/components/pooleditor';
 import GroupEditor from '@/components/groupeditor';
@@ -2571,7 +2572,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 { id: 'production-calendars', icon: '📅', title: 'Производственные календари', desc: 'Рабочие и праздничные дни по странам' },
                 { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
               ].map(d => (
-                <div key={d.id} className="dir-card" onClick={() => ['work-schedules', 'production-calendars'].includes(d.id) ? navTo(d.id as View) : setDirectoryModal(d.id)}>
+                <div key={d.id} className="dir-card" onClick={() => ['work-schedules', 'production-calendars', 'resources'].includes(d.id) ? navTo(d.id as View) : setDirectoryModal(d.id)}>
                   <div className="dc-icon">{d.icon}</div>
                   <div className="dc-title">{d.title}</div>
                   <div className="dc-count">{d.desc}</div>
@@ -2638,16 +2639,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager />}
           {view === 'production-calendars' && <ProductionCalendarManager />}
 
-          {view === 'resources' && (
-            <div className="panel">
-              <div className="panel-hdr"><span className="panel-title">{titles[view]}</span></div>
-              <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
-                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
-                <div>Здесь будет таблица ресурсов: станки, бригады, транспорт</div>
-              </div>
-            </div>
-          )}
+          {view === 'resources' && <ResourceManager projects={projects} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
