@@ -155,20 +155,23 @@ export function useWindows(sidebarWidth: number = 260) {
     }]);
   };
 
-  const openDirWin = (entity: string, title: string, columns: any[]) => {
+  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void) => {
     const d = deskRect();
-    const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
-    if (ex) {
-      winZ.current += 1;
-      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current } : w));
-      return;
+    if (!onSelect) {
+      const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
+      if (ex) {
+        winZ.current += 1;
+        setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current } : w));
+        return ex.id;
+      }
     }
+    const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     winZ.current += 1;
     setWins(prev => [...prev, {
-      id: 'd' + Date.now().toString(36),
+      id,
       kind: 'dir' as const,
       orderId: '',
-      data: { entity, columns },
+      data: { entity, columns, onSelect },
       title,
       x: d.x + 60,
       y: d.y + 40,
@@ -180,6 +183,7 @@ export function useWindows(sidebarWidth: number = 260) {
       editing: false,
       form: {},
     }]);
+    return id;
   };
 
   const closeWin = (id: string) => { setWins(prev => prev.filter(w => w.id !== id)); setLay(null); };

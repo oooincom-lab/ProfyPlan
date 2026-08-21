@@ -44,6 +44,7 @@ type WindowsLayerProps = {
   onBomNodeRemove: (nodeId: string) => void;
   onBomNodeAdd: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
+  onPickResource: (opId: string) => void;
 };
 
 const TAB_LIST: { v: OrderTab; l: string }[] = [
@@ -67,7 +68,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
-    onRoutingOpUpdate,
+    onRoutingOpUpdate, onPickResource,
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
@@ -159,7 +160,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div style={{ padding: '12px 14px', overflow: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
               {isBom && (renderBomWindow ? renderBomWindow(w) : null)}
               {isDir && (
-                <DirectoryTable entity={w.data?.entity || ''} columns={w.data?.columns || []} apiBase="https://profyplan.ru/api" />
+                <DirectoryTable entity={w.data?.entity || ''} columns={w.data?.columns || []} apiBase="https://profyplan.ru/api" onSelect={w.data?.onSelect} />
               )}
               {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
                 <table className="tbl">
@@ -274,13 +275,17 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                 {w.editing ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                     <span style={{ flexShrink: 0 }}>Ресурс:</span>
-                                    <DirectoryPicker
-                                      entity="resources"
-                                      apiBase="https://profyplan.ru/api"
-                                      value={(() => { const cr = resourcesList.find((x: any) => x.id === op.resource_type_id || x.name === op.resource_type_id); return cr ? cr.id : null; })()}
-                                      onChange={(v) => onRoutingOpUpdate(op.id, { resource_type_id: v })}
-                                      placeholder="Выбрать ресурс..."
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => onPickResource(op.id)}
+                                      style={{
+                                        background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6,
+                                        color: op.resource_type_id ? '#E8EEF5' : '#5A7090',
+                                        padding: '6px 12px', fontSize: 13, cursor: 'pointer', flex: 1, textAlign: 'left',
+                                      }}
+                                    >
+                                      {op.resource_type_id ? resName(op.resource_type_id) : 'Выбрать ресурс...'}
+                                    </button>
                                   </div>
                                 ) : (
                                   <>Ресурс: {resName(op.resource_type_id)}</>

@@ -54,6 +54,16 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'unit', label: 'Ед.', width: 70 },
     ],
   },
+  resources: {
+    title: '🔧 Ресурсы',
+    columns: [
+      { key: 'name', label: 'Название', width: 220 },
+      { key: 'resource_type', label: 'Тип', width: 130 },
+      { key: 'capacity_per_unit', label: 'Мощн./ед.', width: 100 },
+      { key: 'capacity_unit', label: 'Ед.', width: 70 },
+      { key: 'country_code', label: 'Страна', width: 80 },
+    ],
+  },
 };
 
 async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
@@ -580,6 +590,13 @@ export default function AppShell() {
       await apiF(`/bom/routing-operations/${opId}`, { method: 'PATCH', body: JSON.stringify(patch) });
       await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка сохранения операции: ' + (e.message || String(e))); }
+  };
+
+  const openResourcePick = (opId: string) => {
+    const wid = win.openDirWin('resources', '🔧 Выбор ресурса', DIR_COLUMNS.resources.columns, (row: any) => {
+      handleRoutingOpUpdate(opId, { resource_type_id: row.id });
+      win.closeWin(wid);
+    });
   };
 
   // BOM-узлы заказа + BOM подчинённых заказов (тусклые, через order_id на узлах)
@@ -3067,6 +3084,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onBomNodeRemove={handleBomNodeRemove}
         onBomNodeAdd={handleBomNodeAdd}
         onRoutingOpUpdate={handleRoutingOpUpdate}
+        onPickResource={openResourcePick}
         onOpenDirectory={openDirectory}
       />
     )}

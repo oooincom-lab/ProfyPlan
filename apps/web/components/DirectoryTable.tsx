@@ -192,7 +192,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
           <span style={{ position: 'absolute', left: 10, top: 7, fontSize: 12, color: '#5A7090' }}>🔍</span>
         </div>
         <div style={{ flex: 1 }} />
-        {!compact && (
+        {!compact && !onSelect && (
           <>
             <button
               className="btn btn-sm"
@@ -263,9 +263,9 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
               ))}
               <td style={{ padding: '4px 6px', display: 'flex', gap: 4 }}>
                 {onSelect && (
-                  <button onClick={() => onSelect(row)} style={{ background: 'none', border: 'none', color: '#60A5FA', cursor: 'pointer', fontSize: 12 }} title="Выбрать">✓</button>
+                  <button onClick={() => onSelect(row)} style={{ background: '#1E3252', border: '1px solid #3B82F6', borderRadius: 4, color: '#93C5FD', cursor: 'pointer', fontSize: 11, padding: '2px 10px', whiteSpace: 'nowrap' }} title="Выбрать">Выбрать</button>
                 )}
-                {editingId === row.id ? (
+                {!onSelect && (editingId === row.id ? (
                   <>
                     <button onClick={() => saveEdit(row.id)} style={{ background: 'none', border: 'none', color: '#10B981', cursor: 'pointer', fontSize: 12 }}>✓</button>
                     <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }}>✕</button>
@@ -275,7 +275,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
                     <button onClick={() => { setEditingId(row.id); setEditVals({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
                     <button onClick={() => deleteRow(row.id, row.name || row.specification_name || '')} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
                   </>
-                )}
+                ))}
               </td>
             </tr>
           ))}
