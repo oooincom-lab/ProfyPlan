@@ -211,7 +211,7 @@ async def import_xmlcalendar(
     days = _parse_xmlcalendar(data, country)
 
     existing = await db.execute(
-        select(ProductionCalendar).options(_load_days()).where(
+        select(ProductionCalendar).where(
             ProductionCalendar.tenant_id == tenant_id,
             ProductionCalendar.country_code == country,
             ProductionCalendar.year == year,
@@ -243,7 +243,6 @@ async def import_xmlcalendar(
             )
         )
     await db.commit()
-    db.expire_all()
     res = await db.execute(
         select(ProductionCalendar).options(_load_days()).where(ProductionCalendar.id == item.id)
     )
@@ -276,7 +275,6 @@ async def update_item(
 ):
     res = await db.execute(
         select(ProductionCalendar)
-        .options(_load_days())
         .where(ProductionCalendar.id == item_id, ProductionCalendar.tenant_id == tenant_id)
     )
     item = res.scalar_one_or_none()
@@ -302,7 +300,6 @@ async def update_item(
             )
 
     await db.commit()
-    db.expire_all()
     res = await db.execute(
         select(ProductionCalendar).options(_load_days()).where(ProductionCalendar.id == item.id)
     )
