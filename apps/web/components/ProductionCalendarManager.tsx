@@ -6,7 +6,10 @@ const API = 'https://profyplan.ru/api/v1';
 
 type DayType = 'work' | 'weekend' | 'holiday' | 'preholiday';
 type Day = { date: string; day_type: DayType; hours: number | null };
-type Calendar = { id?: string; country_code: string; year: number; name: string; days: Day[] };
+type Calendar = {
+  id?: string; country_code: string; year: number; name: string; days: Day[];
+  source?: string; status?: string; last_error?: string | null; source_synced_at?: string | null;
+};
 
 // Официальные нерабочие праздничные дни РФ (ст. 112 ТК РФ), без переносов.
 const RU_HOLIDAYS = new Set([
@@ -26,6 +29,9 @@ const TYPE_COLOR: Record<DayType, string> = {
   holiday: 'rgba(239,68,68,.34)',
   preholiday: 'rgba(245,158,11,.32)',
 };
+const STATUS_LABEL: Record<string, string> = { ok: 'загружено', fallback: 'базовый', missing: 'нет', error: 'ошибка' };
+const STATUS_COLOR: Record<string, string> = { ok: '#22D3EE', fallback: '#FBBF24', missing: '#94A3B8', error: '#F87171' };
+const SRC_LABEL: Record<string, string> = { xmlcalendar: 'xmlcalendar.ru', base: 'базовая', excel: 'Excel', manual: 'вручную' };
 
 const fmt = (d: Date) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
@@ -97,6 +103,8 @@ export default function ProductionCalendarManager() {
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [presetBusy, setPresetBusy] = useState(false);
+  const [xmlBusy, setXmlBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const [importPreview, setImportPreview] = useState<Day[]>([]);
@@ -198,6 +206,27 @@ export default function ProductionCalendarManager() {
     setPresetBusy(false);
   };
 
+  const importXml = async (cc?: string, year?: number) => {
+    const y = year ?? new Date().getFullYear();
+    const countries: readonly string[] = cc ? [cc] : ['RU', 'BY', 'KZ'];
+    setXmlBusy(true); setError(null); setNotice(null);
+    const results: string[] = [];
+    for (const c of countries) {
+      try {
+        const r = await af('/production-calendars/import-xmlcalendar', { method: 'POST', body: JSON.stringify({ country_code: c, year: y }) });
+        results.push(`${c}: ✓ ${r.status === 'ok' ? 'загружено' : r.status}`);
+        if (cc && c === cc) {
+          setEditing(e => e ? { ...e, days: r.days.map((d: any) => ({ date: d.date, day_type: d.day_type, hours: d.hours })) } : e);
+        }
+      } catch (e: any) {
+        results.push(`${c}: ✗ ${String(e)}`);
+      }
+    }
+    setNotice(results.join(' · '));
+    await load();
+    setXmlBusy(false);
+  };
+
   // ── year grid ──
   const MonthGrid = ({ year, month, days }: { year: number; month: number; days: Day[] }) => {
     const map = new Map(days.map(d => [d.date, d]));
@@ -249,11 +278,13 @@ export default function ProductionCalendarManager() {
           <>
             <button onClick={startNew} style={btn('#3B82F6')}>＋ Новый календарь</button>
             <button onClick={preset} disabled={presetBusy} style={ghost()}>{presetBusy ? 'Загрузка…' : '⚡ Предзагрузить РФ/РБ/РК'}</button>
+            <button onClick={() => importXml()} disabled={xmlBusy} style={ghost()}>{xmlBusy ? 'Загрузка…' : '⬇ Загрузить из xmlcalendar.ru'}</button>
           </>
         )}
       </div>
 
       {error && <div style={{ color: '#FCA5A5', fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+      {notice && <div style={{ color: '#8FA3BD', fontSize: 12.5, marginBottom: 12 }}>{notice}</div>}
 
       {!editing && (
         loading ? <div style={{ color: '#5A7090', fontSize: 13 }}>Загрузка…</div> : (
@@ -269,12 +300,18 @@ export default function ProductionCalendarManager() {
                 const st = stats(c);
                 return (
                   <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, padding: '10px 14px', cursor: 'pointer' }} onClick={() => startEdit(c)}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLOR[c.status || 'ok'], flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5' }}>{c.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5' }}>{c.name}</div>
+                        <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: STATUS_COLOR[c.status || 'ok'] + '26', color: STATUS_COLOR[c.status || 'ok'], border: '1px solid ' + STATUS_COLOR[c.status || 'ok'] + '55' }}>
+                          {SRC_LABEL[c.source || 'base']} · {STATUS_LABEL[c.status || 'ok']}
+                        </span>
+                      </div>
                       <div style={{ fontSize: 11.5, color: '#5A7090' }}>
                         {c.country_code} · {c.year} · работа {st.work} · выходной {st.weekend} · праздник {st.holiday} · предпраздн. {st.pre} · {st.hours}ч
                       </div>
+                      {c.last_error && <div style={{ fontSize: 10.5, color: '#FCA5A5' }}>⚠ {c.last_error}</div>}
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); del(c); }} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer' }}>Удалить</button>
                   </div>
@@ -307,6 +344,7 @@ export default function ProductionCalendarManager() {
               Клик по дню переключает тип: <span style={{ color: '#60A5FA' }}>работа</span> → <span style={{ color: '#94A3B8' }}>выходной</span> → <span style={{ color: '#F87171' }}>праздник</span> → <span style={{ color: '#FBBF24' }}>предпраздничный</span>.
             </div>
             <button onClick={() => setImportOpen(true)} style={ghost()}>📥 Импорт из Excel/буфера</button>
+            <button onClick={() => importXml(editing.country_code, editing.year)} disabled={xmlBusy} style={ghost()}>⬇ Загрузить из xmlcalendar.ru</button>
             <button onClick={regenerate} style={ghost()}>⚡ Сгенерировать базовый</button>
             <button onClick={save} disabled={saving} style={btn('#3B82F6')}>{saving ? 'Сохранение…' : '✓ Сохранить'}</button>
             {!isNew && editing.id && <button onClick={() => del(editing)} style={{ ...btn('transparent'), border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5' }}>Удалить</button>}
