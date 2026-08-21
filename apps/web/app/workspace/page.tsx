@@ -1025,10 +1025,21 @@ export default function AppShell() {
     setSelectedProject(p); setView('project-gantt');
     setGanttLoading(true); setGanttData(null);
     try {
-      const r = await apiF<any>(`/projects/${p.id}/calculate/cpm`, { method: 'POST' });
+      const body = p?.start_date ? { start_date: p.start_date } : {};
+      const r = await apiF<any>(`/projects/${p.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify(body) });
       setGanttData(r);
     } catch (e: any) { setMsg('Ошибка загрузки Ганта: ' + (e.message || String(e))); }
     setGanttLoading(false);
+  };
+
+  const setProjectStartDate = async (dateStr: string) => {
+    if (!selectedProject || !dateStr) return;
+    try {
+      await apiF(`/projects/${selectedProject.id}`, { method: 'PUT', body: JSON.stringify({ start_date: dateStr + 'T00:00:00' }) });
+      const updated = { ...selectedProject, start_date: dateStr + 'T00:00:00' };
+      setSelectedProject(updated);
+      await loadProjectGantt(updated);
+    } catch (e: any) { setMsg('Ошибка: ' + (e.message || String(e))); }
   };
 
   // ── Groups ──
@@ -2011,7 +2022,12 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             <div className="panel">
               <div className="panel-hdr">
                 <div><span className="panel-title">📊 Диаграмма Ганта</span><span className="panel-sub">{selectedProject?.name}</span></div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: 11, color: '#8FA3BD', display: 'inline-flex', alignItems: 'center' }}>Старт:
+                    <input type="date" value={(ganttData?.anchor || selectedProject?.start_date || '').slice(0, 10)} onChange={e => setProjectStartDate(e.target.value)} style={{ marginLeft: 6, background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E8EEF5', padding: '3px 6px', fontSize: 12 }} />
+                  </label>
+                  {ganttData?.project_finish_date && <span style={{ fontSize: 11, color: '#8FA3BD' }}>→ финиш <span style={{ color: '#10B981', fontWeight: 600 }}>{ganttData.project_finish_date.slice(8, 10)}.{ganttData.project_finish_date.slice(5, 7)}.{ganttData.project_finish_date.slice(0, 4)}</span></span>}
+                  {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{ganttData.total_duration_days} раб. дн.</span>}
                   <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">🔄 Обновить</button>
                   <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
                 </div>
@@ -2080,36 +2096,37 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <div style={{ overflowX: 'auto' }}>
                   <table className="tbl">
                     <thead><tr>
-                      <th style={{ width: 300 }}>Операция</th>
-                      <th style={{ width: 80 }}>Длит. (ч)</th>
-                      <th style={{ width: 90 }}>ES</th>
-                      <th style={{ width: 90 }}>EF</th>
-                      <th style={{ width: 90 }}>LS</th>
-                      <th style={{ width: 90 }}>LF</th>
-                      <th style={{ width: 80 }}>Резерв</th>
+                      <th style={{ width: 280 }}>Операция</th>
+                      <th style={{ width: 70 }}>Длит. (дн)</th>
+                      <th style={{ width: 105 }}>Старт</th>
+                      <th style={{ width: 105 }}>Финиш</th>
+                      <th style={{ width: 105 }}>Поздн. старт</th>
+                      <th style={{ width: 105 }}>Поздн. финиш</th>
+                      <th style={{ width: 72 }}>Резерв</th>
                       <th style={{ minWidth: 300 }}>График</th>
                     </tr></thead>
                     <tbody>
                       {(ganttData.nodes || []).map((n: any) => {
-                        const totalDur = ganttData.nodes?.reduce((m: number, x: any) => Math.max(m, x.late_finish || x.early_finish || 0), 1) || 1;
-                        const es = n.early_start || 0;
-                        const ef = n.early_finish || 0;
-                        const dur = n.duration || ef - es || 1;
+                        const totalDur = ganttData.total_duration_days || ganttData.nodes?.reduce((m: number, x: any) => Math.max(m, x.late_finish_day || x.early_finish_day || 0), 1) || 1;
+                        const es = n.early_start_day ?? 0;
+                        const ef = n.early_finish_day ?? 0;
+                        const dur = n.duration_days || (ef - es) || 0.01;
                         const leftPct = (es / totalDur) * 100;
                         const widthPct = Math.max((dur / totalDur) * 100, 1);
-                        const isCritical = n.total_float === 0;
-                        const tf = n.total_float || 0;
+                        const isCritical = n.is_critical === true || n.total_float_days === 0;
+                        const tf = n.total_float_days ?? 0;
+                        const fmt = (d: string) => d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '—';
                         return (
                           <tr key={n.id}>
                             <td style={{ color: isCritical ? '#f87171' : '#E8EEF5', fontWeight: isCritical ? 600 : 400 }}>
                               {isCritical ? '🔴 ' : ''}{n.name}
                             </td>
-                            <td className="t-mono">{dur}ч</td>
-                            <td className="t-mono">{es}ч</td>
-                            <td className="t-mono">{ef}ч</td>
-                            <td className="t-mono">{n.late_start ?? '—'}</td>
-                            <td className="t-mono">{n.late_finish ?? '—'}</td>
-                            <td className="t-mono" style={{ color: tf === 0 ? '#10B981' : '#F59E0B' }}>{tf === 0 ? '0 (КП)' : tf}</td>
+                            <td className="t-mono">{Number(dur).toFixed(1)}</td>
+                            <td className="t-mono">{fmt(n.early_start_date)}</td>
+                            <td className="t-mono">{fmt(n.early_finish_date)}</td>
+                            <td className="t-mono">{fmt(n.late_start_date)}</td>
+                            <td className="t-mono">{fmt(n.late_finish_date)}</td>
+                            <td className="t-mono" style={{ color: tf === 0 ? '#10B981' : '#F59E0B' }}>{tf === 0 ? '0 (КП)' : Number(tf).toFixed(1)}</td>
                             <td>
                               <div style={{ position: 'relative', height: 22, background: '#0A1628', borderRadius: 4 }}>
                                 <div style={{

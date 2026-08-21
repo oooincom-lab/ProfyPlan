@@ -247,10 +247,16 @@ async def run_schedule(
     for nid, node in result.nodes.items():
         es_days = node.early_start
         ef_days = node.early_finish
+        ls_days = node.late_start
+        lf_days = node.late_finish
         start_idx = int(math.floor(float(es_days)))
         finish_idx = int(math.ceil(float(ef_days)) - 1) if ef_days > 0 else 0
+        ls_idx = int(math.floor(float(ls_days)))
+        lf_idx = int(math.ceil(float(lf_days)) - 1) if lf_days > 0 else 0
         s_date = await working_day_index_to_date(resolver, anchor, max(start_idx, 0))
         f_date = await working_day_index_to_date(resolver, anchor, max(finish_idx, 0))
+        ls_date = await working_day_index_to_date(resolver, anchor, max(ls_idx, 0))
+        lf_date = await working_day_index_to_date(resolver, anchor, max(lf_idx, 0))
         nodes.append({
             "id": nid,
             "name": node.name,
@@ -260,6 +266,10 @@ async def run_schedule(
             "early_finish_day": float(ef_days),
             "early_start_date": s_date.isoformat(),
             "early_finish_date": f_date.isoformat(),
+            "late_start_day": float(ls_days),
+            "late_finish_day": float(lf_days),
+            "late_start_date": ls_date.isoformat(),
+            "late_finish_date": lf_date.isoformat(),
             "total_float_days": float(node.total_float),
             "is_critical": node.is_critical,
         })
