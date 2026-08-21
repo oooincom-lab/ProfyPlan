@@ -1230,6 +1230,13 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 ### 18.3 Аудит изоляции (2026-08-21) — результаты
 - **КРИТИЧЕСКИ (исправлено):** `actual.py` (4 эндпоинта факта) не фильтровал по tenant_id — по UUID операции можно было читать/менять чужие ActualExecution и все OperationDependency. Добавлен `get_current_tenant_id`, `_get_operation(tenant_id)`, депсы скоплены по op_ids тенанта.
 - **БАГ (исправлено):** `/refresh` выпускал access-токен без tenant_id → после рефреша все тенант-эндпоинты падали в 401. Теперь refresh подтягивает tenant пользователя.
-- Низкий риск (не дыры, транзитивно скоплено): display-выборки `Resource.name`/`WorkSchedule.name` по id, где id берётся из уже тенант-скопленных данных (bom.py, calculations.py, project_resources.py). Можно добавить tenant-фильтр как defense-in-depth.
-- Известные gap (не утечки): `login` берёт первый tenant (нет выбора тенанта для мультитенантного пользователя); `get_current_user`/`me` сравнивают UUID без каста.
+- **Defense-in-depth (сделано):** добавлены tenant_id-фильтры во все display-выборки `Resource`/`WorkSchedule` по id (bom.py развёртка, calculations.py движок, project_resources.py назначение). Теперь ни одна выборка не читает по id без привязки к тенанту.
+- Известный gap (не утечка): `get_current_user`/`me` сравнивают UUID без каста (работает, стоит кастить).
 - Правило для новых роутеров: любой роутер, работающий с данными тенанта, ОБЯЗАН `Depends(get_current_tenant_id)` и фильтровать ВСЕ выборки/записи по tenant_id (или через родителя с tenant_id). Lookup по ID из URL — всегда с tenant_id.
+
+### 18.4 Выбор тенанта при входе (2026-08-21)
+- `login`/`register`/`refresh` возвращают `tenants: [{id, name, role}]` — все компании пользователя.
+- Новый эндпоинт `POST /v1/auth/select-tenant` (тело `{tenant_id}`): проверяет членство в UserTenant и выдаёт новый access-токен с выбранным tenant_id; чужой тенант → 403.
+- Фронтенд: `api.ts` login/selectTenant (refresh + tenants в localStorage `profyplan_refresh`/`profyplan_tenants`); `page.tsx` при `tenants.length > 1` показывает экран «Выберите компанию», после выбора грузит рабочий стол.
+- Смена тенанта = новый access-токен через select-tenant (refresh-токен без tenant, подтягивает tenant из UserTenant).
+- Демо-аккаунт (planner@demo.ru) в одной компании → селектор не виден; задел на реальную мультитенантность (нужен flow приглашения во вторую компанию).
