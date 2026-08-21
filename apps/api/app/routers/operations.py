@@ -57,7 +57,7 @@ async def create_operation(
     db.add(operation)
     await db.commit()
     await db.refresh(operation)
-    return OperationOut.model_validate(operation)
+    return OperationOut(id=str(operation.id), project_id=str(operation.project_id), name=operation.name, duration_base=operation.duration_base, duration_unit=operation.duration_unit, setup_time=operation.setup_time, teardown_time=operation.teardown_time, to_optimistic=operation.to_optimistic, tm_likely=operation.tm_likely, tp_pessimistic=operation.tp_pessimistic, position=operation.position, is_critical=operation.is_critical)
 
 
 @router.get("/{operation_id}", response_model=OperationOut)
@@ -147,7 +147,17 @@ async def list_dependencies(
             Operation, OperationDependency.predecessor_id == Operation.id
         ).where(Operation.project_id == project_id)
     )
-    return [DependencyOut.model_validate(d) for d in result.scalars().all()]
+    return [
+        DependencyOut(
+            id=str(d.id),
+            predecessor_id=str(d.predecessor_id),
+            successor_id=str(d.successor_id),
+            dependency_type=d.dependency_type,
+            lag_time=d.lag_time,
+            lag_unit=d.lag_unit,
+        )
+        for d in result.scalars().all()
+    ]
 
 
 @dep_router.post("", response_model=DependencyOut, status_code=status.HTTP_201_CREATED)
@@ -161,7 +171,14 @@ async def create_dependency(
     db.add(dep)
     await db.commit()
     await db.refresh(dep)
-    return DependencyOut.model_validate(dep)
+    return DependencyOut(
+        id=str(dep.id),
+        predecessor_id=str(dep.predecessor_id),
+        successor_id=str(dep.successor_id),
+        dependency_type=dep.dependency_type,
+        lag_time=dep.lag_time,
+        lag_unit=dep.lag_unit,
+    )
 
 
 @dep_router.delete("/{dep_id}", status_code=status.HTTP_204_NO_CONTENT)
