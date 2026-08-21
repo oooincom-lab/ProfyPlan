@@ -35,13 +35,39 @@ async function request<T>(
 }
 
 // --- Auth ---
+export interface TenantInfo {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  refresh_token?: string;
+  tenants?: TenantInfo[];
+}
+
 export async function login(email: string, password: string) {
-  const data = await request<{ access_token: string }>('/v1/auth/login', {
+  const data = await request<AuthResponse>('/v1/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
   if (typeof window !== 'undefined') {
     localStorage.setItem('profyplan_token', data.access_token);
+    if (data.refresh_token) localStorage.setItem('profyplan_refresh', data.refresh_token);
+    if (data.tenants) localStorage.setItem('profyplan_tenants', JSON.stringify(data.tenants));
+  }
+  return data;
+}
+
+export async function selectTenant(tenantId: string) {
+  const data = await request<AuthResponse>('/v1/auth/select-tenant', {
+    method: 'POST',
+    body: JSON.stringify({ tenant_id: tenantId }),
+  });
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('profyplan_token', data.access_token);
+    if (data.refresh_token) localStorage.setItem('profyplan_refresh', data.refresh_token);
   }
   return data;
 }

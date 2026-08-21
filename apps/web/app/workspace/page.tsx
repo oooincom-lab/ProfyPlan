@@ -77,6 +77,7 @@ export default function AppShell() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [authError, setAuthError] = useState(false);
+  const [pendingTenants, setPendingTenants] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ email: 'planner@demo.ru', password: 'demo123' });
   const [view, setView] = useState<View>('dashboard');
   const [projects, setProjects] = useState<any[]>([]);
@@ -949,6 +950,13 @@ export default function AppShell() {
       if (!r.ok) throw new Error('LOGIN_FAILED');
       const data = await r.json();
       localStorage.setItem('profyplan_token', data.access_token);
+      const tenants = Array.isArray(data.tenants) ? data.tenants : [];
+      if (tenants.length > 1) {
+        localStorage.setItem('profyplan_tenants', JSON.stringify(tenants));
+        setPendingTenants(tenants);
+        setLoading(false);
+        return;
+      }
       const proj = await apiF<{ items: any[] }>('/projects');
       setProjects(proj.items);
       setLoaded(true);
@@ -961,6 +969,21 @@ export default function AppShell() {
     }
     setLoading(false);
   }, []);
+
+  const chooseTenant = async (tenantId: string) => {
+    setLoading(true);
+    try {
+      const data = await apiF<any>(`/auth/select-tenant`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+      localStorage.setItem('profyplan_token', data.access_token);
+      setPendingTenants([]);
+      const proj = await apiF<{ items: any[] }>('/projects');
+      setProjects(proj.items);
+      setLoaded(true);
+    } catch (e: any) {
+      setMsg(e.message || String(e));
+    }
+    setLoading(false);
+  };
 
   const loadProjectDashboard = async (p: any) => {
     setSelectedProject(p);
@@ -1724,7 +1747,21 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           <div className="s-logo" style={{ margin: '0 auto 20px' }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>ProfyPlan</h1>
           <p style={{ color: '#5A7090', marginBottom: 24 }}>{msg || 'Рабочий стол'}</p>
-          {authError ? (
+          {pendingTenants.length > 0 ? (
+            <div style={{ maxWidth: 360, margin: '0 auto', textAlign: 'left' }}>
+              <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 16 }}>Выберите компанию</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pendingTenants.map((t: any) => (
+                    <button key={t.id} onClick={() => chooseTenant(t.id)} disabled={loading} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, color: '#E8EEF5', padding: '12px 14px', fontSize: 14, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                      <div style={{ fontWeight: 600 }}>{t.name}</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>{t.role === 'owner' ? 'Владелец' : t.role}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : authError ? (
             <div style={{ maxWidth: 320, margin: '0 auto', textAlign: 'left' }}>
               <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
                 <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 16 }}>Вход</div>

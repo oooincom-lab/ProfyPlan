@@ -142,10 +142,10 @@ async def update_assignment(
     await db.commit()
     await db.refresh(pr)
 
-    rname = (await db.execute(select(Resource.name).where(Resource.id == pr.resource_id))).scalar_one_or_none()
+    rname = (await db.execute(select(Resource.name).where(Resource.id == pr.resource_id, Resource.tenant_id == tenant_id))).scalar_one_or_none()
     sname = None
     if pr.schedule_id:
-        sname = (await db.execute(select(WorkSchedule.name).where(WorkSchedule.id == pr.schedule_id))).scalar_one_or_none()
+        sname = (await db.execute(select(WorkSchedule.name).where(WorkSchedule.id == pr.schedule_id, WorkSchedule.tenant_id == tenant_id))).scalar_one_or_none()
 
     return ProjectResourceOut(
         id=str(pr.id),

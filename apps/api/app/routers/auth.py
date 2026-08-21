@@ -1,5 +1,5 @@
 """
-Роутер аутентификации: register, login, refresh, logout, me.
+Роутер аутентификации: register, login, refresh, logout, me, select-tenant.
 """
 import uuid
 from datetime import datetime, timezone
@@ -20,6 +20,8 @@ from app.core.deps import get_current_token
 from app.models.tenant import Tenant, User, UserTenant
 from app.schemas.auth import (
     RefreshRequest,
+    SelectTenantRequest,
+    TenantInfo,
     TokenResponse,
     UserLogin,
     UserMe,
@@ -27,6 +29,19 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+
+
+async def _tenants_for(db: AsyncSession, user_id) -> list[TenantInfo]:
+    """Список тенантов пользователя (id + имя + роль)."""
+    ut_rows = await db.execute(
+        select(UserTenant, Tenant)
+        .join(Tenant, UserTenant.tenant_id == Tenant.id)
+        .where(UserTenant.user_id == user_id)
+    )
+    return [
+        TenantInfo(id=str(t.id), name=t.name, role=ut.role)
+        for ut, t in ut_rows.all()
+    ]
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -69,12 +84,16 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     access_token = create_access_token(str(user.id), str(tenant.id))
     refresh_token = create_refresh_token(str(user.id))
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        tenants=[TenantInfo(id=str(tenant.id), name=tenant.name, role="owner")],
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
-    """Вход — возвращает JWT-токены."""
+    """Вход — возвращает JWT-токены + список тенантов пользователя."""
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(body.password, user.hashed_password):
@@ -87,19 +106,21 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # Найти tenant и роль
-    ut_result = await db.execute(
-        select(UserTenant).where(UserTenant.user_id == user.id)
-    )
-    user_tenant = ut_result.scalars().first()
+    # Все тенанты пользователя (мультитенантность)
+    tenants = await _tenants_for(db, user.id)
+    first = tenants[0] if tenants else None
 
     access_token = create_access_token(
         str(user.id),
-        str(user_tenant.tenant_id) if user_tenant else None,
+        first.id if first else None,
     )
     refresh_token = create_refresh_token(str(user.id))
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        tenants=tenants,
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -110,17 +131,45 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     user_id = payload.get("sub")
-    ut_result = await db.execute(
-        select(UserTenant).where(UserTenant.user_id == uuid.UUID(user_id))
-    )
-    user_tenant = ut_result.scalars().first()
+    tenants = await _tenants_for(db, uuid.UUID(user_id))
+    first = tenants[0] if tenants else None
     access_token = create_access_token(
         user_id,
-        str(user_tenant.tenant_id) if user_tenant else None,
+        first.id if first else None,
     )
     new_refresh = create_refresh_token(user_id)
 
-    return TokenResponse(access_token=access_token, refresh_token=new_refresh)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=new_refresh,
+        tenants=tenants,
+    )
+
+
+@router.post("/select-tenant", response_model=TokenResponse)
+async def select_tenant(
+    body: SelectTenantRequest,
+    db: AsyncSession = Depends(get_db),
+    token: dict = Depends(get_current_token),
+):
+    """Выбрать tenant (для пользователя в нескольких компаниях) — новый access-токен."""
+    user_id = token.get("sub")
+    ut = await db.execute(
+        select(UserTenant).where(
+            UserTenant.user_id == uuid.UUID(user_id),
+            UserTenant.tenant_id == uuid.UUID(body.tenant_id),
+        )
+    )
+    if not ut.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="No access to this tenant")
+
+    access_token = create_access_token(user_id, body.tenant_id)
+    refresh_token = create_refresh_token(user_id)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        tenants=[],
+    )
 
 
 @router.post("/logout")
@@ -159,6 +208,3 @@ async def me(
         tenant_name=tenant.name,
         role=user_tenant.role,
     )
-
-
-

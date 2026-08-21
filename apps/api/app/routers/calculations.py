@@ -180,7 +180,7 @@ async def run_schedule(
     res_ids = {or_.resource_id for ors in op_resources.values() for or_ in ors}
     resources: dict = {}
     if res_ids:
-        res_rows = await db.execute(select(Resource).where(Resource.id.in_(res_ids)))
+        res_rows = await db.execute(select(Resource).where(Resource.id.in_(res_ids), Resource.tenant_id == tenant_id))
         resources = {r.id: r for r in res_rows.scalars().all()}
 
     # Переопределение графика через регистр ProjectResource (override на проект)
@@ -201,7 +201,7 @@ async def run_schedule(
     schedules: dict = {}
     slots_by_sched: dict = defaultdict(list)
     if sched_ids:
-        sched_rows = await db.execute(select(WorkSchedule).where(WorkSchedule.id.in_(sched_ids)))
+        sched_rows = await db.execute(select(WorkSchedule).where(WorkSchedule.id.in_(sched_ids), WorkSchedule.tenant_id == tenant_id))
         schedules = {s.id: s for s in sched_rows.scalars().all()}
         slot_rows = await db.execute(
             select(WorkScheduleSlot).where(WorkScheduleSlot.schedule_id.in_(sched_ids))

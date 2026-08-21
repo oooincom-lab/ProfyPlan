@@ -870,7 +870,10 @@ async def export_mrp(
     if op_resources:
         res_ids = list({or_m.resource_id for or_m in op_resources})
         resources_result = await db.execute(
-            select(Resource).where(Resource.id.in_(res_ids))
+            select(Resource).where(
+                Resource.id.in_(res_ids),
+                Resource.tenant_id == tenant_id,
+            )
         )
         for res in resources_result.scalars().all():
             resource_names[str(res.id)] = res.name

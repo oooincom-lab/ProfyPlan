@@ -16,14 +16,26 @@ class UserLogin(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class TenantInfo(BaseModel):
+    """Тенант (компания) пользователя — для выбора при входе."""
+    id: str
+    name: str
+    role: str
+
+
+class SelectTenantRequest(BaseModel):
+    tenant_id: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
+    tenants: list[TenantInfo] = []
 
 
 class UserOut(BaseModel):
