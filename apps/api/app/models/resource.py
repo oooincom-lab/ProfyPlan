@@ -42,5 +42,8 @@ class Resource(BaseModel):
     unit: Mapped[Optional[str]] = mapped_column(
         String(20)
     )  # шт / кг / л (что производит)
+    country_code: Mapped[Optional[str]] = mapped_column(
+        String(2), nullable=True
+    )  # страна производственного календаря ресурса (nullable = наследовать от проекта)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)

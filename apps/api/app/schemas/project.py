@@ -23,6 +23,7 @@ class ProjectUpdate(BaseModel):
     status: Optional[str] = Field(default=None, pattern="^(draft|active|completed|archived)$")
     mode: Optional[str] = Field(default=None, pattern="^(quick|project|recurring)$")
     default_method: Optional[str] = Field(default=None, pattern="^(cpm|pert_cpm|cpm_ccm|pert_ccm)$")
+    country_code: Optional[str] = Field(None, min_length=2, max_length=2)
 
 
 class ProjectOut(BaseModel):

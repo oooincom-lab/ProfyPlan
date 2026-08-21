@@ -1,8 +1,9 @@
 """CRUD для производственных календарей (ProductionCalendar) + генерация базового календаря."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +67,38 @@ def _generate_days(country_code: str, year: int) -> list[dict]:
     return out
 
 
+def _parse_xmlcalendar(data: dict, country_code: str) -> list[dict]:
+    """Разобрать JSON xmlcalendar.ru в список дней.
+    Маркеры: `+` — перенесённый выходной, `*` — предпраздничный (7ч), без маркера — выходной/праздник."""
+    year = int(data["year"])
+    holidays = RU_HOLIDAYS if country_code == "RU" else set()
+    result: dict[date, tuple[str, Decimal | None]] = {}
+    for month in data.get("months", []):
+        m = month["month"]
+        for tok in month["days"].split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            if tok.endswith("*"):
+                day = int(tok[:-1])
+                result[date(year, m, day)] = ("preholiday", Decimal("7.0"))
+            elif tok.endswith("+"):
+                day = int(tok[:-1])
+                result[date(year, m, day)] = ("holiday", None)
+            else:
+                day = int(tok)
+                typ = "holiday" if (m, day) in holidays else "weekend"
+                result[date(year, m, day)] = (typ, None)
+
+    out: list[dict] = []
+    d = date(year, 1, 1)
+    while d.year == year:
+        typ, hours = result.get(d, ("work", Decimal("8.0")))
+        out.append({"date": d, "day_type": typ, "hours": hours})
+        d += timedelta(days=1)
+    return out
+
+
 def _make_name(country_code: str, year: int) -> str:
     base = COUNTRY_NAMES.get(country_code, country_code)
     return f"{base} {year}"
@@ -100,7 +133,8 @@ async def create_item(
     country = body.country_code.upper()
     name = (body.name or "").strip() or _make_name(country, body.year)
     item = ProductionCalendar(
-        id=uuid4(), tenant_id=tenant_id, country_code=country, year=body.year, name=name
+        id=uuid4(), tenant_id=tenant_id, country_code=country, year=body.year, name=name,
+        source="manual", status="ok",
     )
     db.add(item)
     await db.flush()
@@ -139,10 +173,70 @@ async def seed_item(
     item = ProductionCalendar(
         id=uuid4(), tenant_id=tenant_id, country_code=country,
         year=body.year, name=_make_name(country, body.year),
+        source="base", status="fallback",
     )
     db.add(item)
     await db.flush()
     for dc in _generate_days(country, body.year):
+        db.add(
+            ProductionCalendarDay(
+                calendar_id=item.id, date=dc["date"], day_type=dc["day_type"], hours=dc["hours"]
+            )
+        )
+    await db.commit()
+    res = await db.execute(
+        select(ProductionCalendar).options(_load_days()).where(ProductionCalendar.id == item.id)
+    )
+    return res.scalar_one()
+
+
+@router.post("/import-xmlcalendar", response_model=ProductionCalendarOut, status_code=201)
+async def import_xmlcalendar(
+    body: ProductionCalendarSeed,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Загрузить календарь из xmlcalendar.ru (полный: переносы + предпраздничные)."""
+    country = body.country_code.upper()
+    year = body.year
+    url = f"https://xmlcalendar.ru/data/{country.lower()}/{year}/calendar.json"
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Источник недоступен: {e}")
+
+    days = _parse_xmlcalendar(data, country)
+
+    existing = await db.execute(
+        select(ProductionCalendar).options(_load_days()).where(
+            ProductionCalendar.tenant_id == tenant_id,
+            ProductionCalendar.country_code == country,
+            ProductionCalendar.year == year,
+        )
+    )
+    item = existing.scalar_one_or_none()
+    if item:
+        for dd in item.days:
+            await db.delete(dd)
+        await db.flush()
+        item.name = _make_name(country, year)
+        item.source = "xmlcalendar"
+        item.status = "ok"
+        item.last_error = None
+        item.source_synced_at = datetime.now(timezone.utc)
+    else:
+        item = ProductionCalendar(
+            id=uuid4(), tenant_id=tenant_id, country_code=country,
+            year=year, name=_make_name(country, year),
+            source="xmlcalendar", status="ok",
+            source_synced_at=datetime.now(timezone.utc),
+        )
+        db.add(item)
+        await db.flush()
+    for dc in days:
         db.add(
             ProductionCalendarDay(
                 calendar_id=item.id, date=dc["date"], day_type=dc["day_type"], hours=dc["hours"]

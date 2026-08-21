@@ -50,5 +50,10 @@ class ProductionCalendarOut(BaseModel):
     country_code: str
     year: int
     name: str
+    source: str
+    status: str
+    last_error: Optional[str] = None
+    source_synced_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_at: datetime
     days: list[ProductionCalendarDayOut] = []

@@ -50,7 +50,7 @@ async def create_resource(
     db.add(resource)
     await db.commit()
     await db.refresh(resource)
-    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, is_active=resource.is_active)
+    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, country_code=resource.country_code, is_active=resource.is_active)
 
 
 @router.get("/{resource_id}", response_model=ResourceOut)
@@ -70,7 +70,7 @@ async def get_resource(
     resource = result.scalar_one_or_none()
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
-    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, is_active=resource.is_active)
+    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, country_code=resource.country_code, is_active=resource.is_active)
 
 
 @router.put("/{resource_id}", response_model=ResourceOut)
@@ -97,7 +97,7 @@ async def update_resource(
 
     await db.commit()
     await db.refresh(resource)
-    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, is_active=resource.is_active)
+    return ResourceOut(id=str(resource.id), project_id=str(resource.project_id), name=resource.name, parent_id=str(resource.parent_id) if resource.parent_id else None, resource_type=resource.resource_type, capacity_per_unit=resource.capacity_per_unit, capacity_unit=resource.capacity_unit, unit=resource.unit, country_code=resource.country_code, is_active=resource.is_active)
 
 
 @router.delete("/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)

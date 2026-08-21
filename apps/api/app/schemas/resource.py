@@ -14,6 +14,7 @@ class ResourceCreate(BaseModel):
     capacity_per_unit: Decimal = Field(default=1.0, ge=0)
     capacity_unit: str = Field(default="hour")
     unit: Optional[str] = None
+    country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     is_active: bool = True
 
 
@@ -23,6 +24,7 @@ class ResourceUpdate(BaseModel):
     capacity_per_unit: Optional[Decimal] = None
     capacity_unit: Optional[str] = None
     unit: Optional[str] = None
+    country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     is_active: Optional[bool] = None
 
 
@@ -35,6 +37,7 @@ class ResourceOut(BaseModel):
     capacity_per_unit: Decimal
     capacity_unit: str
     unit: Optional[str] = None
+    country_code: Optional[str] = None
     is_active: bool
 
     class Config:
