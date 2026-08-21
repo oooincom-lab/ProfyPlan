@@ -1213,3 +1213,23 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 - Дорожная карта (слои): (1) сейчас — глобальный справочник + регистр с графиком; (2) скоро — capacity_share + период → сквозная загрузка по проектам; (3) потом — выравнивание ресурсов (алгоритм, отдельный продукт).
 - Текущий скоуп (слой 1): глобальный справочник ресурсов (CRUD без project_id, вью на уровне тенанта) + миграция регистра (capacity_share/date_from/date_to) + UI назначения «ресурс→проект» с переопределением графика + фикс движка на register-override + миграция project-scoped ресурсов без потери.
 - НЕ делаем сейчас: слои 2–3 (выравнивание/алгоритм загрузки) — преждевременно до появления кросспроектных данных.
+
+## 18. Мультитенантность: общая база + tenant_id, аудит изоляции (решено 2026-08-21, вечер)
+
+### 18.1 Решение по масштабированию
+- Модель: **Pool** (общая БД + колонка `tenant_id` на каждой таблице). Остаёмся на ней — это стандарт SaaS.
+- Отдельная БД на аккаунт (Silo) НЕ нужна сейчас: одна Postgres держит тысячи активных аккаунтов и десятки миллионов записей; нагрузка ProfyPlan лёгкая (чтения + редкие записи).
+- Silo/Bridge — только при enterprise-требовании физической изоляции или гигантском тенанте; тогда гибрид (большинство в общей БД, VIP — в своих).
+- Вместо «базы на аккаунт» делать: железная tenant-изоляция (18.3), индексы, пул соединений (PgBouncer); при реальном росте — шардирование по tenant_id (2–3 базы на всех, не N баз).
+
+### 18.2 Модель доступа
+- JWT несёт `sub` (user_id) + `tenant_id`; `get_current_tenant_id` извлекает tenant_id; каждый тенант-скопленный роутер обязан `Depends(get_current_tenant_id)` + фильтровать ВСЕ запросы по tenant_id.
+- Модели С tenant_id: Project, Resource, ProjectResource, Operation, ProductionOrder, OrderGroup, OrderPool, Nomenclature, Unit, Counterparty, WorkSchedule, ProductionCalendar, Tenant, UserTenant.
+- Модели БЕЗ tenant_id (скоп через родителя): OperationDependency, OperationResource, ActualExecution, PlanBaseline, InterProjectDependency, WorkScheduleSlot, ProductionCalendarDay — для них изоляция обязана идти через родителя (Operation.tenant_id / Project.tenant_id / WorkSchedule.tenant_id).
+
+### 18.3 Аудит изоляции (2026-08-21) — результаты
+- **КРИТИЧЕСКИ (исправлено):** `actual.py` (4 эндпоинта факта) не фильтровал по tenant_id — по UUID операции можно было читать/менять чужие ActualExecution и все OperationDependency. Добавлен `get_current_tenant_id`, `_get_operation(tenant_id)`, депсы скоплены по op_ids тенанта.
+- **БАГ (исправлено):** `/refresh` выпускал access-токен без tenant_id → после рефреша все тенант-эндпоинты падали в 401. Теперь refresh подтягивает tenant пользователя.
+- Низкий риск (не дыры, транзитивно скоплено): display-выборки `Resource.name`/`WorkSchedule.name` по id, где id берётся из уже тенант-скопленных данных (bom.py, calculations.py, project_resources.py). Можно добавить tenant-фильтр как defense-in-depth.
+- Известные gap (не утечки): `login` берёт первый tenant (нет выбора тенанта для мультитенантного пользователя); `get_current_user`/`me` сравнивают UUID без каста.
+- Правило для новых роутеров: любой роутер, работающий с данными тенанта, ОБЯЗАН `Depends(get_current_tenant_id)` и фильтровать ВСЕ выборки/записи по tenant_id (или через родителя с tenant_id). Lookup по ID из URL — всегда с tenant_id.

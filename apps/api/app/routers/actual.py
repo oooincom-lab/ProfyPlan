@@ -12,6 +12,7 @@ from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_tenant_id
 from app.models.plan_version import ActualExecution
 from app.models.operation import Operation, OperationDependency
 
@@ -60,8 +61,10 @@ class UncloseResponse(BaseModel):
 
 # ── Helpers ─────────────────────────────────────────────
 
-async def _get_operation(db: AsyncSession, operation_id: uuid.UUID) -> Operation:
-    result = await db.execute(select(Operation).where(Operation.id == operation_id))
+async def _get_operation(db: AsyncSession, operation_id: uuid.UUID, tenant_id: uuid.UUID) -> Operation:
+    result = await db.execute(
+        select(Operation).where(Operation.id == operation_id, Operation.tenant_id == tenant_id)
+    )
     op = result.scalar_one_or_none()
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
@@ -89,7 +92,8 @@ def _to_response(ae: ActualExecution) -> ActualResponse:
 # ── GET actual by operation ──────────────────────────────
 
 @router.get("/operations/{operation_id}/actual", response_model=Optional[ActualResponse])
-async def get_actual(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_actual(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db), tenant_id: uuid.UUID = Depends(get_current_tenant_id)):
+    await _get_operation(db, operation_id, tenant_id)
     result = await db.execute(
         select(ActualExecution).where(ActualExecution.operation_id == operation_id)
     )
@@ -100,8 +104,8 @@ async def get_actual(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 # ── PUT save actual ──────────────────────────────────────
 
 @router.put("/operations/{operation_id}/actual", response_model=ActualResponse)
-async def save_actual(operation_id: uuid.UUID, req: ActualSaveRequest, db: AsyncSession = Depends(get_db)):
-    op = await _get_operation(db, operation_id)
+async def save_actual(operation_id: uuid.UUID, req: ActualSaveRequest, db: AsyncSession = Depends(get_db), tenant_id: uuid.UUID = Depends(get_current_tenant_id)):
+    op = await _get_operation(db, operation_id, tenant_id)
     now = datetime.now(timezone.utc)
 
     # Find existing or create
@@ -145,19 +149,26 @@ async def save_actual(operation_id: uuid.UUID, req: ActualSaveRequest, db: Async
 # ── AUTO-CLOSE predecessors ———————————————
 
 @router.post("/operations/{operation_id}/auto-close", response_model=AutoCloseResponse)
-async def auto_close_predecessors(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def auto_close_predecessors(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db), tenant_id: uuid.UUID = Depends(get_current_tenant_id)):
     """Найти цепочку незакрытых операций от последней закрытой до target и закрыть плановыми данными."""
-    target = await _get_operation(db, operation_id)
+    target = await _get_operation(db, operation_id, tenant_id)
 
-    # Build project-operation graph
+    # Build project-operation graph (scoped to tenant)
     result = await db.execute(
-        select(Operation).where(Operation.project_id == target.project_id).order_by(Operation.position)
+        select(Operation).where(
+            Operation.project_id == target.project_id,
+            Operation.tenant_id == tenant_id,
+        ).order_by(Operation.position)
     )
     all_ops = list(result.scalars().all())
 
-    # Load dependencies
+    # Load dependencies (only within tenant's operations)
+    op_ids = [op.id for op in all_ops]
     dep_result = await db.execute(
-        select(OperationDependency)
+        select(OperationDependency).where(
+            OperationDependency.predecessor_id.in_(op_ids),
+            OperationDependency.successor_id.in_(op_ids),
+        )
     )
     deps = list(dep_result.scalars().all())
 
@@ -251,9 +262,9 @@ async def auto_close_predecessors(operation_id: uuid.UUID, db: AsyncSession = De
 # ── UNCLOSE chain ———————————————
 
 @router.post("/operations/{operation_id}/unclose", response_model=UncloseResponse)
-async def unclose_chain(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def unclose_chain(operation_id: uuid.UUID, db: AsyncSession = Depends(get_db), tenant_id: uuid.UUID = Depends(get_current_tenant_id)):
     """Отменить авто-закрытие от последней незакрытой до target."""
-    target = await _get_operation(db, operation_id)
+    target = await _get_operation(db, operation_id, tenant_id)
     actual_target = await db.execute(
         select(ActualExecution).where(ActualExecution.operation_id == operation_id)
     )
@@ -263,9 +274,12 @@ async def unclose_chain(operation_id: uuid.UUID, db: AsyncSession = Depends(get_
     if ae_target.source == "manual":
         raise HTTPException(status_code=400, detail="Cannot auto-unclose a manual record")
 
-    # Load all ops for this project
+    # Load all ops for this project (scoped to tenant)
     result = await db.execute(
-        select(Operation).where(Operation.project_id == target.project_id).order_by(Operation.position)
+        select(Operation).where(
+            Operation.project_id == target.project_id,
+            Operation.tenant_id == tenant_id,
+        ).order_by(Operation.position)
     )
     all_ops = list(result.scalars().all())
     op_ids = [op.id for op in all_ops]
@@ -277,8 +291,13 @@ async def unclose_chain(operation_id: uuid.UUID, db: AsyncSession = Depends(get_
     actuals = list(actuals_result.scalars().all())
     actual_map = {ae.operation_id: ae for ae in actuals}
 
-    # Build dependency graph
-    dep_result = await db.execute(select(OperationDependency))
+    # Build dependency graph (only within tenant's operations)
+    dep_result = await db.execute(
+        select(OperationDependency).where(
+            OperationDependency.predecessor_id.in_(op_ids),
+            OperationDependency.successor_id.in_(op_ids),
+        )
+    )
     deps = list(dep_result.scalars().all())
     pred_of = {op.id: [] for op in all_ops}
     for d in deps:

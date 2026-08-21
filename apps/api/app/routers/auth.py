@@ -103,14 +103,21 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest):
-    """Обновить access-токен по refresh-токену."""
+async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Обновить access-токен по refresh-токену (с сохранением tenant_id)."""
     payload = decode_token(body.refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     user_id = payload.get("sub")
-    access_token = create_access_token(user_id)
+    ut_result = await db.execute(
+        select(UserTenant).where(UserTenant.user_id == uuid.UUID(user_id))
+    )
+    user_tenant = ut_result.scalars().first()
+    access_token = create_access_token(
+        user_id,
+        str(user_tenant.tenant_id) if user_tenant else None,
+    )
     new_refresh = create_refresh_token(user_id)
 
     return TokenResponse(access_token=access_token, refresh_token=new_refresh)
