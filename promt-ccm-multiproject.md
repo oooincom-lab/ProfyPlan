@@ -1184,3 +1184,22 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 - Порядок автозагрузки: нет календаря → xmlcalendar → успех=`ok` / неудача=базовый(`fallback`, `last_error`) / база тоже упала=`error`.
 - Резолвер `resolve_calendar(country, date)`: год из даты → календарь; нет → автозагрузка/база + статус.
 
+
+### 17.8 Календарное планирование (даты по календарю + графику) — реализовано
+- Endpoint `POST /v1/projects/{pid}/calculate/schedule` (роутер calculations.py).
+- Алгоритм:
+  1. Длительность операции → часы (нормализация по duration_unit: sec/min/hour/day/shift; day=8ч).
+  2. «Часов в сутки» операции = график её ресурса (через OperationResource → Resource.schedule_id), иначе 8ч. Недельный график = среднее по дням с работой минус перерывы; цикл (2/2) = сумма часов цикла / длина цикла.
+  3. Длительность (ч) → рабочие дни = часы / часов_в_сутки.
+  4. CPM считается в рабочих днях (абстрактная шкала, движок calculate_cpm без изменений).
+  5. Индекс рабочего дня (0-based) → реальная дата через производственный календарь страны (выходные/праздники пропускаются; предпраздничные 7ч влияют на длительность в днях через календарь при будущем уточнении, сейчас фолбэк Пн-Пт).
+- Точка отсчёта: `body.start_date` ?? `project.start_date` (новая колонка, миграция 0016) ?? сегодня.
+- Ответ: anchor, country_code, calendar_found, total_duration_days, project_start_date/project_finish_date, nodes[].{duration_days, hours_per_day, early_start_day, early_finish_day, early_start_date, early_finish_date, total_float_days, is_critical}.
+- Сервис `app/services/scheduling.py`: normalize_to_hours, schedule_hours_per_day, CalendarResolver (кэш календарей по годам, is_working, фолбэк Пн-Пт), working_day_index_to_date.
+- Проверено smoke-тестом: A 16ч@5/2→2дн; B 24ч@2/2(6ч/д)→4дн (выходные пропущены); C 8ч→1дн; итог 7 раб.дней, финиш через календарь РФ.
+- Открытый фронтенд: показать early_start_date/early_finish_date в Gantt (следующий шаг).
+
+### 17.9 Фикс Pydantic v2 (важно для любых новых роутеров)
+- `XOut.model_validate(orm_obj)` падает 500 если в схеме `id: str`/`project_id: str`, а в ORM — UUID: Pydantic v2 НЕ приводит UUID→str в строгой валидации.
+- Паттерн: собирать ответ вручную (`XOut(id=str(o.id), ...)`), как в get/update operations.py.
+- Исправлены: create_operation, create_dependency, list_dependencies (коммит 45003b5).
