@@ -26,7 +26,6 @@ const TYPE_COLOR: Record<DayType, string> = {
   holiday: 'rgba(239,68,68,.34)',
   preholiday: 'rgba(245,158,11,.32)',
 };
-const COUNTRY_NAMES: Record<string, string> = { RU: 'РФ', BY: 'РБ', KZ: 'РК' };
 
 const fmt = (d: Date) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
@@ -192,12 +191,7 @@ export default function ProductionCalendarManager() {
     try {
       const year = new Date().getFullYear();
       for (const cc of ['RU', 'BY', 'KZ'] as const) {
-        const name = `${COUNTRY_NAMES[cc]} ${year}`;
-        const days = genDays(cc, year);
-        await af('/production-calendars/', {
-          method: 'POST',
-          body: JSON.stringify({ country_code: cc, year, name, days: days.map(d => ({ date: d.date, day_type: d.day_type, hours: d.hours })) }),
-        });
+        await af('/production-calendars/seed', { method: 'POST', body: JSON.stringify({ country_code: cc, year }) });
       }
       await load();
     } catch (e: any) { setError(String(e)); }
