@@ -5,6 +5,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
 import DirectoryPicker from '@/components/DirectoryPicker';
+import BomTree from '@/components/bomtree';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -18,6 +19,7 @@ type WindowsLayerProps = {
   pools: any[];
   isDyn: (o: any) => boolean;
   orderBomNodes: (o: any) => any[];
+  routings: any[];
   routingFor: (o: any) => any;
   routingsFor: (o: any) => any[];
   resName: (rid: any) => string;
@@ -56,7 +58,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const {
     wins, lay, snapZone, setWins, setLay,
     orders, resourcesList, groups, pools, isDyn,
-    orderBomNodes, routingFor, routingsFor, resName,
+    orderBomNodes, routingFor, routingsFor, resName, routings,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
   } = props;
@@ -105,24 +107,6 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         if (!isList && !isDir && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
-        const renderBomNode = (n: any, d: number): any => {
-          const kids = bomNodes.filter((c: any) => c.parent_id === n.id);
-          return (
-            <div key={n.id}>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
-                <span style={{ color: n.node_type === 'material' ? '#8FA3BD' : '#E2E8F0' }}>{n.nomenclature_name || n.name || n.ext_id}</span>
-                <span style={{ color: '#5A7090' }}>×{n.quantity_per_parent ?? '1'}</span>
-                <span style={{ color: '#5A7090', fontSize: 11 }}>{n.unit}</span>
-                {n.node_type === 'semi_finished' && <span style={{ background: 'rgba(139,92,246,.15)', color: '#C4B5FD', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>ПФ</span>}
-                {n.is_phantom && <span style={{ background: 'rgba(6,182,212,.12)', color: '#67E8F9', borderRadius: 4, padding: '0 5px', fontSize: 10 }}>фантом</span>}
-                {n.routing_id && <span style={{ color: '#22D3EE', fontSize: 10 }}>⛓</span>}
-              </div>
-              {kids.map((k: any) => renderBomNode(k, d + 1))}
-            </div>
-          );
-        };
-        const rt = o ? routingFor(o) : null;
-        const rtTotal = rt?.operations ? rt.operations.reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0) : 0;
 
         return (
           <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
@@ -145,7 +129,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', flexShrink: 0 }}>
                 <span style={{ flex: 1, minWidth: 0, color: '#8FA3BD', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o!.specification_name || o!.ext_id || ''}</span>
                 {!w.editing ? (
-                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
+                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: 'order', editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
                     style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
                 ) : (
                   <>
@@ -159,7 +143,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             {!isList && !isBom && !isDir && (
               <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
                 {TAB_LIST.map(tb => (
-                  <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v, editing: false } : x))}
+                  <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v } : x))}
                     style={{ flex: 1, border: 0, background: 'transparent', color: w.tab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (w.tab === tb.v ? '#3B82F6' : 'transparent'), padding: '7px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
                 ))}
               </div>
@@ -259,28 +243,37 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 </div>
               )}
               {!isList && !isBom && !isDir && w.tab === 'bom' && (
-                bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
+                bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} />
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
-              {!isList && !isBom && !isDir && w.tab === 'route' && (
-                rt && rt.operations && rt.operations.length ? (
+              {!isList && !isBom && !isDir && w.tab === 'route' && (() => {
+                const rts = routingsFor(o);
+                if (!rts.length) return <div style={{ color: '#5A7090' }}>Маршруты не заданы. Привяжите маршруты к узлам спецификации (BOM → узел → routing_id).</div>;
+                return (
                   <div>
-                    <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
-                    {rt.operations.map((op: any) => (
-                      <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
-                          <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
-                          <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                    {rts.map((r: any) => {
+                      const total = (r.operations || []).reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+                      return (
+                        <div key={r.id} style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 6 }}>⛓ {r.name || 'Маршрут'} · {(r.operations || []).length} оп. · {total} ч{r.variant ? ' · вариант ' + r.variant : ''}</div>
+                          {(r.operations || []).map((op: any) => (
+                            <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
+                                <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                              </div>
+                              <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
+                                Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
-                          Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
-              )}
+                );
+              })()}
               {!isList && !isBom && !isDir && w.tab === 'res' && (() => {
                 const used = new Set<string>();
                 for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));

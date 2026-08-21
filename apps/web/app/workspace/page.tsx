@@ -312,14 +312,14 @@ export default function AppShell() {
   const selOrder = selOrderId ? (orders.find((o: any) => o.id === selOrderId) || null) : null;
 
   const openOrderPanel = (o: any) => {
-    if (panelMode === 'window' || listWinMode) { win.openWin(o); return; }
-    setSelOrderId(o.id);
-    setPanelTab('order');
-    setPanelEditing(false);
     if (selectedProject) {
       loadBomTree(selectedProject.id);
       loadPanelData(selectedProject);
     }
+    if (panelMode === 'window' || listWinMode) { win.openWin(o); return; }
+    setSelOrderId(o.id);
+    setPanelTab('order');
+    setPanelEditing(false);
   };
 
   const openGroupEditor = (g: any) => {
@@ -503,8 +503,11 @@ export default function AppShell() {
   const openBomModal = (o: any) => {
     setBomTimeline(null);
     setBomTimelineLoading(false);
-    if (selectedProject) loadProjectOrders(selectedProject.id);
-    if (selectedProject) loadBomAnomalies(selectedProject.id);
+    if (selectedProject) {
+      loadProjectOrders(selectedProject.id);
+      loadBomAnomalies(selectedProject.id);
+      loadBomTree(selectedProject.id);
+    }
     if (panelMode === 'window' || listWinMode) { win.openBomWin(o); return; }
     setBomModalOrder(o);
   };
@@ -1003,6 +1006,7 @@ export default function AppShell() {
   const loadProjectOrdersView = async (p: any) => {
     setSelectedProject(p);
     loadPanelData(p);
+    loadBomTree(p.id);
     if (listWinMode) {
       try {
         const [o, g, pl] = await Promise.all([
@@ -1068,6 +1072,7 @@ export default function AppShell() {
   // ── Groups ──
   const loadProjectGroups = async (p: any) => {
     setSelectedProject(p);
+    loadBomTree(p.id);
     if (listWinMode) {
       try {
         const [o, g, pl] = await Promise.all([
@@ -1110,6 +1115,7 @@ export default function AppShell() {
   // ── Pools ──
   const loadProjectPools = async (p: any) => {
     setSelectedProject(p);
+    loadBomTree(p.id);
     if (listWinMode) {
       try {
         const [o, g, pl] = await Promise.all([
@@ -2981,6 +2987,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         orders={orders}
         resourcesList={resourcesList}
         orderBomNodes={orderBomNodes}
+        routings={routings}
         routingFor={routingFor}
         routingsFor={routingsFor}
         resName={resName}
