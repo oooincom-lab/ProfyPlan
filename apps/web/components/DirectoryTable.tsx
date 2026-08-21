@@ -63,6 +63,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
   const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
   const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
   const [deleteCheckTarget, setDeleteCheckTarget] = useState<{ id: string; name: string } | null>(null);
+  const [selId, setSelId] = useState<string | null>(null);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
 
@@ -209,6 +210,15 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
             </button>
           </>
         )}
+        {onSelect && (
+          <button
+            disabled={!selId}
+            onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onSelect(row); }}
+            style={{ background: selId ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : '#1E3252', border: '1px solid ' + (selId ? '#3B82F6' : '#2A4060'), borderRadius: 6, color: selId ? '#fff' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 14px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+          >
+            ✓ Выбрать
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -238,12 +248,21 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
                 </span>
               </th>
             ))}
-            <th style={{ width: 70, padding: '6px 10px', borderBottom: '1px solid #1E3252' }} />
+            {!onSelect && <th style={{ width: 70, padding: '6px 10px', borderBottom: '1px solid #1E3252' }} />}
           </tr>
         </thead>
         <tbody>
           {filtered.map(row => (
-            <tr key={row.id} style={{ borderBottom: '1px solid #162844' }}>
+            <tr
+              key={row.id}
+              onClick={onSelect ? () => setSelId(row.id) : undefined}
+              onDoubleClick={onSelect ? () => onSelect(row) : undefined}
+              style={{
+                borderBottom: '1px solid #162844',
+                background: onSelect && selId === row.id ? 'rgba(59,130,246,.12)' : undefined,
+                cursor: onSelect ? 'pointer' : undefined,
+              }}
+            >
               {columns.map(c => (
                 <td key={c.key} style={{ padding: '7px 10px', color: '#B0C4DE' }}>
                   {editingId === row.id && c.editable !== false ? (
@@ -261,22 +280,21 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
                   )}
                 </td>
               ))}
-              <td style={{ padding: '4px 6px', display: 'flex', gap: 4 }}>
-                {onSelect && (
-                  <button onClick={() => onSelect(row)} style={{ background: '#1E3252', border: '1px solid #3B82F6', borderRadius: 4, color: '#93C5FD', cursor: 'pointer', fontSize: 11, padding: '2px 10px', whiteSpace: 'nowrap' }} title="Выбрать">Выбрать</button>
-                )}
-                {!onSelect && (editingId === row.id ? (
-                  <>
-                    <button onClick={() => saveEdit(row.id)} style={{ background: 'none', border: 'none', color: '#10B981', cursor: 'pointer', fontSize: 12 }}>✓</button>
-                    <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }}>✕</button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => { setEditingId(row.id); setEditVals({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
-                    <button onClick={() => deleteRow(row.id, row.name || row.specification_name || '')} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
-                  </>
-                ))}
-              </td>
+              {!onSelect && (
+                <td style={{ padding: '4px 6px', display: 'flex', gap: 4 }}>
+                  {editingId === row.id ? (
+                    <>
+                      <button onClick={() => saveEdit(row.id)} style={{ background: 'none', border: 'none', color: '#10B981', cursor: 'pointer', fontSize: 12 }}>✓</button>
+                      <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { setEditingId(row.id); setEditVals({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
+                      <button onClick={() => deleteRow(row.id, row.name || row.specification_name || '')} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
+                    </>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
           {/* New row */}
@@ -312,7 +330,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
             </tr>
           )}
           {filtered.length === 0 && !adding && (
-            <tr><td colSpan={columns.length + 1} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Нет данных</td></tr>
+            <tr><td colSpan={columns.length + (onSelect ? 0 : 1)} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Нет данных</td></tr>
           )}
         </tbody>
       </table>
