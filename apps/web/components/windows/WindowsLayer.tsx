@@ -43,6 +43,7 @@ type WindowsLayerProps = {
   onBomNodeQuantity: (nodeId: string, value: number) => void;
   onBomNodeRemove: (nodeId: string) => void;
   onBomNodeAdd: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
+  onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
 };
 
 const TAB_LIST: { v: OrderTab; l: string }[] = [
@@ -66,6 +67,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
+    onRoutingOpUpdate,
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
@@ -269,7 +271,20 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                 <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
                               </div>
                               <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
-                                Ресурс: {resName(op.resource_type_id)}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
+                                {w.editing ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    <span style={{ flexShrink: 0 }}>Ресурс:</span>
+                                    <DirectoryPicker
+                                      entity="resources"
+                                      apiBase="https://profyplan.ru/api"
+                                      value={(() => { const cr = resourcesList.find((x: any) => x.id === op.resource_type_id || x.name === op.resource_type_id); return cr ? cr.id : null; })()}
+                                      onChange={(v) => onRoutingOpUpdate(op.id, { resource_type_id: v })}
+                                      placeholder="Выбрать ресурс..."
+                                    />
+                                  </div>
+                                ) : (
+                                  <>Ресурс: {resName(op.resource_type_id)}</>
+                                )}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
                               </div>
                             </div>
                           ))}

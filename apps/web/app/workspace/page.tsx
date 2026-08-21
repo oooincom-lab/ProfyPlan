@@ -568,6 +568,20 @@ export default function AppShell() {
     } catch (e: any) { setMsg('Ошибка добавления узла: ' + (e.message || String(e))); }
   };
 
+  const reloadRoutings = async () => {
+    try {
+      const r = await apiF<any>('/bom/routings?page_size=200').catch(() => null);
+      if (r && Array.isArray(r.items)) setRoutings(r.items);
+    } catch {}
+  };
+
+  const handleRoutingOpUpdate = async (opId: string, patch: Record<string, any>) => {
+    try {
+      await apiF(`/bom/routing-operations/${opId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      await reloadRoutings();
+    } catch (e: any) { setMsg('Ошибка сохранения операции: ' + (e.message || String(e))); }
+  };
+
   // BOM-узлы заказа + BOM подчинённых заказов (тусклые, через order_id на узлах)
   const orderBomNodesWithSuborders = (o: any) => {
     const projId = selectedProject?.id || '';
@@ -3052,6 +3066,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onBomNodeQuantity={handleBomNodeQuantity}
         onBomNodeRemove={handleBomNodeRemove}
         onBomNodeAdd={handleBomNodeAdd}
+        onRoutingOpUpdate={handleRoutingOpUpdate}
         onOpenDirectory={openDirectory}
       />
     )}

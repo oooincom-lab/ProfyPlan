@@ -22,7 +22,7 @@ from app.models.routing import Routing, RoutingOperation
 from app.models.operation import Operation, OperationDependency
 from app.schemas.bom import (
     BOMNodeCreate, BOMNodeUpdate, BOMNodeOut, BOMTreeOut, BOMUploadResult,
-    RoutingCreate, RoutingOut, RoutingOpOut, RoutingList,
+    RoutingCreate, RoutingOut, RoutingOpOut, RoutingOpUpdate, RoutingList,
     BOMExplosionOut, BOMExplodeAndSaveRequest, BOMExplodeAndSaveOut,
     ExplodedOpOut, ExplodedDepOut,
 )
@@ -469,6 +469,35 @@ async def get_routing(
         notes=routing.notes,
         operations=[RoutingOpOut.model_validate(op) for op in ops],
     )
+
+
+@bom_router.patch("/routing-operations/{operation_id}", response_model=RoutingOpOut)
+async def update_routing_operation(
+    operation_id: UUID,
+    body: RoutingOpUpdate,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Обновить операцию маршрута (ресурс, длительность и т.д.). Тенант-скоп через маршрут."""
+    op = (await db.execute(
+        select(RoutingOperation)
+        .join(Routing, RoutingOperation.routing_id == Routing.id)
+        .where(RoutingOperation.id == operation_id, Routing.tenant_id == tenant_id)
+    )).scalars().first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Routing operation not found")
+
+    data = body.model_dump(exclude_unset=True)
+    # Пустая строка в resource_type_id = снять ресурс (null)
+    if data.get("resource_type_id") == "":
+        data["resource_type_id"] = None
+
+    for k, v in data.items():
+        setattr(op, k, v)
+
+    await db.commit()
+    await db.refresh(op)
+    return RoutingOpOut.model_validate(op)
 
 
 # ── BOM Explosion (Развёртка в CPM-операции) ──

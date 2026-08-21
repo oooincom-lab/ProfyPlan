@@ -138,6 +138,21 @@ class RoutingOpOut(BaseModel):
     ext_id: Optional[str] = None
 
 
+class RoutingOpUpdate(BaseModel):
+    """Частичное обновление операции маршрута (PATCH)."""
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    duration_hours: Optional[Decimal] = Field(default=None, ge=0)
+    setup_hours: Optional[Decimal] = Field(default=None, ge=0)
+    teardown_hours: Optional[Decimal] = Field(default=None, ge=0)
+    resource_type_id: Optional[str] = None
+    stage: Optional[str] = None
+    stage_name: Optional[str] = None
+    department: Optional[str] = None
+    output_quantity: Optional[Decimal] = Field(default=None, ge=0)
+    yield_rate: Optional[Decimal] = Field(default=None, ge=0, le=1)
+    notes: Optional[str] = None
+
+
 class RoutingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
