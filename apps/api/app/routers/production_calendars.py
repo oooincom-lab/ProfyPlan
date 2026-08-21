@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -219,9 +219,9 @@ async def import_xmlcalendar(
     )
     item = existing.scalar_one_or_none()
     if item:
-        for dd in item.days:
-            await db.delete(dd)
-        await db.flush()
+        await db.execute(
+            delete(ProductionCalendarDay).where(ProductionCalendarDay.calendar_id == item.id)
+        )
         item.name = _make_name(country, year)
         item.source = "xmlcalendar"
         item.status = "ok"
@@ -243,6 +243,7 @@ async def import_xmlcalendar(
             )
         )
     await db.commit()
+    db.expire_all()
     res = await db.execute(
         select(ProductionCalendar).options(_load_days()).where(ProductionCalendar.id == item.id)
     )
@@ -290,9 +291,9 @@ async def update_item(
         setattr(item, k, v)
 
     if days is not None:
-        for dd in item.days:
-            await db.delete(dd)
-        await db.flush()
+        await db.execute(
+            delete(ProductionCalendarDay).where(ProductionCalendarDay.calendar_id == item.id)
+        )
         for dc in days:
             db.add(
                 ProductionCalendarDay(
@@ -301,6 +302,7 @@ async def update_item(
             )
 
     await db.commit()
+    db.expire_all()
     res = await db.execute(
         select(ProductionCalendar).options(_load_days()).where(ProductionCalendar.id == item.id)
     )
