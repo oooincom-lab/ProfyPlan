@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
+import DirectoryTable from '@/components/DirectoryTable';
+import DirectoryPicker from '@/components/DirectoryPicker';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -17,12 +19,14 @@ type WindowsLayerProps = {
   isDyn: (o: any) => boolean;
   orderBomNodes: (o: any) => any[];
   routingFor: (o: any) => any;
+  routingsFor: (o: any) => any[];
   resName: (rid: any) => string;
   onOpenOrder: (o: any) => void;
   onOpenGroup: (g: any) => void;
   onOpenPool: (p: any) => void;
   renderOrdersTable?: () => any;
   renderBomWindow?: (w: WinRec) => any;
+  onOpenDirectory: (entity: string) => void;
   onClose: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleMin: (id: string) => void;
@@ -52,8 +56,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const {
     wins, lay, snapZone, setWins, setLay,
     orders, resourcesList, groups, pools, isDyn,
-    orderBomNodes, routingFor, resName,
-    onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow,
+    orderBomNodes, routingFor, routingsFor, resName,
+    onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
   } = props;
 
@@ -66,6 +70,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
+    if (w.kind === 'dir') return w.title || 'Справочник';
     const o = w.data || orderById(w.orderId);
     const base = o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + base : base;
@@ -73,6 +78,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
   const winFullTitle = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
+    if (w.kind === 'dir') return w.title || 'Справочник';
     const o = w.data || orderById(w.orderId);
     const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + full : full;
@@ -94,8 +100,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
       {wins.map((w: WinRec) => {
         const isList = w.kind === 'list';
         const isBom = w.kind === 'bom';
-        const o = isList ? null : (w.data || orderById(w.orderId));
-        if (!isList && !o) return null;
+        const isDir = w.kind === 'dir';
+        const o = (isList || isDir) ? null : (w.data || orderById(w.orderId));
+        if (!isList && !isDir && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
         const renderBomNode = (n: any, d: number): any => {
@@ -122,8 +129,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
             onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
             <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : '#3B82F6', flexShrink: 0 }} />
-              <span className="ttl">{isList ? (w.title || 'Список') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : isDir ? '#10B981' : '#3B82F6', flexShrink: 0 }} />
+              <span className="ttl">{isList ? (w.title || 'Список') : isDir ? (w.title || 'Справочник') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
               <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
               <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
                 {w.max
@@ -134,7 +141,22 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
             </div>
 
-            {!isList && !isBom && (
+            {!isList && !isBom && !isDir && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', flexShrink: 0 }}>
+                <span style={{ flex: 1, minWidth: 0, color: '#8FA3BD', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o!.specification_name || o!.ext_id || ''}</span>
+                {!w.editing ? (
+                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
+                    style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
+                ) : (
+                  <>
+                    <button onClick={() => onSaveEdit(w)} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ Сохранить</button>
+                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x))} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Отмена</button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {!isList && !isBom && !isDir && (
               <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
                 {TAB_LIST.map(tb => (
                   <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v, editing: false } : x))}
@@ -145,6 +167,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
             <div style={{ padding: '12px 14px', overflow: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
               {isBom && (renderBomWindow ? renderBomWindow(w) : null)}
+              {isDir && (
+                <DirectoryTable entity={w.data?.entity || ''} columns={w.data?.columns || []} apiBase="https://profyplan.ru/api" />
+              )}
               {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
                 <table className="tbl">
                   <thead><tr>
@@ -187,54 +212,57 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Пулов нет</div>
               )}
 
-              {!isList && !isBom && w.tab === 'order' && !w.editing && (
-                <div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client: o!.client || '', quantity: String(o!.quantity ?? ''), priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
-                      style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                    {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', o!.priority || '—'], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
-                      <div key={kv[0]} style={{ display: 'contents' }}>
-                        <div style={{ color: '#5A7090' }}>{kv[0]}</div>
-                        <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
-                      </div>
-                    ))}
-                  </div>
+              {!isList && !isBom && !isDir && w.tab === 'order' && !w.editing && (
+                <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
+                  {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', o!.priority || '—'], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
+                    <div key={kv[0]} style={{ display: 'contents' }}>
+                      <div style={{ color: '#5A7090' }}>{kv[0]}</div>
+                      <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
+                    </div>
+                  ))}
                 </div>
               )}
-              {!isList && !isBom && w.tab === 'order' && w.editing && (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {([['client', 'Клиент'], ['quantity', 'Кол-во'], ['priority', 'Приоритет'], ['start_date', 'Старт'], ['due_date', 'Финиш'], ['status', 'Статус']] as const).map((kv) => {
-                    const k = kv[0] as string, label = kv[1] as string;
-                    return (
-                      <label key={k} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8 }}>
-                        <span style={{ color: '#8FA3BD', fontSize: 12 }}>{label}</span>
-                        {k === 'priority' ? (
-                          <select value={w.form[k] || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                            <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
-                          </select>
-                        ) : k === 'status' ? (
-                          <select value={w.form[k] || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                            <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
-                          </select>
-                        ) : (
-                          <input value={w.form[k] || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
-                        )}
-                      </label>
-                    );
-                  })}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                    <button onClick={() => onSaveEdit(w)} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Сохранить</button>
-                    <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x))} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, cursor: 'pointer' }}>Отмена</button>
-                  </div>
+              {!isList && !isBom && !isDir && w.tab === 'order' && w.editing && (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Клиент</span>
+                    <DirectoryPicker entity="counterparties" apiBase="https://profyplan.ru/api" value={w.form.client_id || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, client_id: v } } : x))} placeholder="Выбрать контрагента..." onManage={() => onOpenDirectory('counterparties')} />
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Кол-во</span>
+                    <input type="number" value={w.form.quantity || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, quantity: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Ед. изм.</span>
+                    <DirectoryPicker entity="units" apiBase="https://profyplan.ru/api" value={w.form.unit || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, unit: v } } : x))} displayField="symbol_ru" valueField="symbol_int" subField="symbol_int" placeholder="Выбрать единицу..." onManage={() => onOpenDirectory('units')} />
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритет</span>
+                    <select value={w.form.priority || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, priority: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                      <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                    </select>
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Старт</span>
+                    <input type="date" value={w.form.start_date || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, start_date: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Финиш</span>
+                    <input type="date" value={w.form.due_date || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, due_date: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Статус</span>
+                    <select value={w.form.status || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, status: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
+                      <option value="draft">Черновик</option><option value="active">В работе</option><option value="completed">Завершён</option>
+                    </select>
+                  </label>
                 </div>
               )}
-              {!isList && !isBom && w.tab === 'bom' && (
+              {!isList && !isBom && !isDir && w.tab === 'bom' && (
                 bomNodes.length ? <div>{bomNodes.filter((n: any) => !n.parent_id).map((n: any) => renderBomNode(n, 0))}</div>
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
-              {!isList && !isBom && w.tab === 'route' && (
+              {!isList && !isBom && !isDir && w.tab === 'route' && (
                 rt && rt.operations && rt.operations.length ? (
                   <div>
                     <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 8 }}>⛓ {rt.name || 'Маршрут'} · {rt.operations.length} оп. · {rtTotal} ч{rt.variant ? ' · вариант ' + rt.variant : ''}</div>
@@ -253,11 +281,14 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 ) : <div style={{ color: '#5A7090' }}>Маршрут не задан. Привяжите маршрут к корневому узлу спецификации (BOM → узел → routing_id).</div>
               )}
-              {!isList && !isBom && w.tab === 'res' && (
-                resourcesList.length ? (
+              {!isList && !isBom && !isDir && w.tab === 'res' && (() => {
+                const used = new Set<string>();
+                for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
+                const ordRes = resourcesList.filter((r: any) => used.has(r.id) || used.has(r.name));
+                return ordRes.length ? (
                   <div>
-                    <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Справочник ресурсов: {resourcesList.length}</div>
-                    {resourcesList.map((r: any) => (
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Ресурсы заказа: {ordRes.length}</div>
+                    {ordRes.map((r: any) => (
                       <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
                         <span style={{ flex: 1 }}>{r.name}</span>
                         <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
@@ -266,9 +297,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       </div>
                     ))}
                   </div>
-                ) : <div style={{ color: '#5A7090' }}>Справочник ресурсов пуст.</div>
-              )}
-              {!isList && !isBom && w.tab === 'plan' && (
+                ) : <div style={{ color: '#5A7090' }}>У заказа нет задействованных ресурсов.</div>;
+              })()}
+              {!isList && !isBom && !isDir && w.tab === 'plan' && (
                 <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
                   План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
                 </div>
@@ -341,7 +372,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 title={winFullTitle(w)}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : w.kind === 'bom' ? '#A78BFA' : '#3B82F6'), flexShrink: 0 }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : w.kind === 'bom' ? '#A78BFA' : w.kind === 'dir' ? '#10B981' : '#3B82F6'), flexShrink: 0 }} />
                 {winLabel(w)}
                 {w.editing && <span className="pp-tchip-dirty" title="Есть несохранённые изменения" />}
                 <span className="pp-tchip-x" title="Закрыть"

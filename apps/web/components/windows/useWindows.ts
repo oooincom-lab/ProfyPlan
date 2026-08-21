@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom';
+  kind: 'order' | 'list' | 'bom' | 'dir';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -147,6 +147,33 @@ export function useWindows(sidebarWidth: number = 260) {
       y: top,
       w: d.w - MX * 2,
       h: Math.max(160, d.h - (top - d.y) - 16),
+      min: false,
+      z: winZ.current,
+      tab: 'order' as const,
+      editing: false,
+      form: {},
+    }]);
+  };
+
+  const openDirWin = (entity: string, title: string, columns: any[]) => {
+    const d = deskRect();
+    const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
+    if (ex) {
+      winZ.current += 1;
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current } : w));
+      return;
+    }
+    winZ.current += 1;
+    setWins(prev => [...prev, {
+      id: 'd' + Date.now().toString(36),
+      kind: 'dir' as const,
+      orderId: '',
+      data: { entity, columns },
+      title,
+      x: d.x + 60,
+      y: d.y + 40,
+      w: Math.min(840, d.w - 80),
+      h: Math.min(560, d.h - 80),
       min: false,
       z: winZ.current,
       tab: 'order' as const,
@@ -354,7 +381,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openBomWin, openListWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, openDirWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

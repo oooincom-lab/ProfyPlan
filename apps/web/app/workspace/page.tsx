@@ -357,7 +357,12 @@ export default function AppShell() {
 
   const openDirectory = (entity: string) => {
     const cfg = DIR_COLUMNS[entity];
-    if (cfg) setDirManager({ title: cfg.title, entity, columns: cfg.columns });
+    if (!cfg) return;
+    if (listWinMode) {
+      win.openDirWin(entity, cfg.title, cfg.columns);
+    } else {
+      setDirManager({ title: cfg.title, entity, columns: cfg.columns });
+    }
   };
 
   const startEditOrder = () => {
@@ -2924,6 +2929,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         resourcesList={resourcesList}
         orderBomNodes={orderBomNodes}
         routingFor={routingFor}
+        routingsFor={routingsFor}
         resName={resName}
         groups={projGroups}
         pools={projPools}
@@ -2943,6 +2949,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onResize={win.startResize}
         onApplyCell={win.applySnapCell}
         onSaveEdit={saveWinEdit}
+        onOpenDirectory={openDirectory}
       />
     )}
 
