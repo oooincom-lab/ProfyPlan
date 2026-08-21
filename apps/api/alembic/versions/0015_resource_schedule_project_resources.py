@@ -1,6 +1,6 @@
 """Add resources.schedule_id + create project_resources (привязка графика к ресурсу + регистр ресурсов проекта)
 
-Revision ID: 0015_resource_schedule_project_resources
+Revision ID: 0015_resource_sched_pr
 Revises: 0014_resource_country_code
 Create Date: 2026-08-21
 """
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 
-revision = "0015_resource_schedule_project_resources"
+revision = "0015_resource_sched_pr"
 down_revision = "0014_resource_country_code"
 branch_labels = None
 depends_on = None
