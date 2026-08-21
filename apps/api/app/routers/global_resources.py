@@ -35,6 +35,7 @@ def _to_out(r: Resource) -> ResourceOut:
 
 
 @router.get("", response_model=list[ResourceOut])
+@router.get("/", response_model=list[ResourceOut])
 async def list_global_resources(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
