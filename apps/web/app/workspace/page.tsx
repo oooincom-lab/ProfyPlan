@@ -1172,9 +1172,22 @@ export default function AppShell() {
     if (!selectedProject) return;
     if (!newGroupInput) { setNewGroupInput(true); setNewGroupName(''); return; }
     if (!newGroupName.trim()) { setNewGroupInput(false); return; }
-    await apiF(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: newGroupName.trim() }) });
+    const created = await apiF<any>(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: newGroupName.trim() }) });
     setNewGroupInput(false);
-    await loadProjectGroups(selectedProject);
+    setNewGroupName('');
+    // Сразу открываем «мастер» новой группы — редактор с заказами/пулами
+    const g = created && created.id ? created : null;
+    const [o, gs, pl] = await Promise.all([
+      apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`),
+      apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`),
+      apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`),
+    ]);
+    setOrders(o); setGroups(prev => ({ ...prev, [selectedProject.id]: gs.items })); setPools(prev => ({ ...prev, [selectedProject.id]: pl.items }));
+    if (g) {
+      setSelectedGroup(g);
+      setEditingGroup(true);
+      setView('project-groups');
+    }
   };
 
   const delGroup = (gid: string, gname: string) => {
