@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, type CSSProperties } from 'react';
+import ResourceForm, { typeLabel, capUnitLabel } from './ResourceForm';
 
 const API = 'https://profyplan.ru/api/v1';
 
@@ -32,18 +33,6 @@ type Assignment = {
 
 type Project = { id: string; name: string; country_code?: string };
 
-const RES_TYPES: { v: string; l: string }[] = [
-  { v: 'equipment', l: 'Оборудование' },
-  { v: 'employee', l: 'Сотрудник' },
-  { v: 'team', l: 'Бригада' },
-  { v: 'line', l: 'Линия' },
-  { v: 'area', l: 'Участок' },
-];
-const CAP_UNITS = ['hour', 'day', 'shift'];
-const COUNTRIES = ['RU', 'BY', 'KZ'];
-
-const typeLabel = (v: string) => RES_TYPES.find(t => t.v === v)?.l || v;
-const capUnitLabel = (v: string) => (v === 'hour' ? 'час' : v === 'day' ? 'день' : v === 'shift' ? 'смена' : v);
 const shareLabel = (v: number | string) => `${Math.round(parseFloat(String(v ?? 1)) * 100)}%`;
 const periodLabel = (a: Assignment) => {
   const f = a.date_from ? a.date_from.slice(0, 10) : '';
@@ -52,7 +41,7 @@ const periodLabel = (a: Assignment) => {
   return `${f || '…'} – ${t || '…'}`;
 };
 
-export default function ResourceManager({ projects }: { projects: Project[] }) {
+export default function ResourceManager({ projects, listWinMode = false, onOpenResEdit }: { projects: Project[]; listWinMode?: boolean; onOpenResEdit?: (res: any | null) => void }) {
   // Глобальный справочник
   const [rows, setRows] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,11 +94,14 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
   const schedName = (id?: string | null) => (id ? (schedules.find((s: any) => s.id === id)?.name || '—') : null);
 
   const openNew = () => {
+    const blank = { resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour', unit: '', country_code: '', schedule_id: '' };
+    if (listWinMode && onOpenResEdit) { onOpenResEdit(null); return; }
     setEditingId(null);
-    setForm({ resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour', unit: '', country_code: '', schedule_id: '' });
+    setForm(blank);
     setFormOpen(true);
   };
   const openEdit = (r: Resource) => {
+    if (listWinMode && onOpenResEdit) { onOpenResEdit(r); return; }
     setEditingId(r.id);
     setForm({
       name: r.name, resource_type: r.resource_type,
@@ -191,55 +183,17 @@ export default function ResourceManager({ projects }: { projects: Project[] }) {
         {error && <div style={{ color: '#FCA5A5', fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
 
         {formOpen && (
-          <div style={{ background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, padding: 14, marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#E8EEF5', marginBottom: 10 }}>{editingId ? 'Редактирование ресурса' : 'Новый ресурс'}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: 'span 2' }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Название</span>
-                <input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} style={input()} placeholder="Станок / Бригада" />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Тип</span>
-                <select value={form.resource_type || 'equipment'} onChange={e => setForm({ ...form, resource_type: e.target.value })} style={input()}>
-                  {RES_TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
-                </select>
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Мощность</span>
-                <input type="number" step="0.1" min="0" value={form.capacity_per_unit || ''} onChange={e => setForm({ ...form, capacity_per_unit: e.target.value })} style={input()} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Ед. мощности</span>
-                <select value={form.capacity_unit || 'hour'} onChange={e => setForm({ ...form, capacity_unit: e.target.value })} style={input()}>
-                  {CAP_UNITS.map(u => <option key={u} value={u}>{capUnitLabel(u)}</option>)}
-                </select>
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Ед. продукции</span>
-                <input value={form.unit || ''} onChange={e => setForm({ ...form, unit: e.target.value })} style={input()} placeholder="шт / кг" />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Страна (календарь)</span>
-                <select value={form.country_code || ''} onChange={e => setForm({ ...form, country_code: e.target.value })} style={input()}>
-                  <option value="">Наследовать от проекта</option>
-                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>График (по умолчанию)</span>
-                <select value={form.schedule_id || ''} onChange={e => setForm({ ...form, schedule_id: e.target.value })} style={input()}>
-                  <option value="">— не задан —</option>
-                  {schedules.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </label>
+          <>
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.6)', zIndex: 9990, backdropFilter: 'blur(4px)' }} onClick={() => { setFormOpen(false); setEditingId(null); setForm({}); }} />
+            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 640, maxWidth: '92vw', maxHeight: '86vh', overflow: 'auto', zIndex: 9991, background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252', borderRadius: 14, padding: 20, boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#E8EEF5' }}>{editingId ? '🔧 Редактирование ресурса' : '🔧 Новый ресурс'}</span>
+                <button onClick={() => { setFormOpen(false); setEditingId(null); setForm({}); }} style={{ background: 'transparent', border: 'none', color: '#5A7090', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+              </div>
+              <ResourceForm form={form} onChange={patch => setForm({ ...form, ...patch })} schedules={schedules} saving={saving} onSave={save} onCancel={() => { setFormOpen(false); setEditingId(null); setForm({}); }} />
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button onClick={save} disabled={saving} style={btn('#3B82F6')}>{saving ? 'Сохранение…' : '✓ Сохранить'}</button>
-              <button onClick={() => { setFormOpen(false); setEditingId(null); setForm({}); }} style={ghost()}>Отмена</button>
-            </div>
-          </div>
+          </>
         )}
-
         {loading ? <div style={{ color: '#5A7090', fontSize: 13 }}>Загрузка…</div> : (
           rows.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#5A7090' }}>

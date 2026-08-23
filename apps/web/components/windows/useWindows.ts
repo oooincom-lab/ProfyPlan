@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom' | 'dir';
+  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -22,6 +22,7 @@ export type WinRec = {
   z: number;
   tab: OrderTab;
   editing: boolean;
+  saving?: boolean;
   form: Record<string, string>;
 };
 
@@ -153,6 +154,38 @@ export function useWindows(sidebarWidth: number = 260) {
       editing: false,
       form: {},
     }]);
+  };
+
+  const openResEdit = (res: any | null) => {
+    const d = deskRect();
+    const w = Math.min(620, d.w - 80);
+    const h = Math.min(540, d.h - 80);
+    const id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    winZ.current += 1;
+    setWins(prev => [...prev, {
+      id,
+      kind: 'resedit' as const,
+      orderId: '',
+      data: res,
+      title: res ? 'Редактирование ресурса' : 'Новый ресурс',
+      x: d.x + Math.max(28, (d.w - w) / 2),
+      y: d.y + Math.max(18, (d.h - h) / 2),
+      w,
+      h,
+      min: false,
+      z: winZ.current,
+      tab: 'order' as const,
+      editing: false,
+      form: res ? {
+        name: res.name || '', resource_type: res.resource_type || 'equipment',
+        capacity_per_unit: String(res.capacity_per_unit ?? 1), capacity_unit: res.capacity_unit || 'hour',
+        unit: res.unit || '', country_code: res.country_code || '', schedule_id: res.schedule_id || '',
+      } : {
+        name: '', resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour',
+        unit: '', country_code: '', schedule_id: '',
+      },
+    }]);
+    return id;
   };
 
   const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void) => {
@@ -385,7 +418,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openBomWin, openListWin, openDirWin, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, openDirWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

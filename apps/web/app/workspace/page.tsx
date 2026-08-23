@@ -132,6 +132,7 @@ export default function AppShell() {
   const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[] } | null>(null);
   const [routings, setRoutings] = useState<any[]>([]);
   const [resourcesList, setResourcesList] = useState<any[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
   // Логика и состояние вынесены в useWindows() / WindowsLayer (components/windows).
   const sidebarWidth = menuMode === 'auto' ? 0 : (sidebarCollapsed ? 64 : 260);
@@ -302,6 +303,8 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProject?.id]);
 
+  useEffect(() => { apiF<any[]>('/work-schedules/').then(s => { if (Array.isArray(s)) setWorkSchedules(s); }).catch(() => {}); }, []);
+
   // ── Панель заказа: режимы, данные, действия ──
   const setTreeMode = (m: 'both' | 'bom' | 'routes') => { setTreeModeState(m); try { localStorage.setItem('profyplan_tree_mode', m); } catch {} };
   const setPanelMode = (m: 'side' | 'modal' | 'window') => {
@@ -326,6 +329,32 @@ export default function AppShell() {
       if (r && Array.isArray(r.items)) setRoutings(r.items);
       if (Array.isArray(rs)) setResourcesList(rs);
     } catch {}
+  };
+
+  // Сохранение ресурса из MDI-окна «resedit» (режим «окна для списков»)
+  const saveResourceEdit = async (w: WinRec) => {
+    const f = w.form || {};
+    if (!f.name?.trim()) { setMsg('Укажите название ресурса'); return; }
+    win.setWins(prev => prev.map(x => x.id === w.id ? { ...x, saving: true } : x));
+    const body: Record<string, any> = {
+      name: f.name.trim(),
+      resource_type: f.resource_type || 'equipment',
+      capacity_per_unit: parseFloat(String(f.capacity_per_unit).replace(',', '.')) || 1,
+      capacity_unit: f.capacity_unit || 'hour',
+      unit: f.unit?.trim() || null,
+      country_code: (f.country_code || '').trim().toUpperCase() || null,
+      schedule_id: (f.schedule_id || '').trim() || null,
+      is_active: true,
+    };
+    try {
+      if (w.data && w.data.id) await apiF(`/resources/${w.data.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      else await apiF('/resources', { method: 'POST', body: JSON.stringify(body) });
+      win.closeWin(w.id);
+      try { const rs = await apiF<any[]>('/resources'); if (Array.isArray(rs)) setResourcesList(rs); } catch {}
+    } catch (e: any) {
+      setMsg(String(e));
+      win.setWins(prev => prev.map(x => x.id === w.id ? { ...x, saving: false } : x));
+    }
   };
 
   const selOrder = selOrderId ? (orders.find((o: any) => o.id === selOrderId) || null) : null;
@@ -2781,7 +2810,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager />}
           {view === 'production-calendars' && <ProductionCalendarManager />}
 
-          {view === 'resources' && <ResourceManager projects={projects} />}
+          {view === 'resources' && <ResourceManager projects={projects} listWinMode={listWinMode} onOpenResEdit={(res) => win.openResEdit(res)} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
@@ -3098,6 +3127,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onRoutingOpUpdate={handleRoutingOpUpdate}
         onPickResource={openResourcePick}
         onOpenDirectory={openDirectory}
+        schedules={workSchedules}
+        onSaveResourceEdit={saveResourceEdit}
       />
     )}
 

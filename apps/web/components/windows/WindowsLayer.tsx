@@ -6,6 +6,7 @@ import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
+import ResourceForm from '@/components/ResourceForm';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -45,6 +46,8 @@ type WindowsLayerProps = {
   onBomNodeAdd: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
   onPickResource: (opId: string) => void;
+  schedules?: any[];
+  onSaveResourceEdit?: (w: WinRec) => void;
 };
 
 const TAB_LIST: { v: OrderTab; l: string }[] = [
@@ -69,6 +72,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource,
+    schedules = [], onSaveResourceEdit,
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
@@ -81,6 +85,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
+    if (w.kind === 'resedit') return w.title || 'Ресурс';
     const o = w.data || orderById(w.orderId);
     const base = o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + base : base;
@@ -89,6 +94,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const winFullTitle = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
+    if (w.kind === 'resedit') return w.title || 'Ресурс';
     const o = w.data || orderById(w.orderId);
     const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + full : full;
@@ -111,8 +117,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         const isList = w.kind === 'list';
         const isBom = w.kind === 'bom';
         const isDir = w.kind === 'dir';
-        const o = (isList || isDir) ? null : (w.data || orderById(w.orderId));
-        if (!isList && !isDir && !o) return null;
+        const isResEdit = w.kind === 'resedit';
+        const o = (isList || isDir || isResEdit) ? null : (w.data || orderById(w.orderId));
+        if (!isList && !isDir && !isResEdit && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
 
@@ -121,8 +128,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
             onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
             <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : isDir ? '#10B981' : '#3B82F6', flexShrink: 0 }} />
-              <span className="ttl">{isList ? (w.title || 'Список') : isDir ? (w.title || 'Справочник') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : isDir ? '#10B981' : isResEdit ? '#F59E0B' : '#3B82F6', flexShrink: 0 }} />
+              <span className="ttl">{isList ? (w.title || 'Список') : isDir ? (w.title || 'Справочник') : isResEdit ? (w.title || 'Ресурс') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
               <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
               <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
                 {w.max
@@ -133,7 +140,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
             </div>
 
-            {!isList && !isBom && !isDir && (
+            {!isList && !isBom && !isDir && !isResEdit && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', flexShrink: 0 }}>
                 <span style={{ flex: 1, minWidth: 0, color: '#8FA3BD', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o!.specification_name || o!.ext_id || ''}</span>
                 {!w.editing ? (
@@ -148,7 +155,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               </div>
             )}
 
-            {!isList && !isBom && !isDir && (
+            {!isList && !isBom && !isDir && !isResEdit && (
               <div style={{ display: 'flex', borderBottom: '1px solid #1E3252', flexShrink: 0 }}>
                 {TAB_LIST.map(tb => (
                   <button key={tb.v} onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, tab: tb.v } : x))}
@@ -161,6 +168,16 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               {isBom && (renderBomWindow ? renderBomWindow(w) : null)}
               {isDir && (
                 <DirectoryTable entity={w.data?.entity || ''} columns={w.data?.columns || []} apiBase="https://profyplan.ru/api" onSelect={w.data?.onSelect} />
+              )}
+              {isResEdit && (
+                <ResourceForm
+                  form={w.form}
+                  onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
+                  schedules={schedules}
+                  saving={!!w.saving}
+                  onSave={() => onSaveResourceEdit && onSaveResourceEdit(w)}
+                  onCancel={() => onClose(w.id)}
+                />
               )}
               {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
                 <table className="tbl">
@@ -204,7 +221,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Пулов нет</div>
               )}
 
-              {!isList && !isBom && !isDir && w.tab === 'order' && !w.editing && (
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && !w.editing && (
                 <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
                   {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', o!.priority || '—'], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
                     <div key={kv[0]} style={{ display: 'contents' }}>
@@ -214,7 +231,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   ))}
                 </div>
               )}
-              {!isList && !isBom && !isDir && w.tab === 'order' && w.editing && (
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && w.editing && (
                 <div style={{ display: 'grid', gap: 10 }}>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Клиент</span>
@@ -250,11 +267,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </label>
                 </div>
               )}
-              {!isList && !isBom && !isDir && w.tab === 'bom' && (
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'bom' && (
                 bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} />
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
-              {!isList && !isBom && !isDir && w.tab === 'route' && (() => {
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'route' && (() => {
                 const rts = routingsFor(o);
                 if (!rts.length) return <div style={{ color: '#5A7090' }}>Маршруты не заданы. Привяжите маршруты к узлам спецификации (BOM → узел → routing_id).</div>;
                 return (
@@ -299,7 +316,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 );
               })()}
-              {!isList && !isBom && !isDir && w.tab === 'res' && (() => {
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'res' && (() => {
                 const used = new Set<string>();
                 for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
                 const ordRes = resourcesList.filter((r: any) => used.has(r.id) || used.has(r.name));
@@ -317,7 +334,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 ) : <div style={{ color: '#5A7090' }}>У заказа нет задействованных ресурсов.</div>;
               })()}
-              {!isList && !isBom && !isDir && w.tab === 'plan' && (
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'plan' && (
                 <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
                   План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
                 </div>
@@ -390,7 +407,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 title={winFullTitle(w)}
                 onClick={() => { if (w.min || !active) onFocus(w.id); else onToggleMin(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : w.kind === 'bom' ? '#A78BFA' : w.kind === 'dir' ? '#10B981' : '#3B82F6'), flexShrink: 0 }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.min ? '#F59E0B' : (w.kind === 'list' ? '#22D3EE' : w.kind === 'bom' ? '#A78BFA' : w.kind === 'dir' ? '#10B981' : w.kind === 'resedit' ? '#F59E0B' : '#3B82F6'), flexShrink: 0 }} />
                 {winLabel(w)}
                 {w.editing && <span className="pp-tchip-dirty" title="Есть несохранённые изменения" />}
                 <span className="pp-tchip-x" title="Закрыть"
