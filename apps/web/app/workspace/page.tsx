@@ -1075,7 +1075,6 @@ export default function AppShell() {
 
   const loadProjectOrdersView = async (p: any) => {
     setSelectedProject(p);
-    loadPanelData(p);
     loadBomTree(p.id);
     if (listWinMode) {
       try {
