@@ -112,7 +112,11 @@ export default function AppShell() {
   const [panelMode, setPanelModeState] = useState<'side' | 'modal' | 'window'>(() => {
     if (typeof window === 'undefined') return 'side';
     const v = localStorage.getItem('profyplan_panel_mode');
-    return v === 'modal' ? 'modal' : v === 'window' ? 'window' : 'side';
+    if (v === 'modal') return 'modal';
+    if (v === 'window') return 'window';
+    // Миграция старой настройки «Окна для списков» → единый режим
+    if (v == null && localStorage.getItem('profyplan_list_windows') === '1') return 'window';
+    return 'side';
   });
   const [menuMode, setMenuModeState] = useState<'expanded' | 'manual' | 'auto'>(() => {
     if (typeof window === 'undefined') return 'expanded';
@@ -148,12 +152,6 @@ export default function AppShell() {
     win.openListWin(pendingList.kind, pendingList.title, dockTop);
     setPendingList(null);
   }, [pendingList, view]);
-
-  // ── «Окна для списков»: список заказов открывается окном поверх дашборда ──
-  const [listWinMode, setListWinModeState] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('profyplan_list_windows') === '1';
-  });
 
   const [projectOrders, setProjectOrders] = useState<Record<string, any[]>>({});
   const [sidebarSec, setSidebarSec] = useState<string | null>(null);
@@ -364,7 +362,7 @@ export default function AppShell() {
       loadBomTree(selectedProject.id);
       loadPanelData(selectedProject);
     }
-    if (panelMode === 'window' || listWinMode) { win.openWin(o); return; }
+    if (panelMode === 'window') { win.openWin(o); return; }
     setSelOrderId(o.id);
     setPanelTab('order');
     setPanelEditing(false);
@@ -383,8 +381,6 @@ export default function AppShell() {
     setSelectedPool(p); setSelectedProject(selectedProject); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false);
     (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })();
   };
-
-  const setListWinMode = (v: boolean) => { setListWinModeState(v); try { localStorage.setItem('profyplan_list_windows', v ? '1' : '0'); } catch {} };
 
   const routingFor = (o: any): any | null => {
     if (!routings.length) return null;
@@ -410,7 +406,7 @@ export default function AppShell() {
   const openDirectory = (entity: string) => {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
-    if (listWinMode) {
+    if (panelMode === 'window') {
       win.openDirWin(entity, cfg.title, cfg.columns);
     } else {
       setDirManager({ title: cfg.title, entity, columns: cfg.columns });
@@ -556,7 +552,7 @@ export default function AppShell() {
       loadBomAnomalies(selectedProject.id);
       loadBomTree(selectedProject.id);
     }
-    if (panelMode === 'window' || listWinMode) { win.openBomWin(o); return; }
+    if (panelMode === 'window') { win.openBomWin(o); return; }
     setBomModalOrder(o);
   };
 
@@ -1105,7 +1101,7 @@ export default function AppShell() {
   const loadProjectOrdersView = async (p: any) => {
     setSelectedProject(p);
     loadBomTree(p.id);
-    if (listWinMode) {
+    if (panelMode === 'window') {
       try {
         const [o, g, pl] = await Promise.all([
           apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -1171,7 +1167,7 @@ export default function AppShell() {
   const loadProjectGroups = async (p: any) => {
     setSelectedProject(p);
     loadBomTree(p.id);
-    if (listWinMode) {
+    if (panelMode === 'window') {
       try {
         const [o, g, pl] = await Promise.all([
           apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -1227,7 +1223,7 @@ export default function AppShell() {
   const loadProjectPools = async (p: any) => {
     setSelectedProject(p);
     loadBomTree(p.id);
-    if (listWinMode) {
+    if (panelMode === 'window') {
       try {
         const [o, g, pl] = await Promise.all([
           apiF<any[]>(`/production-orders/?project_id=${p.id}`),
@@ -2022,13 +2018,13 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
               </>
             )}
-            {view === 'project-groups' && listWinMode && !selectedGroup && (
+            {view === 'project-groups' && panelMode === 'window' && !selectedGroup && (
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
               {newGroupInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewGroupInput(false);else if(e.key==='Enter')addGroup()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addGroup} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewGroupInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
               </>
             )}
-            {view === 'project-pools' && listWinMode && !selectedPool && (
+            {view === 'project-pools' && panelMode === 'window' && !selectedPool && (
               <>
                 <button onClick={addPool} className="btn btn-primary btn-sm">+ Пул</button>
               {newPoolInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newPoolName} onChange={e=>setNewPoolName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewPoolInput(false);else if(e.key==='Enter')addPool()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addPool} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
@@ -2169,7 +2165,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           )}
 
           {/* ═══ PROJECT ORDERS ═══ */}
-          {view === 'project-orders' && (listWinMode ? <div ref={dashHeadRef}>{renderSectionDashboard()}</div> : renderOrdersView())}
+          {view === 'project-orders' && (panelMode === 'window' ? <div ref={dashHeadRef}>{renderSectionDashboard()}</div> : renderOrdersView())}
 
           {/* ═══ PROJECT GANTT ═══ */}
           {view === 'project-gantt' && (
@@ -2314,7 +2310,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           )}
 
           {/* ═══ PROJECT GROUPS ═══ */}
-          {view === 'project-groups' && !selectedGroup && (listWinMode ? (<div ref={dashHeadRef}>{renderSectionDashboard()}</div>) : (
+          {view === 'project-groups' && !selectedGroup && (panelMode === 'window' ? (<div ref={dashHeadRef}>{renderSectionDashboard()}</div>) : (
             <>
               <div className="panel">
                 <div className="panel-hdr">
@@ -2420,7 +2416,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           ))}
 
           {/* ═══ PROJECT POOLS ═══ */}
-          {view === 'project-pools' && !selectedPool && (listWinMode ? (<div ref={dashHeadRef}>{renderSectionDashboard()}</div>) : (
+          {view === 'project-pools' && !selectedPool && (panelMode === 'window' ? (<div ref={dashHeadRef}>{renderSectionDashboard()}</div>) : (
             <>
               {/* ── Dashboard KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
@@ -2810,7 +2806,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager />}
           {view === 'production-calendars' && <ProductionCalendarManager />}
 
-          {view === 'resources' && <ResourceManager projects={projects} listWinMode={listWinMode} onOpenResEdit={(res) => win.openResEdit(res)} />}
+          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} onOpenResEdit={(res) => win.openResEdit(res)} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
@@ -2886,17 +2882,17 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     ⚠ Проверка выполняется при открытии BOM заказа: полуфабрикаты без маршрута и без подчинённого заказа подсвечиваются, создание заказа — одним кликом. Полуфабрикаты-«фантомы» (прозрачные узлы) исключены из проверки.
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🗂 Панель заказа</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🗂 Интерфейс работы со списками</div>
                     <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
-                      Как открывать окно заказа при клике на заказ в списке.
+                      Как открываются заказы, справочники и редакторы: встроенно, модально или в отдельных окнах.
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      {([['side', 'Сбоку'], ['modal', 'Модальное'], ['window', 'Окна']] as const).map((kv) => (
+                      {([['side', 'Встроенно'], ['modal', 'Модально'], ['window', 'Окна (MDI)']] as const).map((kv) => (
                         <button key={kv[0]} onClick={() => setPanelMode(kv[0])} style={{ flex: 1, border: '1px solid ' + (panelMode === kv[0] ? 'rgba(59,130,246,.6)' : '#1E3252'), background: panelMode === kv[0] ? 'rgba(59,130,246,.14)' : '#0A1628', color: panelMode === kv[0] ? '#fff' : '#8FA3BD', borderRadius: 8, padding: '9px 10px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{kv[1]}</button>
                       ))}
                     </div>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
-                      {panelMode === 'window' ? 'Окна: несколько заказов одновременно, перетаскивание, прилипание к краям (Snap), сетка раскладок «⛶», панель задач внизу.' : panelMode === 'modal' ? 'Модальное — поверх списка, закрытие по ✕ или Esc.' : 'Сбоку — панель закреплена справа от списка, ширину меняют перетаскиванием разделителя.'}
+                      {panelMode === 'window' ? 'Окна (MDI): заказы, справочники и редакторы открываются отдельными окнами — перетаскивание, прилипание к краям (Snap), сетка раскладок «⛶», панель задач внизу.' : panelMode === 'modal' ? 'Модально — заказы и справочники открываются поверх списка, закрытие по ✕ или Esc.' : 'Встроенно — заказ открывается в панели справа от списка, справочники и редакторы — inline поверх списка.'}
                     </div>
                   </div>
                   <div>
@@ -2924,19 +2920,6 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     </label>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
                       При выключении окна перетаскиваются свободно, без прилипания к краям и без раскладки Snap.
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🪟 Окна для списков</div>
-                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
-                      Открывать списки (заказы, группы, пулы) отдельным окном поверх дашборда вместо полного экрана.
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={listWinMode} onChange={e => setListWinMode(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
-                      <span style={{ fontSize: 13 }}>Включить окна для списков</span>
-                    </label>
-                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
-                      При включении клик по «📋 Заказы», «📁 Группы» или «📦 Пулы» открывает список в окне поверх дашборда; клик по строке — окно заказа или редактор группы/пула.
                     </div>
                   </div>
                   <div>

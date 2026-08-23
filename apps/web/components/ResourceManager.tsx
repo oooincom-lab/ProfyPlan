@@ -41,7 +41,7 @@ const periodLabel = (a: Assignment) => {
   return `${f || '…'} – ${t || '…'}`;
 };
 
-export default function ResourceManager({ projects, listWinMode = false, onOpenResEdit }: { projects: Project[]; listWinMode?: boolean; onOpenResEdit?: (res: any | null) => void }) {
+export default function ResourceManager({ projects, windowMode = false, onOpenResEdit }: { projects: Project[]; windowMode?: boolean; onOpenResEdit?: (res: any | null) => void }) {
   // Глобальный справочник
   const [rows, setRows] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,13 +95,13 @@ export default function ResourceManager({ projects, listWinMode = false, onOpenR
 
   const openNew = () => {
     const blank = { resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour', unit: '', country_code: '', schedule_id: '' };
-    if (listWinMode && onOpenResEdit) { onOpenResEdit(null); return; }
+    if (windowMode && onOpenResEdit) { onOpenResEdit(null); return; }
     setEditingId(null);
     setForm(blank);
     setFormOpen(true);
   };
   const openEdit = (r: Resource) => {
-    if (listWinMode && onOpenResEdit) { onOpenResEdit(r); return; }
+    if (windowMode && onOpenResEdit) { onOpenResEdit(r); return; }
     setEditingId(r.id);
     setForm({
       name: r.name, resource_type: r.resource_type,
