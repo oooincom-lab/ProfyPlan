@@ -414,13 +414,20 @@ async def list_routings(
         .offset((page - 1) * page_size).limit(page_size)
     )).scalars().all()
 
+    # Операции всех маршрутов страницы — одним запросом (без N+1)
+    ops_by_routing: dict = {}
+    if routings:
+        routing_ids = [r.id for r in routings]
+        all_ops = (await db.execute(
+            select(RoutingOperation)
+            .where(RoutingOperation.routing_id.in_(routing_ids))
+            .order_by(RoutingOperation.routing_id, RoutingOperation.sequence_number)
+        )).scalars().all()
+        for op in all_ops:
+            ops_by_routing.setdefault(op.routing_id, []).append(op)
+
     items = []
     for r in routings:
-        ops = (await db.execute(
-            select(RoutingOperation).where(
-                RoutingOperation.routing_id == r.id,
-            ).order_by(RoutingOperation.sequence_number)
-        )).scalars().all()
         items.append(RoutingOut(
             id=str(r.id),
             tenant_id=str(r.tenant_id),
@@ -430,7 +437,7 @@ async def list_routings(
             is_default=r.is_default,
             total_setup_hours=r.total_setup_hours,
             notes=r.notes,
-            operations=[RoutingOpOut.model_validate(op) for op in ops],
+            operations=[RoutingOpOut.model_validate(op) for op in ops_by_routing.get(r.id, [])],
         ))
 
     return RoutingList(items=items, total=total)
