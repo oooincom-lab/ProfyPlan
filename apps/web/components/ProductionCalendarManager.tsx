@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, type CSSProperties } from 'react';
+import DebugBadge from './DebugBadge';
 
 const API = 'https://profyplan.ru/api/v1';
 
@@ -95,7 +96,7 @@ function parseImport(text: string): Day[] {
   return out;
 }
 
-export default function ProductionCalendarManager() {
+export default function ProductionCalendarManager({ debug = false }: { debug?: boolean }) {
   const [list, setList] = useState<Calendar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -274,6 +275,7 @@ export default function ProductionCalendarManager() {
     <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <span style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>📅 Производственные календари</span>
+        <DebugBadge debug={debug} text="[pcalendar:manager]" copy="[pcalendar:manager] «Производственные календари»" />
         {!editing && (
           <>
             <button onClick={startNew} style={btn('#3B82F6')}>＋ Новый календарь</button>

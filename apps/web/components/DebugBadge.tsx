@@ -12,12 +12,15 @@ export default function DebugBadge({
   text,
   copy,
   debug = false,
+  corner = false,
 }: {
   /** Короткая подпись в бейдже, напр. [order:openWin #2] */
   text: string;
   /** Полный текст для копирования (по умолчанию = text) */
   copy?: string;
   debug?: boolean;
+  /** Позиционировать поверх контейнера (угол карточки/области) */
+  corner?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   if (!debug) return null;
@@ -69,6 +72,7 @@ export default function DebugBadge({
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         display: 'inline-block',
+        ...(corner ? { position: 'absolute' as const, top: 5, right: 5, zIndex: 9 } : {}),
       }}
     >
       {copied ? '✓ скопировано' : text}

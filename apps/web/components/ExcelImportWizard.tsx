@@ -7,16 +7,18 @@
 import { useState, useRef, useCallback } from 'react';
 import { importProductionOrders, explodeAndSaveBOM, runCPM } from '@/lib/api';
 import type { ImportValidationError as ImportError, ExcelImportResult } from '@/lib/api';
+import DebugBadge from './DebugBadge';
 
 interface Props {
   projectId: string;
   onComplete?: (result: ExcelImportResult) => void;
   onClose: () => void;
+  debug?: boolean;
 }
 
 type Step = 'upload' | 'importing' | 'result' | 'exploding' | 'done';
 
-export default function ExcelImportWizard({ projectId, onComplete, onClose }: Props) {
+export default function ExcelImportWizard({ projectId, onComplete, onClose, debug = false }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -134,6 +136,7 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose }: Pr
           <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
             Импорт заказов и BOM
           </h3>
+          <DebugBadge debug={debug} text="[import:wizard]" copy="[import:wizard] «Импорт заказов и BOM»" />
           <div style={{ flex: 1 }} />
           <button onClick={onClose} style={{
             background: 'none', border: 'none', color: 'var(--fg-2, #B0C4DE)',

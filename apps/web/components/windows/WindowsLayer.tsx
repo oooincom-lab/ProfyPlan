@@ -413,6 +413,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
       {wins.length > 0 && (
         <div className="pp-taskbar">
+          {debug && <DebugBadge debug={debug} text="[area:taskbar]" />}
           {wins.map((w: WinRec, idx: number) => {
             const active = w.z === maxZ && !w.min;
             return (

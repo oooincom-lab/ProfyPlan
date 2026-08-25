@@ -1271,11 +1271,11 @@ export default function AppShell() {
 
   const renderSectionDashboard = () => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
-      <div className="kpi-card"><div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
-      <div className="kpi-card"><div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
-      <div className="kpi-card"><div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
-      <div className="kpi-card"><div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
-      <div className="kpi-card"><div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
+      <div className="kpi-card" data-module="dash:metric:orders">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:orders]" copy="[dash:metric:orders] «Всего заказов»" />}<div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
+      <div className="kpi-card" data-module="dash:metric:dyn">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:dyn]" copy="[dash:metric:dyn] «Динамические»" />}<div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
+      <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] «В работе»" />}<div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
+      <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
+      <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Пулов»" />}<div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
     </div>
   );
 
@@ -1772,7 +1772,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
   const css = `
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter',sans-serif;background:#0A1628;color:#E8EEF5}
-    .kpi-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:18px 20px;transition:all .15s}
+    .kpi-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:18px 20px;transition:all .15s};position:relative
     .kpi-card:hover{border-color:#2A4060;transform:translateY(-1px)}
     .kpi-label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#60A5FA;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
     .kpi-val{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
@@ -1809,7 +1809,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     .btn-sm{font-size:11px;padding:4px 10px}
     .group-card{background:rgba(59,130,246,.04);border:1px solid #1E3252;border-radius:12px;padding:16px 20px;margin-bottom:12px}
     .s-logo{width:34px;height:34px;background:linear-gradient(135deg,#3B82F6,#2563EB);border-radius:9px;box-shadow:0 4px 14px rgba(59,130,246,.35);flex-shrink:0}
-    .proj-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:20px;transition:all .15s;cursor:pointer}
+    .proj-card{background:linear-gradient(135deg,#0F1E36,#162844);border:1px solid #1E3252;border-radius:12px;padding:20px;transition:all .15s;cursor:pointer};position:relative
     .proj-card:hover{border-color:#2A4060;transform:translateY(-1px)}
     .proj-card .pc-name{font-size:16px;font-weight:600;margin-bottom:4px}
     .proj-card .pc-meta{font-size:12px;color:#5A7090;font-family:'IBM Plex Mono',monospace;margin-bottom:12px}
@@ -1986,12 +1986,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         collapsed={effCollapsed}
         menuMode={menuMode}
         onAutoHide={() => { if (autoEnabled) setSidebarCollapsed(true); }}
+        debug={debugMode}
       />
 
       {/* ═══ MAIN ═══ */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, gridColumn: 2 }}>
         {/* Topbar */}
         <div className="topbar" style={menuMode === 'auto' ? { paddingLeft: effCollapsed ? 52 : 8, transition: 'padding-left .22s ease' } : undefined}>
+          {debugMode && <DebugBadge debug={debugMode} text="[area:header]" />}
           {menuMode !== 'expanded' && (
             <button
               onClick={() => {
@@ -2043,22 +2045,22 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           </div>
         </div>
 
-        <div style={{ padding: '20px 28px 48px', flex: 1, overflow: 'auto' }}>
+        <div style={{ padding: '20px 28px 48px', flex: 1, overflow: 'auto' }} data-module={`area:content:${view}`}>{debugMode && <DebugBadge debug={debugMode} corner text={`[area:content:${view}]`} />}
           {/* ═══ DASHBOARD ═══ */}
           {view === 'dashboard' && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
-                <div className="kpi-card"><div className="kpi-label">Всего проектов</div><div className="kpi-val">{projects.length}</div><div className="kpi-sub">активных: {projects.filter((p: any) => p.status === 'active').length}</div></div>
-                <div className="kpi-card"><div className="kpi-label">Заказов</div><div className="kpi-val g">{orders.length || '—'}</div><div className="kpi-sub">выберите проект</div></div>
-                <div className="kpi-card"><div className="kpi-label">Динамических</div><div className="kpi-val g">{dynCount || '—'}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
-                <div className="kpi-card"><div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress || '—'}</div><div className="kpi-sub">активных заказов</div></div>
-                <div className="kpi-card"><div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical || '—'}</div><div className="kpi-sub">High + Critical</div></div>
+                <div className="kpi-card" data-module="dash:metric:projects">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:projects]" copy="[dash:metric:projects] «Всего проектов»" />}<div className="kpi-label">Всего проектов</div><div className="kpi-val">{projects.length}</div><div className="kpi-sub">активных: {projects.filter((p: any) => p.status === 'active').length}</div></div>
+                <div className="kpi-card" data-module="dash:metric:orders">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:orders]" copy="[dash:metric:orders] «Заказов»" />}<div className="kpi-label">Заказов</div><div className="kpi-val g">{orders.length || '—'}</div><div className="kpi-sub">выберите проект</div></div>
+                <div className="kpi-card" data-module="dash:metric:dyn">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:dyn]" copy="[dash:metric:dyn] «Динамических»" />}<div className="kpi-label">Динамических</div><div className="kpi-val g">{dynCount || '—'}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
+                <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] «В работе»" />}<div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress || '—'}</div><div className="kpi-sub">активных заказов</div></div>
+                <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical || '—'}</div><div className="kpi-sub">High + Critical</div></div>
               </div>
               <div className="panel">
                 <div className="panel-hdr"><span className="panel-title">Последние проекты</span></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-                  {projects.slice(0, 4).map((p: any) => (
-                    <div key={p.id} className="proj-card" onClick={() => loadProjectDashboard(p)}>
+                  {projects.slice(0, 4).map((p: any, pi: number) => (
+                    <div key={p.id} className="proj-card" data-module="dash:card:project" onClick={() => loadProjectDashboard(p)}>{debugMode && <DebugBadge debug={debugMode} corner text={`[dash:card:project #${pi + 1}]`} />}
                       <div className="pc-name">{p.name}</div>
                       <div className="pc-meta">{p.status} · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
                       <div className="pc-actions">
@@ -2078,8 +2080,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <div style={{ fontSize: 34, color: '#3B82F6', lineHeight: 1, fontWeight: 300 }}>+</div>
                 <div style={{ fontWeight: 600, color: '#60A5FA', fontSize: 14 }}>Новый проект</div>
               </div>
-              {projects.filter((p: any) => p.status !== 'archived').map((p: any) => (
-                <div key={p.id} className="proj-card">
+              {projects.filter((p: any) => p.status !== 'archived').map((p: any, pi: number) => (
+                <div key={p.id} className="proj-card" data-module="dash:card:project">{debugMode && <DebugBadge debug={debugMode} corner text={`[dash:card:project #${pi + 1}]`} />}
                   <div className="pc-name">📁 {p.name}</div>
                   <div className="pc-meta">{p.status} · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -2111,8 +2113,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   <div>Архивированные проекты появятся здесь</div>
                 </div>
               )}
-              {projects.filter((p: any) => p.status === 'archived').map((p: any) => (
-                <div key={p.id} className="proj-card" style={{ opacity: 0.7 }}>
+              {projects.filter((p: any) => p.status === 'archived').map((p: any, pi: number) => (
+                <div key={p.id} className="proj-card" style={{ opacity: 0.7 }} data-module="dash:card:project">{debugMode && <DebugBadge debug={debugMode} corner text={`[dash:card:project #${pi + 1}]`} />}
                   <div className="pc-name">📦 {p.name}</div>
                   <div className="pc-meta">архив · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -2128,11 +2130,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'project-dashboard' && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
-                <div className="kpi-card"><div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
-                <div className="kpi-card"><div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
-                <div className="kpi-card"><div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
-                <div className="kpi-card"><div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
-                <div className="kpi-card"><div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
+                <div className="kpi-card" data-module="dash:metric:orders">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:orders]" copy="[dash:metric:orders] «Всего заказов»" />}<div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
+                <div className="kpi-card" data-module="dash:metric:dyn">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:dyn]" copy="[dash:metric:dyn] «Динамические»" />}<div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
+                <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] «В работе»" />}<div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
+                <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
+                <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Пулов»" />}<div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
               </div>
 
               {projGroups.length > 0 && projGroups.map((g: any) => {
@@ -2428,10 +2430,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             <>
               {/* ── Dashboard KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-                <div className="kpi-card"><div className="kpi-label">Пулов</div><div className="kpi-val v">{projPools.length}</div><div className="kpi-sub">CCM-объединений</div></div>
-                <div className="kpi-card"><div className="kpi-label">В пулах</div><div className="kpi-val g">{orders.filter((o: any) => !!o.pool_id).length}</div><div className="kpi-sub">заказов</div></div>
-                <div className="kpi-card"><div className="kpi-label">Свободных</div><div className="kpi-val">{orders.filter((o: any) => !o.pool_id).length}</div><div className="kpi-sub">доступно</div></div>
-                <div className="kpi-card"><div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
+                <div className="kpi-card" data-module="dash:metric:pools">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:pools]" copy="[dash:metric:pools] «Пулов»" />}<div className="kpi-label">Пулов</div><div className="kpi-val v">{projPools.length}</div><div className="kpi-sub">CCM-объединений</div></div>
+                <div className="kpi-card" data-module="dash:metric:pooled">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:pooled]" copy="[dash:metric:pooled] «В пулах»" />}<div className="kpi-label">В пулах</div><div className="kpi-val g">{orders.filter((o: any) => !!o.pool_id).length}</div><div className="kpi-sub">заказов</div></div>
+                <div className="kpi-card" data-module="dash:metric:free">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:free]" copy="[dash:metric:free] «Свободных»" />}<div className="kpi-label">Свободных</div><div className="kpi-val">{orders.filter((o: any) => !o.pool_id).length}</div><div className="kpi-sub">доступно</div></div>
+                <div className="kpi-card" data-module="dash:metric:orders">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:orders]" copy="[dash:metric:orders] «Всего заказов»" />}<div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
               </div>
 
               {/* ── Pool cards grid ── */}
@@ -2569,6 +2571,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'project-pools' && selectedPool && editingPool && (
             <PoolEditor
               pool={selectedPool}
+              debug={debugMode}
               orders={orders}
               onClose={() => setEditingPool(false)}
               onRefresh={() => { (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrders(o); setPools(prev => ({ ...prev, [selectedProject.id]: pr.items })); } catch (e: any) { setMsg(String(e)); } })(); }}
@@ -2726,6 +2729,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'project-groups' && selectedGroup && editingGroup && (
             <GroupEditor
               group={selectedGroup}
+              debug={debugMode}
               orders={orders}
               pools={projPools}
               onClose={() => setEditingGroup(false)}
@@ -2811,8 +2815,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </div>
           )}
 
-          {view === 'work-schedules' && <WorkScheduleManager />}
-          {view === 'production-calendars' && <ProductionCalendarManager />}
+          {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} />}
+          {view === 'production-calendars' && <ProductionCalendarManager debug={debugMode} />}
 
           {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} />}
 
@@ -3160,6 +3164,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           borderRadius: 10, padding: '4px 0', minWidth: 180,
           boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
         }}>
+          {debugMode && <DebugBadge debug={debugMode} corner text="[ctx:menu]" />}
           <button onClick={() => { setDirectoryModal(sidebarCtx.view); setSidebarCtx(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
             📋 Открыть список
           </button>
@@ -3222,6 +3227,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     {importProjectId && (
       <ExcelImportWizard
         projectId={importProjectId}
+        debug={debugMode}
         onClose={() => setImportProjectId(null)}
         onComplete={() => { setImportProjectId(null); refresh(); }}
       />
@@ -3231,6 +3237,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     {deleteCheckEntity && (
       <DeleteCheckDialog
         entityType={deleteCheckEntity.type}
+        debug={debugMode}
         entityId={deleteCheckEntity.id}
         entityName={deleteCheckEntity.name}
         result={deleteCheckResult}

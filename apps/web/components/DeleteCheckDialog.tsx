@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import DebugBadge from './DebugBadge';
 
 interface DeleteCheckResult {
   entity: { type: string; id: string; name: string; label: string };
@@ -19,9 +20,10 @@ interface DeleteCheckDialogProps {
   result?: DeleteCheckResult | null;
   loading?: boolean;
   error?: string | null;
+  debug?: boolean;
 }
 
-export default function DeleteCheckDialog({ entityType, entityId, entityName, onClose, onDeleted, result, loading, error }: DeleteCheckDialogProps) {
+export default function DeleteCheckDialog({ entityType, entityId, entityName, onClose, onDeleted, result, loading, error, debug = false }: DeleteCheckDialogProps) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -83,7 +85,10 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
           .dc-loader{display:flex;align-items:center;justify-content:center;padding:40px;color:#64748B;font-size:14px}
         `}</style>
         <div className="dc-header">
-          <h2 className="dc-title">⚠️ Удаление {result?.entity.label.toLowerCase() || entityType}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h2 className="dc-title" style={{ margin: 0 }}>⚠️ Удаление {result?.entity.label.toLowerCase() || entityType}</h2>
+            <DebugBadge debug={debug} text="[delete:dialog]" copy={`[delete:dialog] «${result?.entity.label.toLowerCase() || entityType}»`} />
+          </div>
           <div className="dc-entity">{result?.entity.name || entityName || entityId}</div>
         </div>
         <div className="dc-body">

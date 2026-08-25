@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import OrderTree, { TreeChevron } from './OrderTree';
+import DebugBadge from './DebugBadge';
 
 type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
@@ -44,6 +45,7 @@ interface SidebarProps {
   collapsed: boolean;
   menuMode: 'expanded' | 'manual' | 'auto';
   onAutoHide: () => void;
+  debug?: boolean;
 }
 
 export default function Sidebar(props: SidebarProps) {
@@ -59,6 +61,7 @@ export default function Sidebar(props: SidebarProps) {
     selectedGroup, onSelectGroup,
     onOpenOrder, onOpenGroup, onOpenPool,
     collapsed, menuMode, onAutoHide,
+    debug = false,
   } = props;
 
   // Internal expand state — independent multiselect
@@ -288,7 +291,7 @@ export default function Sidebar(props: SidebarProps) {
         className={`s-item ${view === 'dashboard' ? 'active' : ''}`}
         onClick={() => navTo('dashboard')}
       >
-        📊 Рабочий стол
+        📊 Рабочий стол{debug && <DebugBadge debug={debug} text="[nav:dashboard]" />}
       </button>
 
       {/* Проекты */}
@@ -319,6 +322,7 @@ export default function Sidebar(props: SidebarProps) {
         >
           <span className="s-folder" style={{ color: 'var(--s-folder-all)' }} /> Все проекты
         </span>
+        <>{debug && <DebugBadge debug={debug} text="[nav:projects]" />}</>
       </div>
 
       {expandedProjects && projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
@@ -367,7 +371,7 @@ export default function Sidebar(props: SidebarProps) {
                     onClick={() => loadProjectOrdersView(p)}
                     style={{ cursor: 'pointer' }}
                   >
-                    📋 Заказы
+                    📋 Заказы{debug && <DebugBadge debug={debug} text="[nav:orders]" />}
                   </span>
                   <span className="s-count">
                     {(() => { const free = (projectOrders[p.id] || []).filter((o: any) => !o.group_id && !o.pool_id); return free.length || (expandedOrders === p.id ? '...' : (p.order_count || '—')); })()}
@@ -425,7 +429,7 @@ export default function Sidebar(props: SidebarProps) {
                     onClick={() => { onSelectGroup(null, p); loadProjectGroups(p); }}
                     style={{ cursor: 'pointer' }}
                   >
-                    📁 Группы
+                    📁 Группы{debug && <DebugBadge debug={debug} text="[nav:groups]" />}
                   </span>
                   <span className="s-count">{(groups[p.id] || []).length || '—'}</span>
                 </div>
@@ -462,7 +466,7 @@ export default function Sidebar(props: SidebarProps) {
                     onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}
                     style={{ cursor: 'pointer' }}
                   >
-                    📦 Пулы
+                    📦 Пулы{debug && <DebugBadge debug={debug} text="[nav:pools]" />}
                   </span>
                 </div>
 
@@ -482,15 +486,15 @@ export default function Sidebar(props: SidebarProps) {
                   </div>
                 ))}
 
-                <div className="s-sub" onClick={() => { setSelectedProject(p); setView('settings'); }}>
-                  ⚙️ Настройки
+                <div className="s-sub" onClick={() => { setSelectedProject(p); setView('settings'); }} data-module="nav:proj-settings">
+                  ⚙️ Настройки{debug && <DebugBadge debug={debug} text="[nav:proj-settings]" />}
                 </div>
                 <div
                   className="s-sub"
                   onClick={() => loadProjectGantt(p)}
                   style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
                 >
-                  📊 Диаграмма Ганта
+                  📊 Диаграмма Ганта{debug && <DebugBadge debug={debug} text="[nav:gantt]" />}
                 </div>
               </>
             )}
@@ -514,7 +518,7 @@ export default function Sidebar(props: SidebarProps) {
           onClick={() => navTo('archive')}
           style={{ cursor: 'pointer' }}
         >
-          📦 Архив
+          📦 Архив{debug && <DebugBadge debug={debug} text="[nav:archive]" />}
         </span>
       </div>
 
@@ -555,7 +559,7 @@ export default function Sidebar(props: SidebarProps) {
           onClick={() => navTo('directories')}
           style={{ cursor: 'pointer' }}
         >
-          📚 Справочники
+          📚 Справочники{debug && <DebugBadge debug={debug} text="[nav:directories]" />}
         </span>
       </div>
 
@@ -568,7 +572,7 @@ export default function Sidebar(props: SidebarProps) {
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'nomenclature' }); }}
             onDoubleClick={() => setDirectoryModal('nomenclature')}
           >
-            📦 Номенклатура
+            📦 Номенклатура{debug && <DebugBadge debug={debug} text="[nav:nomenclature]" />}
           </div>
           <div
             className={`s-sub ${view === 'units' ? 'active' : ''}`}
@@ -577,7 +581,7 @@ export default function Sidebar(props: SidebarProps) {
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'units' }); }}
             onDoubleClick={() => setDirectoryModal('units')}
           >
-            📏 Единицы измерения
+            📏 Единицы измерения{debug && <DebugBadge debug={debug} text="[nav:units]" />}
           </div>
           <div
             className={`s-sub ${view === 'resources' ? 'active' : ''}`}
@@ -586,7 +590,7 @@ export default function Sidebar(props: SidebarProps) {
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'resources' }); }}
             onDoubleClick={() => setDirectoryModal('resources')}
           >
-            🔧 Ресурсы
+            🔧 Ресурсы{debug && <DebugBadge debug={debug} text="[nav:resources]" />}
           </div>
           <div
             className={`s-sub ${view === 'work-schedules' ? 'active' : ''}`}
@@ -594,7 +598,7 @@ export default function Sidebar(props: SidebarProps) {
             onClick={() => navTo('work-schedules')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'work-schedules' }); }}
           >
-            🕒 Графики работы
+            🕒 Графики работы{debug && <DebugBadge debug={debug} text="[nav:work-schedules]" />}
           </div>
           <div
             className={`s-sub ${view === 'departments' ? 'active' : ''}`}
@@ -603,7 +607,7 @@ export default function Sidebar(props: SidebarProps) {
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'departments' }); }}
             onDoubleClick={() => setDirectoryModal('departments')}
           >
-            🏢 Подразделения
+            🏢 Подразделения{debug && <DebugBadge debug={debug} text="[nav:departments]" />}
           </div>
           <div
             className={`s-sub ${view === 'organizations' ? 'active' : ''}`}
@@ -612,7 +616,7 @@ export default function Sidebar(props: SidebarProps) {
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'organizations' }); }}
             onDoubleClick={() => setDirectoryModal('organizations')}
           >
-            🏭 Организации
+            🏭 Организации{debug && <DebugBadge debug={debug} text="[nav:organizations]" />}
           </div>
           <div
             className={`s-sub ${view === 'production-calendars' ? 'active' : ''}`}
@@ -620,22 +624,22 @@ export default function Sidebar(props: SidebarProps) {
             onClick={() => navTo('production-calendars')}
             onContextMenu={(e) => { e.preventDefault(); setSidebarCtx({ x: e.clientX, y: e.clientY, view: 'production-calendars' }); }}
           >
-            📅 Производственные календари
+            📅 Производственные календари{debug && <DebugBadge debug={debug} text="[nav:production-calendars]" />}
           </div>
         </>
       )}
 
       {/* Аналитика */}
       <div className="s-sec" style={{ justifyContent: 'flex-start' }}>Аналитика</div>
-      <a href="/ccm-v2" className="s-item" style={{ textDecoration: 'none' }}>📈 CCM</a>
+      <a href="/ccm-v2" className="s-item" style={{ textDecoration: 'none' }}>📈 CCM{debug && <DebugBadge debug={debug} text="[nav:ccm]" />}</a>
       <button className={`s-item ${view === 'reports' ? 'active' : ''}`} onClick={() => navTo('reports')}>
-        📋 Отчёты
+        📋 Отчёты{debug && <DebugBadge debug={debug} text="[nav:reports]" />}
       </button>
 
       {/* Настройки (bottom) */}
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--s-border)', paddingTop: 8 }}>
         <button className={`s-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navTo('settings')}>
-          ⚙️ Настройки
+          ⚙️ Настройки{debug && <DebugBadge debug={debug} text="[nav:settings]" />}
         </button>
       </div>
     </div>

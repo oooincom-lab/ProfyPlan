@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import OrderTree, { TreeChevron } from './OrderTree';
+import DebugBadge from './DebugBadge';
 
 interface Order {
   id: string;
@@ -34,6 +35,7 @@ interface GroupEditorProps {
   onClose: () => void;
   onRefresh: () => void;
   onMoveOrders?: (orderIds: string[], groupId: string | null) => Promise<void>;
+  debug?: boolean;
 }
 
 const btnStyle = (w: number): React.CSSProperties => ({
@@ -126,7 +128,7 @@ function OrderCard({ o, selected, onToggle, colorSet, depth = 0, hasChildren = f
   );
 }
 
-export default function GroupEditor({ group, orders, pools, onClose, onRefresh, onMoveOrders }: GroupEditorProps) {
+export default function GroupEditor({ group, orders, pools, onClose, onRefresh, onMoveOrders, debug = false }: GroupEditorProps) {
   const groupOrders = orders.filter(o => o.group_id === group.id);
   const groupPools = pools.filter(p => p.group_id === group.id);
   const freeOrders = orders.filter(o => !o.group_id && !o.pool_id);
@@ -216,6 +218,7 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
             {totalInGroup} элементов
           </span>
         </div>
+        <DebugBadge debug={debug} text="[group:editor]" copy={`[group:editor] «${group.name}»`} />
         {saving && <span style={{ fontSize: 12, color: '#60A5FA' }}>Сохранение...</span>}
       </div>
 

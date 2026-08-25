@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, type CSSProperties } from 'react';
+import DebugBadge from './DebugBadge';
 
 const API = 'https://profyplan.ru/api/v1';
 
@@ -36,7 +37,7 @@ const dec = (s: string) => {
 
 const MODE_LABEL: Record<string, string> = { weekdays: 'По дням недели', cycle: 'По циклу' };
 
-export default function WorkScheduleManager() {
+export default function WorkScheduleManager({ debug = false }: { debug?: boolean }) {
   const [list, setList] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +197,7 @@ export default function WorkScheduleManager() {
     <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
       <div className="panel-hdr" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>🕒 Графики работы</span>
+        <DebugBadge debug={debug} text="[wschedule:manager]" copy="[wschedule:manager] «Графики работы»" />
         {!editing && <button onClick={startNew} style={btn('#3B82F6')}>＋ Новый график</button>}
       </div>
 

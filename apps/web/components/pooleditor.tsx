@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import OrderTree, { TreeChevron } from './OrderTree';
+import DebugBadge from './DebugBadge';
 
 interface Order {
   id: string;
@@ -27,6 +28,7 @@ interface PoolEditorProps {
   onClose: () => void;
   onRefresh: () => void;
   onMoveOrders?: (orderIds: string[], poolId: string | null) => Promise<void>;
+  debug?: boolean;
 }
 
 const btnStyle = (w: number): React.CSSProperties => ({
@@ -69,7 +71,7 @@ async function moveOrders(orderIds: string[], poolId: string | null) {
   }
 }
 
-export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrders }: PoolEditorProps) {
+export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrders, debug = false }: PoolEditorProps) {
   const poolOrders = orders.filter(o => o.pool_id === pool.id);
   const freeOrders = orders.filter(o => !o.pool_id);
   const poolIds = poolOrders.map(o => o.id);
@@ -155,6 +157,7 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrd
             {poolOrders.length} заказов
           </span>
         </div>
+        <DebugBadge debug={debug} text="[pool:editor]" copy={`[pool:editor] «${pool.name}»`} />
         {saving && <span style={{ fontSize: 12, color: '#60A5FA' }}>Сохранение...</span>}
       </div>
 
