@@ -18,11 +18,13 @@ type Props = {
   columns: ColumnDef[];
   apiBase: string;
   onSelect?: (row: any) => void;
+  onManageEdit?: (row: any) => void;
+  onManageDelete?: (row: any) => void;
   compact?: boolean;
   synonyms?: Record<string, string[]>;
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, compact, synonyms }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, compact, synonyms }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -211,13 +213,31 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, com
           </>
         )}
         {onSelect && (
-          <button
-            disabled={!selId}
-            onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onSelect(row); }}
-            style={{ background: selId ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : '#1E3252', border: '1px solid ' + (selId ? '#3B82F6' : '#2A4060'), borderRadius: 6, color: selId ? '#fff' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 14px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
-          >
-            ✓ Выбрать
-          </button>
+          <>
+            <button
+              disabled={!selId}
+              onClick={() => { const row = filtered.find(r => r.id === selId); if (row && onManageEdit) onManageEdit(row); }}
+              title="Редактировать выбранную запись"
+              style={{ background: selId ? '#162844' : '#1E3252', border: '1px solid #2A4060', borderRadius: 6, color: selId ? '#FCD34D' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              ✏️ Редактировать
+            </button>
+            <button
+              disabled={!selId || !onManageDelete}
+              onClick={() => { const row = filtered.find(r => r.id === selId); if (row && onManageDelete) onManageDelete(row); }}
+              title="Удалить через мастер удаления (проверка связей)"
+              style={{ background: selId && onManageDelete ? 'rgba(239,68,68,.12)' : '#1E3252', border: '1px solid ' + (selId && onManageDelete ? 'rgba(239,68,68,.4)' : '#2A4060'), borderRadius: 6, color: selId && onManageDelete ? '#F87171' : '#5A7090', cursor: selId && onManageDelete ? 'pointer' : 'not-allowed', padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              🗑 Удалить
+            </button>
+            <button
+              disabled={!selId}
+              onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onSelect(row); }}
+              style={{ background: selId ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : '#1E3252', border: '1px solid ' + (selId ? '#3B82F6' : '#2A4060'), borderRadius: 6, color: selId ? '#fff' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 14px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+            >
+              ✓ Выбрать
+            </button>
+          </>
         )}
       </div>
 

@@ -41,6 +41,7 @@ export default function BomExpand(props: BomExpandProps) {
   } = props;
 
   const [treeMode, setTreeMode] = useState<'bom' | 'both' | 'routes'>('both');
+  const [editing, setEditing] = useState(false);
 
   const visible = !anomalies ? [] : (semiPolicy === 'strict'
     ? [...anomalies.no_routing, ...anomalies.no_order, ...anomalies.self_order]
@@ -56,10 +57,25 @@ export default function BomExpand(props: BomExpandProps) {
         <span style={{ opacity: .85 }}>Переключатель «Только свой BOM / Вся цепочка» — сверху.</span>
       </div>
 
-      <div style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2, marginBottom: 10 }}>
-        {([['bom', 'BOM'], ['both', 'BOM + Маршруты'], ['routes', 'Маршруты']] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setTreeMode(v)} style={{ border: 0, background: treeMode === v ? '#3B82F6' : 'transparent', color: treeMode === v ? '#fff' : '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
-        ))}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+        <div style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2 }}>
+          {([['bom', 'BOM'], ['both', 'BOM + Маршруты'], ['routes', 'Маршруты']] as const).map(([v, label]) => (
+            <button key={v} onClick={() => setTreeMode(v)} style={{ border: 0, background: treeMode === v ? '#3B82F6' : 'transparent', color: treeMode === v ? '#fff' : '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
+          ))}
+        </div>
+        <button
+          onClick={() => setEditing(!editing)}
+          title="Включить/выключить редактирование структуры (добавление, удаление, смена заказа)"
+          style={{
+            border: '1px solid ' + (editing ? 'rgba(245,158,11,.5)' : '#1E3A5F'),
+            background: editing ? 'rgba(245,158,11,.12)' : '#0B1B33',
+            color: editing ? '#FCD34D' : '#8FA3BD',
+            borderRadius: 8, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+          }}
+        >
+          {editing ? '✓ Редактирование включено' : '✏️ Редактирование'}
+        </button>
+        <span style={{ fontSize: 11, color: '#5A7090' }}>{editing ? 'Кнопки ＋ ⇥ ✕ и смена заказа доступны' : 'Структура только для просмотра'}</span>
       </div>
 
       {(() => {
@@ -108,11 +124,11 @@ export default function BomExpand(props: BomExpandProps) {
       <BomTree
         nodes={nodes}
         orderName={order.specification_name}
+        editable={editing}
         timeline={timeline}
         timelineDraft={timelineDraft}
         timelineLoading={timelineLoading}
         onLoadTimeline={onLoadTimeline}
-        editable
         orders={orders}
         onNodeOrderChange={onNodeOrderChange}
         chainControl

@@ -31,6 +31,8 @@ type WindowsLayerProps = {
   renderOrdersTable?: () => any;
   renderBomWindow?: (w: WinRec) => any;
   onOpenDirectory: (entity: string) => void;
+  onDirManageEdit?: (entity: string, row: any) => void;
+  onDirManageDelete?: (entity: string, row: any) => void;
   onClose: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleMin: (id: string) => void;
@@ -52,6 +54,12 @@ type WindowsLayerProps = {
   debug?: boolean;
 };
 
+function fmtPreds(p: any): string {
+  if (Array.isArray(p)) return p.join(', ');
+  if (typeof p === 'string' && p.trim()) return p.split(/[;,\s]+/).filter(Boolean).join(', ');
+  return '';
+}
+
 const TAB_LIST: { v: OrderTab; l: string }[] = [
   { v: 'order', l: 'Заказ' },
   { v: 'bom', l: 'Состав' },
@@ -71,6 +79,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     orders, resourcesList, groups, pools, isDyn,
     orderBomNodes, routingFor, routingsFor, resName, routings,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
+    onDirManageEdit, onDirManageDelete,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource,
@@ -186,7 +195,14 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div style={{ padding: '12px 14px', overflow: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
               {isBom && (renderBomWindow ? renderBomWindow(w) : null)}
               {isDir && (
-                <DirectoryTable entity={w.data?.entity || ''} columns={w.data?.columns || []} apiBase="https://profyplan.ru/api" onSelect={w.data?.onSelect} />
+                <DirectoryTable
+                  entity={w.data?.entity || ''}
+                  columns={w.data?.columns || []}
+                  apiBase="https://profyplan.ru/api"
+                  onSelect={w.data?.onSelect}
+                  onManageEdit={w.data?.onManageEdit ? (row: any) => onDirManageEdit?.(w.data?.entity || '', row) : undefined}
+                  onManageDelete={w.data?.onManageDelete ? (row: any) => onDirManageDelete?.(w.data?.entity || '', row) : undefined}
+                />
               )}
               {isResEdit && (
                 <ResourceForm
@@ -305,7 +321,22 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
                                 <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
-                                <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                                {w.editing ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#FCD34D', fontSize: 12 }}>
+                                    <input
+                                      type="number" min="0" step="any"
+                                      defaultValue={Number(op.duration_hours) || 0}
+                                      key={'dur-' + op.id + '-' + (Number(op.duration_hours) || 0)}
+                                      title="Продолжительность операции, ч"
+                                      onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0 && Number(v.toFixed(3)) !== Number(op.duration_hours)) { onRoutingOpUpdate(op.id, { duration_hours: v }); } }}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                      style={{ width: 74, background: '#0A1628', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, color: '#FCD34D', padding: '2px 5px', fontSize: 12, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", outline: 'none' }}
+                                    />
+                                    <span>ч</span>
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
+                                )}
                               </div>
                               <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
                                 {w.editing ? (
@@ -325,7 +356,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                   </div>
                                 ) : (
                                   <>Ресурс: {resName(op.resource_type_id)}</>
-                                )}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{op.predecessors && op.predecessors.length ? ' · Предш.: ' + op.predecessors.join(', ') : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
+                                )}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{fmtPreds(op.predecessors) ? ' · Предш.: ' + fmtPreds(op.predecessors) : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
                               </div>
                             </div>
                           ))}

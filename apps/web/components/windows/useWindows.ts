@@ -188,7 +188,7 @@ export function useWindows(sidebarWidth: number = 260) {
     return id;
   };
 
-  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void) => {
+  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void) => {
     const d = deskRect();
     if (!onSelect) {
       const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
@@ -204,7 +204,7 @@ export function useWindows(sidebarWidth: number = 260) {
       id,
       kind: 'dir' as const,
       orderId: '',
-      data: { entity, columns, onSelect },
+      data: { entity, columns, onSelect, onManageEdit, onManageDelete },
       title,
       x: d.x + 60,
       y: d.y + 40,

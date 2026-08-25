@@ -481,6 +481,24 @@ export default function AppShell() {
     if (next) loadBomTree(selectedProject.id);
   };
 
+  // Переход к заказу по бейджу «производит: …»: раскрыть путь в иерархии,
+  // раскрыть его BOM и прокрутить список к строке заказа.
+  const focusOrderByBom = (orderId: string) => {
+    setCollapsedOrderIds(prev => {
+      const next = new Set(prev);
+      const all = projectOrders[selectedProject?.id || ''] || orders;
+      const byId = new Map(all.map((x: any) => [x.id, x]));
+      let cur: any = byId.get(orderId);
+      while (cur) { next.delete(cur.id); cur = cur.parent_order_id ? byId.get(cur.parent_order_id) : null; }
+      return next;
+    });
+    setExpandedBomOrder(orderId);
+    if (panelMode !== 'window') setView('project-orders');
+    setTimeout(() => {
+      document.getElementById('ord-' + orderId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 150);
+  };
+
   const toggleOrderCollapse = (id: string) => {
     setCollapsedOrderIds(prev => {
       const next = new Set(prev);
@@ -577,6 +595,8 @@ export default function AppShell() {
       }
       await apiF(`/bom/nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify({ order_id: orderId }) });
       await reloadBomTree(selectedProject.id);
+      try { await loadProjectOrders(selectedProject.id); } catch {}
+      try { await refresh(); } catch {}
     } catch (e: any) { setMsg('Ошибка привязки заказа: ' + (e.message || String(e))); }
   };
 
@@ -625,10 +645,11 @@ export default function AppShell() {
   };
 
   const openResourcePick = (opId: string) => {
-    const wid = win.openDirWin('resources', '🔧 Выбор ресурса', DIR_COLUMNS.resources.columns, (row: any) => {
-      handleRoutingOpUpdate(opId, { resource_type_id: row.id });
-      win.closeWin(wid);
-    });
+    const wid = win.openDirWin('resources', '🔧 Выбор ресурса', DIR_COLUMNS.resources.columns,
+      (row: any) => { handleRoutingOpUpdate(opId, { resource_type_id: row.id }); win.closeWin(wid); },
+      (row: any) => win.openResEdit(row),
+      (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id),
+    );
   };
 
   // BOM-узлы заказа + BOM подчинённых заказов (тусклые, через order_id на узлах)
@@ -680,7 +701,7 @@ export default function AppShell() {
     const visit = (nodeId: string) => {
       for (const c of childrenOf[nodeId] || []) {
         if (c.order_id && c.order_id !== o.id) {
-          result.push({ ...c, _ownerId: c.order_id, _ownerExtId: orderLabel(c.order_id) });
+          result.push({ ...c, _ownerId: c.order_id, _ownerExtId: orderLabel(c.order_id), _layerBoundary: ownIds.has(c.parent_id) });
           injectSubtree(c.id, c.id, c.order_id, 1, new Set<string>([o.id, c.order_id]));
         } else if (ownIds.has(c.id)) {
           visit(c.id);
@@ -1494,7 +1515,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           const bomOpen = expandedBomOrder === o.id;
                           return (
                             <Fragment key={o.id}>
-                            <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
+                            <tr id={'ord-' + o.id} draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
                               <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 96, minWidth: 96, maxWidth: 96, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
                                 <span style={{ display: 'inline-block', width: 22, textAlign: 'center' }}>
                                   {hasChildren ? (
@@ -1533,7 +1554,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
@@ -1559,7 +1580,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     maxHeight: 'calc(100vh - 130px)',
                   };
                   const pStyle: any = isModal
-                    ? { ...base, position: 'fixed', top: 68, left: 275, right: 18, bottom: 58, maxHeight: 'none', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
+                    ? { ...base, position: 'fixed', top: 76, right: 26, width: 'min(640px, calc(100vw - 330px))', height: 'auto', maxHeight: 'calc(100vh - 152px)', zIndex: 120, borderColor: 'rgba(59,130,246,.6)', boxShadow: '0 24px 70px rgba(0,0,0,.55)' }
                     : { ...base, width: panelWidth ?? '40%', minWidth: 300, maxWidth: '62%', position: 'sticky', top: 16 };
                   const tabs: { v: 'order' | 'bom' | 'route' | 'res' | 'plan'; l: string }[] = [
                     { v: 'order', l: 'Заказ' }, { v: 'bom', l: 'Состав' }, { v: 'route', l: 'Маршрут' }, { v: 'res', l: 'Ресурсы' }, { v: 'plan', l: 'План' },
@@ -1664,7 +1685,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
-                            bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o.specification_name} />
+                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps showMaterials resName={resName} />
                             : <div style={{ color: '#5A7090' }}>{bomLoading[selectedProject?.id || ''] ? 'Загрузка состава…' : 'Состав пуст — у заказа нет спецификации (BOM).'}</div>
                           )}
                           {o && panelTab === 'route' && (() => {
@@ -1713,6 +1734,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       {ops.map((op: any) => {
                                         const d = det(op);
                                         return (
+                                          <>
                                           <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 6 }}>
                                             <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
                                             {op.stage ? (
@@ -1724,6 +1746,22 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                             </span>
                                             <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
                                           </div>
+                                          {panelEditing && (
+                                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 8px 6px 32px', flexWrap: 'wrap' }}>
+                                              <button type="button" onClick={() => openResourcePick(op.id)} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: op.resource_type_id ? '#E8EEF5' : '#5A7090', padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                                {op.resource_type_id ? ('Ресурс: ' + resName(op.resource_type_id)) : 'Выбрать ресурс...'}
+                                              </button>
+                                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#FCD34D' }}>
+                                                ⏱
+                                                <input type="number" min="0" step="any" defaultValue={Number(op.duration_hours) || 0} key={'pd-' + op.id + '-' + (Number(op.duration_hours) || 0)} title="Продолжительность операции, ч"
+                                                  onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0 && Number(v.toFixed(3)) !== Number(op.duration_hours)) { handleRoutingOpUpdate(op.id, { duration_hours: v }); } }}
+                                                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                  style={{ width: 74, background: '#0A1628', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, color: '#FCD34D', padding: '2px 5px', fontSize: 12, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", outline: 'none' }} />
+                                                <span>ч</span>
+                                              </span>
+                                            </div>
+                                          )}
+                                          </>
                                         );
                                       })}
                                       {kids.map((k: any) => renderRouteNode(k))}
@@ -2553,7 +2591,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                   <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                   <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                 </div>
-                                <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+                                <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                               </div>
                             </td>
                           </tr>
@@ -2669,7 +2707,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                           <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                           <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                         </div>
-                                        <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+                                        <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                                       </div>
                                     </td>
                                   </tr>
@@ -2709,7 +2747,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                                   </div>
                                 </td>
                               </tr>
@@ -3135,6 +3173,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onRoutingOpUpdate={handleRoutingOpUpdate}
         onPickResource={openResourcePick}
         onOpenDirectory={openDirectory}
+        onDirManageEdit={(entity, row) => { if (entity === 'resources') win.openResEdit(row); }}
+        onDirManageDelete={(entity, row) => { if (entity === 'resources') runDeleteCheck('resource', row.id, row.name || row.code || row.id); }}
         schedules={workSchedules}
         onSaveResourceEdit={saveResourceEdit}
         debug={debugMode}
