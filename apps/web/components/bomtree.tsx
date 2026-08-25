@@ -65,6 +65,8 @@ interface BomTreeProps {
   resName?: (rid: any) => string;
   /** Клик по бейджу «производит: …» — перейти к заказу-производителю узла */
   onOrderFocus?: (orderId: string) => void;
+  /** Добавить операцию в маршрут узла (кнопка ⛭ при редактировании) */
+  onRoutingAdd?: (routingId: string) => void;
 }
 
 export interface TimelineOp {
@@ -131,7 +133,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -170,8 +172,10 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
   const tree = useMemo(() => {
     const childrenMap: Record<string, BomTreeNode[]> = {};
     const roots: BomTreeNode[] = [];
+    const idSet = new Set(effectiveNodes.map(n => n.id));
     for (const n of effectiveNodes) {
-      if (n.parent_id) {
+      // Нода с parent_id, которого нет в наборе (обрезанное поддерево заказа), — корень.
+      if (n.parent_id && idSet.has(n.parent_id)) {
         (childrenMap[n.parent_id] ||= []).push(n);
       } else {
         roots.push(n);
@@ -330,6 +334,10 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           </span>
           {editable && (
             <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+              {n.routing_id && (
+                <button type="button" title="Добавить операцию в маршрут" onClick={() => onRoutingAdd?.(n.routing_id!)}
+                  style={{ background: 'rgba(34,211,238,.12)', border: '1px solid rgba(34,211,238,.35)', color: '#22D3EE', borderRadius: 5, width: 20, height: 20, fontSize: 11, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⛭</button>
+              )}
               <button type="button" title="Добавить материал" onClick={() => onNodeAdd?.(n.id, 'material')}
                 style={{ background: 'rgba(52,211,153,.12)', border: '1px solid rgba(52,211,153,.35)', color: '#34D399', borderRadius: 5, width: 20, height: 20, fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>＋</button>
               <button type="button" title="Добавить полуфабрикат" onClick={() => onNodeAdd?.(n.id, 'semi_finished')}

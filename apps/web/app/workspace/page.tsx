@@ -608,14 +608,36 @@ export default function AppShell() {
     } catch (e: any) { setMsg('Ошибка изменения количества: ' + (e.message || String(e))); }
   };
 
-  const handleBomNodeRemove = async (nodeId: string) => {
+  // ── Мастер удаления узла BOM: проверка поддерева вниз по дереву ──
+  const confirmBomNodeDelete = (nodeId: string) => {
     if (!selectedProject) return;
-    if (!window.confirm('Удалить узел BOM и всех его потомков?')) return;
+    const all = bomTrees[selectedProject.id] || [];
+    const node = all.find((n: any) => n.id === nodeId);
+    if (!node) return;
+    const childrenMap: Record<string, any[]> = {};
+    for (const n of all) if (n.parent_id) (childrenMap[n.parent_id] ||= []).push(n);
+    const items: { name: string; type: string }[] = [];
+    const walk = (id: string) => {
+      for (const c of childrenMap[id] || []) {
+        items.push({ name: c.nomenclature_name || c.name || c.ext_id || '—', type: c.node_type || 'node' });
+        walk(c.id);
+      }
+    };
+    walk(nodeId);
+    setBomDelete({ nodeId, name: node.nomenclature_name || node.name || node.ext_id || nodeId, items });
+  };
+
+  const doBomNodeDelete = async () => {
+    if (!selectedProject || !bomDelete) return;
     try {
-      await apiF(`/bom/projects/${selectedProject.id}/nodes/${nodeId}`, { method: 'DELETE' });
+      await apiF(`/bom/projects/${selectedProject.id}/nodes/${bomDelete.nodeId}`, { method: 'DELETE' });
+      setBomDelete(null);
       await reloadBomTree(selectedProject.id);
+      await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка удаления узла: ' + (e.message || String(e))); }
   };
+
+  const handleBomNodeRemove = confirmBomNodeDelete;
 
   const handleBomNodeAdd = async (parentId: string, nodeType: 'material' | 'semi_finished') => {
     if (!selectedProject) return;
@@ -642,6 +664,28 @@ export default function AppShell() {
       await apiF(`/bom/routing-operations/${opId}`, { method: 'PATCH', body: JSON.stringify(patch) });
       await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка сохранения операции: ' + (e.message || String(e))); }
+  };
+
+  const handleRoutingOpAdd = async (routingId: string) => {
+    try {
+      const rt = routings.find((r: any) => r.id === routingId);
+      const ops = (rt?.operations || []).slice();
+      const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
+      const name = window.prompt('Название новой операции:', 'Операция ' + (maxSeq + 1));
+      if (!name || !name.trim()) return;
+      await apiF('/bom/routing-operations', {
+        method: 'POST',
+        body: JSON.stringify({ routing_id: routingId, name: name.trim(), sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1 }),
+      });
+      await reloadRoutings();
+    } catch (e: any) { setMsg('Ошибка добавления операции: ' + (e.message || String(e))); }
+  };
+
+  const handleRoutingOpRemove = async (opId: string) => {
+    try {
+      await apiF(`/bom/routing-operations/${opId}`, { method: 'DELETE' });
+      await reloadRoutings();
+    } catch (e: any) { setMsg('Ошибка удаления операции: ' + (e.message || String(e))); }
   };
 
   const openResourcePick = (opId: string) => {
@@ -718,6 +762,8 @@ export default function AppShell() {
     const o = w.data || orders.find((x: any) => x.id === w.orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === w.orderId);
     if (!o) return null;
     return (
+      <>
+      
       <BomExpand
         order={o}
         nodes={orderBomNodesWithSuborders(o)}
@@ -730,11 +776,17 @@ export default function AppShell() {
         timelineLoading={bomTimelineLoading}
         onLoadTimeline={loadBomTimeline}
         onNodeOrderChange={handleNodeOrderChange}
+        onNodeQuantityChange={handleBomNodeQuantity}
+        onNodeRemove={confirmBomNodeDelete}
+        onNodeAdd={handleBomNodeAdd}
+        onOrderFocus={focusOrderByBom}
+        onRoutingAdd={handleRoutingOpAdd}
         onCreateMissingOrders={createMissingOrders}
         onCreateOrderFromNode={createOrderFromNode}
         routings={routings}
         resName={resName}
       />
+      </>
     );
   };
 
@@ -1030,6 +1082,8 @@ export default function AppShell() {
   };
 
   const [deleteCheckEntity, setDeleteCheckEntity] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [dirRefreshKey, setDirRefreshKey] = useState(0);
+  const [bomDelete, setBomDelete] = useState<{ nodeId: string; name: string; items: { name: string; type: string }[] } | null>(null);
   const [deleteCheckResult, setDeleteCheckResult] = useState<any>(null);
   const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
   const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
@@ -1633,7 +1687,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                         </div>
                         <div style={{ display: 'flex', borderBottom: '1px solid #1E3252' }}>
                           {tabs.map(tb => (
-                            <button key={tb.v} onClick={() => { setPanelTab(tb.v); setPanelEditing(false); }} style={{ flex: 1, border: 0, background: 'transparent', color: panelTab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (panelTab === tb.v ? '#3B82F6' : 'transparent'), padding: '8px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
+                            <button key={tb.v} onClick={() => setPanelTab(tb.v)} style={{ flex: 1, border: 0, background: 'transparent', color: panelTab === tb.v ? '#fff' : '#8FA3BD', borderBottom: '2px solid ' + (panelTab === tb.v ? '#3B82F6' : 'transparent'), padding: '8px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{tb.l}</button>
                           ))}
                         </div>
                         <div style={{ padding: '12px 14px', minHeight: 300, overflowY: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0' }}>
@@ -1728,6 +1782,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                     ) : (
                                       <span style={{ fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap' }}>{meta.l}</span>
                                     )}
+                                    {panelEditing && n.routing_id && (
+                                      <button type="button" title="Добавить операцию в маршрут" onClick={() => handleRoutingOpAdd(n.routing_id)}
+                                        style={{ background: 'rgba(34,211,238,.12)', border: '1px solid rgba(34,211,238,.35)', color: '#22D3EE', borderRadius: 5, padding: '2px 9px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ оп</button>
+                                    )}
                                   </div>
                                   {hasBody && (
                                     <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: '1px solid #2A4060' }}>
@@ -1745,6 +1803,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                               <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName(op.resource_type_id)}{d ? ' · ' + d : ''}</span>
                                             </span>
                                             <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
+                                            {panelEditing && (
+                                              <button type="button" title="Удалить операцию" onClick={() => { if (window.confirm('Удалить операцию «' + op.name + '» из маршрута?')) handleRoutingOpRemove(op.id); }}
+                                                style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
+                                            )}
                                           </div>
                                           {panelEditing && (
                                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 8px 6px 32px', flexWrap: 'wrap' }}>
@@ -3171,7 +3233,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onBomNodeRemove={handleBomNodeRemove}
         onBomNodeAdd={handleBomNodeAdd}
         onRoutingOpUpdate={handleRoutingOpUpdate}
+        onRoutingOpAdd={handleRoutingOpAdd}
+        onRoutingOpRemove={handleRoutingOpRemove}
         onPickResource={openResourcePick}
+        dirRefreshKey={dirRefreshKey}
+        onOrderFocus={focusOrderByBom}
         onOpenDirectory={openDirectory}
         onDirManageEdit={(entity, row) => { if (entity === 'resources') win.openResEdit(row); }}
         onDirManageDelete={(entity, row) => { if (entity === 'resources') runDeleteCheck('resource', row.id, row.name || row.code || row.id); }}
@@ -3295,12 +3361,52 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           } else if (deleteCheckEntity.type === 'order_pool') {
             setSelectedPool(null);
             loadProjectPools(selectedProject);
+          } else if (deleteCheckEntity.type === 'resource') {
+            setDirRefreshKey(k => k + 1);
+            load();
           } else {
             load();
           }
         }}
       />
     )}
+
+    {/* Мастер удаления узла BOM: проверка поддерева вниз по дереву */}
+    {bomDelete && (() => {
+      const total = bomDelete.items.length;
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setBomDelete(null)}>
+          <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12, width: 480, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid #334155' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#F1F5F9' }}>⚠️ Удаление узла BOM</div>
+              <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 4 }}>{bomDelete.name}</div>
+            </div>
+            <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ fontSize: 13, color: '#FBBF24', fontWeight: 500, marginBottom: 8 }}>
+                {total > 0 ? 'Будут удалены связанные объекты (' + total + '):' : 'Узел не имеет вложенных элементов. Удаление затронет только сам узел.'}
+              </div>
+              {total > 0 && (
+                <div style={{ display: 'grid', gap: 4 }}>
+                  {bomDelete.items.slice(0, 12).map((it: any, i: number) => (
+                    <div key={i} style={{ fontSize: 12, color: '#94A3B8', padding: '2px 0 2px 12px', borderLeft: '2px solid #334155', margin: '2px 0' }}>
+                      {it.name} <span style={{ color: '#64748B', fontSize: 11 }}>({it.type === 'assembly' ? 'сборка' : it.type === 'semi_finished' ? 'полуфабрикат' : 'материал'})</span>
+                    </div>
+                  ))}
+                  {total > 12 && <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>...и ещё {total - 12}</div>}
+                </div>
+              )}
+              <div style={{ marginTop: 12, fontSize: 12, color: '#94A3B8' }}>
+                Удаляется весь узел вместе с поддеревом спецификации. Операции маршрута при этом сохраняются.
+              </div>
+            </div>
+            <div style={{ padding: '12px 24px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #334155' }}>
+              <button onClick={() => setBomDelete(null)} style={{ background: '#334155', border: 'none', color: '#CBD5E1', borderRadius: 8, padding: '8px 20px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button onClick={doBomNodeDelete} style={{ background: '#DC2626', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{total > 0 ? 'Удалить узел и ' + total + ' потомков' : 'Удалить узел'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
 
     {/* BOM heavy modal */}
     {bomModalOrder && (() => {
@@ -3328,6 +3434,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 timelineLoading={bomTimelineLoading}
                 onLoadTimeline={loadBomTimeline}
                 onNodeOrderChange={handleNodeOrderChange}
+                onNodeQuantityChange={handleBomNodeQuantity}
+                onNodeRemove={confirmBomNodeDelete}
+                onNodeAdd={handleBomNodeAdd}
+                onOrderFocus={focusOrderByBom}
+                onRoutingAdd={handleRoutingOpAdd}
                 onCreateMissingOrders={createMissingOrders}
                 onCreateOrderFromNode={createOrderFromNode}
                 routings={routings}

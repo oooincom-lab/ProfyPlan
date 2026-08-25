@@ -22,7 +22,7 @@ from app.models.routing import Routing, RoutingOperation
 from app.models.operation import Operation, OperationDependency
 from app.schemas.bom import (
     BOMNodeCreate, BOMNodeUpdate, BOMNodeOut, BOMTreeOut, BOMUploadResult,
-    RoutingCreate, RoutingOut, RoutingOpOut, RoutingOpUpdate, RoutingList,
+    RoutingCreate, RoutingOut, RoutingOpOut, RoutingOpUpdate, RoutingOpAdd, RoutingList,
     BOMExplosionOut, BOMExplodeAndSaveRequest, BOMExplodeAndSaveOut,
     ExplodedOpOut, ExplodedDepOut,
 )
@@ -505,6 +505,63 @@ async def update_routing_operation(
     await db.commit()
     await db.refresh(op)
     return RoutingOpOut.model_validate(op)
+
+
+@bom_router.post("/routing-operations", response_model=RoutingOpOut, status_code=201)
+async def add_routing_operation(
+    body: RoutingOpAdd,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Добавить операцию в маршрут. Тенант-скоп через маршрут."""
+    routing = (await db.execute(
+        select(Routing).where(Routing.id == body.routing_id, Routing.tenant_id == tenant_id)
+    )).scalars().first()
+    if not routing:
+        raise HTTPException(status_code=404, detail="Маршрут не найден")
+
+    op = RoutingOperation(
+        routing_id=body.routing_id,
+        sequence_number=body.sequence_number,
+        name=body.name,
+        duration_hours=body.duration_hours,
+        setup_hours=body.setup_hours,
+        teardown_hours=body.teardown_hours,
+        resource_type_id=body.resource_type_id,
+        alternative_resource_types=body.alternative_resource_types,
+        stage=body.stage,
+        stage_name=body.stage_name,
+        department=body.department,
+        output_product=body.output_product,
+        output_quantity=body.output_quantity,
+        yield_rate=body.yield_rate,
+        predecessors=body.predecessors,
+        input_materials=body.input_materials,
+        notes=body.notes,
+        ext_id=body.ext_id,
+    )
+    db.add(op)
+    await db.commit()
+    await db.refresh(op)
+    return RoutingOpOut.model_validate(op)
+
+
+@bom_router.delete("/routing-operations/{operation_id}", status_code=204)
+async def delete_routing_operation(
+    operation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Удалить операцию маршрута. Тенант-скоп через маршрут."""
+    op = (await db.execute(
+        select(RoutingOperation)
+        .join(Routing, RoutingOperation.routing_id == Routing.id)
+        .where(RoutingOperation.id == operation_id, Routing.tenant_id == tenant_id)
+    )).scalars().first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Routing operation not found")
+    await db.delete(op)
+    await db.commit()
 
 
 # ── BOM Explosion (Развёртка в CPM-операции) ──

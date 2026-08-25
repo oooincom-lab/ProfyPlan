@@ -104,6 +104,11 @@ class RoutingOpCreate(BaseModel):
     ext_id: Optional[str] = None
 
 
+class RoutingOpAdd(RoutingOpCreate):
+    """Добавление операции в существующий маршрут (POST /bom/routing-operations)."""
+    routing_id: UUID
+
+
 class RoutingCreate(BaseModel):
     """Создание техмаршрута."""
     name: str = Field(min_length=1, max_length=255)

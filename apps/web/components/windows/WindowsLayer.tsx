@@ -33,6 +33,14 @@ type WindowsLayerProps = {
   onOpenDirectory: (entity: string) => void;
   onDirManageEdit?: (entity: string, row: any) => void;
   onDirManageDelete?: (entity: string, row: any) => void;
+  /** Обновить списки справочников после удаления (счётчик) */
+  dirRefreshKey?: number;
+  /** Клик по бейджу «производит: …» — перейти к заказу */
+  onOrderFocus?: (orderId: string) => void;
+  /** Добавить операцию в маршрут */
+  onRoutingOpAdd?: (routingId: string) => void;
+  /** Удалить операцию маршрута */
+  onRoutingOpRemove?: (opId: string) => void;
   onClose: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleMin: (id: string) => void;
@@ -79,7 +87,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     orders, resourcesList, groups, pools, isDyn,
     orderBomNodes, routingFor, routingsFor, resName, routings,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
-    onDirManageEdit, onDirManageDelete,
+    onDirManageEdit, onDirManageDelete, dirRefreshKey = 0, onOrderFocus,
+    onRoutingOpAdd, onRoutingOpRemove,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource,
@@ -197,6 +206,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               {isDir && (
                 <DirectoryTable
                   entity={w.data?.entity || ''}
+                  refreshKey={dirRefreshKey}
                   columns={w.data?.columns || []}
                   apiBase="https://profyplan.ru/api"
                   onSelect={w.data?.onSelect}
@@ -303,7 +313,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 </div>
               )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'bom' && (
-                bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} />
+                bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={onOrderFocus} onRoutingAdd={onRoutingOpAdd} />
                 : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
               )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'route' && (() => {
@@ -315,12 +325,25 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       const total = (r.operations || []).reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
                       return (
                         <div key={r.id} style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: 11.5, color: '#22D3EE', marginBottom: 6 }}>⛓ {r.name || 'Маршрут'} · {(r.operations || []).length} оп. · {total} ч{r.variant ? ' · вариант ' + r.variant : ''}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 11.5, color: '#22D3EE' }}>⛓ {r.name || 'Маршрут'} · {(r.operations || []).length} оп. · {total} ч{r.variant ? ' · вариант ' + r.variant : ''}</span>
+                            <div style={{ flex: 1 }} />
+                            {w.editing && (
+                              <button type="button" title="Добавить операцию в маршрут"
+                                onClick={() => onRoutingOpAdd?.(r.id)}
+                                style={{ background: 'rgba(34,211,238,.12)', border: '1px solid rgba(34,211,238,.35)', color: '#22D3EE', borderRadius: 5, padding: '2px 9px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ операция</button>
+                            )}
+                          </div>
                           {(r.operations || []).map((op: any) => (
                             <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
                                 <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                {w.editing && (
+                                  <button type="button" title="Удалить операцию"
+                                    onClick={() => { if (window.confirm('Удалить операцию «' + op.name + '» из маршрута?')) onRoutingOpRemove?.(op.id); }}
+                                    style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
+                                )}
                                 {w.editing ? (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#FCD34D', fontSize: 12 }}>
                                     <input

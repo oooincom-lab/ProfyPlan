@@ -15,6 +15,11 @@ export type BomExpandProps = {
   timelineLoading?: boolean;
   onLoadTimeline?: () => void;
   onNodeOrderChange: (nodeId: string, orderId: string | null) => void;
+  onNodeQuantityChange?: (nodeId: string, value: number) => void;
+  onNodeRemove?: (nodeId: string) => void;
+  onNodeAdd?: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
+  onOrderFocus?: (orderId: string) => void;
+  onRoutingAdd?: (routingId: string) => void;
   onCreateMissingOrders: () => void;
   onCreateOrderFromNode: (nodeId: string) => void;
   routings?: any[];
@@ -36,7 +41,8 @@ export default function BomExpand(props: BomExpandProps) {
   const {
     order, nodes, orders, anomalies, anomaliesLoading, semiPolicy,
     timeline, timelineDraft, timelineLoading, onLoadTimeline,
-    onNodeOrderChange, onCreateMissingOrders, onCreateOrderFromNode,
+    onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, onOrderFocus, onRoutingAdd,
+    onCreateMissingOrders, onCreateOrderFromNode,
     routings, resName,
   } = props;
 
@@ -131,6 +137,11 @@ export default function BomExpand(props: BomExpandProps) {
         onLoadTimeline={onLoadTimeline}
         orders={orders}
         onNodeOrderChange={onNodeOrderChange}
+        onNodeQuantityChange={onNodeQuantityChange}
+        onNodeRemove={onNodeRemove}
+        onNodeAdd={onNodeAdd}
+        onOrderFocus={onOrderFocus}
+        onRoutingAdd={onRoutingAdd}
         chainControl
         currentOrderId={order.id}
         anomalyIds={anomalyIds}

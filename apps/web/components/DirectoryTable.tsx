@@ -22,9 +22,11 @@ type Props = {
   onManageDelete?: (row: any) => void;
   compact?: boolean;
   synonyms?: Record<string, string[]>;
+  /** Счётчик — при изменении список перезагружается (после удаления извне) */
+  refreshKey?: number;
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, compact, synonyms }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, compact, synonyms, refreshKey = 0 }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -92,7 +94,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [refreshKey]);
 
   const saveNew = async () => {
     if (!newRow.name?.trim()) return;
