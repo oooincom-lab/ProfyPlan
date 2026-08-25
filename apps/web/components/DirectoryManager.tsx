@@ -1,6 +1,7 @@
 'use client';
 
 import DirectoryTable from './DirectoryTable';
+import DebugBadge from './DebugBadge';
 
 type ColumnDef = {
   key: string;
@@ -16,6 +17,7 @@ type Props = {
   apiBase: string;
   onClose: () => void;
   onSelect?: (row: any) => void;
+  debug?: boolean;
 };
 
 /**
@@ -23,7 +25,7 @@ type Props = {
  * CRUD-таблицы DirectoryTable. Один модуль — для всех справочников.
  * (В оконном режиме этот же контент рендерится внутри окна.)
  */
-export default function DirectoryManager({ title, entity, columns, apiBase, onClose, onSelect }: Props) {
+export default function DirectoryManager({ title, entity, columns, apiBase, onClose, onSelect, debug = false }: Props) {
   return (
     <div
       style={{
@@ -42,6 +44,7 @@ export default function DirectoryManager({ title, entity, columns, apiBase, onCl
       >
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1 }}>{title}</div>
+          <DebugBadge debug={debug} text={`[dir:manager:${entity}]`} copy={`[dir:manager:${entity}] «${title}»`} />
           <button
             onClick={onClose}
             style={{ background: 'transparent', border: 0, color: '#8FA3BD', cursor: 'pointer', fontSize: 18, padding: '2px 8px' }}

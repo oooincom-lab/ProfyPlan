@@ -9,6 +9,7 @@ import DirectoryManager from '@/components/DirectoryManager';
 import WorkScheduleManager from '@/components/WorkScheduleManager';
 import ProductionCalendarManager from '@/components/ProductionCalendarManager';
 import ResourceManager from '@/components/ResourceManager';
+import DebugBadge from '@/components/DebugBadge';
 import Sidebar from '@/components/sidebar';
 import PoolEditor from '@/components/pooleditor';
 import GroupEditor from '@/components/groupeditor';
@@ -117,6 +118,11 @@ export default function AppShell() {
     // Миграция старой настройки «Окна для списков» → единый режим
     if (v == null && localStorage.getItem('profyplan_list_windows') === '1') return 'window';
     return 'side';
+  });
+  // 🧪 Режим отладки: технические идентификаторы окон и форм (для описания проблем)
+  const [debugMode, setDebugMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('profyplan_debug_mode') === '1';
   });
   const [menuMode, setMenuModeState] = useState<'expanded' | 'manual' | 'auto'>(() => {
     if (typeof window === 'undefined') return 'expanded';
@@ -310,6 +316,7 @@ export default function AppShell() {
     try { localStorage.setItem('profyplan_panel_mode', m); } catch {}
     if (m === 'modal') { setSelOrderId(null); setPanelEditing(false); }
   };
+  const setDebugModeFlag = (v: boolean) => { setDebugMode(v); try { localStorage.setItem('profyplan_debug_mode', v ? '1' : '0'); } catch {} };
   const setMenuMode = (m: 'expanded' | 'manual' | 'auto') => {
     setMenuModeState(m);
     try { localStorage.setItem('profyplan_menu_mode', m); } catch {}
@@ -1587,6 +1594,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                         <div style={{ padding: '10px 14px', borderBottom: '1px solid #1E3A5F', background: '#0D1F3A', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.ext_id || o.id) : 'Панель заказа'}</div>
+                            {debugMode && <DebugBadge debug={debugMode} text="[order:panel]" copy={o ? `[order:panel] «${o.ext_id || o.id}${o.specification_name ? ' · ' + o.specification_name : ''}»` : '[order:panel] «Панель заказа»'} />}
                             <div style={{ fontSize: 12, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o ? (o.specification_name || '—') : 'Выберите заказ в списке'}</div>
                           </div>
                           {o && !panelEditing && (
@@ -2806,7 +2814,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager />}
           {view === 'production-calendars' && <ProductionCalendarManager />}
 
-          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} onOpenResEdit={(res) => win.openResEdit(res)} />}
+          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
@@ -2893,6 +2901,19 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     </div>
                     <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
                       {panelMode === 'window' ? 'Окна (MDI): заказы, справочники и редакторы открываются отдельными окнами — перетаскивание, прилипание к краям (Snap), сетка раскладок «⛶», панель задач внизу.' : panelMode === 'modal' ? 'Модально — заказы и справочники открываются поверх списка, закрытие по ✕ или Esc.' : 'Встроенно — заказ открывается в панели справа от списка, справочники и редакторы — inline поверх списка.'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🧪 Режим отладки</div>
+                    <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                      Показывать технические идентификаторы в заголовках окон и форм — чтобы было удобно описывать их в сообщениях. Клик по идентификатору копирует его в буфер.
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={debugMode} onChange={e => setDebugModeFlag(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
+                      <span style={{ fontSize: 13 }}>Показывать технические идентификаторы</span>
+                    </label>
+                    <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6, lineHeight: 1.45 }}>
+                      Идентификаторы вида [order:openWin #1]. Можно отключить в любой момент — интерфейс вернётся к обычному виду.
                     </div>
                   </div>
                   <div>
@@ -3112,6 +3133,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onOpenDirectory={openDirectory}
         schedules={workSchedules}
         onSaveResourceEdit={saveResourceEdit}
+        debug={debugMode}
       />
     )}
 
@@ -3122,6 +3144,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         entity={dirManager.entity}
         columns={dirManager.columns}
         apiBase="https://profyplan.ru/api"
+        debug={debugMode}
         onClose={() => setDirManager(null)}
       />
     )}
@@ -3241,6 +3264,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 22px 0', flexShrink: 0 }}>
               <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600 }}>BOM · Развёртка</span>
               <span style={{ fontSize: 17, fontWeight: 600, color: '#E8EEF5' }}>{bomModalOrder.specification_name || bomModalOrder.ext_id || '—'}</span>
+              {debugMode && <DebugBadge debug={debugMode} text="[bom:modal]" copy={`[bom:modal] «${bomModalOrder.specification_name || bomModalOrder.ext_id || '—'}»`} />}
               <div style={{ flex: 1 }} />
               <button onClick={() => setBomModalOrder(null)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 20 }}>✕</button>
             </div>

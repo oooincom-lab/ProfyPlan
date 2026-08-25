@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type CSSProperties } from 'react';
 import ResourceForm, { typeLabel, capUnitLabel } from './ResourceForm';
+import DebugBadge from './DebugBadge';
 
 const API = 'https://profyplan.ru/api/v1';
 
@@ -41,7 +42,7 @@ const periodLabel = (a: Assignment) => {
   return `${f || '…'} – ${t || '…'}`;
 };
 
-export default function ResourceManager({ projects, windowMode = false, onOpenResEdit }: { projects: Project[]; windowMode?: boolean; onOpenResEdit?: (res: any | null) => void }) {
+export default function ResourceManager({ projects, windowMode = false, debug = false, onOpenResEdit }: { projects: Project[]; windowMode?: boolean; debug?: boolean; onOpenResEdit?: (res: any | null) => void }) {
   // Глобальный справочник
   const [rows, setRows] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -186,8 +187,10 @@ export default function ResourceManager({ projects, windowMode = false, onOpenRe
           <>
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.6)', zIndex: 9990, backdropFilter: 'blur(4px)' }} onClick={() => { setFormOpen(false); setEditingId(null); setForm({}); }} />
             <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 640, maxWidth: '92vw', maxHeight: '86vh', overflow: 'auto', zIndex: 9991, background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252', borderRadius: 14, padding: 20, boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#E8EEF5' }}>{editingId ? '🔧 Редактирование ресурса' : '🔧 Новый ресурс'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#E8EEF5', flexShrink: 0 }}>{editingId ? '🔧 Редактирование ресурса' : '🔧 Новый ресурс'}</span>
+                <div style={{ flex: 1 }} />
+                <DebugBadge debug={debug} text="[resedit:modal]" copy={editingId ? `[resedit:modal] «Редактирование ресурса · ${editingId.slice(0, 8)}»` : '[resedit:modal] «Новый ресурс»'} />
                 <button onClick={() => { setFormOpen(false); setEditingId(null); setForm({}); }} style={{ background: 'transparent', border: 'none', color: '#5A7090', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
               <ResourceForm form={form} onChange={patch => setForm({ ...form, ...patch })} schedules={schedules} saving={saving} onSave={save} onCancel={() => { setFormOpen(false); setEditingId(null); setForm({}); }} />

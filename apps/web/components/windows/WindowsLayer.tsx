@@ -7,6 +7,7 @@ import DirectoryTable from '@/components/DirectoryTable';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
 import ResourceForm from '@/components/ResourceForm';
+import DebugBadge from '@/components/DebugBadge';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -48,6 +49,7 @@ type WindowsLayerProps = {
   onPickResource: (opId: string) => void;
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
+  debug?: boolean;
 };
 
 const TAB_LIST: { v: OrderTab; l: string }[] = [
@@ -73,6 +75,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource,
     schedules = [], onSaveResourceEdit,
+    debug = false,
   } = props;
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
@@ -100,6 +103,21 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     return w.kind === 'bom' ? 'BOM · ' + full : full;
   };
 
+  // 🧪 Технический идентификатор окна (режим отладки)
+  const debugIdOf = (w: WinRec, idx: number): { badge: string; copy: string } => {
+    const n = wins.filter((x, i) => i <= idx && x.kind === w.kind && (
+      w.kind === 'dir' ? (x.data?.entity === w.data?.entity)
+        : w.kind === 'list' ? (x.listKind === w.listKind)
+          : true
+    )).length;
+    const title = winFullTitle(w);
+    if (w.kind === 'order') return { badge: `[order:openWin #${n}]`, copy: `[order:openWin #${n}] «${title}»` };
+    if (w.kind === 'bom') return { badge: `[bom:openBomWin #${n}]`, copy: `[bom:openBomWin #${n}] «${title}»` };
+    if (w.kind === 'list') return { badge: `[list:openListWin:${w.listKind || '?'} #${n}]`, copy: `[list:openListWin:${w.listKind || '?'} #${n}] «${title}»` };
+    if (w.kind === 'dir') return { badge: `[dir:openDirWin:${w.data?.entity || '?'} #${n}]`, copy: `[dir:openDirWin:${w.data?.entity || '?'} #${n}] «${title}»` };
+    return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
+  };
+
   const reorderWins = (from: number, to: number) => {
     setWins(prev => {
       const arr = [...prev];
@@ -113,7 +131,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     <>
       {snapZone && <div className="pp-snapzone" style={{ left: snapZone.x, top: snapZone.y, width: snapZone.w, height: snapZone.h }} />}
 
-      {wins.map((w: WinRec) => {
+      {wins.map((w: WinRec, wi: number) => {
         const isList = w.kind === 'list';
         const isBom = w.kind === 'bom';
         const isDir = w.kind === 'dir';
@@ -130,6 +148,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : isDir ? '#10B981' : isResEdit ? '#F59E0B' : '#3B82F6', flexShrink: 0 }} />
               <span className="ttl">{isList ? (w.title || 'Список') : isDir ? (w.title || 'Справочник') : isResEdit ? (w.title || 'Ресурс') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
+              {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
               <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
               <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
                 {w.max
