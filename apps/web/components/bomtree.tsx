@@ -67,6 +67,12 @@ interface BomTreeProps {
   onOrderFocus?: (orderId: string) => void;
   /** Добавить операцию в маршрут узла (кнопка ⛭ при редактировании) */
   onRoutingAdd?: (routingId: string) => void;
+  /** Кнопки ＋/⇥/⛭ показывать только у корневых узлов (форма состава окна заказа) */
+  addRootOnly?: boolean;
+  /** Операции маршрутов раскрывать только у корневых узлов */
+  rootOpsOnly?: boolean;
+  /** Разрыв связи узла с заказом-производителем (узел + заказ становятся свободными) */
+  onNodeUnlink?: (nodeId: string, orderId: string | null) => void;
 }
 
 export interface TimelineOp {
@@ -133,7 +139,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd, addRootOnly = false, rootOpsOnly = false, onNodeUnlink }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -218,12 +224,15 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
   const renderNode = (n: BomTreeNode, depth: number): React.ReactNode => {
     const meta = TYPE_META[n.node_type] || TYPE_META.material;
     if (!showMaterials && n.node_type === 'material') return null;
+    const isRoot = depth === 0;
     const rawChildren = tree.childrenMap[n.id] || [];
     const children = showMaterials ? rawChildren : rawChildren.filter((c: BomTreeNode) => c.node_type !== 'material');
     const hasChildren = children.length > 0;
     const rt = showOps && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
     const ops = rt ? (rt.operations || []) : [];
-    const hasOps = showOps && ops.length > 0;
+    // В форме состава окна заказа операции раскрываются только у корневого узла
+    const opsVisible = rootOpsOnly ? isRoot : true;
+    const hasOps = showOps && ops.length > 0 && opsVisible;
     const expandable = hasChildren || hasOps;
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
@@ -286,13 +295,16 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
               )}
               {linkedOrderLabel && (!currentOrderId || n.order_id !== currentOrderId) && (
                 <span
-                  title={onOrderFocus && n.order_id ? `Перейти к заказу ${linkedOrderLabel}` : `Этот узел производит заказ ${linkedOrderLabel}`}
+                  title={onOrderFocus && n.order_id ? `Открыть заказ ${linkedOrderLabel}` : `Этот узел производит заказ ${linkedOrderLabel}`}
                   onClick={(e) => { e.stopPropagation(); if (onOrderFocus && n.order_id) onOrderFocus(n.order_id); }}
+                  onMouseEnter={(e) => { if (onOrderFocus && n.order_id) { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,.32)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(139,92,246,.75)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; } }}
+                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(139,92,246,.14)'; el.style.borderColor = 'rgba(139,92,246,.35)'; el.style.transform = 'none'; }}
                   style={{
-                    color: '#A78BFA', fontSize: 10, marginLeft: 6, fontWeight: 600,
+                    color: '#C4B5FD', fontSize: 10, marginLeft: 6, fontWeight: 600,
                     background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.35)', borderRadius: 4,
                     padding: '1px 5px', whiteSpace: 'nowrap', cursor: onOrderFocus && n.order_id ? 'pointer' : 'default',
-                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    display: 'inline-flex', alignItems: 'center', gap: 3, transition: 'background .12s, border-color .12s, transform .12s',
+                    boxShadow: onOrderFocus && n.order_id ? '0 0 0 1px rgba(139,92,246,.12)' : 'none',
                   }}>
                   производит: {linkedOrderLabel}{onOrderFocus && n.order_id ? <span style={{ fontSize: 9, opacity: .75 }}>↗</span> : null}
                 </span>
@@ -334,14 +346,24 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           </span>
           {editable && (
             <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 3 }} onClick={e => e.stopPropagation()}>
-              {n.routing_id && (
+              {/* Кнопки добавления — только у корневого узла (форма состава окна заказа) */}
+              {(!addRootOnly || isRoot) && n.routing_id && (
                 <button type="button" title="Добавить операцию в маршрут" onClick={() => onRoutingAdd?.(n.routing_id!)}
                   style={{ background: 'rgba(34,211,238,.12)', border: '1px solid rgba(34,211,238,.35)', color: '#22D3EE', borderRadius: 5, width: 20, height: 20, fontSize: 11, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⛭</button>
               )}
-              <button type="button" title="Добавить материал" onClick={() => onNodeAdd?.(n.id, 'material')}
-                style={{ background: 'rgba(52,211,153,.12)', border: '1px solid rgba(52,211,153,.35)', color: '#34D399', borderRadius: 5, width: 20, height: 20, fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>＋</button>
-              <button type="button" title="Добавить полуфабрикат" onClick={() => onNodeAdd?.(n.id, 'semi_finished')}
-                style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.35)', color: '#A78BFA', borderRadius: 5, width: 20, height: 20, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⇥</button>
+              {(!addRootOnly || isRoot) && (
+                <button type="button" title="Добавить материал" onClick={() => onNodeAdd?.(n.id, 'material')}
+                  style={{ background: 'rgba(52,211,153,.12)', border: '1px solid rgba(52,211,153,.35)', color: '#34D399', borderRadius: 5, width: 20, height: 20, fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>＋</button>
+              )}
+              {(!addRootOnly || isRoot) && (
+                <button type="button" title="Добавить полуфабрикат" onClick={() => onNodeAdd?.(n.id, 'semi_finished')}
+                  style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.35)', color: '#A78BFA', borderRadius: 5, width: 20, height: 20, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⇥</button>
+              )}
+              {/* Разрыв связи с заказом-производителем — у вложенных узлов */}
+              {addRootOnly && !isRoot && n.order_id && (!currentOrderId || n.order_id !== currentOrderId) && onNodeUnlink && (
+                <button type="button" title="Разорвать связь с заказом-производителем (заказ станет свободным)" onClick={() => onNodeUnlink(n.id, n.order_id)}
+                  style={{ background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.4)', color: '#FBBF24', borderRadius: 5, width: 20, height: 20, fontSize: 10.5, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⛓</button>
+              )}
               <button type="button" title="Удалить узел" onClick={() => onNodeRemove?.(n.id)}
                 style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 20, height: 20, fontSize: 11, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
             </span>

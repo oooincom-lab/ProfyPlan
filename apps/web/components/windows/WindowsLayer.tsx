@@ -8,6 +8,7 @@ import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
 import ResourceForm from '@/components/ResourceForm';
 import DebugBadge from '@/components/DebugBadge';
+import AppModal from '@/components/AppModal';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -41,6 +42,17 @@ type WindowsLayerProps = {
   onRoutingOpAdd?: (routingId: string) => void;
   /** Удалить операцию маршрута */
   onRoutingOpRemove?: (opId: string) => void;
+  /** Разрыв связи узла с заказом-производителем */
+  onNodeUnlink?: (nodeId: string, orderId: string | null) => void;
+  /** Открыть окно заказа по id (клик по бейджу «производит: …») */
+  openOrderWinById?: (orderId: string) => void;
+  /** Аномалии структуры BOM проекта (для списка заказов и вкладки «Состав») */
+  anomalies?: any;
+  anomaliesLoading?: boolean;
+  onCreateMissingOrders?: () => void;
+  onCreateOrderFromNode?: (nodeId: string) => void;
+  /** Привязать свободный заказ к текущему как производителя полуфабриката */
+  onAttachOrder?: (currentOrderId: string, freeOrderId: string) => void;
   onClose: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleMin: (id: string) => void;
@@ -88,7 +100,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     orderBomNodes, routingFor, routingsFor, resName, routings,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onDirManageEdit, onDirManageDelete, dirRefreshKey = 0, onOrderFocus,
-    onRoutingOpAdd, onRoutingOpRemove,
+    onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById,
+    anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource,
@@ -102,6 +115,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [snapCell, setSnapCell] = useState(-1);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
+  const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
@@ -185,6 +200,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
                 ) : (
                   <>
+                    {w.tab === 'bom' && onAttachOrder && (
+                      <button onClick={() => setAttachOpen({ orderId: o!.id })}
+                        title="Привязать свободный заказ как производителя полуфабриката"
+                        style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⛓ Привязать свободный заказ</button>
+                    )}
                     <button onClick={() => onSaveEdit(w)} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ Сохранить</button>
                     <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x))} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Отмена</button>
                   </>
@@ -313,8 +333,39 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 </div>
               )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'bom' && (
-                bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={onOrderFocus} onRoutingAdd={onRoutingOpAdd} />
-                : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>
+                <>
+                  {(() => {
+                    const all: any[] = anomalies ? [...(anomalies.no_routing || []), ...(anomalies.no_order || []), ...(anomalies.self_order || [])] : [];
+                    if (anomaliesLoading) return <div style={{ fontSize: 11.5, color: '#5A7090', padding: '6px 4px', marginBottom: 8 }}>Проверка структуры…</div>;
+                    if (!all.length) return null;
+                    return (
+                      <div style={{ marginBottom: 10, padding: '8px 12px', background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#FCA5A5' }}>⚠ Аномалии структуры: {all.length}</span>
+                          <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>полуфабрикаты без маршрута или без подчинённого заказа</span>
+                          <div style={{ flex: 1 }} />
+                          {onCreateMissingOrders && all.filter((a: any) => a.category !== 'no_routing').length > 0 && (
+                            <button onClick={onCreateMissingOrders} style={{ background: '#3B82F6', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Создать заказы ({all.filter((a: any) => a.category !== 'no_routing').length})</button>
+                          )}
+                        </div>
+                        <div style={{ display: 'grid', gap: 3, maxHeight: 110, overflow: 'auto', marginTop: 5 }}>
+                          {all.slice(0, 12).map((a: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, padding: '3px 8px', background: 'rgba(4,10,20,.4)', borderRadius: 5 }}>
+                              <span style={{ color: '#FCA5A5', fontWeight: 600, flex: '0 0 84px' }}>{a.category === 'no_routing' ? 'нет маршрута' : a.category === 'no_order' ? 'нет заказа' : 'свой заказ'}</span>
+                              <span style={{ color: '#E8EEF5', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.path || a.name}>{a.name}</span>
+                              {a.category !== 'no_routing' && onCreateOrderFromNode && (
+                                <button onClick={() => onCreateOrderFromNode(a.node_id)} style={{ background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 5, padding: '1px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Создать заказ</button>
+                              )}
+                            </div>
+                          ))}
+                          {all.length > 12 && <div style={{ fontSize: 10.5, color: '#5A7090', padding: '2px 8px' }}>…и ещё {all.length - 12}</div>}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={openOrderWinById || onOrderFocus} onRoutingAdd={onRoutingOpAdd} onNodeUnlink={onNodeUnlink} addRootOnly rootOpsOnly currentOrderId={o!.id} />
+                  : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>}
+                </>
               )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'route' && (() => {
                 const rts = routingsFor(o);
@@ -341,7 +392,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                 <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
                                 {w.editing && (
                                   <button type="button" title="Удалить операцию"
-                                    onClick={() => { if (window.confirm('Удалить операцию «' + op.name + '» из маршрута?')) onRoutingOpRemove?.(op.id); }}
+                                    onClick={() => setDelOp({ id: op.id, name: op.name })}
                                     style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
                                 )}
                                 {w.editing ? (
@@ -493,6 +544,44 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', lineHeight: 1, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{allMin ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11" /><polyline points="17 18 12 13 7 18" /></svg> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 13 12 18 17 13" /><polyline points="7 6 12 11 17 6" /></svg>}</button>
         </div>
       )}
+
+      {delOp && (
+        <AppModal title="Удалить операцию" onClose={() => setDelOp(null)} accent="#F87171">
+          <div style={{ fontSize: 12.5, color: '#B0C4DE' }}>
+            Удалить операцию <b style={{ color: '#E8EEF5' }}>«{delOp.name}»</b> из маршрута?
+            <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6 }}>Операция будет удалена безвозвратно.</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+            <button onClick={() => setDelOp(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+            <button onClick={() => { onRoutingOpRemove?.(delOp.id); setDelOp(null); }} style={{ background: '#EF4444', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Удалить</button>
+          </div>
+        </AppModal>
+      )}
+
+      {attachOpen && (() => {
+        const cur = orderById(attachOpen.orderId);
+        const free = orders.filter((x: any) => !x.parent_order_id && x.id !== attachOpen.orderId);
+        return (
+          <AppModal title="Привязать свободный заказ" onClose={() => setAttachOpen(null)} accent="#A78BFA" width={520}>
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 10 }}>
+              Свободные заказы (без родителя) для заказа <b style={{ color: '#C4B5FD' }}>{cur ? (cur.ext_id || cur.specification_name || cur.id.slice(0, 8)) : ''}</b>. Выбранный заказ станет производителем первого свободного полуфабриката в составе.
+            </div>
+            {free.length === 0 && <div style={{ color: '#5A7090', padding: '14px 4px' }}>Свободных заказов нет.</div>}
+            <div style={{ display: 'grid', gap: 5, maxHeight: 300, overflow: 'auto' }}>
+              {free.map((x: any) => (
+                <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FBBF24', flexShrink: 0 }} />
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#B0C4DE', flex: '0 0 74px' }}>{x.ext_id || '—'}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: '#E8EEF5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.specification_name || x.ext_id || '—'}</span>
+                  <button
+                    onClick={() => { onAttachOrder?.(attachOpen.orderId, x.id); setAttachOpen(null); }}
+                    style={{ background: 'rgba(167,139,250,.14)', border: '1px solid rgba(167,139,250,.45)', color: '#C4B5FD', borderRadius: 6, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Привязать</button>
+                </div>
+              ))}
+            </div>
+          </AppModal>
+        );
+      })()}
     </>
   );
 }

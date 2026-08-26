@@ -1072,6 +1072,7 @@ async def update_order(
     order = res.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Заказ не найден")
+    body_fields = body.model_dump(exclude_unset=True)
     for field in ("specification_name", "ext_id", "unit", "priority", "client", "notes", "status"):
         v = getattr(body, field, None)
         if v is not None:
@@ -1093,9 +1094,12 @@ async def update_order(
         order.start_date = body.start_date
     if body.due_date is not None:
         order.due_date = body.due_date
-    if body.parent_order_id is not None:
-        order.parent_order_id = await _resolve_parent_order(
-            body.parent_order_id, str(order.project_id) if order.project_id else None,
+    if 'parent_order_id' in body_fields:
+        if not body.parent_order_id:
+            order.parent_order_id = None
+        else:
+            order.parent_order_id = await _resolve_parent_order(
+                body.parent_order_id, str(order.project_id) if order.project_id else None,
             tenant_id, db
         )
     await db.commit()

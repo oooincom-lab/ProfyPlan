@@ -20,6 +20,7 @@ import BomExpand from '@/components/bomexpand';
 import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
+import AppModal from '@/components/AppModal';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -639,17 +640,24 @@ export default function AppShell() {
 
   const handleBomNodeRemove = confirmBomNodeDelete;
 
-  const handleBomNodeAdd = async (parentId: string, nodeType: 'material' | 'semi_finished') => {
-    if (!selectedProject) return;
-    const name = window.prompt(nodeType === 'material' ? 'Название материала:' : 'Название полуфабриката:');
-    if (!name || !name.trim()) return;
+  const confirmBomNodeAdd = async () => {
+    if (!selectedProject || !appModal || appModal.kind !== 'node-add') return;
+    const name = (modalName || '').trim();
+    if (!name) return;
+    const { parentId, nodeType } = appModal;
+    setAppModal(null); setModalName('');
     try {
       await apiF(`/bom/projects/${selectedProject.id}/nodes`, {
         method: 'POST',
-        body: JSON.stringify({ parent_id: parentId, node_type: nodeType, nomenclature_name: name.trim(), quantity_per_parent: 1, unit: 'pcs' }),
+        body: JSON.stringify({ parent_id: parentId, node_type: nodeType, nomenclature_name: name, quantity_per_parent: 1, unit: 'pcs' }),
       });
       await reloadBomTree(selectedProject.id);
     } catch (e: any) { setMsg('Ошибка добавления узла: ' + (e.message || String(e))); }
+  };
+
+  const handleBomNodeAdd = (parentId: string, nodeType: 'material' | 'semi_finished') => {
+    setModalName('');
+    setAppModal({ kind: 'node-add', parentId, nodeType });
   };
 
   const reloadRoutings = async () => {
@@ -666,16 +674,27 @@ export default function AppShell() {
     } catch (e: any) { setMsg('Ошибка сохранения операции: ' + (e.message || String(e))); }
   };
 
-  const handleRoutingOpAdd = async (routingId: string) => {
+  const handleRoutingOpAdd = (routingId: string) => {
+    const rt = routings.find((r: any) => r.id === routingId);
+    const ops = (rt?.operations || []).slice();
+    const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
+    setModalName('Операция ' + (maxSeq + 1));
+    setAppModal({ kind: 'op-add', routingId });
+  };
+
+  const confirmRoutingOpAdd = async () => {
+    if (!appModal || appModal.kind !== 'op-add') return;
+    const name = (modalName || '').trim();
+    if (!name) return;
+    const { routingId } = appModal;
+    setAppModal(null); setModalName('');
     try {
       const rt = routings.find((r: any) => r.id === routingId);
       const ops = (rt?.operations || []).slice();
       const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
-      const name = window.prompt('Название новой операции:', 'Операция ' + (maxSeq + 1));
-      if (!name || !name.trim()) return;
       await apiF('/bom/routing-operations', {
         method: 'POST',
-        body: JSON.stringify({ routing_id: routingId, name: name.trim(), sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1 }),
+        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1 }),
       });
       await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка добавления операции: ' + (e.message || String(e))); }
@@ -686,6 +705,44 @@ export default function AppShell() {
       await apiF(`/bom/routing-operations/${opId}`, { method: 'DELETE' });
       await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка удаления операции: ' + (e.message || String(e))); }
+  };
+
+  // ── Разрыв связи узла с заказом-производителем (п.2) ──
+  const handleBomNodeUnlink = async (nodeId: string, orderId: string | null) => {
+    if (!selectedProject) return;
+    try {
+      await apiF(`/bom/nodes/${nodeId}`, { method: 'PATCH', body: JSON.stringify({ order_id: null }) });
+      if (orderId) {
+        await apiF(`/production-orders/${orderId}`, { method: 'PUT', body: JSON.stringify({ parent_order_id: null }) });
+      }
+      await reloadBomTree(selectedProject.id);
+      try { await loadProjectOrders(selectedProject.id); } catch {}
+      try { await refresh(); } catch {}
+      setMsg('Связь разорвана: заказ теперь свободный');
+    } catch (e: any) { setMsg('Ошибка разрыва связи: ' + (e.message || String(e))); }
+  };
+
+  // ── Привязка свободного заказа как производителя полуфабриката (п.3) ──
+  const handleAttachFreeOrder = async (currentOrderId: string, freeOrderId: string) => {
+    if (!selectedProject) return;
+    try {
+      const cur = orders.find((x: any) => x.id === currentOrderId);
+      if (!cur) return;
+      const target = orderBomNodes(cur).find((n: any) => n.node_type === 'semi_finished' && !n.order_id);
+      if (!target) { setMsg('В составе этого заказа нет свободного полуфабриката для привязки'); return; }
+      await apiF(`/bom/nodes/${target.id}`, { method: 'PATCH', body: JSON.stringify({ order_id: freeOrderId }) });
+      await apiF(`/production-orders/${freeOrderId}`, { method: 'PUT', body: JSON.stringify({ parent_order_id: currentOrderId }) });
+      await reloadBomTree(selectedProject.id);
+      try { await loadProjectOrders(selectedProject.id); } catch {}
+      try { await refresh(); } catch {}
+      setMsg('Свободный заказ привязан как производитель полуфабриката');
+    } catch (e: any) { setMsg('Ошибка привязки свободного заказа: ' + (e.message || String(e))); }
+  };
+
+  // ── Открыть окно заказа по id (п.5: клик по «производит: …») ──
+  const openOrderWinById = (orderId: string) => {
+    const o = orders.find((x: any) => x.id === orderId);
+    if (o) openOrderPanel(o);
   };
 
   const openResourcePick = (opId: string) => {
@@ -1084,6 +1141,13 @@ export default function AppShell() {
   const [deleteCheckEntity, setDeleteCheckEntity] = useState<{ type: string; id: string; name: string } | null>(null);
   const [dirRefreshKey, setDirRefreshKey] = useState(0);
   const [bomDelete, setBomDelete] = useState<{ nodeId: string; name: string; items: { name: string; type: string }[] } | null>(null);
+  // Стилизованные диалоги вместо window.prompt / window.confirm
+  const [appModal, setAppModal] = useState<null |
+    { kind: 'node-add'; parentId: string; nodeType: 'material' | 'semi_finished' }
+    | { kind: 'op-add'; routingId: string }
+    | { kind: 'op-del'; opId: string; opName: string }
+  >(null);
+  const [modalName, setModalName] = useState('');
   const [deleteCheckResult, setDeleteCheckResult] = useState<any>(null);
   const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
   const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
@@ -1463,6 +1527,37 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     📍 Бросьте заказ сюда — убрать из группы/пула
                   </div>
 
+                  {/* Аномалии структуры BOM (список заказов) */}
+                  {(() => {
+                    const all: any[] = bomAnomalies ? [...(bomAnomalies.no_routing || []), ...(bomAnomalies.no_order || []), ...(bomAnomalies.self_order || [])] : [];
+                    if (bomAnomaliesLoading) return <div style={{ fontSize: 11.5, color: '#F59E0B', padding: '6px 2px' }}>Проверка структуры BOM…</div>;
+                    if (!all.length) return null;
+                    return (
+                      <div style={{ marginBottom: 10, padding: '8px 12px', background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#FCA5A5' }}>⚠ Аномалии структуры: {all.length}</span>
+                          <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>полуфабрикаты без маршрута или без подчинённого заказа</span>
+                          <div style={{ flex: 1 }} />
+                          {createMissingOrders && all.filter((a: any) => a.category !== 'no_routing').length > 0 && (
+                            <button onClick={createMissingOrders} style={{ background: '#3B82F6', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Создать заказы ({all.filter((a: any) => a.category !== 'no_routing').length})</button>
+                          )}
+                        </div>
+                        <div style={{ display: 'grid', gap: 3, maxHeight: 130, overflow: 'auto', marginTop: 5 }}>
+                          {all.slice(0, 15).map((a: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, padding: '3px 8px', background: 'rgba(4,10,20,.4)', borderRadius: 5 }}>
+                              <span style={{ color: '#FCA5A5', fontWeight: 600, flex: '0 0 84px' }}>{a.category === 'no_routing' ? 'нет маршрута' : a.category === 'no_order' ? 'нет заказа' : 'свой заказ'}</span>
+                              <span style={{ color: '#E8EEF5', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.path || a.name}>{a.name}</span>
+                              {a.category !== 'no_routing' && createOrderFromNode && (
+                                <button onClick={() => createOrderFromNode(a.node_id)} style={{ background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 5, padding: '1px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Создать заказ</button>
+                              )}
+                            </div>
+                          ))}
+                          {all.length > 15 && <div style={{ fontSize: 10.5, color: '#5A7090', padding: '2px 8px' }}>…и ещё {all.length - 15}</div>}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Bulk paste panel */}
                   {showBulkPaste && (
                     <div style={{
@@ -1567,9 +1662,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                         {treeRows.map(({ o, depth, hasChildren, collapsed }: any) => {
                           const ti = getTypeInfo(o);
                           const bomOpen = expandedBomOrder === o.id;
+                          const isFree = !o.parent_order_id;
                           return (
                             <Fragment key={o.id}>
-                            <tr id={'ord-' + o.id} draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : undefined }}>
+                            <tr id={'ord-' + o.id} draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : (isFree ? 'rgba(245,158,11,.05)' : undefined) }}>
                               <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 96, minWidth: 96, maxWidth: 96, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
                                 <span style={{ display: 'inline-block', width: 22, textAlign: 'center' }}>
                                   {hasChildren ? (
@@ -1588,7 +1684,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
                               <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
                               <td className="t-mono">{o.ext_id || '—'}</td>
-                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{o.specification_name || o.ext_id || '—'}</td>
+                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{isFree && depth === 0 && <span title="Свободный заказ (без родителя)" style={{ display: 'inline-block', background: 'rgba(245,158,11,.14)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>своб.</span>}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
@@ -1739,7 +1835,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
-                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps showMaterials resName={resName} />
+                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps showMaterials resName={resName} addRootOnly rootOpsOnly onNodeUnlink={handleBomNodeUnlink} />
                             : <div style={{ color: '#5A7090' }}>{bomLoading[selectedProject?.id || ''] ? 'Загрузка состава…' : 'Состав пуст — у заказа нет спецификации (BOM).'}</div>
                           )}
                           {o && panelTab === 'route' && (() => {
@@ -1804,7 +1900,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                             </span>
                                             <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
                                             {panelEditing && (
-                                              <button type="button" title="Удалить операцию" onClick={() => { if (window.confirm('Удалить операцию «' + op.name + '» из маршрута?')) handleRoutingOpRemove(op.id); }}
+                                              <button type="button" title="Удалить операцию" onClick={() => setAppModal({ kind: 'op-del', opId: op.id, opName: op.name })}
                                                 style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
                                             )}
                                           </div>
@@ -3235,6 +3331,13 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onRoutingOpUpdate={handleRoutingOpUpdate}
         onRoutingOpAdd={handleRoutingOpAdd}
         onRoutingOpRemove={handleRoutingOpRemove}
+        onNodeUnlink={handleBomNodeUnlink}
+        openOrderWinById={openOrderWinById}
+        anomalies={bomAnomalies}
+        anomaliesLoading={bomAnomaliesLoading}
+        onCreateMissingOrders={createMissingOrders}
+        onCreateOrderFromNode={createOrderFromNode}
+        onAttachOrder={handleAttachFreeOrder}
         onPickResource={openResourcePick}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}
@@ -3405,6 +3508,47 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </div>
           </div>
         </div>
+      );
+    })()}
+
+    {/* Стилизованные диалоги: ввод имени узла/операции, подтверждение удаления операции */}
+    {appModal && (() => {
+      if (appModal.kind === 'node-add') {
+        const isSemi = appModal.nodeType === 'semi_finished';
+        return (
+          <AppModal title={isSemi ? 'Добавить полуфабрикат' : 'Добавить материал'} onClose={() => { setAppModal(null); setModalName(''); }} accent={isSemi ? '#A78BFA' : '#34D399'}>
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Название {isSemi ? 'полуфабриката' : 'материала'}:</div>
+            <input autoFocus value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmBomNodeAdd(); }} placeholder={isSemi ? 'Например: Опора моста' : 'Например: Бетон М400'} style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+              <button onClick={() => { setAppModal(null); setModalName(''); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button onClick={confirmBomNodeAdd} disabled={!modalName.trim()} style={{ background: isSemi ? '#8B5CF6' : '#10B981', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: modalName.trim() ? 'pointer' : 'default', opacity: modalName.trim() ? 1 : .5, fontFamily: 'inherit' }}>Добавить</button>
+            </div>
+          </AppModal>
+        );
+      }
+      if (appModal.kind === 'op-add') {
+        return (
+          <AppModal title="Добавить операцию в маршрут" onClose={() => { setAppModal(null); setModalName(''); }} accent="#22D3EE">
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Название новой операции:</div>
+            <input autoFocus value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmRoutingOpAdd(); }} placeholder="Например: Сварка" style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+              <button onClick={() => { setAppModal(null); setModalName(''); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button onClick={confirmRoutingOpAdd} disabled={!modalName.trim()} style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: modalName.trim() ? 'pointer' : 'default', opacity: modalName.trim() ? 1 : .5, fontFamily: 'inherit' }}>Добавить</button>
+            </div>
+          </AppModal>
+        );
+      }
+      return (
+        <AppModal title="Удалить операцию" onClose={() => setAppModal(null)} accent="#F87171">
+          <div style={{ fontSize: 12.5, color: '#B0C4DE' }}>
+            Удалить операцию <b style={{ color: '#E8EEF5' }}>«{appModal.opName}»</b> из маршрута?
+            <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6 }}>Операция будет удалена безвозвратно.</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+            <button onClick={() => setAppModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+            <button onClick={() => { handleRoutingOpRemove(appModal.opId); setAppModal(null); }} style={{ background: '#EF4444', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Удалить</button>
+          </div>
+        </AppModal>
       );
     })()}
 
