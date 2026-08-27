@@ -65,12 +65,16 @@ interface BomTreeProps {
   resName?: (rid: any) => string;
   /** Клик по бейджу «производит: …» — перейти к заказу-производителю узла */
   onOrderFocus?: (orderId: string) => void;
-  /** Добавить операцию в маршрут узла (кнопка ⛭ при редактировании) */
-  onRoutingAdd?: (routingId: string) => void;
+  /** Добавить операцию в маршрут узла (кнопка ⛭ при редактировании); при пустом routingId узел создаёт маршрут */
+  onRoutingAdd?: (routingId: string, nodeId?: string) => void;
   /** Кнопки ＋/⇥/⛭ показывать только у корневых узлов (форма состава окна заказа) */
   addRootOnly?: boolean;
   /** Операции маршрутов раскрывать только у корневых узлов */
   rootOpsOnly?: boolean;
+  /** Дочерние узлы не раскрываются (форма состава окна заказа: дочерний полуфабрикат без вложенного списка) */
+  childExpandable?: boolean;
+  /** Выбор/замена номенклатуры в строке (кнопка ⇄ при редактировании) */
+  onNodeNomenclatureChange?: (nodeId: string, nodeType: string) => void;
   /** Разрыв связи узла с заказом-производителем (узел + заказ становятся свободными) */
   onNodeUnlink?: (nodeId: string, orderId: string | null) => void;
 }
@@ -139,7 +143,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd, addRootOnly = false, rootOpsOnly = false, onNodeUnlink }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd, addRootOnly = false, rootOpsOnly = false, childExpandable = true, onNodeNomenclatureChange, onNodeUnlink }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -233,7 +237,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     // В форме состава окна заказа операции раскрываются только у корневого узла
     const opsVisible = rootOpsOnly ? isRoot : true;
     const hasOps = showOps && ops.length > 0 && opsVisible;
-    const expandable = hasChildren || hasOps;
+    const expandable = (hasChildren || hasOps) && (isRoot || childExpandable);
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
     const lead = fmtNum(n.procurement_lead_time_days);
@@ -347,8 +351,8 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
           {editable && (
             <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 3 }} onClick={e => e.stopPropagation()}>
               {/* Кнопки добавления — только у корневого узла (форма состава окна заказа) */}
-              {(!addRootOnly || isRoot) && n.routing_id && (
-                <button type="button" title="Добавить операцию в маршрут" onClick={() => onRoutingAdd?.(n.routing_id!)}
+              {(!addRootOnly || isRoot) && (n.routing_id || isRoot) && (
+                <button type="button" title={n.routing_id ? 'Добавить операцию в маршрут' : 'Создать маршрут и добавить операцию'} onClick={() => onRoutingAdd?.(n.routing_id || '', n.id)}
                   style={{ background: 'rgba(34,211,238,.12)', border: '1px solid rgba(34,211,238,.35)', color: '#22D3EE', borderRadius: 5, width: 20, height: 20, fontSize: 11, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⛭</button>
               )}
               {(!addRootOnly || isRoot) && (
@@ -363,6 +367,10 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
               {addRootOnly && !isRoot && n.order_id && (!currentOrderId || n.order_id !== currentOrderId) && onNodeUnlink && (
                 <button type="button" title="Разорвать связь с заказом-производителем (заказ станет свободным)" onClick={() => onNodeUnlink(n.id, n.order_id)}
                   style={{ background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.4)', color: '#FBBF24', borderRadius: 5, width: 20, height: 20, fontSize: 10.5, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⛓</button>
+              )}
+              {onNodeNomenclatureChange && (
+                <button type="button" title="Заменить номенклатуру (выбор из справочника)" onClick={() => onNodeNomenclatureChange(n.id, n.node_type)}
+                  style={{ background: 'rgba(148,163,184,.12)', border: '1px solid rgba(148,163,184,.35)', color: '#A8B6C8', borderRadius: 5, width: 20, height: 20, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>⇄</button>
               )}
               <button type="button" title="Удалить узел" onClick={() => onNodeRemove?.(n.id)}
                 style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 20, height: 20, fontSize: 11, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>

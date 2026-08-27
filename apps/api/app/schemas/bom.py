@@ -34,6 +34,7 @@ class BOMNodeCreate(BaseModel):
 class BOMNodeUpdate(BaseModel):
     """Частичное обновление узла BOM."""
     nomenclature_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    nomenclature_id: Optional[str] = None
     quantity_per_parent: Optional[Decimal] = Field(default=None, ge=0)
     unit: Optional[str] = None
     routing_id: Optional[str] = None

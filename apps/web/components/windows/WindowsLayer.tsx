@@ -38,10 +38,12 @@ type WindowsLayerProps = {
   dirRefreshKey?: number;
   /** Клик по бейджу «производит: …» — перейти к заказу */
   onOrderFocus?: (orderId: string) => void;
-  /** Добавить операцию в маршрут */
-  onRoutingOpAdd?: (routingId: string) => void;
+  /** Добавить операцию в маршрут (при пустом routingId — создать маршрут узла) */
+  onRoutingOpAdd?: (routingId: string, nodeId?: string) => void;
   /** Удалить операцию маршрута */
   onRoutingOpRemove?: (opId: string) => void;
+  /** Выбор/замена номенклатуры в строке состава (кнопка ⇄ при редактировании) */
+  onNodeNomenclatureChange?: (nodeId: string, nodeType: string) => void;
   /** Разрыв связи узла с заказом-производителем */
   onNodeUnlink?: (nodeId: string, orderId: string | null) => void;
   /** Открыть окно заказа по id (клик по бейджу «производит: …») */
@@ -100,7 +102,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     orderBomNodes, routingFor, routingsFor, resName, routings,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onDirManageEdit, onDirManageDelete, dirRefreshKey = 0, onOrderFocus,
-    onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById,
+    onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById, onNodeNomenclatureChange,
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
@@ -117,6 +119,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
   const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
+  const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
@@ -195,16 +198,24 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             {!isList && !isBom && !isDir && !isResEdit && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', flexShrink: 0 }}>
                 <span style={{ flex: 1, minWidth: 0, color: '#8FA3BD', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o!.specification_name || o!.ext_id || ''}</span>
+                {w.tab === 'bom' && (
+                  <>
+                    <label title="Показывать операции маршрута корневого узла в составе" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#8FA3BD', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      <input type="checkbox" checked={showBomOps} onChange={e => setShowBomOps(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
+                      показывать операции
+                    </label>
+                    {onAttachOrder && (
+                      <button onClick={() => setAttachOpen({ orderId: o!.id })}
+                        title="Привязать свободный заказ как производителя полуфабриката"
+                        style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⛓ Привязать свободный заказ</button>
+                    )}
+                  </>
+                )}
                 {!w.editing ? (
                   <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
                     style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
                 ) : (
                   <>
-                    {w.tab === 'bom' && onAttachOrder && (
-                      <button onClick={() => setAttachOpen({ orderId: o!.id })}
-                        title="Привязать свободный заказ как производителя полуфабриката"
-                        style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⛓ Привязать свободный заказ</button>
-                    )}
                     <button onClick={() => onSaveEdit(w)} style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ Сохранить</button>
                     <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x))} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Отмена</button>
                   </>
@@ -363,7 +374,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       </div>
                     );
                   })()}
-                  {bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={openOrderWinById || onOrderFocus} onRoutingAdd={onRoutingOpAdd} onNodeUnlink={onNodeUnlink} addRootOnly rootOpsOnly currentOrderId={o!.id} />
+                  {bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps={showBomOps} showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={openOrderWinById || onOrderFocus} onRoutingAdd={onRoutingOpAdd} onNodeUnlink={onNodeUnlink} addRootOnly rootOpsOnly childExpandable={false} onNodeNomenclatureChange={onNodeNomenclatureChange} currentOrderId={o!.id} />
                   : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>}
                 </>
               )}
@@ -564,9 +575,13 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         return (
           <AppModal title="Привязать свободный заказ" onClose={() => setAttachOpen(null)} accent="#A78BFA" width={520}>
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 10 }}>
-              Свободные заказы (без родителя) для заказа <b style={{ color: '#C4B5FD' }}>{cur ? (cur.ext_id || cur.specification_name || cur.id.slice(0, 8)) : ''}</b>. Выбранный заказ станет производителем первого свободного полуфабриката в составе.
+              Свободные заказы (без родителя): <b style={{ color: '#C4B5FD' }}>{free.length}</b> — для заказа <b style={{ color: '#C4B5FD' }}>{cur ? (cur.ext_id || cur.specification_name || cur.id.slice(0, 8)) : ''}</b>. Выбранный заказ станет производителем первого свободного полуфабриката в составе.
             </div>
-            {free.length === 0 && <div style={{ color: '#5A7090', padding: '14px 4px' }}>Свободных заказов нет.</div>}
+            {free.length === 0 && (
+              <div style={{ color: '#5A7090', padding: '12px 4px', fontSize: 12 }}>
+                Свободных заказов нет (в проекте всего {orders.length}). Свободными считаются заказы без родителя — чтобы освободить заказ, разорвите связь у его узла в составе (кнопка ⛓).
+              </div>
+            )}
             <div style={{ display: 'grid', gap: 5, maxHeight: 300, overflow: 'auto' }}>
               {free.map((x: any) => (
                 <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8 }}>

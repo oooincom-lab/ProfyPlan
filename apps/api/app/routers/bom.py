@@ -2,6 +2,8 @@
 BOM-роутер: загрузка структуры изделия, техмаршруты, развёртка BOM → CPM-операции.
 """
 import json
+import math
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
@@ -16,6 +18,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.product_structure import ProductStructure
 from app.models.production_order import ProductionOrder
+from app.models.nomenclature import Nomenclature
+from app.models.project import Project
 from app.routers.production_orders import _build_bom_link_graph, _order_to_out
 from app.schemas.production_order import ProductionOrderOut
 from app.models.routing import Routing, RoutingOperation
@@ -130,6 +134,24 @@ async def update_bom_node(
         node.routing_id = UUID(body.routing_id) if body.routing_id else None
     if 'order_id' in body.model_fields_set:
         node.order_id = UUID(body.order_id) if body.order_id else None
+    if 'nomenclature_id' in body.model_fields_set:
+        if body.nomenclature_id:
+            nom = (await db.execute(
+                select(Nomenclature).where(
+                    Nomenclature.id == UUID(body.nomenclature_id),
+                    Nomenclature.tenant_id == tenant_id,
+                )
+            )).scalar_one_or_none()
+            if not nom:
+                raise HTTPException(status_code=404, detail="Номенклатура не найдена")
+            node.nomenclature_id = str(nom.id)
+            node.nomenclature_name = nom.name
+            if nom.unit:
+                node.unit = nom.unit
+            if nom.ext_id:
+                node.ext_id = nom.ext_id
+        else:
+            node.nomenclature_id = None
     if body.quantity_per_parent is not None:
         node.quantity_per_parent = body.quantity_per_parent
     if body.nomenclature_name is not None:
@@ -1422,6 +1444,33 @@ async def create_order_from_node(
     db.add(order)
     await db.flush()
     node.order_id = order.id
+
+    # ── Старт/финиш по операциям маршрута узла (п.7: расчёт по входящим операциям) ──
+    total_hours = 0.0
+    if node.routing_id:
+        rt = (await db.execute(
+            select(Routing).where(Routing.id == node.routing_id, Routing.tenant_id == tenant_id)
+        )).scalar_one_or_none()
+        if rt:
+            ops = (await db.execute(
+                select(RoutingOperation).where(RoutingOperation.routing_id == rt.id)
+            )).scalars().all()
+            total_hours = sum(float(o.duration_hours or 0) for o in ops)
+    start: Optional[date] = None
+    if owner and owner.start_date:
+        start = owner.start_date
+    if start is None:
+        proj = (await db.execute(
+            select(Project).where(Project.id == pid, Project.tenant_id == tenant_id)
+        )).scalar_one_or_none()
+        if proj and proj.start_date:
+            start = proj.start_date.date() if hasattr(proj.start_date, 'date') else proj.start_date
+    if start is None:
+        start = date.today()
+    order.start_date = start
+    days = math.ceil(total_hours / 8) if total_hours > 0 else 0
+    order.due_date = start + timedelta(days=days) if days else None
+
     await db.commit()
     await db.refresh(order)
 
