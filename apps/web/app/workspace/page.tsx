@@ -1234,7 +1234,6 @@ export default function AppShell() {
   const [modalName, setModalName] = useState('');
   const [nomQuery, setNomQuery] = useState('');
   const [nomenclatureList, setNomenclatureList] = useState<any[]>([]);
-  const [detailShowOps, setDetailShowOps] = useState(false); // чекбокс «показывать операции» в детализации списка заказов
   const [panelShowOps, setPanelShowOps] = useState(false); // чекбокс «показывать операции» в панели заказа
   const [panelAttach, setPanelAttach] = useState<string | null>(null); // модалка привязки свободного заказа в панели
   const [deleteCheckResult, setDeleteCheckResult] = useState<any>(null);
@@ -1604,10 +1603,6 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '4px 8px', whiteSpace: 'nowrap' }} title={collapsedOrderIds.size === 0 ? 'Свернуть все поддеревья цепочки' : 'Развернуть все поддеревья цепочки'}>{collapsedOrderIds.size === 0 ? '▾ Свернуть всё' : '▸ Развернуть всё'}</button>
                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
-                      <label title="Показывать операции маршрута корневого узла в детализации заказа" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#8FA3BD', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={detailShowOps} onChange={e => setDetailShowOps(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
-                        операции
-                      </label>
                       <span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>⚡ = CPM</span><span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>○ = План</span>
                     </div>
                   </div>
@@ -1799,7 +1794,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode === 'bom' ? detailShowOps : true} showMaterials={treeMode !== 'routes'} rootOpsOnly={treeMode === 'bom'} resName={resName} onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
@@ -1940,7 +1935,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
-                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps={panelShowOps} showMaterials resName={resName} addRootOnly rootOpsOnly childExpandable={false} onNodeUnlink={handleBomNodeUnlink} onNodeNomenclatureChange={handleBomNodeNomenclature} />
+                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps={panelShowOps} showMaterials resName={resName} addRootOnly childExpandable={false} onNodeUnlink={handleBomNodeUnlink} onNodeNomenclatureChange={handleBomNodeNomenclature} />
                             : <div style={{ color: '#5A7090' }}>{bomLoading[selectedProject?.id || ''] ? 'Загрузка состава…' : 'Состав пуст — у заказа нет спецификации (BOM).'}</div>
                           )}
                           {o && panelTab === 'route' && (() => {

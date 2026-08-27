@@ -237,7 +237,9 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     // В форме состава окна заказа операции раскрываются только у корневого узла
     const opsVisible = rootOpsOnly ? isRoot : true;
     const hasOps = showOps && ops.length > 0 && opsVisible;
-    const expandable = (hasChildren || hasOps) && (isRoot || childExpandable);
+    // Узел с операциями всегда раскрываем (иначе чекбокс «показывать операции»
+    // в окне заказа не показывает операции дочерних узлов при childExpandable=false)
+    const expandable = hasOps || (hasChildren && (isRoot || childExpandable));
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
     const lead = fmtNum(n.procurement_lead_time_days);
