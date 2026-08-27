@@ -234,11 +234,15 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     const hasChildren = children.length > 0;
     const rt = showOps && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
     const ops = rt ? (rt.operations || []) : [];
-    // В форме состава окна заказа операции раскрываются только у корневого узла
-    const opsVisible = rootOpsOnly ? isRoot : true;
+    // Окно заказа (rootOpsOnly): операции показываются у корневого узла продукции
+    // и у прямых детей корня, которые НЕ полуфабрикаты (материалы продукции —
+    // напр. «Монтаж ограждений» у материала «Ограждение барьерное»). Операции
+    // полуфабрикатов (любой глубины) не показываются — их детализация доступна
+    // в собственных окнах заказов.
+    const opsVisible = !rootOpsOnly ? true : (isRoot || (depth === 1 && n.node_type !== 'semi_finished'));
     const hasOps = showOps && ops.length > 0 && opsVisible;
     // Узел с операциями всегда раскрываем (иначе чекбокс «показывать операции»
-    // в окне заказа не показывает операции дочерних узлов при childExpandable=false)
+    // в окне заказа не показывает операции при childExpandable=false)
     const expandable = hasOps || (hasChildren && (isRoot || childExpandable));
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
