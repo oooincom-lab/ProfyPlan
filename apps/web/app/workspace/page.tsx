@@ -21,6 +21,7 @@ import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
 import AppModal from '@/components/AppModal';
+import ReferenceField from '@/components/ReferenceField';
 
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
@@ -749,16 +750,16 @@ export default function AppShell() {
   const confirmRoutingOpAdd = async () => {
     if (!appModal || appModal.kind !== 'op-add') return;
     const name = (modalName || '').trim();
-    if (!name) return;
+    if (!name || !modalResId) return; // Ресурс обязателен: операция без ресурса не участвует в расчёте мощности
     const { routingId } = appModal;
-    setAppModal(null); setModalName('');
+    setAppModal(null); setModalName(''); setModalResId(null);
     try {
       const rt = routings.find((r: any) => r.id === routingId);
       const ops = (rt?.operations || []).slice();
       const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
       await apiF('/bom/routing-operations', {
         method: 'POST',
-        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1 }),
+        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1, resource_type_id: modalResId }),
       });
       await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка добавления операции: ' + (e.message || String(e))); }
@@ -828,12 +829,21 @@ export default function AppShell() {
     if (o) openOrderPanel(o);
   };
 
-  const openResourcePick = (opId: string) => {
-    const wid = win.openDirWin('resources', '🔧 Выбор ресурса', DIR_COLUMNS.resources.columns,
-      (row: any) => { handleRoutingOpUpdate(opId, { resource_type_id: row.id }); win.closeWin(wid); },
-      (row: any) => win.openResEdit(row),
-      (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id),
+  // ── Универсальное открытие окна справочника в режиме выбора (Шаг 1 модуля справочников) ──
+  // Окно рабочего стола: выбор кликом по строке, CRUD доступен там же. Режим «модально»
+  // для справочников-обзоров покрывается настройкой panelMode (Настройки Рабочего стола).
+  const openDirForPick = (entity: string, onPick: (row: any) => void) => {
+    const cfg = DIR_COLUMNS[entity];
+    if (!cfg) return;
+    const wid = win.openDirWin(entity, cfg.title + ' — выбор', cfg.columns,
+      (row: any) => { onPick(row); win.closeWin(wid); },
+      entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
+      entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id) : undefined,
     );
+  };
+
+  const openResourcePick = (opId: string) => {
+    openDirForPick('resources', (row: any) => handleRoutingOpUpdate(opId, { resource_type_id: row.id }));
   };
 
   // BOM-узлы заказа + BOM подчинённых заказов (тусклые, через order_id на узлах)
@@ -1232,6 +1242,7 @@ export default function AppShell() {
     | { kind: 'node-nom'; nodeId: string; nodeType: string; nomId: string | null }
   >(null);
   const [modalName, setModalName] = useState('');
+  const [modalResId, setModalResId] = useState<string | null>(null); // Ресурс * для op-add (обязательный)
   const [nomQuery, setNomQuery] = useState('');
   const [nomenclatureList, setNomenclatureList] = useState<any[]>([]);
   const [panelShowOps, setPanelShowOps] = useState(false); // чекбокс «показывать операции» в панели заказа
@@ -3440,6 +3451,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onAttachOrder={handleAttachFreeOrder}
         onNodeNomenclatureChange={handleBomNodeNomenclature}
         onPickResource={openResourcePick}
+                  onOpenDirPick={openDirForPick}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}
         onOpenDirectory={openDirectory}
@@ -3629,12 +3641,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
       }
       if (appModal.kind === 'op-add') {
         return (
-          <AppModal title="Добавить операцию в маршрут" onClose={() => { setAppModal(null); setModalName(''); }} accent="#22D3EE">
+          <AppModal title="Добавить операцию в маршрут" onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); }} accent="#22D3EE">
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Название новой операции:</div>
             <input autoFocus value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmRoutingOpAdd(); }} placeholder="Например: Сварка" style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '10px 0 6px' }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
+            <ReferenceField entity="resources" value={modalResId} onChange={v => setModalResId(v)} onOpenBrowser={openDirForPick} placeholder="Выбрать ресурс…" />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
-              <button onClick={() => { setAppModal(null); setModalName(''); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-              <button onClick={confirmRoutingOpAdd} disabled={!modalName.trim()} style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: modalName.trim() ? 'pointer' : 'default', opacity: modalName.trim() ? 1 : .5, fontFamily: 'inherit' }}>Добавить</button>
+              <button onClick={() => { setAppModal(null); setModalName(''); setModalResId(null); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button onClick={confirmRoutingOpAdd} disabled={!modalName.trim() || !modalResId} style={{ background: (modalName.trim() && modalResId) ? '#0891B2' : '#123047', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: (modalName.trim() && modalResId) ? 'pointer' : 'default', opacity: (modalName.trim() && modalResId) ? 1 : .5, fontFamily: 'inherit' }}>Добавить</button>
             </div>
           </AppModal>
         );

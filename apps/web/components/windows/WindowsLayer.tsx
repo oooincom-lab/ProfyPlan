@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
+import ReferenceField from '@/components/ReferenceField';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
 import ResourceForm from '@/components/ResourceForm';
@@ -71,6 +72,7 @@ type WindowsLayerProps = {
   onBomNodeAdd: (parentId: string, nodeType: 'material' | 'semi_finished') => void;
   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
   onPickResource: (opId: string) => void;
+  onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
   debug?: boolean;
@@ -106,7 +108,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
-    onRoutingOpUpdate, onPickResource,
+    onRoutingOpUpdate, onPickResource, onOpenDirPick,
     schedules = [], onSaveResourceEdit,
     debug = false,
   } = props;
@@ -427,17 +429,13 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                 {w.editing ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                     <span style={{ flexShrink: 0 }}>Ресурс:</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => onPickResource(op.id)}
-                                      style={{
-                                        background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6,
-                                        color: op.resource_type_id ? '#E8EEF5' : '#5A7090',
-                                        padding: '6px 12px', fontSize: 13, cursor: 'pointer', flex: 1, textAlign: 'left',
-                                      }}
-                                    >
-                                      {op.resource_type_id ? resName(op.resource_type_id) : 'Выбрать ресурс...'}
-                                    </button>
+                                    <ReferenceField
+                                      entity="resources"
+                                      value={op.resource_type_id || null}
+                                      onChange={(v) => onRoutingOpUpdate?.(op.id, { resource_type_id: v })}
+                                      onOpenBrowser={onOpenDirPick}
+                                      placeholder="Выбрать ресурс…"
+                                    />
                                   </div>
                                 ) : (
                                   <>Ресурс: {resName(op.resource_type_id)}</>
