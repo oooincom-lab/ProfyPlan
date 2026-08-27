@@ -1337,6 +1337,7 @@ export default function AppShell() {
     setSelectedProject(p);
     loadBomTree(p.id);
     loadNomenclature();
+    reloadRoutings();
     if (panelMode === 'window') {
       try {
         const [o, g, pl] = await Promise.all([
@@ -1798,7 +1799,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode === 'routes' ? true : detailShowOps} showMaterials={treeMode !== 'routes'} rootOpsOnly={treeMode !== 'routes'} resName={resName} onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode === 'bom' ? detailShowOps : true} showMaterials={treeMode !== 'routes'} rootOpsOnly={treeMode === 'bom'} resName={resName} onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
