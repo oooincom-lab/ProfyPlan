@@ -73,6 +73,8 @@ type WindowsLayerProps = {
   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
   onPickResource: (opId: string) => void;
   onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
+  onRoutingOpCreate?: (routingId: string, name: string, resourceId: string) => Promise<boolean>;
+  opNameSuggestions?: string[];
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
   debug?: boolean;
@@ -108,7 +110,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
-    onRoutingOpUpdate, onPickResource, onOpenDirPick,
+    onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
     schedules = [], onSaveResourceEdit,
     debug = false,
   } = props;
@@ -121,6 +123,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
   const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
+  const [opAddForm, setOpAddForm] = useState<Record<string, { name: string; resId: string | null }>>({});
   const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
@@ -136,6 +139,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
+    if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
     const o = w.data || orderById(w.orderId);
     const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + full : full;
@@ -153,6 +157,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'bom') return { badge: `[bom:openBomWin #${n}]`, copy: `[bom:openBomWin #${n}] «${title}»` };
     if (w.kind === 'list') return { badge: `[list:openListWin:${w.listKind || '?'} #${n}]`, copy: `[list:openListWin:${w.listKind || '?'} #${n}] «${title}»` };
     if (w.kind === 'dir') return { badge: `[dir:openDirWin:${w.data?.entity || '?'} #${n}]`, copy: `[dir:openDirWin:${w.data?.entity || '?'} #${n}] «${title}»` };
+    if (w.kind === 'opadd') return { badge: `[opadd:openWin #${n}]`, copy: `[opadd:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
   };
 
@@ -178,6 +183,58 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         if (!isList && !isDir && !isResEdit && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
+
+        // ── Окно «Добавить операцию в маршрут» (MDI): простое окно рабочего стола с формой ──
+        if (w.kind === 'opadd') {
+          const f = opAddForm[w.id] || { name: '', resId: null };
+          const canAdd = !!(f.name || '').trim() && !!f.resId;
+          return (
+            <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+              style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+              onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
+                <span className="ttl">{w.title || 'Добавить операцию в маршрут'}</span>
+                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
+                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
+                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
+              </div>
+              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto', height: 'calc(100% - 32px)' }}>
+                <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название операции:</div>
+                <input
+                  value={f.name}
+                  list="pp-op-name-suggestions"
+                  onChange={(e) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, name: e.target.value } }))}
+                  placeholder="Например: Сварка"
+                  style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                />
+                <datalist id="pp-op-name-suggestions">
+                  {(opNameSuggestions || []).map((n: string) => <option key={n} value={n} />)}
+                </datalist>
+                <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 4 }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
+                <ReferenceField
+                  entity="resources"
+                  value={f.resId}
+                  onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, resId: v } }))}
+                  onOpenBrowser={onOpenDirPick}
+                  placeholder="Выбрать ресурс…"
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                  <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+                  <button
+                    onClick={async () => {
+                      if (!canAdd || !onRoutingOpCreate) return;
+                      const ok = await onRoutingOpCreate(w.data.routingId, f.name.trim(), f.resId as string);
+                      if (ok !== false) onClose(w.id);
+                    }}
+                    disabled={!canAdd}
+                    style={{ background: canAdd ? '#0891B2' : '#123047', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: canAdd ? 'pointer' : 'default', opacity: canAdd ? 1 : .5, fontFamily: 'inherit' }}
+                  >Добавить</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}

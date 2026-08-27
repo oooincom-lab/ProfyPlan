@@ -743,8 +743,28 @@ export default function AppShell() {
     const rt = routings.find((r: any) => r.id === rid);
     const ops = (rt?.operations || []).slice();
     const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
+    if (panelMode === 'window') {
+      // MDI: добавление операции — простое окно рабочего стола, а не модальный диалог
+      win.openOpAddWin(rid, 'Добавить операцию в маршрут');
+      return;
+    }
     setModalName('Операция ' + (maxSeq + 1));
     setAppModal({ kind: 'op-add', routingId: rid });
+  };
+
+  // Создание операции из MDI-окна «Добавить операцию в маршрут» (Шаг 1 модуля справочников)
+  const handleRoutingOpCreate = async (routingId: string, name: string, resourceId: string): Promise<boolean> => {
+    try {
+      const rt = routings.find((r: any) => r.id === routingId);
+      const ops = (rt?.operations || []).slice();
+      const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
+      await apiF('/bom/routing-operations', {
+        method: 'POST',
+        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1, resource_type_id: resourceId }),
+      });
+      await reloadRoutings();
+      return true;
+    } catch (e: any) { setMsg('Ошибка добавления операции: ' + (e.message || String(e))); return false; }
   };
 
   const confirmRoutingOpAdd = async () => {
@@ -839,6 +859,7 @@ export default function AppShell() {
       (row: any) => { onPick(row); win.closeWin(wid); },
       entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
       entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id) : undefined,
+      { zBoost: 4300 },
     );
   };
 
@@ -3452,6 +3473,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onNodeNomenclatureChange={handleBomNodeNomenclature}
         onPickResource={openResourcePick}
                   onOpenDirPick={openDirForPick}
+                  onRoutingOpCreate={handleRoutingOpCreate}
+                  opNameSuggestions={Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean))))}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}
         onOpenDirectory={openDirectory}
@@ -3629,7 +3652,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
       if (appModal.kind === 'node-add') {
         const isSemi = appModal.nodeType === 'semi_finished';
         return (
-          <AppModal title={isSemi ? 'Добавить полуфабрикат' : 'Добавить материал'} onClose={() => { setAppModal(null); setModalName(''); }} accent={isSemi ? '#A78BFA' : '#34D399'}>
+          <AppModal title={isSemi ? 'Добавить полуфабрикат' : 'Добавить материал'} code="node-add" debug={debugMode} onClose={() => { setAppModal(null); setModalName(''); }} accent={isSemi ? '#A78BFA' : '#34D399'}>
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Название {isSemi ? 'полуфабриката' : 'материала'}:</div>
             <input autoFocus value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmBomNodeAdd(); }} placeholder={isSemi ? 'Например: Опора моста' : 'Например: Бетон М400'} style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
@@ -3641,9 +3664,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
       }
       if (appModal.kind === 'op-add') {
         return (
-          <AppModal title="Добавить операцию в маршрут" onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); }} accent="#22D3EE">
+          <AppModal title="Добавить операцию в маршрут" code="op-add" debug={debugMode} onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); }} accent="#22D3EE">
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Название новой операции:</div>
-            <input autoFocus value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmRoutingOpAdd(); }} placeholder="Например: Сварка" style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            <input autoFocus list="pp-modal-op-names" value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmRoutingOpAdd(); }} placeholder="Например: Сварка" style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            <datalist id="pp-modal-op-names">{Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean)))).map((n: string) => <option key={n} value={n} />)}</datalist>
             <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '10px 0 6px' }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
             <ReferenceField entity="resources" value={modalResId} onChange={v => setModalResId(v)} onOpenBrowser={openDirForPick} placeholder="Выбрать ресурс…" />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
@@ -3661,7 +3685,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           n.ntype === wantType && (!q || (n.name || '').toLowerCase().includes(q) || (n.code || '').toLowerCase().includes(q) || (n.article || '').toLowerCase().includes(q))
         ).slice(0, 60);
         return (
-          <AppModal title={'Выбор номенклатуры — ' + typeLabel} onClose={() => { setAppModal(null); setNomQuery(''); }} accent="#A78BFA" width={560}>
+          <AppModal title={'Выбор номенклатуры — ' + typeLabel} code="node-nom" debug={debugMode} onClose={() => { setAppModal(null); setNomQuery(''); }} accent="#A78BFA" width={560}>
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>
               Замените номенклатуру в строке состава. Фильтр по типу: <b style={{ color: '#C4B5FD' }}>{typeLabel}</b>. Операции не затрагиваются — они меняются во вкладке «Маршрут».
             </div>
@@ -3688,7 +3712,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         );
       }
       return (
-        <AppModal title="Удалить операцию" onClose={() => setAppModal(null)} accent="#F87171">
+        <AppModal title="Удалить операцию" code="op-del" debug={debugMode} onClose={() => setAppModal(null)} accent="#F87171">
           <div style={{ fontSize: 12.5, color: '#B0C4DE' }}>
             Удалить операцию <b style={{ color: '#E8EEF5' }}>«{appModal.opName}»</b> из маршрута?
             <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 6 }}>Операция будет удалена безвозвратно.</div>
@@ -3706,7 +3730,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
       const cur = orders.find((x: any) => x.id === panelAttach);
       const free = orders.filter((x: any) => !x.parent_order_id && x.id !== panelAttach);
       return (
-        <AppModal title="Привязать свободный заказ" onClose={() => setPanelAttach(null)} accent="#A78BFA" width={520}>
+        <AppModal title="Привязать свободный заказ" code="attach" debug={debugMode} onClose={() => setPanelAttach(null)} accent="#A78BFA" width={520}>
           <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 10 }}>
             Свободные заказы (без родителя): <b style={{ color: '#C4B5FD' }}>{free.length}</b> — для заказа <b style={{ color: '#C4B5FD' }}>{cur ? (cur.ext_id || cur.specification_name || cur.id.slice(0, 8)) : ''}</b>. Выбранный заказ станет производителем первого свободного полуфабриката в составе.
           </div>

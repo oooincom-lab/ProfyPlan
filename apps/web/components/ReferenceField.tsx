@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type Props = {
   entity: string;
@@ -31,7 +32,9 @@ export default function ReferenceField({
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   const hdr = (): Record<string, string> => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -47,6 +50,11 @@ export default function ReferenceField({
     setLoading(false);
   };
 
+  const syncRect = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setRect({ left: r.left, top: r.bottom + 4, width: Math.max(r.width, 280) });
+  };
+
   useEffect(() => {
     if (open) load(search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,10 +68,14 @@ export default function ReferenceField({
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setSearch(''); }
+      const t = e.target as HTMLElement;
+      if (t.closest && t.closest('[data-rf-dropdown]')) return; // клики внутри dropdown (portal)
+      if (ref.current && !ref.current.contains(t)) { setOpen(false); setSearch(''); }
     };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); setSearch(''); } };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, []);
 
   const sel = value ? items.find(i => String(i.id) === String(value)) : null;
@@ -73,8 +85,9 @@ export default function ReferenceField({
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex', gap: 4, alignItems: 'center', minWidth: 130, flex: 1, ...style }}>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { syncRect(); setOpen(o => !o); }}
         title={sel ? String(sel[displayField] || '') : placeholder}
         style={{
           background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6,
@@ -107,11 +120,11 @@ export default function ReferenceField({
           }}
         >✕</button>
       )}
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60,
-          background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, marginTop: 4,
-          boxShadow: '0 8px 24px rgba(0,0,0,.5)', maxHeight: 280, overflow: 'hidden',
+      {open && rect && createPortal(
+        <div data-rf-dropdown style={{
+          position: 'fixed', top: rect.top, left: rect.left, width: rect.width, zIndex: 6000,
+          background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8,
+          boxShadow: '0 12px 32px rgba(0,0,0,.6)', maxHeight: 280, overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
         }}>
           <input
@@ -138,7 +151,8 @@ export default function ReferenceField({
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

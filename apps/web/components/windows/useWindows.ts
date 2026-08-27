@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit';
+  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -188,18 +188,44 @@ export function useWindows(sidebarWidth: number = 260) {
     return id;
   };
 
-  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void) => {
+  // Окно добавления операции в маршрут (в MDI-режиме — простое окно, не модальный диалог)
+  const openOpAddWin = (routingId: string, title?: string) => {
+    const d = deskRect();
+    winZ.current += 1;
+    const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    setWins(prev => [...prev, {
+      id,
+      kind: 'opadd' as const,
+      orderId: '',
+      data: { routingId },
+      title: title || 'Добавить операцию в маршрут',
+      x: d.x + Math.max(40, Math.round(d.w / 2) - 200),
+      y: d.y + Math.max(40, Math.round(d.h / 2) - 150),
+      w: 420,
+      h: 300,
+      min: false,
+      z: winZ.current,
+      tab: 'route' as OrderTab,
+      editing: false,
+      form: {},
+    }]);
+    return id;
+  };
+
+  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void, opts?: { zBoost?: number }) => {
     const d = deskRect();
     if (!onSelect) {
       const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
       if (ex) {
         winZ.current += 1;
-        setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current } : w));
+        setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: opts?.zBoost ? opts.zBoost : winZ.current } : w));
         return ex.id;
       }
     }
     const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     winZ.current += 1;
+    const dirZ = opts?.zBoost ? opts.zBoost : winZ.current;
+    if (dirZ > winZ.current) winZ.current = dirZ;
     setWins(prev => [...prev, {
       id,
       kind: 'dir' as const,
@@ -211,7 +237,7 @@ export function useWindows(sidebarWidth: number = 260) {
       w: Math.min(840, d.w - 80),
       h: Math.min(560, d.h - 80),
       min: false,
-      z: winZ.current,
+      z: dirZ,
       tab: 'order' as const,
       editing: false,
       form: {},
@@ -418,7 +444,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openBomWin, openListWin, openDirWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

@@ -1,17 +1,20 @@
 'use client';
 
 import { ReactNode } from 'react';
+import DebugBadge from './DebugBadge';
 
 /**
  * Стилизованная модалка в дизайне ProfyPlan.
  * Заменяет браузерные window.confirm / window.prompt.
  */
-export default function AppModal({ title, onClose, children, width = 460, accent = '#3B82F6' }: {
+export default function AppModal({ title, onClose, children, width = 460, accent = '#3B82F6', code, debug }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   width?: number;
   accent?: string;
+  code?: string;   // код для режима отладки, напр. 'op-add' → [modal:op-add]
+  debug?: boolean; // включён ли режим отладки
 }) {
   return (
     <div
@@ -30,7 +33,7 @@ export default function AppModal({ title, onClose, children, width = 460, accent
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid #1E3252', background: 'rgba(13,31,58,.85)', flexShrink: 0 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 8px ${accent}88` }} />
-          <span style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#E8EEF5', letterSpacing: '.01em' }}>{title}</span>
+          <span style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#E8EEF5', letterSpacing: '.01em', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>{title}{code && debug ? <DebugBadge text={'[modal:' + code + ']'} copy={'[modal:' + code + '] «' + title + '»'} debug={debug} /> : null}</span>
           <button
             onClick={onClose}
             title="Закрыть"
