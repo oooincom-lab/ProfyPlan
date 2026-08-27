@@ -1935,7 +1935,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
-                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps={panelShowOps} showMaterials resName={resName} addRootOnly childExpandable={false} onNodeUnlink={handleBomNodeUnlink} onNodeNomenclatureChange={handleBomNodeNomenclature} />
+                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps={panelShowOps} showMaterials resName={resName} addRootOnly rootOpsOnly childExpandable={false} onNodeUnlink={handleBomNodeUnlink} onNodeNomenclatureChange={handleBomNodeNomenclature} />
                             : <div style={{ color: '#5A7090' }}>{bomLoading[selectedProject?.id || ''] ? 'Загрузка состава…' : 'Состав пуст — у заказа нет спецификации (BOM).'}</div>
                           )}
                           {o && panelTab === 'route' && (() => {

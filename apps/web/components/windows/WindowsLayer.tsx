@@ -374,7 +374,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       </div>
                     );
                   })()}
-                  {bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps={showBomOps} showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={openOrderWinById || onOrderFocus} onRoutingAdd={onRoutingOpAdd} onNodeUnlink={onNodeUnlink} addRootOnly childExpandable={false} onNodeNomenclatureChange={onNodeNomenclatureChange} currentOrderId={o!.id} />
+                  {bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps={showBomOps} showMaterials resName={resName} editable={w.editing} orders={orders} onNodeOrderChange={onNodeOrderChange} onNodeQuantityChange={onBomNodeQuantity} onNodeRemove={onBomNodeRemove} onNodeAdd={onBomNodeAdd} onOrderFocus={openOrderWinById || onOrderFocus} onRoutingAdd={onRoutingOpAdd} onNodeUnlink={onNodeUnlink} addRootOnly rootOpsOnly childExpandable={false} onNodeNomenclatureChange={onNodeNomenclatureChange} currentOrderId={o!.id} />
                   : <div style={{ color: '#5A7090' }}>Состав не загружен — нажмите кнопку BOM (▸) у заказа в списке.</div>}
                 </>
               )}
