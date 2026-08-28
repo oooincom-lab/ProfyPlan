@@ -203,6 +203,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
                 <ReferenceField
                   entity="operations"
+                  pathOverride="/api/v1/catalog-operations/"
                   value={f.opId || null}
                   onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, opId: v, opName: null, opDur: null } }))}
                   onOpenBrowser={onOpenDirPick}
