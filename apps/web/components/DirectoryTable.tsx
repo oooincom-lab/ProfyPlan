@@ -106,9 +106,13 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const saveNew = async () => {
     if (!newRow.name?.trim()) return;
     try {
+      // Глобальные справочники: старый body (ntype/unit); проектные (endpoints): {name, code}
+      const body = endpoints
+        ? { name: newRow.name, code: newRow.code || null }
+        : { name: newRow.name, ntype: newRow.ntype || 'product', unit: newRow.unit || 'pcs', code: newRow.code || null };
       const r = await af(endpoints?.create || `${apiBase}/v1/${entity}/`, {
         method: 'POST',
-        body: JSON.stringify({ name: newRow.name, code: newRow.code || null }),
+        body: JSON.stringify(body),
       });
       if (r.ok) { setNewRow({}); setAdding(false); await load(); }
     } catch (e: any) { alert('Ошибка: ' + e.message); }
