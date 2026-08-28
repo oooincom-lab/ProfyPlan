@@ -3330,9 +3330,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {
                         endpoints: {
-                          list: `/v1/projects/${selectedProject.id}/stages/`,
-                          create: `/v1/projects/${selectedProject.id}/stages/`,
-                          item: (id: string) => `/v1/project-stages/${id}`,
+                          list: `/api/v1/projects/${selectedProject.id}/stages/`,
+                          create: `/api/v1/projects/${selectedProject.id}/stages/`,
+                          item: (id: string) => `/api/v1/project-stages/${id}`,
                           method: 'PATCH' as const,
                         },
                       })}>Этапы</button>
