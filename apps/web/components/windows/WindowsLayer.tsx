@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
@@ -75,6 +75,16 @@ type WindowsLayerProps = {
   onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
   onRoutingOpCreate?: (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null) => Promise<boolean>;
   opNameSuggestions?: string[];
+  /** Ресурсы заказа (Шаг 5): {orderId: items[]} — из операций маршрутов + переопределения */
+  orderRes?: Record<string, any[]>;
+  /** Добавить ресурс в заказ (ReferenceField) */
+  onOrderResAdd?: (orderId: string, resourceId: string) => void;
+  /** Загрузить ресурсы заказа (lazy при открытой вкладке «Ресурсы») */
+  onOrderResLoad?: (orderId: string) => void;
+  /** Изменить переопределение/связь ресурса заказа (upsert) */
+  onOrderResChange?: (orderId: string, item: any, patch: Record<string, any>) => void;
+  /** Убрать переопределение/связь */
+  onOrderResRemove?: (orderId: string, item: any) => void;
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
   debug?: boolean;
@@ -111,7 +121,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove,
     debug = false,
   } = props;
 
@@ -126,6 +136,13 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null }>>({});
   // Единица длительности для инлайн-редактирования операций маршрута (Шаг 4): д/ч/мин/с
   const [durUnit, setDurUnit] = useState<Record<string, string>>({});
+
+  // Шаг 5: ленивая загрузка ресурсов заказа для открытых вкладок «Ресурсы»
+  useEffect(() => {
+    for (const w of wins) {
+      if (!w.min && w.tab === 'res' && w.orderId && onOrderResLoad) onOrderResLoad(w.orderId);
+    }
+  }, [wins, onOrderResLoad]);
   // Селектор «Узел» на вкладке «Маршрут» (Шаг 4): фильтр маршрутов по узлу BOM
   const [routeSelNode, setRouteSelNode] = useState<Record<string, string | null>>({});
   const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
@@ -614,23 +631,65 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 );
               })()}
-              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'res' && (() => {
-                const used = new Set<string>();
-                for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
-                const ordRes = resourcesList.filter((r: any) => used.has(r.id) || used.has(r.name));
-                return ordRes.length ? (
-                  <div>
-                    <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Ресурсы заказа: {ordRes.length}</div>
-                    {ordRes.map((r: any) => (
-                      <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
-                        <span style={{ flex: 1 }}>{r.name}</span>
-                        <span style={{ color: '#5A7090', fontSize: 11 }}>{r.resource_type || '—'}</span>
-                        <span style={{ color: '#FCD34D', fontSize: 11 }}>×{r.capacity_per_unit ?? r.capacity_per_day ?? '—'}</span>
-                        <span style={{ color: '#5A7090', fontSize: 11 }}>{r.capacity_unit || r.unit || ''}</span>
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'res' && o && (() => {
+                const list = (orderRes || {})[o.id] || [];
+                return (
+                  <div style={{ padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <span style={{ fontSize: 11.5, color: '#5A7090', flex: 1 }}>Ресурсы заказа: {list.length} <span style={{ fontSize: 10.5 }}>(из операций маршрутов; здесь задаётся подразделение и доступная мощность)</span></span>
+                      <ReferenceField
+                        entity="resources"
+                        value={null}
+                        onChange={() => {}}
+                        onPickItem={(row) => onOrderResAdd?.(o.id, String(row.id))}
+                        onOpenBrowser={onOpenDirPick}
+                        placeholder="+ Ресурс"
+                        style={{ flex: '0 1 260px', minWidth: 180 }}
+                      />
+                    </div>
+                    {list.length === 0 && (
+                      <div style={{ color: '#5A7090', fontSize: 12 }}>Ресурсы появятся автоматически, когда назначите их операциям маршрута (вкладка «Маршрут»), либо добавьте вручную полем «+ Ресурс».</div>
+                    )}
+                    {list.map((it: any) => (
+                      <div key={it.resource_id} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ flex: 1, fontWeight: 600, fontSize: 12.5 }}>{it.resource_name}</span>
+                          <span style={{ color: '#5A7090', fontSize: 11 }}>Ед.: {it.resource_unit || '—'}</span>
+                          <span style={{ color: '#5A7090', fontSize: 11 }}>Тип: {it.resource_type || '—'}</span>
+                          {it.id && (
+                            <button type="button" title="Убрать из заказа" onClick={() => onOrderResRemove?.(o.id, it)}
+                              style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                          <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Подразделение:</span>
+                          <ReferenceField
+                            entity="departments"
+                            value={it.department_id || null}
+                            displayValue={it.department_name || undefined}
+                            onChange={() => {}}
+                            onPickItem={(row) => onOrderResChange?.(o.id, it, { department_id: row.id })}
+                            onOpenBrowser={onOpenDirPick}
+                            placeholder="Выбрать подразделение…"
+                            style={{ flex: 1, minWidth: 170 }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Доступно:</span>
+                          <input
+                            type="number" min="0" step="any"
+                            defaultValue={it.capacity ?? ''}
+                            key={'cap-' + (it.id || it.resource_id) + '-' + (it.capacity ?? '')}
+                            onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0) onOrderResChange?.(o.id, it, { capacity: v }); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            style={{ width: 90, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12.5, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
+                          />
+                          <span style={{ color: '#5A7090', fontSize: 11 }}>{it.resource_unit || ''}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
-                ) : <div style={{ color: '#5A7090' }}>У заказа нет задействованных ресурсов.</div>;
+                );
               })()}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'plan' && (
                 <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>

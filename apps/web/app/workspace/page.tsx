@@ -1301,6 +1301,46 @@ export default function AppShell() {
   const [modalOpId, setModalOpId] = useState<string | null>(null); // Операция * из каталога (Шаг 3)
   const [modalOpName, setModalOpName] = useState<string | null>(null);
   const [modalOpDur, setModalOpDur] = useState<number | null>(null);
+  // Шаг 5: ресурсы заказа {orderId: items[]} + загрузка (из операций маршрутов + переопределения)
+  const [orderRes, setOrderRes] = useState<Record<string, any[]>>({});
+  const loadOrderResources = async (orderId: string) => {
+    try {
+      const data = await apiF<any>(`/orders/${orderId}/resources`);
+      setOrderRes(prev => ({ ...prev, [orderId]: data }));
+    } catch { }
+  };
+  // Добавление ресурса: только если ресурс уже используется операциями маршрута заказа
+  const handleOrderResAdd = async (orderId: string, resourceId: string) => {
+    const o = orders.find((x: any) => x.id === orderId);
+    const used = new Set<string>();
+    for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
+    if (!used.has(String(resourceId))) {
+      setMsg('Ресурс не используется в операциях маршрута этого заказа — сначала назначьте его в операции (вкладка «Маршрут»).');
+      return;
+    }
+    try {
+      await apiF(`/orders/${orderId}/resources`, { method: 'POST', body: JSON.stringify({ resource_id: resourceId }) });
+      await loadOrderResources(orderId);
+    } catch (e: any) { setMsg('Ошибка добавления ресурса: ' + (e.message || String(e))); }
+  };
+  // Изменение переопределения (upsert: если записи нет — создаём)
+  const handleOrderResChange = async (orderId: string, item: any, patch: Record<string, any>) => {
+    try {
+      if (item.id) {
+        await apiF(`/order-resources/${item.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      } else {
+        await apiF(`/orders/${orderId}/resources`, { method: 'POST', body: JSON.stringify({ resource_id: item.resource_id, ...patch }) });
+      }
+      await loadOrderResources(orderId);
+    } catch (e: any) { setMsg('Ошибка сохранения ресурса заказа: ' + (e.message || String(e))); }
+  };
+  // Удаление переопределения/связи (ресурс из операций остаётся с дефолтами)
+  const handleOrderResRemove = async (orderId: string, item: any) => {
+    try {
+      if (item.id) await apiF(`/order-resources/${item.id}`, { method: 'DELETE' });
+      await loadOrderResources(orderId);
+    } catch (e: any) { setMsg('Ошибка удаления ресурса: ' + (e.message || String(e))); }
+  };
   const [nomQuery, setNomQuery] = useState('');
   const [nomenclatureList, setNomenclatureList] = useState<any[]>([]);
   const [panelShowOps, setPanelShowOps] = useState(false); // чекбокс «показывать операции» в панели заказа
@@ -3527,6 +3567,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onPickResource={openResourcePick}
                   onOpenDirPick={openDirForPick}
                   onRoutingOpCreate={handleRoutingOpCreate}
+                  orderRes={orderRes}
+                  onOrderResLoad={loadOrderResources}
+                  onOrderResChange={handleOrderResChange}
+                  onOrderResRemove={handleOrderResRemove}
                   opNameSuggestions={Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean))))}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}
