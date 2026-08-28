@@ -124,6 +124,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
   const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
   const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null }>>({});
+  // Единица длительности для инлайн-редактирования операций маршрута (Шаг 4): д/ч/мин/с
+  const [durUnit, setDurUnit] = useState<Record<string, string>>({});
   const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
@@ -461,44 +463,102 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                           {(r.operations || []).map((op: any) => (
                             <div key={op.id || op.sequence_number} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
-                                <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                {w.editing ? (
+                                  <input
+                                    type="number" min="1" step="1"
+                                    defaultValue={op.sequence_number}
+                                    key={'seq-' + op.id + '-' + op.sequence_number}
+                                    title="Номер операции"
+                                    onBlur={(e) => { const v = parseInt(String(e.target.value), 10); if (!Number.isNaN(v) && v >= 1 && v !== op.sequence_number) onRoutingOpUpdate?.(op.id, { sequence_number: v }); }}
+                                    style={{ width: 44, background: '#0A1628', border: '1px solid rgba(59,130,246,.4)', borderRadius: 5, color: '#93C5FD', padding: '2px 5px', fontSize: 12, textAlign: 'center', fontFamily: 'inherit' }}
+                                  />
+                                ) : (
+                                  <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: 12 }}>{op.sequence_number}</span>
+                                )}
+                                {w.editing ? (
+                                  <ReferenceField
+                                    entity="operations"
+                                    pathOverride="/api/v1/catalog-operations/"
+                                    value={op.catalog_operation_id || null}
+                                    displayValue={op.catalog_operation_id ? op.name : undefined}
+                                    onChange={(v) => { if (!v) onRoutingOpUpdate?.(op.id, { catalog_operation_id: null }); }}
+                                    onPickItem={(row) => onRoutingOpUpdate?.(op.id, { catalog_operation_id: row.id, name: row.name, duration_hours: Number(row.default_duration_hours) || Number(op.duration_hours) || 0 })}
+                                    onOpenBrowser={onOpenDirPick}
+                                    placeholder="Операция из каталога…"
+                                    style={{ flex: 1, minWidth: 150 }}
+                                  />
+                                ) : (
+                                  <span style={{ flex: 1, fontWeight: 600 }}>{op.name}</span>
+                                )}
                                 {w.editing && (
                                   <button type="button" title="Удалить операцию"
                                     onClick={() => setDelOp({ id: op.id, name: op.name })}
                                     style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>✕</button>
                                 )}
-                                {w.editing ? (
+                                {w.editing ? (() => {
+                                  const K: Record<string, number> = { 'д': 24, 'ч': 1, 'мин': 1 / 60, 'с': 1 / 3600 };
+                                  const unit = durUnit[op.id] || 'ч';
+                                  const k = K[unit] || 1;
+                                  const display = ((Number(op.duration_hours) || 0) / k);
+                                  return (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#FCD34D', fontSize: 12 }}>
                                     <input
                                       type="number" min="0" step="any"
-                                      defaultValue={Number(op.duration_hours) || 0}
-                                      key={'dur-' + op.id + '-' + (Number(op.duration_hours) || 0)}
-                                      title="Продолжительность операции, ч"
-                                      onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0 && Number(v.toFixed(3)) !== Number(op.duration_hours)) { onRoutingOpUpdate(op.id, { duration_hours: v }); } }}
+                                      defaultValue={Number(display.toFixed(3))}
+                                      key={'dur-' + op.id + '-' + unit + '-' + (Number(op.duration_hours) || 0)}
+                                      title="Продолжительность операции"
+                                      onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0) { const hours = v * k; if (Number(hours.toFixed(3)) !== Number(op.duration_hours)) { onRoutingOpUpdate?.(op.id, { duration_hours: Number(hours.toFixed(3)) }); } } }}
                                       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                      style={{ width: 74, background: '#0A1628', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, color: '#FCD34D', padding: '2px 5px', fontSize: 12, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", outline: 'none' }}
+                                      style={{ width: 74, background: '#0A1628', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, color: '#FCD34D', padding: '2px 5px', fontSize: 12, textAlign: 'right', fontFamily: 'inherit' }}
                                     />
-                                    <span>ч</span>
+                                    <select
+                                      value={unit}
+                                      title="Единица длительности"
+                                      onChange={(e) => setDurUnit(prev => ({ ...prev, [op.id]: e.target.value }))}
+                                      style={{ background: '#0A1628', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, color: '#FCD34D', padding: '2px 3px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
+                                    >
+                                      <option value="д">д</option>
+                                      <option value="ч">ч</option>
+                                      <option value="мин">мин</option>
+                                      <option value="с">с</option>
+                                    </select>
                                   </span>
-                                ) : (
+                                  );
+                                })() : (
                                   <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ч</span>
                                 )}
                               </div>
                               <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 3 }}>
                                 {w.editing ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    <span style={{ flexShrink: 0 }}>Ресурс:</span>
-                                    <ReferenceField
-                                      entity="resources"
-                                      value={op.resource_type_id || null}
-                                      onChange={(v) => onRoutingOpUpdate?.(op.id, { resource_type_id: v })}
-                                      onOpenBrowser={onOpenDirPick}
-                                      placeholder="Выбрать ресурс…"
-                                    />
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ flexShrink: 0, width: 108 }}>Этап:</span>
+                                      <ReferenceField
+                                        entity="stages"
+                                        pathOverride={'/api/v1/projects/' + (o.project_id || '') + '/stages/'}
+                                        value={op.stage_name || null}
+                                        displayValue={op.stage_name || undefined}
+                                        onChange={() => {}}
+                                        onPickItem={(row) => onRoutingOpUpdate?.(op.id, { stage_name: row.name })}
+                                        onOpenBrowser={onOpenDirPick}
+                                        placeholder="Выбрать этап…"
+                                        style={{ flex: 1, minWidth: 140 }}
+                                      />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ flexShrink: 0, width: 108 }}>Ресурс:</span>
+                                      <ReferenceField
+                                        entity="resources"
+                                        value={op.resource_type_id || null}
+                                        onChange={(v) => onRoutingOpUpdate?.(op.id, { resource_type_id: v })}
+                                        onOpenBrowser={onOpenDirPick}
+                                        placeholder="Выбрать ресурс…"
+                                        style={{ flex: 1, minWidth: 140 }}
+                                      />
+                                    </div>
                                   </div>
                                 ) : (
-                                  <>Ресурс: {resName(op.resource_type_id)}</>
+                                  <div>Этап: {op.stage_name || '—'} · Ресурс: {resName(op.resource_type_id)}</div>
                                 )}{op.setup_hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{fmtPreds(op.predecessors) ? ' · Предш.: ' + fmtPreds(op.predecessors) : ''}{Number(op.output_quantity) ? ' · Вых. годн.: ' + op.output_quantity : ''}
                               </div>
                             </div>

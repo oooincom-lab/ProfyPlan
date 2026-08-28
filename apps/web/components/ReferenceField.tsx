@@ -20,6 +20,8 @@ type Props = {
   pathOverride?: string;
   apiBase?: string;
   displayField?: string;
+  /** Отображаемое имя, когда value не id из списка (напр. строка stage_name) */
+  displayValue?: string;
   placeholder?: string;
   style?: React.CSSProperties;
 };
@@ -28,6 +30,7 @@ export default function ReferenceField({
   entity, value, onChange, onOpenBrowser, onPickItem, pathOverride,
   apiBase = 'https://profyplan.ru/api',
   displayField = 'name',
+  displayValue,
   placeholder = 'Выбрать…',
   style,
 }: Props) {
@@ -100,7 +103,7 @@ export default function ReferenceField({
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'inherit',
         }}
       >
-        {sel ? String(sel[displayField] || sel.name || sel.id) : placeholder} <span style={{ color: '#3B82F6' }}>▾</span>
+        {sel ? String(sel[displayField] || sel.name || sel.id) : (!sel && value && displayValue ? displayValue : placeholder)} <span style={{ color: '#3B82F6' }}>▾</span>
       </button>
       {onOpenBrowser && (
         <button
