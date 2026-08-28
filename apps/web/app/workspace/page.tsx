@@ -57,6 +57,13 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'unit', label: 'Ед.', width: 70 },
     ],
   },
+  operations: {
+    title: 'Операции', columns: [
+      { key: 'name', label: 'Операция' },
+      { key: 'default_duration_hours', label: 'Длит., ч' },
+      { key: 'notes', label: 'Примечание' },
+    ],
+  },
   stages: {
     title: 'Этапы проекта', columns: [
       { key: 'position', label: '№', width: 50 },
@@ -760,14 +767,14 @@ export default function AppShell() {
   };
 
   // Создание операции из MDI-окна «Добавить операцию в маршрут» (Шаг 1 модуля справочников)
-  const handleRoutingOpCreate = async (routingId: string, name: string, resourceId: string): Promise<boolean> => {
+  const handleRoutingOpCreate = async (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null): Promise<boolean> => {
     try {
       const rt = routings.find((r: any) => r.id === routingId);
       const ops = (rt?.operations || []).slice();
       const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
       await apiF('/bom/routing-operations', {
         method: 'POST',
-        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1, resource_type_id: resourceId }),
+        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: durationHours || 1, output_quantity: 1, yield_rate: 1, resource_type_id: resourceId, catalog_operation_id: catalogOperationId || null }),
       });
       await reloadRoutings();
       return true;
@@ -776,17 +783,16 @@ export default function AppShell() {
 
   const confirmRoutingOpAdd = async () => {
     if (!appModal || appModal.kind !== 'op-add') return;
-    const name = (modalName || '').trim();
-    if (!name || !modalResId) return; // Ресурс обязателен: операция без ресурса не участвует в расчёте мощности
+    if (!modalOpId || !modalResId) return; // Операция и Ресурс обязательны: без ресурса операция не участвует в расчёте мощности
     const { routingId } = appModal;
-    setAppModal(null); setModalName(''); setModalResId(null);
+    setAppModal(null); setModalName(''); setModalResId(null); setModalOpId(null); setModalOpName(null); setModalOpDur(null);
     try {
       const rt = routings.find((r: any) => r.id === routingId);
       const ops = (rt?.operations || []).slice();
       const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
       await apiF('/bom/routing-operations', {
         method: 'POST',
-        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: 1, output_quantity: 1, yield_rate: 1, resource_type_id: modalResId }),
+        body: JSON.stringify({ routing_id: routingId, name: modalOpName || 'Операция', sequence_number: maxSeq + 1, duration_hours: modalOpDur || 1, output_quantity: 1, yield_rate: 1, resource_type_id: modalResId, catalog_operation_id: modalOpId }),
       });
       await reloadRoutings();
     } catch (e: any) { setMsg('Ошибка добавления операции: ' + (e.message || String(e))); }
@@ -862,11 +868,14 @@ export default function AppShell() {
   const openDirForPick = (entity: string, onPick: (row: any) => void) => {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
+    const extraEndpoints = entity === 'operations'
+      ? { list: '/api/v1/catalog-operations/', create: '/api/v1/catalog-operations/' }
+      : undefined;
     const wid = win.openDirWin(entity, cfg.title + ' — выбор', cfg.columns,
       (row: any) => { onPick(row); win.closeWin(wid); },
       entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
       entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id) : undefined,
-      { zBoost: 4300 },
+      { zBoost: 4300, endpoints: extraEndpoints },
     );
   };
 
@@ -1271,6 +1280,9 @@ export default function AppShell() {
   >(null);
   const [modalName, setModalName] = useState('');
   const [modalResId, setModalResId] = useState<string | null>(null); // Ресурс * для op-add (обязательный)
+  const [modalOpId, setModalOpId] = useState<string | null>(null); // Операция * из каталога (Шаг 3)
+  const [modalOpName, setModalOpName] = useState<string | null>(null);
+  const [modalOpDur, setModalOpDur] = useState<number | null>(null);
   const [nomQuery, setNomQuery] = useState('');
   const [nomenclatureList, setNomenclatureList] = useState<any[]>([]);
   const [panelShowOps, setPanelShowOps] = useState(false); // чекбокс «показывать операции» в панели заказа
@@ -3687,15 +3699,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
       }
       if (appModal.kind === 'op-add') {
         return (
-          <AppModal title="Добавить операцию в маршрут" code="op-add" debug={debugMode} onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); }} accent="#22D3EE">
-            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Название новой операции:</div>
-            <input autoFocus list="pp-modal-op-names" value={modalName} onChange={e => setModalName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmRoutingOpAdd(); }} placeholder="Например: Сварка" style={{ width: '100%', background: '#0A1628', border: '1px solid #2A4060', borderRadius: 8, color: '#E8EEF5', padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-            <datalist id="pp-modal-op-names">{Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean)))).map((n: string) => <option key={n} value={n} />)}</datalist>
+          <AppModal title="Добавить операцию в маршрут" code="op-add" debug={debugMode} onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); setModalOpId(null); setModalOpName(null); setModalOpDur(null); }} accent="#22D3EE">
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
+            <ReferenceField entity="operations" value={modalOpId} onChange={v => setModalOpId(v)} onOpenBrowser={openDirForPick} onPickItem={row => { setModalOpId(String(row.id)); setModalOpName(row.name); setModalOpDur(Number(row.default_duration_hours) || 1); }} placeholder="Выбрать операцию…" />
             <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '10px 0 6px' }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
             <ReferenceField entity="resources" value={modalResId} onChange={v => setModalResId(v)} onOpenBrowser={openDirForPick} placeholder="Выбрать ресурс…" />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
-              <button onClick={() => { setAppModal(null); setModalName(''); setModalResId(null); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-              <button onClick={confirmRoutingOpAdd} disabled={!modalName.trim() || !modalResId} style={{ background: (modalName.trim() && modalResId) ? '#0891B2' : '#123047', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: (modalName.trim() && modalResId) ? 'pointer' : 'default', opacity: (modalName.trim() && modalResId) ? 1 : .5, fontFamily: 'inherit' }}>Добавить</button>
+              <button onClick={() => { setAppModal(null); setModalName(''); setModalResId(null); setModalOpId(null); setModalOpName(null); setModalOpDur(null); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button onClick={confirmRoutingOpAdd} disabled={!modalOpId || !modalResId} style={{ background: (modalOpId && modalResId) ? '#0891B2' : '#123047', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: (modalOpId && modalResId) ? 'pointer' : 'default', opacity: (modalOpId && modalResId) ? 1 : .5, fontFamily: 'inherit' }}>Добавить</button>
             </div>
           </AppModal>
         );

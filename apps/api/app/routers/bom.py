@@ -542,13 +542,28 @@ async def add_routing_operation(
     if not routing:
         raise HTTPException(status_code=404, detail="Маршрут не найден")
 
+    # Каталог операций: если указана операция из каталога — подставляем
+    # имя и длительность по умолчанию (источник истины — каталог).
+    catalog_op = None
+    if body.catalog_operation_id:
+        from app.models.catalog_operation import CatalogOperation
+        catalog_op = (await db.execute(
+            select(CatalogOperation).where(
+                CatalogOperation.id == body.catalog_operation_id,
+                CatalogOperation.tenant_id == tenant_id,
+            )
+        )).scalar_one_or_none()
+        if not catalog_op:
+            raise HTTPException(404, "Операция из каталога не найдена")
+
     op = RoutingOperation(
         routing_id=body.routing_id,
         sequence_number=body.sequence_number,
-        name=body.name,
-        duration_hours=body.duration_hours,
+        name=catalog_op.name if catalog_op else body.name,
+        duration_hours=(catalog_op.default_duration_hours if catalog_op else body.duration_hours),
         setup_hours=body.setup_hours,
         teardown_hours=body.teardown_hours,
+        catalog_operation_id=body.catalog_operation_id,
         resource_type_id=body.resource_type_id,
         alternative_resource_types=body.alternative_resource_types,
         stage=body.stage,

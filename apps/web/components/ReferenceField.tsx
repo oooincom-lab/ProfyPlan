@@ -15,6 +15,7 @@ type Props = {
   value: string | null;
   onChange: (id: string | null) => void;
   onOpenBrowser?: (entity: string, onPick: (row: any) => void) => void;
+  onPickItem?: (row: any) => void;
   apiBase?: string;
   displayField?: string;
   placeholder?: string;
@@ -22,7 +23,7 @@ type Props = {
 };
 
 export default function ReferenceField({
-  entity, value, onChange, onOpenBrowser,
+  entity, value, onChange, onOpenBrowser, onPickItem,
   apiBase = 'https://profyplan.ru/api',
   displayField = 'name',
   placeholder = 'Выбрать…',
@@ -102,7 +103,7 @@ export default function ReferenceField({
         <button
           type="button"
           title="Открыть справочник: список, добавление, редактирование, удаление"
-          onClick={() => onOpenBrowser(entity, (row: any) => { onChange(String(row.id)); setOpen(false); })}
+          onClick={() => onOpenBrowser(entity, (row: any) => { onChange(String(row.id)); onPickItem?.(row); setOpen(false); })}
           style={{
             background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD',
             borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: 'pointer', flex: '0 0 auto', fontFamily: 'inherit',
@@ -140,7 +141,7 @@ export default function ReferenceField({
             {filtered.map((it: any) => (
               <div
                 key={String(it.id)}
-                onClick={() => { onChange(String(it.id)); setOpen(false); setSearch(''); }}
+                onClick={() => { onChange(String(it.id)); onPickItem?.(it); setOpen(false); setSearch(''); }}
                 style={{
                   padding: '7px 10px', fontSize: 12.5, cursor: 'pointer',
                   borderBottom: '1px dashed rgba(30,58,95,.4)',

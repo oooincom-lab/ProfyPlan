@@ -73,7 +73,7 @@ type WindowsLayerProps = {
   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
   onPickResource: (opId: string) => void;
   onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
-  onRoutingOpCreate?: (routingId: string, name: string, resourceId: string) => Promise<boolean>;
+  onRoutingOpCreate?: (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null) => Promise<boolean>;
   opNameSuggestions?: string[];
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
@@ -123,7 +123,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
   const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
-  const [opAddForm, setOpAddForm] = useState<Record<string, { name: string; resId: string | null }>>({});
+  const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null }>>({});
   const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
@@ -186,8 +186,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
         // ── Окно «Добавить операцию в маршрут» (MDI): простое окно рабочего стола с формой ──
         if (w.kind === 'opadd') {
-          const f = opAddForm[w.id] || { name: '', resId: null };
-          const canAdd = !!(f.name || '').trim() && !!f.resId;
+          const f = opAddForm[w.id] || { opId: null, opName: null, opDur: null, resId: null };
+          const canAdd = !!f.opId && !!f.resId;
           return (
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
@@ -200,17 +200,18 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
               </div>
               <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto', height: 'calc(100% - 32px)' }}>
-                <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название операции:</div>
-                <input
-                  value={f.name}
-                  list="pp-op-name-suggestions"
-                  onChange={(e) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, name: e.target.value } }))}
-                  placeholder="Например: Сварка"
-                  style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
+                <ReferenceField
+                  entity="operations"
+                  value={f.opId || null}
+                  onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, opId: v, opName: null, opDur: null } }))}
+                  onOpenBrowser={onOpenDirPick}
+                  onPickItem={(row) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, opId: String(row.id), opName: row.name, opDur: Number(row.default_duration_hours) || 1 } }))}
+                  placeholder="Выбрать операцию…"
                 />
-                <datalist id="pp-op-name-suggestions">
-                  {(opNameSuggestions || []).map((n: string) => <option key={n} value={n} />)}
-                </datalist>
+                {f.opName && (
+                  <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название: <b style={{ color: '#E8EEF5' }}>{f.opName}</b> · длительность по умолчанию: <b style={{ color: '#E8EEF5' }}>{f.opDur} ч</b></div>
+                )}
                 <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 4 }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
                 <ReferenceField
                   entity="resources"
@@ -224,7 +225,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   <button
                     onClick={async () => {
                       if (!canAdd || !onRoutingOpCreate) return;
-                      const ok = await onRoutingOpCreate(w.data.routingId, f.name.trim(), f.resId as string);
+                      const ok = await onRoutingOpCreate(w.data.routingId, (f.opName || '').trim(), f.resId as string, f.opId, f.opDur);
                       if (ok !== false) onClose(w.id);
                     }}
                     disabled={!canAdd}

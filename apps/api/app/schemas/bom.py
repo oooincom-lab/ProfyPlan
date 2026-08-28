@@ -103,6 +103,7 @@ class RoutingOpCreate(BaseModel):
     input_materials: Optional[str] = None
     notes: Optional[str] = None
     ext_id: Optional[str] = None
+    catalog_operation_id: Optional[UUID] = None
 
 
 class RoutingOpAdd(RoutingOpCreate):
@@ -142,6 +143,7 @@ class RoutingOpOut(BaseModel):
     predecessors: Optional[str] = None
     notes: Optional[str] = None
     ext_id: Optional[str] = None
+    catalog_operation_id: Optional[UUID] = None
 
 
 class RoutingOpUpdate(BaseModel):
@@ -157,6 +159,7 @@ class RoutingOpUpdate(BaseModel):
     output_quantity: Optional[Decimal] = Field(default=None, ge=0)
     yield_rate: Optional[Decimal] = Field(default=None, ge=0, le=1)
     notes: Optional[str] = None
+    catalog_operation_id: Optional[UUID] = None
 
 
 class RoutingOut(BaseModel):

@@ -18,6 +18,7 @@ from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
 from app.models.nomenclature import Nomenclature
 from app.models.project_stage import ProjectStage
+from app.models.catalog_operation import CatalogOperation
 from app.models.unit import Unit
 from app.models.order_group import OrderGroup
 from app.models.order_pool import OrderPool
@@ -141,6 +142,15 @@ DEPENDENCY_MAP = {
         "cascade": [],
         "blocking": [],
     },
+    "catalog_operation": {
+        "model": CatalogOperation,
+        "label": "Операция (каталог)",
+        "name_field": "name",
+        "cascade": [],
+        "blocking": [
+            ("routing_operations", RoutingOperation, "catalog_operation_id", "name"),
+        ],
+    },
 }
 
 CASCADE_LABELS = {
@@ -155,6 +165,7 @@ CASCADE_LABELS = {
 
 BLOCKING_LABELS = {
     "operation_resources": "Связи операций с ресурсами",
+    "routing_operations": "Операции маршрутов",
     "nomenclature": "Единицы номенклатуры",
     "orders": "Заказы", "pools": "Пулы", "bom_nodes": "Узлы BOM",
     "actual_executions": "Фактическое выполнение",
@@ -206,6 +217,7 @@ async def delete_check(
             'resources': 'resource',
             'calendars': 'resource_calendar',
             'stages': 'stage',
+            'operations': 'catalog_operation',
         }
         mapped = _alias.get(entity_type)
         if mapped:
@@ -316,6 +328,7 @@ async def safe_delete(
             'resources': 'resource',
             'calendars': 'resource_calendar',
             'stages': 'stage',
+            'operations': 'catalog_operation',
         }
         mapped = _alias.get(entity_type)
         if mapped:

@@ -91,6 +91,12 @@ class RoutingOperation(BaseModel):
         Numeric(5, 3), default=1.0
     )  # 0.95 = 5% брак
 
+    catalog_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("catalog_operations.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Ссылка на каталог операций (Шаг 3 v2.15)",
+    )
+
     predecessors: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )  # "1,3" — sequence_number предшественников

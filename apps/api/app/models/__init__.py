@@ -14,7 +14,8 @@ from app.models.order_pool import OrderPool  # noqa: F401
 from app.models.nomenclature import Nomenclature  # noqa: F401
 from app.models.unit import Unit  # noqa: F401
 from app.models.counterparty import Counterparty
-from app.models.project_stage import ProjectStage  # noqa: F401
+from app.models.project_stage import ProjectStage
+from app.models.catalog_operation import CatalogOperation  # noqa: F401
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot  # noqa: F401
 from app.models.production_calendar import ProductionCalendar, ProductionCalendarDay  # noqa: F401
 from app.models.plan_version import (
