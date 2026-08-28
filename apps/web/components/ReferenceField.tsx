@@ -16,6 +16,8 @@ type Props = {
   onChange: (id: string | null) => void;
   onOpenBrowser?: (entity: string, onPick: (row: any) => void) => void;
   onPickItem?: (row: any) => void;
+  /** Переопределение пути API (напр. /api/v1/catalog-operations/) */
+  pathOverride?: string;
   apiBase?: string;
   displayField?: string;
   placeholder?: string;
@@ -23,7 +25,7 @@ type Props = {
 };
 
 export default function ReferenceField({
-  entity, value, onChange, onOpenBrowser, onPickItem,
+  entity, value, onChange, onOpenBrowser, onPickItem, pathOverride,
   apiBase = 'https://profyplan.ru/api',
   displayField = 'name',
   placeholder = 'Выбрать…',
@@ -45,7 +47,8 @@ export default function ReferenceField({
   const load = async (q: string) => {
     setLoading(true);
     try {
-      const r = await fetch(`${apiBase}/v1/${entity}/` + (q ? `?search=${encodeURIComponent(q)}` : ''), { headers: hdr() });
+      const base = pathOverride || `${apiBase}/v1/${entity}/`;
+      const r = await fetch(base + (q ? `?search=${encodeURIComponent(q)}` : ''), { headers: hdr() });
       if (r.ok) setItems(await r.json());
     } catch { }
     setLoading(false);
