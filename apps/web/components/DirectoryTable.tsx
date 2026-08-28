@@ -24,9 +24,16 @@ type Props = {
   synonyms?: Record<string, string[]>;
   /** Счётчик — при изменении список перезагружается (после удаления извне) */
   refreshKey?: number;
+  /** Переопределение URL (проектные справочники: этапы и т.п.). Если задан — используется вместо /v1/{entity}/... */
+  endpoints?: {
+    list?: string;
+    create?: string;
+    item?: (id: string) => string;
+    method?: 'PUT' | 'PATCH';
+  };
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, compact, synonyms, refreshKey = 0 }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, compact, synonyms, refreshKey = 0, endpoints }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -88,7 +95,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const load = async () => {
     setLoading(true);
     try {
-      const r = await af(`${apiBase}/v1/${entity}/`);
+      const r = await af(endpoints?.list || `${apiBase}/v1/${entity}/`);
       if (r.ok) setRows(await r.json());
     } catch { }
     setLoading(false);
@@ -99,9 +106,9 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const saveNew = async () => {
     if (!newRow.name?.trim()) return;
     try {
-      const r = await af(`${apiBase}/v1/${entity}/`, {
+      const r = await af(endpoints?.create || `${apiBase}/v1/${entity}/`, {
         method: 'POST',
-        body: JSON.stringify({ name: newRow.name, ntype: newRow.ntype || 'product', unit: newRow.unit || 'pcs', code: newRow.code || null }),
+        body: JSON.stringify({ name: newRow.name, code: newRow.code || null }),
       });
       if (r.ok) { setNewRow({}); setAdding(false); await load(); }
     } catch (e: any) { alert('Ошибка: ' + e.message); }
@@ -109,8 +116,8 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
 
   const saveEdit = async (id: string) => {
     try {
-      const r = await af(`${apiBase}/v1/${entity}/${id}`, {
-        method: 'PUT',
+      const r = await af(endpoints?.item ? endpoints.item(id) : `${apiBase}/v1/${entity}/${id}`, {
+        method: endpoints?.item ? (endpoints.method || 'PATCH') : 'PUT',
         body: JSON.stringify(editVals),
       });
       if (r.ok) { setEditingId(null); await load(); }
@@ -198,21 +205,21 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
         </div>
         <div style={{ flex: 1 }} />
         {!compact && !onSelect && (
-          <>
-            <button
-              className="btn btn-sm"
-              style={{ background: '#162844', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}
-              onClick={() => setShowImport(true)}
-            >
-              📋 Импорт
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => { setAdding(true); setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '' }); }}
-            >
-              + Добавить
-            </button>
-          </>
+          <button
+            className="btn btn-sm"
+            style={{ background: '#162844', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}
+            onClick={() => setShowImport(true)}
+          >
+            📋 Импорт
+          </button>
+        )}
+        {!compact && (
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => { setAdding(true); setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '' }); }}
+          >
+            + Добавить
+          </button>
         )}
         {onSelect && (
           <>

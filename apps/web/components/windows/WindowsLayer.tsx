@@ -300,6 +300,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   columns={w.data?.columns || []}
                   apiBase="https://profyplan.ru/api"
                   onSelect={w.data?.onSelect}
+                  endpoints={w.data?.endpoints}
                   onManageEdit={w.data?.onManageEdit ? (row: any) => onDirManageEdit?.(w.data?.entity || '', row) : undefined}
                   onManageDelete={w.data?.onManageDelete ? (row: any) => onDirManageDelete?.(w.data?.entity || '', row) : undefined}
                 />

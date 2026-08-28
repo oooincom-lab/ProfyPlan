@@ -57,6 +57,13 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'unit', label: 'Ед.', width: 70 },
     ],
   },
+  stages: {
+    title: 'Этапы проекта', columns: [
+      { key: 'position', label: '№', width: 50 },
+      { key: 'name', label: 'Этап' },
+      { key: 'code', label: 'Код' },
+    ],
+  },
   resources: {
     title: '🔧 Ресурсы',
     columns: [
@@ -3313,6 +3320,22 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       <button className={selectedProject.status === 'archived' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'} onClick={() => archiveProject(selectedProject)}>
                         {selectedProject.status === 'archived' ? 'Восстановить' : 'В архив'}
                       </button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>🧩 Этапы проекта</div>
+                        <div style={{ fontSize: 12, color: '#5A7090' }}>Регистр этапов для группировки операций маршрутов</div>
+                      </div>
+                      <button className="btn btn-primary btn-sm" onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {
+                        endpoints: {
+                          list: `/v1/projects/${selectedProject.id}/stages/`,
+                          create: `/v1/projects/${selectedProject.id}/stages/`,
+                          item: (id: string) => `/v1/project-stages/${id}`,
+                          method: 'PATCH' as const,
+                        },
+                      })}>Этапы</button>
                     </div>
                   </div>
                   <div style={{ paddingTop: 12, borderTop: '1px solid #1E3252' }}>

@@ -17,6 +17,7 @@ from app.models.resource_calendar import ResourceCalendar, ResourceCalendarSlot
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
 from app.models.nomenclature import Nomenclature
+from app.models.project_stage import ProjectStage
 from app.models.unit import Unit
 from app.models.order_group import OrderGroup
 from app.models.order_pool import OrderPool
@@ -133,6 +134,13 @@ DEPENDENCY_MAP = {
         ],
         "blocking": [],
     },
+    "stage": {
+        "model": ProjectStage,
+        "label": "Этап проекта",
+        "name_field": "name",
+        "cascade": [],
+        "blocking": [],
+    },
 }
 
 CASCADE_LABELS = {
@@ -197,6 +205,7 @@ async def delete_check(
             'units': 'unit',
             'resources': 'resource',
             'calendars': 'resource_calendar',
+            'stages': 'stage',
         }
         mapped = _alias.get(entity_type)
         if mapped:
@@ -306,6 +315,7 @@ async def safe_delete(
             'units': 'unit',
             'resources': 'resource',
             'calendars': 'resource_calendar',
+            'stages': 'stage',
         }
         mapped = _alias.get(entity_type)
         if mapped:
