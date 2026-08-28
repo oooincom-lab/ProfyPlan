@@ -19,6 +19,7 @@ from app.models.routing import Routing, RoutingOperation
 from app.models.nomenclature import Nomenclature
 from app.models.project_stage import ProjectStage
 from app.models.catalog_operation import CatalogOperation
+from app.models.department import Department
 from app.models.unit import Unit
 from app.models.order_group import OrderGroup
 from app.models.order_pool import OrderPool
@@ -142,6 +143,13 @@ DEPENDENCY_MAP = {
         "cascade": [],
         "blocking": [],
     },
+    "department": {
+        "model": Department,
+        "label": "Подразделение",
+        "name_field": "name",
+        "cascade": [],
+        "blocking": [],
+    },
     "catalog_operation": {
         "model": CatalogOperation,
         "label": "Операция (каталог)",
@@ -218,6 +226,7 @@ async def delete_check(
             'calendars': 'resource_calendar',
             'stages': 'stage',
             'operations': 'catalog_operation',
+            'departments': 'department',
         }
         mapped = _alias.get(entity_type)
         if mapped:
@@ -329,6 +338,7 @@ async def safe_delete(
             'calendars': 'resource_calendar',
             'stages': 'stage',
             'operations': 'catalog_operation',
+            'departments': 'department',
         }
         mapped = _alias.get(entity_type)
         if mapped:

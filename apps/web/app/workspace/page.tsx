@@ -64,6 +64,12 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'notes', label: 'Примечание' },
     ],
   },
+  departments: {
+    title: 'Подразделения', columns: [
+      { key: 'name', label: 'Подразделение' },
+      { key: 'code', label: 'Код' },
+    ],
+  },
   stages: {
     title: 'Этапы проекта', columns: [
       { key: 'position', label: '№', width: 50 },
@@ -801,7 +807,19 @@ export default function AppShell() {
   const handleRoutingOpRemove = async (opId: string) => {
     try {
       await apiF(`/bom/routing-operations/${opId}`, { method: 'DELETE' });
+      // Перенумерация оставшихся операций маршрута (1..N) — Шаг 4
+      const removed = routings.flatMap((r: any) => (r.operations || []) as any[]).find((o: any) => o.id === opId);
       await reloadRoutings();
+      if (removed?.routing_id) {
+        const rt = routings.find((r: any) => r.id === removed.routing_id);
+        const rest = ((rt?.operations || []) as any[]).filter((o: any) => o.id !== opId).sort((a: any, b: any) => (a.sequence_number || 0) - (b.sequence_number || 0));
+        for (let i = 0; i < rest.length; i++) {
+          if ((rest[i].sequence_number || 0) !== i + 1) {
+            try { await apiF(`/bom/routing-operations/${rest[i].id}`, { method: 'PATCH', body: JSON.stringify({ sequence_number: i + 1 }) }); } catch { }
+          }
+        }
+        await reloadRoutings();
+      }
     } catch (e: any) { setMsg('Ошибка удаления операции: ' + (e.message || String(e))); }
   };
 

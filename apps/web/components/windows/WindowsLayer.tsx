@@ -126,6 +126,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null }>>({});
   // Единица длительности для инлайн-редактирования операций маршрута (Шаг 4): д/ч/мин/с
   const [durUnit, setDurUnit] = useState<Record<string, string>>({});
+  // Селектор «Узел» на вкладке «Маршрут» (Шаг 4): фильтр маршрутов по узлу BOM
+  const [routeSelNode, setRouteSelNode] = useState<Record<string, string | null>>({});
   const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
@@ -445,9 +447,26 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'route' && (() => {
                 const rts = routingsFor(o);
                 if (!rts.length) return <div style={{ color: '#5A7090' }}>Маршруты не заданы. Привяжите маршруты к узлам спецификации (BOM → узел → routing_id).</div>;
+                const selNode = routeSelNode[w.id] || '';
+                const shown = selNode ? rts.filter((r: any) => r.product_node_id === selNode) : rts;
                 return (
                   <div>
-                    {rts.map((r: any) => {
+                    {bomNodes.length > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <span style={{ fontSize: 11.5, color: '#8FA3BD', flexShrink: 0 }}>Узел:</span>
+                        <select
+                          value={selNode}
+                          onChange={(e) => setRouteSelNode(prev => ({ ...prev, [w.id]: e.target.value }))}
+                          style={{ flex: 1, maxWidth: 380, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          <option value="">Все узлы ({rts.length})</option>
+                          {bomNodes.map((n: any) => (
+                            <option key={n.id} value={n.id}>{(n.path || '') + ' ' + (n.nomenclature_name || '')}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {shown.map((r: any) => {
                       const total = (r.operations || []).reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
                       return (
                         <div key={r.id} style={{ marginBottom: 12 }}>
@@ -554,6 +573,32 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                         onOpenBrowser={onOpenDirPick}
                                         placeholder="Выбрать ресурс…"
                                         style={{ flex: 1, minWidth: 140 }}
+                                      />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ flexShrink: 0, width: 108 }}>Подразделение:</span>
+                                      <ReferenceField
+                                        entity="departments"
+                                        value={null}
+                                        displayValue={op.department || undefined}
+                                        onChange={() => {}}
+                                        onPickItem={(row) => onRoutingOpUpdate?.(op.id, { department: row.name })}
+                                        onOpenBrowser={onOpenDirPick}
+                                        placeholder="Выбрать подразделение…"
+                                        style={{ flex: 1, minWidth: 140 }}
+                                      />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ flexShrink: 0, width: 108 }}>Предш. оп.:</span>
+                                      <input
+                                        type="text"
+                                        defaultValue={fmtPreds(op.predecessors)}
+                                        key={'pred-' + op.id + '-' + (op.predecessors || '')}
+                                        title="Номера предшественников через запятую"
+                                        onBlur={(e) => { const v = e.target.value.replace(/[^0-9,\s]/g, '').trim(); if (v !== (op.predecessors || '')) onRoutingOpUpdate?.(op.id, { predecessors: v || null }); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                        placeholder="—"
+                                        style={{ flex: 1, minWidth: 80, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 12.5, outline: 'none', fontFamily: 'inherit' }}
                                       />
                                     </div>
                                   </div>
