@@ -17,6 +17,7 @@ from app.schemas.catalog_operation import (
 router = APIRouter(prefix="/v1/catalog-operations", tags=["catalog-operations"])
 
 
+@router.get("", response_model=list[CatalogOperationOut])
 @router.get("/", response_model=list[CatalogOperationOut])
 async def list_items(
     search: str | None = None,
@@ -35,6 +36,7 @@ async def list_items(
     return res.scalars().all()
 
 
+@router.post("", response_model=CatalogOperationOut, status_code=201)
 @router.post("/", response_model=CatalogOperationOut, status_code=201)
 async def create_item(
     body: CatalogOperationCreate,
