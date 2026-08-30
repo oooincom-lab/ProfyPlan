@@ -342,7 +342,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                   )}
                 </td>
               ))}
-              {!onSelect && (
+              {(
                 <td style={{ padding: '4px 6px', display: 'flex', gap: 4 }}>
                   {editingId === row.id ? (
                     <>

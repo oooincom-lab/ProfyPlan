@@ -242,14 +242,16 @@ export function useWindows(sidebarWidth: number = 260) {
       const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
       if (ex) {
         winZ.current += 1;
-        setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: opts?.zBoost ? opts.zBoost : winZ.current } : w));
+        const topZ = Math.max(opts?.zBoost || 0, winZ.current);
+        winZ.current = topZ;
+        setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: topZ } : w));
         return ex.id;
       }
     }
     const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     winZ.current += 1;
-    const dirZ = opts?.zBoost ? opts.zBoost : winZ.current;
-    if (dirZ > winZ.current) winZ.current = dirZ;
+    const dirZ = Math.max(winZ.current, opts?.zBoost || 0) + 50;
+    winZ.current = dirZ;
     setWins(prev => [...prev, {
       id,
       kind: 'dir' as const,

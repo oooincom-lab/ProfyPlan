@@ -98,7 +98,7 @@ export default function ReferenceField({
         title={sel ? String(sel[displayField] || '') : placeholder}
         style={{
           background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6,
-          color: sel ? '#E8EEF5' : '#5A7090',
+          color: (sel || (value && displayValue)) ? '#E8EEF5' : '#5A7090',
           padding: '6px 12px', fontSize: 13, cursor: 'pointer', flex: 1, textAlign: 'left',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'inherit',
         }}

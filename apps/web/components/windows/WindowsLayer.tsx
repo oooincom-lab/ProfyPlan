@@ -711,18 +711,34 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                         style={{ flex: 1, minWidth: 140 }}
                                       />
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span style={{ flexShrink: 0, width: 108 }}>Предш. оп.:</span>
-                                      <input
-                                        type="text"
-                                        defaultValue={fmtPreds(op.predecessors)}
-                                        key={'pred-' + op.id + '-' + (op.predecessors || '')}
-                                        title="Номера предшественников через запятую"
-                                        onBlur={(e) => { const v = e.target.value.replace(/[^0-9,\s]/g, '').trim(); if (v !== (op.predecessors || '')) onRoutingOpUpdate?.(op.id, { predecessors: v || null }); }}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                        placeholder="—"
-                                        style={{ flex: 1, minWidth: 80, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 12.5, outline: 'none', fontFamily: 'inherit' }}
-                                      />
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                      <span style={{ flexShrink: 0, width: 108, paddingTop: 4, fontSize: 11.5, color: '#8FA3BD' }}>Предш. оп.:</span>
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1 }}>
+                                        {(r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name).length === 0 && (
+                                          <span style={{ color: '#5A7090', fontSize: 11 }}>нет других операций в маршруте</span>
+                                        )}
+                                        {(r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name).map((o2: any) => {
+                                          const preds = String(op.predecessors || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+                                          const on = preds.includes(String(o2.sequence_number));
+                                          return (
+                                            <button key={o2.id} type="button"
+                                              onClick={() => {
+                                                const next = on ? preds.filter((x: string) => x !== String(o2.sequence_number)) : [...preds, String(o2.sequence_number)].sort((a: string, b: string) => Number(a) - Number(b));
+                                                onRoutingOpUpdate?.(op.id, { predecessors: next.join(',') || null });
+                                              }}
+                                              style={{
+                                                background: on ? 'rgba(59,130,246,.15)' : '#0A1628',
+                                                border: '1px solid ' + (on ? 'rgba(59,130,246,.5)' : '#1E3252'),
+                                                color: on ? '#93C5FD' : '#5A7090',
+                                                borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                              }}
+                                              title={on ? 'Убрать из предшественников' : 'Добавить в предшественники'}
+                                            >
+                                              {o2.sequence_number}. {o2.name}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   </div>
                                 ) : (

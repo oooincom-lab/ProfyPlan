@@ -888,6 +888,15 @@ export default function AppShell() {
     if (!cfg) return;
     const extraEndpoints = entity === 'operations'
       ? { list: '/api/v1/catalog-operations/', create: '/api/v1/catalog-operations/' }
+      : entity === 'stages' && selectedProject
+      ? {
+          list: `/api/v1/projects/${selectedProject.id}/stages/`,
+          create: `/api/v1/projects/${selectedProject.id}/stages/`,
+          item: (id: string) => `/api/v1/project-stages/${id}`,
+          method: 'PATCH' as const,
+        }
+      : entity === 'departments'
+      ? { item: (id: string) => `/api/v1/departments/${id}`, method: 'PATCH' as const }
       : undefined;
     const wid = win.openDirWin(entity, cfg.title + ' — выбор', cfg.columns,
       (row: any) => { onPick(row); win.closeWin(wid); },
