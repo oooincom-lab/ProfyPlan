@@ -17,6 +17,9 @@ type Props = {
   apiBase: string;
   onClose: () => void;
   onSelect?: (row: any) => void;
+  /** modal — центрированное окно с затемнением; panel — встроенная боковая панель (режим «Встроенно») */
+  variant?: 'modal' | 'panel';
+  onManageCalendar?: (row: any) => void;
   debug?: boolean;
 };
 
@@ -25,20 +28,23 @@ type Props = {
  * CRUD-таблицы DirectoryTable. Один модуль — для всех справочников.
  * (В оконном режиме этот же контент рендерится внутри окна.)
  */
-export default function DirectoryManager({ title, entity, columns, apiBase, onClose, onSelect, debug = false }: Props) {
+export default function DirectoryManager({ title, entity, columns, apiBase, onClose, onSelect, variant = 'modal', onManageCalendar, debug = false }: Props) {
+  const panel = variant === 'panel';
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 9000,
-        background: 'rgba(3,10,20,.62)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 24,
+        position: 'fixed',
+        ...(panel
+          ? { top: 0, right: 0, bottom: 0, width: 760, maxWidth: '94vw', zIndex: 7000, background: '#0D1F3A', borderLeft: '1px solid #1E3A5F', display: 'flex', flexDirection: 'column' }
+          : { inset: 0, zIndex: 9000, background: 'rgba(3,10,20,.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }),
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && !panel) onClose(); }}
     >
       <div
         style={{
-          background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3A5F',
-          borderRadius: 12, width: '100%', maxWidth: 960, maxHeight: '82vh',
+          background: 'linear-gradient(135deg, #0F1E36, #162844)', border: panel ? 'none' : '1px solid #1E3A5F',
+          borderRadius: panel ? 0 : 12, width: '100%', maxWidth: panel ? 'none' : 960, maxHeight: panel ? 'none' : '82vh',
+          height: panel ? '100%' : 'auto',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}
       >
@@ -53,7 +59,7 @@ export default function DirectoryManager({ title, entity, columns, apiBase, onCl
           </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12 }}>
-          <DirectoryTable entity={entity} columns={columns} apiBase={apiBase} onSelect={onSelect} />
+          <DirectoryTable entity={entity} columns={columns} apiBase={apiBase} onSelect={onSelect} onManageCalendar={onManageCalendar} />
         </div>
       </div>
     </div>

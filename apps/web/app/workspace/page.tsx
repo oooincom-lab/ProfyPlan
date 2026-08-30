@@ -26,7 +26,7 @@ import ReferenceField from '@/components/ReferenceField';
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
 
-const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number }[] }> = {
+const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number; render?: (val: any, row: any) => React.ReactNode }[] }> = {
   counterparties: {
     title: '👥 Контрагенты',
     columns: [
@@ -85,7 +85,7 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'capacity_per_unit', label: 'Мощн./ед.', width: 100 },
       { key: 'capacity_unit', label: 'Ед.', width: 70 },
       { key: 'country_code', label: 'Страна', width: 80 },
-      { key: 'scope', label: 'Доступ', width: 100 },
+      { key: 'scope', label: 'Доступ', width: 100, render: (v: any) => v === 'project' ? '🔒 Проектный' : '🌐 Общий' },
     ],
   },
 };
@@ -162,7 +162,7 @@ export default function AppShell() {
   const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
   const [panelEditing, setPanelEditing] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
-  const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[] } | null>(null);
+  const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[]; variant: 'modal' | 'panel' } | null>(null);
   const [routings, setRoutings] = useState<any[]>([]);
   const [resourcesList, setResourcesList] = useState<any[]>([]);
   const [workSchedules, setWorkSchedules] = useState<any[]>([]);
@@ -437,9 +437,13 @@ export default function AppShell() {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
     if (panelMode === 'window') {
-      win.openDirWin(entity, cfg.title, cfg.columns);
+      win.openDirWin(entity, cfg.title, cfg.columns, undefined,
+        entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
+        entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.id) : undefined,
+        entity === 'resources' ? { onManageCalendar: (row: any) => win.openCalWin(row.id, row.name) } : undefined,
+      );
     } else {
-      setDirManager({ title: cfg.title, entity, columns: cfg.columns });
+      setDirManager({ title: cfg.title, entity, columns: cfg.columns, variant: panelMode === 'modal' ? 'modal' : 'panel' });
     }
   };
 
@@ -3657,6 +3661,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         entity={dirManager.entity}
         columns={dirManager.columns}
         apiBase="https://profyplan.ru/api"
+        variant={dirManager.variant || 'modal'}
+        onManageCalendar={dirManager.entity === 'resources' ? (row: any) => win.openCalWin(row.id, row.name) : undefined}
         debug={debugMode}
         onClose={() => setDirManager(null)}
       />
