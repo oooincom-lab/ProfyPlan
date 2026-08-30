@@ -55,6 +55,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [newRow, setNewRow] = useState<Record<string, string>>({});
+  const [errNew, setErrNew] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState('');
@@ -105,17 +106,28 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   useEffect(() => { load(); }, [refreshKey]);
 
   const saveNew = async () => {
+    setErrNew(null);
     if (!newRow.name?.trim()) return;
     try {
       // Глобальные справочники: старый body (ntype/unit); проектные (endpoints): {name, code}
       const body = endpoints
-        ? { name: newRow.name, code: newRow.code || null }
+        ? {
+            name: newRow.name,
+            code: newRow.code || null,
+            ...(newRow.position !== undefined && newRow.position !== '' ? { position: Number(newRow.position) } : {}),
+          }
         : { name: newRow.name, ntype: newRow.ntype || 'product', unit: newRow.unit || 'pcs', code: newRow.code || null };
       const r = await af(endpoints?.create || `${apiBase}/v1/${entity}/`, {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      if (r.ok) { setNewRow({}); setAdding(false); await load(); }
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || detail; } catch { }
+        setErrNew('Не сохранено: ' + detail);
+        return;
+      }
+      if (r.ok) { setNewRow({}); setAdding(false); setFilter(''); await load(); }
     } catch (e: any) { alert('Ошибка: ' + e.message); }
   };
 
@@ -221,7 +233,13 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
         {!compact && (
           <button
             className="btn btn-primary btn-sm"
-            onClick={() => { setAdding(true); setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '' }); }}
+            onClick={() => {
+              const hasPos = columns.some(c => c.key === 'position');
+              const maxPos = rows.reduce((m, r) => Math.max(m, Number((r as any).position) || 0), 0);
+              setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '', ...(hasPos ? { position: String(maxPos + 1) } : {}) });
+              setAdding(true);
+              setErrNew(null);
+            }}
           >
             + Добавить
           </button>
@@ -370,6 +388,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
               <td style={{ padding: '4px 6px', display: 'flex', gap: 4 }}>
                 <button onClick={saveNew} style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '3px 8px', fontSize: 11, fontWeight: 600 }}>✓</button>
                 <button onClick={() => setAdding(false)} style={{ background: 'transparent', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: 11 }}>✕</button>
+                  {errNew && <span style={{ color: '#F87171', fontSize: 11, marginLeft: 8 }}>{errNew}</span>}
               </td>
             </tr>
           )}
