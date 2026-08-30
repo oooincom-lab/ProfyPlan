@@ -33,6 +33,7 @@ class CalendarExceptionOut(CalendarExceptionIn):
     created_at: datetime | None = None
 
 
+@router.get("", response_model=list[CalendarExceptionOut])
 @router.get("/", response_model=list[CalendarExceptionOut])
 async def list_items(
     resource_id: str | None = None,
