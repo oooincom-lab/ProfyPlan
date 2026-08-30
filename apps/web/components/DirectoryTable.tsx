@@ -248,17 +248,16 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
           <>
             <button
               disabled={!selId}
-              onClick={() => { const row = filtered.find(r => r.id === selId); if (row && onManageEdit) onManageEdit(row); }}
-              title="Редактировать выбранную запись"
+              onClick={() => { const row = filtered.find(r => r.id === selId); if (!row) return; if (onManageEdit) onManageEdit(row); else { setEditingId(String(row.id)); setEditVals({}); } }}
               style={{ background: selId ? '#162844' : '#1E3252', border: '1px solid #2A4060', borderRadius: 6, color: selId ? '#FCD34D' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }}
             >
               ✏️ Редактировать
             </button>
             <button
-              disabled={!selId || !onManageDelete}
-              onClick={() => { const row = filtered.find(r => r.id === selId); if (row && onManageDelete) onManageDelete(row); }}
+              disabled={!selId}
+              onClick={() => { const row = filtered.find(r => r.id === selId); if (!row) return; if (onManageDelete) onManageDelete(row); else deleteRow(String(row.id), row.name || row.specification_name || ''); }}
               title="Удалить через мастер удаления (проверка связей)"
-              style={{ background: selId && onManageDelete ? 'rgba(239,68,68,.12)' : '#1E3252', border: '1px solid ' + (selId && onManageDelete ? 'rgba(239,68,68,.4)' : '#2A4060'), borderRadius: 6, color: selId && onManageDelete ? '#F87171' : '#5A7090', cursor: selId && onManageDelete ? 'pointer' : 'not-allowed', padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }}
+              style={{ background: selId ? 'rgba(239,68,68,.12)' : '#1E3252', border: '1px solid ' + (selId ? 'rgba(239,68,68,.4)' : '#2A4060'), borderRadius: 6, color: selId ? '#F87171' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }}
             >
               🗑 Удалить
             </button>
