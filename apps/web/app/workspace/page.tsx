@@ -3561,11 +3561,27 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       columns={DIR_COLUMNS.counterparties.columns}
                     />
                   )}
-                  {directoryModal !== 'nomenclature' && directoryModal !== 'units' && directoryModal !== 'counterparties' && (
+                  {directoryModal === 'resources' && (
+                    <DirectoryTable
+                      entity="resources"
+                      apiBase="https://profyplan.ru/api"
+                      columns={DIR_COLUMNS.resources.columns}
+                      onManageCalendar={(row: any) => win.openCalWin(row.id, row.name)}
+                    />
+                  )}
+                  {directoryModal === 'departments' && (
+                    <DirectoryTable
+                      entity="departments"
+                      apiBase="https://profyplan.ru/api"
+                      columns={DIR_COLUMNS.departments.columns}
+                      endpoints={{ item: (id: string) => `https://profyplan.ru/api/v1/departments/${id}`, method: 'PATCH' as const }}
+                    />
+                  )}
+                  {directoryModal === 'organizations' && (
                     <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+                      <div style={{ fontSize: 40, marginBottom: 12 }}>🏭</div>
                       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
-                      <div>Здесь будет таблица с CRUD и импортом</div>
+                      <div>Здесь будет справочник организаций</div>
                     </div>
                   )}
                 </div>
