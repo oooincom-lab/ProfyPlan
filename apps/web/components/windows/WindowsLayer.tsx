@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
@@ -155,6 +156,10 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   }, [wins, onOrderResLoad]);
   // Селектор «Узел» на вкладке «Маршрут» (Шаг 4): фильтр маршрутов по узлу BOM
   const [routeSelNode, setRouteSelNode] = useState<Record<string, string | null>>({});
+  // Dropdown «Предш. оп.» (Шаг 4): список операций маршрута с чекбоксами
+  const [predOpen, setPredOpen] = useState<Record<string, boolean>>({});
+  const [predRect, setPredRect] = useState<Record<string, { left: number; top: number; width: number } | null>>({});
+
   // Формы окна календаря ресурса (v2.16)
   const [calForm, setCalForm] = useState<Record<string, { kind: string; dateFrom: string; dateTo: string; note: string }>>({});
   const [calAssignForm, setCalAssignForm] = useState<Record<string, { scheduleId: string; validFrom: string }>>({});
@@ -712,32 +717,48 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                       />
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                                      <span style={{ flexShrink: 0, width: 108, paddingTop: 4, fontSize: 11.5, color: '#8FA3BD' }}>Предш. оп.:</span>
-                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1 }}>
-                                        {(r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name).length === 0 && (
-                                          <span style={{ color: '#5A7090', fontSize: 11 }}>нет других операций в маршруте</span>
-                                        )}
-                                        {(r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name).map((o2: any) => {
+                                      <span style={{ flexShrink: 0, width: 108, paddingTop: 5, fontSize: 11.5, color: '#8FA3BD' }}>Предш. оп.:</span>
+                                      <div style={{ flex: 1, minWidth: 160 }}>
+                                        {(() => {
+                                          const others = (r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name);
                                           const preds = String(op.predecessors || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-                                          const on = preds.includes(String(o2.sequence_number));
+                                          const togglePred = (seq: string) => {
+                                            const next = preds.includes(seq) ? preds.filter((x: string) => x !== seq) : [...preds, seq].sort((a: string, b: string) => Number(a) - Number(b));
+                                            onRoutingOpUpdate?.(op.id, { predecessors: next.join(',') || null });
+                                          };
                                           return (
-                                            <button key={o2.id} type="button"
-                                              onClick={() => {
-                                                const next = on ? preds.filter((x: string) => x !== String(o2.sequence_number)) : [...preds, String(o2.sequence_number)].sort((a: string, b: string) => Number(a) - Number(b));
-                                                onRoutingOpUpdate?.(op.id, { predecessors: next.join(',') || null });
-                                              }}
-                                              style={{
-                                                background: on ? 'rgba(59,130,246,.15)' : '#0A1628',
-                                                border: '1px solid ' + (on ? 'rgba(59,130,246,.5)' : '#1E3252'),
-                                                color: on ? '#93C5FD' : '#5A7090',
-                                                borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                                              }}
-                                              title={on ? 'Убрать из предшественников' : 'Добавить в предшественники'}
-                                            >
-                                              {o2.sequence_number}. {o2.name}
-                                            </button>
+                                            <>
+                                              <button type="button"
+                                                onClick={() => {
+                                                  const el = document.getElementById('pp-pred-btn-' + op.id);
+                                                  const r2 = el?.getBoundingClientRect();
+                                                  if (r2) setPredRect(prev => ({ ...prev, [op.id]: { left: r2.left, top: r2.bottom + 4, width: Math.max(r2.width, 260) } }));
+                                                  setPredOpen(prev => ({ ...prev, [op.id]: !prev[op.id] }));
+                                                }}
+                                                id={'pp-pred-btn-' + op.id}
+                                                style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: preds.length ? '#93C5FD' : '#5A7090', padding: '6px 10px', fontSize: 12.5, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
+                                              >
+                                                {preds.length ? preds.join(', ') : 'Выбрать…'} <span style={{ float: 'right', color: '#3B82F6' }}>▾</span>
+                                              </button>
+                                              {predOpen[op.id] && predRect[op.id] && createPortal(
+                                                <div data-rf-dropdown style={{ position: 'fixed', top: predRect[op.id]!.top, left: predRect[op.id]!.left, width: predRect[op.id]!.width, zIndex: 6000, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,.6)', maxHeight: 260, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                                                  {others.length === 0 && <div style={{ color: '#5A7090', padding: 8, fontSize: 12 }}>нет других операций в маршруте</div>}
+                                                  {others.map((o2: any) => {
+                                                    const on = preds.includes(String(o2.sequence_number));
+                                                    return (
+                                                      <div key={o2.id} onClick={() => togglePred(String(o2.sequence_number))}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', borderBottom: '1px dashed rgba(30,58,95,.4)', color: on ? '#93C5FD' : '#E8EEF5' }}>
+                                                        <input type="checkbox" readOnly checked={on} style={{ accentColor: '#3B82F6', cursor: 'pointer' }} />
+                                                        <span>{o2.sequence_number}. {o2.name}</span>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>,
+                                                document.body
+                                              )}
+                                            </>
                                           );
-                                        })}
+                                        })()}
                                       </div>
                                     </div>
                                   </div>
