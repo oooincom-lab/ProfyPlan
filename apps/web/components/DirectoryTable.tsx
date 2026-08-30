@@ -276,6 +276,15 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                 🗓 Календарь
               </button>
             )}
+            {editingId && (
+              <button
+                onClick={() => saveEdit(editingId)}
+                title="Сохранить изменения"
+                style={{ background: 'linear-gradient(135deg,#10B981,#059669)', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', padding: '6px 14px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                💾 Сохранить
+              </button>
+            )}
             <button
               disabled={!selId}
               onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onSelect(row); }}
