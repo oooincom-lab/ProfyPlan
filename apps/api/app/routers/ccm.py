@@ -1302,3 +1302,78 @@ async def sync_to_google_sheets(
         "rows_written": result.rows_written,
         "warnings": result.warnings,
     }
+
+
+@ccm_router.get("/resource-usage")
+async def resource_usage(
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Межпроектная сводка использования ресурсов (блок 2).
+
+    По глобальным ресурсам (project_id NULL): в каких проектах используются
+    (через ProjectResource/родительскую связь), суммарные часы операций маршрутов
+    и число операций. is_shared = используется более чем в одном проекте
+    (точка соприкосновения — кандидат на межпроектный конфликт)."""
+    from collections import defaultdict
+    from sqlalchemy import func
+    from app.models.resource import Resource
+    from app.models.routing import Routing, RoutingOperation
+    from app.models.product_structure import ProductStructure
+    from app.models.project import Project
+
+    global_rows = (await db.execute(
+        select(Resource).where(Resource.tenant_id == tenant_id, Resource.project_id.is_(None))
+    )).scalars().all()
+    globals_map = {str(r.id): r for r in global_rows}
+
+    child_rows = (await db.execute(
+        select(Resource).where(Resource.tenant_id == tenant_id, Resource.parent_id.isnot(None))
+    )).scalars().all()
+    parent_of = {str(r.id): str(r.parent_id) for r in child_rows}
+
+    usage = defaultdict(lambda: {"hours": 0.0, "ops": 0, "projects": set()})
+    rows = (await db.execute(
+        select(
+            RoutingOperation.resource_type_id,
+            ProductStructure.project_id,
+            func.sum(RoutingOperation.duration_hours),
+            func.count(),
+        )
+        .join(Routing, RoutingOperation.routing_id == Routing.id)
+        .join(ProductStructure, Routing.product_node_id == ProductStructure.id)
+        .where(RoutingOperation.resource_type_id.isnot(None), RoutingOperation.tenant_id == tenant_id)
+        .group_by(RoutingOperation.resource_type_id, ProductStructure.project_id)
+    )).all()
+    for rid, pid, hours, cnt in rows:
+        if not rid:
+            continue
+        gid = parent_of.get(str(rid), str(rid))
+        if gid in globals_map:
+            u = usage[gid]
+            u["hours"] += float(hours or 0)
+            u["ops"] += int(cnt or 0)
+            u["projects"].add(str(pid))
+
+    proj_names = {str(x.id): x.name for x in (await db.execute(
+        select(Project).where(Project.tenant_id == tenant_id)
+    )).scalars().all()}
+
+    out = []
+    for gid, r in globals_map.items():
+        u = usage.get(gid)
+        projects = sorted([proj_names.get(p, p[:8]) for p in (u["projects"] if u else set())])
+        out.append({
+            "id": gid,
+            "name": r.name,
+            "type": r.resource_type,
+            "capacity_per_unit": float(r.capacity_per_unit or 0),
+            "capacity_unit": r.capacity_unit or "",
+            "projects": projects,
+            "project_count": len(projects),
+            "total_hours": round(u["hours"], 2) if u else 0,
+            "operation_count": u["ops"] if u else 0,
+            "is_shared": len(projects) > 1,
+        })
+    out.sort(key=lambda x: (-x["is_shared"], -x["total_hours"]))
+    return out

@@ -24,12 +24,24 @@ export default function CCMV2Dashboard() {
   const [loginEmail, setLoginEmail] = useState('planner@demo.ru');
   const [loginPass, setLoginPass] = useState('demo123');
   const [loginErr, setLoginErr] = useState<string | null>(null);
+  const [resourceUsage, setResourceUsage] = useState<any[]>([]);
 
   useEffect(() => {
     if (isAuthenticated()) {
       setAuthed(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+    fetch('https://profyplan.ru/api/v1/ccm/resource-usage', {
+      headers: { ...(t ? { Authorization: 'Bearer ' + t } : {}) },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((d: any) => setResourceUsage(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [authed]);
 
   useEffect(() => {
     if (authed) {
@@ -200,6 +212,43 @@ export default function CCMV2Dashboard() {
         <div style={{ padding: '8px 20px', background: 'rgba(239,68,68,0.1)', color: '#EF4444', fontSize: 12 }}>
           {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 12, background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}>&times;</button>
+        </div>
+      )}
+
+      {/* Сводка использования общих ресурсов (межпроектно) */}
+      {resourceUsage.length > 0 && (
+        <div style={{ padding: '10px 20px', background: '#0A1628', borderBottom: '1px solid #1E3252', maxHeight: 220, overflow: 'auto' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD', marginBottom: 6 }}>
+            🧰 Общие ресурсы (межпроектные) — {resourceUsage.filter((r: any) => r.is_shared).length} совм. из {resourceUsage.length}
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ color: '#5A7090', textAlign: 'left' }}>
+                <th style={{ padding: '4px 8px' }}>Ресурс</th>
+                <th style={{ padding: '4px 8px' }}>Тип</th>
+                <th style={{ padding: '4px 8px' }}>Мощность</th>
+                <th style={{ padding: '4px 8px' }}>Проекты</th>
+                <th style={{ padding: '4px 8px' }}>Часы</th>
+                <th style={{ padding: '4px 8px' }}>Оп.</th>
+                <th style={{ padding: '4px 8px' }}>Совм.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resourceUsage.map((r: any) => (
+                <tr key={r.id} style={{ borderTop: '1px solid #1E3252', color: r.is_shared ? '#FCD34D' : '#E8EEF5' }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.type || '—'}</td>
+                  <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.capacity_per_unit || '—'} {r.capacity_unit || ''}</td>
+                  <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.projects.join(', ') || '—'}</td>
+                  <td style={{ padding: '4px 8px' }}>{r.total_hours}</td>
+                  <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.operation_count}</td>
+                  <td style={{ padding: '4px 8px' }}>
+                    {r.is_shared ? <span style={{ color: '#FCD34D', fontWeight: 700 }}>⚠ общий</span> : <span style={{ color: '#5A7090' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
