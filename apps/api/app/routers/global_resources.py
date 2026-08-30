@@ -18,7 +18,9 @@ from app.schemas.resource import ResourceCreate, ResourceOut, ResourceUpdate
 router = APIRouter(prefix="/v1/resources", tags=["resources-global"])
 
 
-def _to_out(r: Resource) -> ResourceOut:
+def _to_out(r: Resource, dept_names=None, sched_names=None) -> ResourceOut:
+    dept_names = dept_names or {}
+    sched_names = sched_names or {}
     return ResourceOut(
         id=str(r.id),
         project_id=str(r.project_id) if r.project_id else None,
@@ -32,6 +34,8 @@ def _to_out(r: Resource) -> ResourceOut:
         schedule_id=str(r.schedule_id) if r.schedule_id else None,
         scope=r.scope if getattr(r, 'scope', None) else 'shared',
         department_id=str(r.department_id) if r.department_id else None,
+        department_name=dept_names.get(str(r.department_id)),
+        schedule_name=sched_names.get(str(r.schedule_id)),
         is_active=r.is_active,
     )
 
@@ -42,6 +46,8 @@ async def list_global_resources(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    from app.models.department import Department
+    from app.models.work_schedule import WorkSchedule
     result = await db.execute(
         select(Resource)
         .where(
@@ -50,7 +56,16 @@ async def list_global_resources(
         )
         .order_by(Resource.name)
     )
-    return [_to_out(r) for r in result.scalars().all()]
+    rows = result.scalars().all()
+    dept_ids = {r.department_id for r in rows if r.department_id}
+    sched_ids = {r.schedule_id for r in rows if r.schedule_id}
+    dept_names = {}
+    sched_names = {}
+    if dept_ids:
+        dept_names = {str(d.id): d.name for d in (await db.execute(select(Department).where(Department.id.in_(dept_ids)))).scalars().all()}
+    if sched_ids:
+        sched_names = {str(s.id): s.name for s in (await db.execute(select(WorkSchedule).where(WorkSchedule.id.in_(sched_ids)))).scalars().all()}
+    return [_to_out(r, dept_names, sched_names) for r in rows]
 
 
 @router.post("", response_model=ResourceOut, status_code=status.HTTP_201_CREATED)

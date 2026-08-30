@@ -18,6 +18,8 @@ class ResourceCreate(BaseModel):
     schedule_id: Optional[str] = None
     department_id: Optional[str] = None
     scope: Optional[str] = None
+    department_name: Optional[str] = None
+    schedule_name: Optional[str] = None
     is_active: bool = True
 
 
