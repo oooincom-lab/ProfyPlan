@@ -61,6 +61,7 @@ async def list_items(
     ) for x in rows]
 
 
+@router.post("", response_model=CalendarExceptionOut, status_code=201)
 @router.post("/", response_model=CalendarExceptionOut, status_code=201)
 async def create_item(
     body: CalendarExceptionIn,
