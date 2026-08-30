@@ -736,8 +736,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                           const others = (r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name);
                                           const preds = String(op.predecessors || '').split(',').map((s: string) => s.trim()).filter(Boolean);
                                           const togglePred = (seq: string) => {
-                                            const next = preds.includes(seq) ? preds.filter((x: string) => x !== seq) : [...preds, seq].sort((a: string, b: string) => Number(a) - Number(b));
-                                            onRoutingOpUpdate?.(op.id, { predecessors: next.join(',') || null });
+                                            const next = preds.includes(seq) ? null : seq;
+                                            onRoutingOpUpdate?.(op.id, { predecessors: next });
                                             setPredOpen(prev => ({ ...prev, [op.id]: false }));
                                           };
                                           return (
@@ -762,7 +762,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                                     return (
                                                       <div key={o2.id} onClick={() => togglePred(String(o2.sequence_number))}
                                                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', borderBottom: '1px dashed rgba(30,58,95,.4)', color: on ? '#93C5FD' : '#E8EEF5' }}>
-                                                        <input type="checkbox" readOnly checked={on} style={{ accentColor: '#3B82F6', cursor: 'pointer' }} />
+                                                        <span style={{ width: 10, height: 10, borderRadius: '50%', border: '1.5px solid ' + (on ? '#3B82F6' : '#5A7090'), background: on ? '#3B82F6' : 'transparent', flexShrink: 0 }} />
                                                         <span>{o2.sequence_number}. {o2.name}</span>
                                                       </div>
                                                     );
