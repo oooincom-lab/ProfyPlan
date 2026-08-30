@@ -1342,7 +1342,7 @@ async def resource_usage(
         )
         .join(Routing, RoutingOperation.routing_id == Routing.id)
         .join(ProductStructure, Routing.product_node_id == ProductStructure.id)
-        .where(RoutingOperation.resource_type_id.isnot(None), RoutingOperation.tenant_id == tenant_id)
+        .where(RoutingOperation.resource_type_id.isnot(None), Routing.tenant_id == tenant_id)
         .group_by(RoutingOperation.resource_type_id, ProductStructure.project_id)
     )).all()
     for rid, pid, hours, cnt in rows:
