@@ -887,7 +887,7 @@ export default function AppShell() {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
     const extraEndpoints = entity === 'operations'
-      ? { list: '/api/v1/catalog-operations/', create: '/api/v1/catalog-operations/' }
+      ? { list: '/api/v1/catalog-operations/', create: '/api/v1/catalog-operations/', item: (id: string) => `/api/v1/catalog-operations/${id}`, method: 'PATCH' as const }
       : entity === 'stages' && selectedProject
       ? {
           list: `/api/v1/projects/${selectedProject.id}/stages/`,

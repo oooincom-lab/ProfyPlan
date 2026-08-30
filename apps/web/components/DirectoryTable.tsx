@@ -138,7 +138,12 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
         body: JSON.stringify(editVals),
       });
       if (r.ok) { setEditingId(null); await load(); }
-    } catch (e: any) { alert('Ошибка: ' + e.message); }
+      else {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || detail; } catch { }
+        setErrNew('Не сохранено: ' + detail);
+      }
+    } catch (e: any) { setErrNew('Ошибка: ' + (e.message || '')); }
   };
 
   const deleteRow = async (id: string, name: string) => {
