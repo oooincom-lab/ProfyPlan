@@ -329,7 +329,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
                 <ReferenceField
                   entity="operations"
-                  pathOverride="/api/v1/catalog-operations/"
+                  pathOverride="https://profyplan.ru/api/v1/catalog-operations/"
                   value={f.opId || null}
                   onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, opId: v, opName: null, opDur: null } }))}
                   onOpenBrowser={onOpenDirPick}
@@ -620,7 +620,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                 {w.editing ? (
                                   <ReferenceField
                                     entity="operations"
-                                    pathOverride="/api/v1/catalog-operations/"
+                                    pathOverride="https://profyplan.ru/api/v1/catalog-operations/"
                                     value={op.catalog_operation_id || null}
                                     displayValue={op.catalog_operation_id ? op.name : undefined}
                                     onChange={(v) => { if (!v) onRoutingOpUpdate?.(op.id, { catalog_operation_id: null }); }}
@@ -677,7 +677,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                       <span style={{ flexShrink: 0, width: 108 }}>Этап:</span>
                                       <ReferenceField
                                         entity="stages"
-                                        pathOverride={'/api/v1/projects/' + (o.project_id || '') + '/stages/'}
+                                        pathOverride={'https://profyplan.ru/api/v1/projects/' + (o.project_id || '') + '/stages/'}
                                         value={op.stage_name || null}
                                         displayValue={op.stage_name || undefined}
                                         onChange={() => {}}

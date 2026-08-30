@@ -887,16 +887,16 @@ export default function AppShell() {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
     const extraEndpoints = entity === 'operations'
-      ? { list: '/api/v1/catalog-operations/', create: '/api/v1/catalog-operations/', item: (id: string) => `/api/v1/catalog-operations/${id}`, method: 'PATCH' as const }
+      ? { list: 'https://profyplan.ru/api/v1/catalog-operations/', create: 'https://profyplan.ru/api/v1/catalog-operations/', item: (id: string) => `https://profyplan.ru/api/v1/catalog-operations/${id}`, method: 'PATCH' as const }
       : entity === 'stages' && selectedProject
       ? {
-          list: `/api/v1/projects/${selectedProject.id}/stages/`,
-          create: `/api/v1/projects/${selectedProject.id}/stages/`,
-          item: (id: string) => `/api/v1/project-stages/${id}`,
+          list: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
+          create: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
+          item: (id: string) => `https://profyplan.ru/api/v1/project-stages/${id}`,
           method: 'PATCH' as const,
         }
       : entity === 'departments'
-      ? { item: (id: string) => `/api/v1/departments/${id}`, method: 'PATCH' as const }
+      ? { item: (id: string) => `https://profyplan.ru/api/v1/departments/${id}`, method: 'PATCH' as const }
       : undefined;
     const wid = win.openDirWin(entity, cfg.title + ' — выбор', cfg.columns,
       (row: any) => { onPick(row); win.closeWin(wid); },
@@ -3445,9 +3445,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {
                         endpoints: {
-                          list: `/api/v1/projects/${selectedProject.id}/stages/`,
-                          create: `/api/v1/projects/${selectedProject.id}/stages/`,
-                          item: (id: string) => `/api/v1/project-stages/${id}`,
+                          list: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
+                          create: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
+                          item: (id: string) => `https://profyplan.ru/api/v1/project-stages/${id}`,
                           method: 'PATCH' as const,
                         },
                       })}>Этапы</button>
@@ -3815,7 +3815,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         return (
           <AppModal title="Добавить операцию в маршрут" code="op-add" debug={debugMode} onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); setModalOpId(null); setModalOpName(null); setModalOpDur(null); }} accent="#22D3EE">
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
-            <ReferenceField entity="operations" pathOverride="/api/v1/catalog-operations/" value={modalOpId} onChange={v => setModalOpId(v)} onOpenBrowser={openDirForPick} onPickItem={row => { setModalOpId(String(row.id)); setModalOpName(row.name); setModalOpDur(Number(row.default_duration_hours) || 1); }} placeholder="Выбрать операцию…" />
+            <ReferenceField entity="operations" pathOverride="https://profyplan.ru/api/v1/catalog-operations/" value={modalOpId} onChange={v => setModalOpId(v)} onOpenBrowser={openDirForPick} onPickItem={row => { setModalOpId(String(row.id)); setModalOpName(row.name); setModalOpDur(Number(row.default_duration_hours) || 1); }} placeholder="Выбрать операцию…" />
             <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '10px 0 6px' }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
             <ReferenceField entity="resources" value={modalResId} onChange={v => setModalResId(v)} onOpenBrowser={openDirForPick} placeholder="Выбрать ресурс…" />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
