@@ -272,7 +272,18 @@ async def run_schedule(
     # Точка отсчёта
     anchor_dt = (body.start_date if body else None) or project.start_date
     anchor = anchor_dt.date() if anchor_dt else date.today()
-    resolver = CalendarResolver(db, tenant_id, project.country_code or "RU")
+    # Исключения доступности уровня проекта (ремонт/простой/форс-мажор) — вырезаются из расчёта дат
+    exc_intervals = []
+    from app.models.calendar_exception import CalendarException as _CE
+    exc_rows = await db.execute(
+        select(_CE).where(_CE.tenant_id == tenant_id, _CE.project_id == project_id, _CE.level == "project")
+    )
+    for x in exc_rows.scalars().all():
+        f = x.date_from.date() if hasattr(x.date_from, 'date') else x.date_from
+        t = x.date_to.date() if hasattr(x.date_to, 'date') else x.date_to
+        exc_intervals.append((f, t))
+
+    resolver = CalendarResolver(db, tenant_id, project.country_code or "RU", extra_exceptions=exc_intervals)
 
     nodes = []
     for nid, node in result.nodes.items():

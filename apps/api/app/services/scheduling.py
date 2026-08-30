@@ -102,12 +102,27 @@ async def _load_calendar_days(db, tenant_id, country_code, year) -> Optional[dic
 class CalendarResolver:
     """Разрешает рабочее время по дате, подтягивая календари по годам (кэш)."""
 
-    def __init__(self, db: AsyncSession, tenant_id, country_code: str):
+    def __init__(self, db: AsyncSession, tenant_id, country_code: str, extra_exceptions: list | None = None):
         self.db = db
         self.tenant_id = tenant_id
         self.country_code = country_code
+        # extra_exceptions: список интервалов недоступности [(date_from: date, date_to: date), ...]
+        self.extra_exceptions = extra_exceptions or []
         self._cache: dict[int, dict] = {}
         self.found = True  # False если хотя бы один год без календаря
+
+    def _in_extra_exception(self, d: date) -> bool:
+        for (f, t) in self.extra_exceptions:
+            try:
+                if f <= d <= t:
+                    return True
+            except TypeError:
+                # на случай datetime — привести к date
+                f2 = f.date() if hasattr(f, 'date') else f
+                t2 = t.date() if hasattr(t, 'date') else t
+                if f2 <= d <= t2:
+                    return True
+        return False
 
     async def _days_for(self, d: date) -> dict:
         year = d.year
@@ -124,6 +139,8 @@ class CalendarResolver:
         return (await self._days_for(d)).get(d)
 
     async def is_working(self, d: date) -> bool:
+        if self._in_extra_exception(d):
+            return False
         day = await self.day_for(d)
         if day is None:
             return d.weekday() < 5  # фолбэк: Пн–Пт рабочий
