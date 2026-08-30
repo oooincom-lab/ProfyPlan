@@ -556,6 +556,32 @@ async def add_routing_operation(
         if not catalog_op:
             raise HTTPException(404, "Операция из каталога не найдена")
 
+    # Регистры этапа/подразделения: имена подставляются из справочников (источник истины)
+    stage_name = body.stage
+    department_name = body.department
+    if body.stage_id:
+        from app.models.project_stage import ProjectStage
+        st = (await db.execute(
+            select(ProjectStage).where(
+                ProjectStage.id == body.stage_id,
+                ProjectStage.tenant_id == tenant_id,
+            )
+        )).scalar_one_or_none()
+        if not st:
+            raise HTTPException(404, "Этап не найден")
+        stage_name = st.name
+    if body.department_id:
+        from app.models.department import Department
+        dp = (await db.execute(
+            select(Department).where(
+                Department.id == body.department_id,
+                Department.tenant_id == tenant_id,
+            )
+        )).scalar_one_or_none()
+        if not dp:
+            raise HTTPException(404, "Подразделение не найдено")
+        department_name = dp.name
+
     op = RoutingOperation(
         routing_id=body.routing_id,
         sequence_number=body.sequence_number,
@@ -564,11 +590,12 @@ async def add_routing_operation(
         setup_hours=body.setup_hours,
         teardown_hours=body.teardown_hours,
         catalog_operation_id=body.catalog_operation_id,
+        stage_id=body.stage_id,
+        stage_name=stage_name,
+        department_id=body.department_id,
+        department=department_name,
         resource_type_id=body.resource_type_id,
         alternative_resource_types=body.alternative_resource_types,
-        stage=body.stage,
-        stage_name=body.stage_name,
-        department=body.department,
         output_product=body.output_product,
         output_quantity=body.output_quantity,
         yield_rate=body.yield_rate,

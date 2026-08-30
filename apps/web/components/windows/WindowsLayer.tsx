@@ -681,7 +681,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                         value={op.stage_name || null}
                                         displayValue={op.stage_name || undefined}
                                         onChange={() => {}}
-                                        onPickItem={(row) => onRoutingOpUpdate?.(op.id, { stage_name: row.name })}
+                                        onPickItem={(row) => onRoutingOpUpdate?.(op.id, { stage_id: row.id, stage_name: row.name })}
                                         onOpenBrowser={onOpenDirPick}
                                         placeholder="Выбрать этап…"
                                         style={{ flex: 1, minWidth: 140 }}
@@ -705,7 +705,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                         value={null}
                                         displayValue={op.department || undefined}
                                         onChange={() => {}}
-                                        onPickItem={(row) => onRoutingOpUpdate?.(op.id, { department: row.name })}
+                                        onPickItem={(row) => onRoutingOpUpdate?.(op.id, { department_id: row.id, department: row.name })}
                                         onOpenBrowser={onOpenDirPick}
                                         placeholder="Выбрать подразделение…"
                                         style={{ flex: 1, minWidth: 140 }}

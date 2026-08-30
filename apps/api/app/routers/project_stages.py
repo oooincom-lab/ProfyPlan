@@ -113,10 +113,23 @@ async def update_stage(
     db: AsyncSession = Depends(get_db),
 ):
     item = await _stage_by_id(stage_id, tenant_id, db)
+    renamed = False
+    if body.name is not None and body.name != item.name:
+        renamed = True
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
     await db.commit()
     await db.refresh(item)
+    # Денормализация: переименование этапа обновляет stage_name в операциях маршрутов
+    if renamed:
+        from sqlalchemy import update as sa_update
+        from app.models.routing import RoutingOperation
+        await db.execute(
+            sa_update(RoutingOperation)
+            .where(RoutingOperation.stage_id == item.id)
+            .values(stage_name=item.name)
+        )
+        await db.commit()
     return item
 
 
