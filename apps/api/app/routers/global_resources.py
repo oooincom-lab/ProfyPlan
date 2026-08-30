@@ -154,6 +154,8 @@ async def effective_schedule(
     from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
     from app.models.schedule_assignment import ScheduleAssignment
     from app.models.calendar_exception import CalendarException
+    from app.models.department import Department
+    from app.models.project import Project
     from datetime import datetime, date as _date
 
     def slots_out(rows):
