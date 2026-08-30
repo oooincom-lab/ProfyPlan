@@ -18,6 +18,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.operation import Operation, OperationDependency, OperationResource
 from app.models.project import Project
+from app.models.department import Department
 from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
@@ -196,8 +197,21 @@ async def run_schedule(
             if pr.schedule_id:
                 override_sched[pr.resource_id] = pr.schedule_id
 
+    # Каскад календарей (v2.16): ресурс → подразделение → проект → default
+    dept_sched: dict = {}
+    project_sched_id = None
+    dept_ids = {r.department_id for r in resources.values() if r.department_id}
+    if dept_ids:
+        dept_rows = await db.execute(select(Department).where(Department.id.in_(dept_ids)))
+        dept_sched = {d.id: d.schedule_id for d in dept_rows.scalars().all() if d.schedule_id}
+    if project.schedule_id:
+        project_sched_id = project.schedule_id
+
     sched_ids = {r.schedule_id for r in resources.values() if r.schedule_id}
     sched_ids.update(override_sched.values())
+    sched_ids.update(s for s in dept_sched.values() if s)
+    if project_sched_id:
+        sched_ids.add(project_sched_id)
     schedules: dict = {}
     slots_by_sched: dict = defaultdict(list)
     if sched_ids:
@@ -214,7 +228,7 @@ async def run_schedule(
         for or_ in ors:
             r = resources.get(or_.resource_id)
             if r:
-                sched_id = override_sched.get(r.id) or r.schedule_id
+                sched_id = override_sched.get(r.id) or r.schedule_id or dept_sched.get(r.department_id) or project_sched_id
                 if sched_id and sched_id in schedules:
                     return schedule_hours_per_day(schedules[sched_id], slots_by_sched[sched_id])
         return DEFAULT_HOURS_PER_DAY
