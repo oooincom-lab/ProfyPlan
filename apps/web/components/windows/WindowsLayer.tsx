@@ -160,6 +160,19 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [predOpen, setPredOpen] = useState<Record<string, boolean>>({});
   const [predRect, setPredRect] = useState<Record<string, { left: number; top: number; width: number } | null>>({});
 
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest && t.closest('[data-rf-dropdown]')) return; // клики внутри dropdown
+      if (t.closest && t.closest('button[id^="pp-pred-btn-"]')) return; // клик по самой кнопке (toggle handled)
+      setPredOpen({});
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setPredOpen({}); };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
+  }, []);
+
   // Формы окна календаря ресурса (v2.16)
   const [calForm, setCalForm] = useState<Record<string, { kind: string; dateFrom: string; dateTo: string; note: string }>>({});
   const [calAssignForm, setCalAssignForm] = useState<Record<string, { scheduleId: string; validFrom: string }>>({});
@@ -725,6 +738,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                           const togglePred = (seq: string) => {
                                             const next = preds.includes(seq) ? preds.filter((x: string) => x !== seq) : [...preds, seq].sort((a: string, b: string) => Number(a) - Number(b));
                                             onRoutingOpUpdate?.(op.id, { predecessors: next.join(',') || null });
+                                            setPredOpen(prev => ({ ...prev, [op.id]: false }));
                                           };
                                           return (
                                             <>
