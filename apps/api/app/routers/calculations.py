@@ -272,16 +272,43 @@ async def run_schedule(
     # Точка отсчёта
     anchor_dt = (body.start_date if body else None) or project.start_date
     anchor = anchor_dt.date() if anchor_dt else date.today()
-    # Исключения доступности уровня проекта (ремонт/простой/форс-мажор) — вырезаются из расчёта дат
+    # Исключения доступности (ремонт/простой/форс-мажор) — вырезаются из расчёта дат.
+    # Уровни: project (весь проект), resource (ресурсы проекта), department (подразделения ресурсов).
     exc_intervals = []
     from app.models.calendar_exception import CalendarException as _CE
+
+    def _interval(x):
+        f = x.date_from.date() if hasattr(x.date_from, 'date') else x.date_from
+        t = x.date_to.date() if hasattr(x.date_to, 'date') else x.date_to
+        return (f, t)
+
     exc_rows = await db.execute(
         select(_CE).where(_CE.tenant_id == tenant_id, _CE.project_id == project_id, _CE.level == "project")
     )
     for x in exc_rows.scalars().all():
-        f = x.date_from.date() if hasattr(x.date_from, 'date') else x.date_from
-        t = x.date_to.date() if hasattr(x.date_to, 'date') else x.date_to
-        exc_intervals.append((f, t))
+        exc_intervals.append(_interval(x))
+
+    if res_ids:
+        res_exc_rows = await db.execute(
+            select(_CE).where(
+                _CE.tenant_id == tenant_id,
+                _CE.level == "resource",
+                _CE.resource_id.in_(res_ids),
+            )
+        )
+        for x in res_exc_rows.scalars().all():
+            exc_intervals.append(_interval(x))
+
+    if dept_ids:
+        dept_exc_rows = await db.execute(
+            select(_CE).where(
+                _CE.tenant_id == tenant_id,
+                _CE.level == "department",
+                _CE.department_id.in_(dept_ids),
+            )
+        )
+        for x in dept_exc_rows.scalars().all():
+            exc_intervals.append(_interval(x))
 
     resolver = CalendarResolver(db, tenant_id, project.country_code or "RU", extra_exceptions=exc_intervals)
 
