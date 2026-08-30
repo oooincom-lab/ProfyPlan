@@ -159,6 +159,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   // Dropdown «Предш. оп.» (Шаг 4): список операций маршрута с чекбоксами
   const [predOpen, setPredOpen] = useState<Record<string, boolean>>({});
   const [predRect, setPredRect] = useState<Record<string, { left: number; top: number; width: number } | null>>({});
+  const [predDraft, setPredDraft] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -735,10 +736,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                         {(() => {
                                           const others = (r.operations || []).filter((o2: any) => o2.id !== op.id && o2.name);
                                           const preds = String(op.predecessors || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+                                          const draft = predDraft[op.id] || preds;
                                           const togglePred = (seq: string) => {
-                                            const next = preds.includes(seq) ? null : seq;
-                                            onRoutingOpUpdate?.(op.id, { predecessors: next });
-                                            setPredOpen(prev => ({ ...prev, [op.id]: false }));
+                                            const cur = predDraft[op.id] || preds;
+                                            const next = cur.includes(seq) ? cur.filter((x: string) => x !== seq) : [...cur, seq].sort((a: string, b: string) => Number(a) - Number(b));
+                                            setPredDraft(prev => ({ ...prev, [op.id]: next }));
                                           };
                                           return (
                                             <>
@@ -747,6 +749,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                                   const el = document.getElementById('pp-pred-btn-' + op.id);
                                                   const r2 = el?.getBoundingClientRect();
                                                   if (r2) setPredRect(prev => ({ ...prev, [op.id]: { left: r2.left, top: r2.bottom + 4, width: Math.max(r2.width, 260) } }));
+                                                  const curPreds = String(op.predecessors || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+                                                  setPredDraft(prev => ({ ...prev, [op.id]: curPreds }));
                                                   setPredOpen(prev => ({ ...prev, [op.id]: !prev[op.id] }));
                                                 }}
                                                 id={'pp-pred-btn-' + op.id}
@@ -758,15 +762,23 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                                 <div data-rf-dropdown style={{ position: 'fixed', top: predRect[op.id]!.top, left: predRect[op.id]!.left, width: predRect[op.id]!.width, zIndex: 6000, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,.6)', maxHeight: 260, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
                                                   {others.length === 0 && <div style={{ color: '#5A7090', padding: 8, fontSize: 12 }}>нет других операций в маршруте</div>}
                                                   {others.map((o2: any) => {
-                                                    const on = preds.includes(String(o2.sequence_number));
+                                                    const on = draft.includes(String(o2.sequence_number));
                                                     return (
                                                       <div key={o2.id} onClick={() => togglePred(String(o2.sequence_number))}
                                                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', borderBottom: '1px dashed rgba(30,58,95,.4)', color: on ? '#93C5FD' : '#E8EEF5' }}>
-                                                        <span style={{ width: 10, height: 10, borderRadius: '50%', border: '1.5px solid ' + (on ? '#3B82F6' : '#5A7090'), background: on ? '#3B82F6' : 'transparent', flexShrink: 0 }} />
+                                                        <input type="checkbox" readOnly checked={on} onClick={(e) => { e.stopPropagation(); togglePred(String(o2.sequence_number)); }} style={{ accentColor: '#3B82F6', cursor: 'pointer' }} />
                                                         <span>{o2.sequence_number}. {o2.name}</span>
                                                       </div>
                                                     );
                                                   })}
+                                                  <div style={{ display: 'flex', gap: 8, padding: 8, borderTop: '1px solid #1E3252' }}>
+                                                    <button type="button" onClick={() => {
+                                                      const dv = predDraft[op.id] || preds;
+                                                      onRoutingOpUpdate?.(op.id, { predecessors: dv.join(',') || null });
+                                                      setPredOpen(prev => ({ ...prev, [op.id]: false }));
+                                                    }} style={{ flex: 1, background: 'linear-gradient(135deg,#10B981,#059669)', border: 'none', borderRadius: 6, color: '#fff', padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Подтвердить</button>
+                                                    <button type="button" onClick={() => setPredOpen(prev => ({ ...prev, [op.id]: false }))} style={{ flex: 1, background: 'transparent', border: '1px solid #1E3A5F', borderRadius: 6, color: '#8FA3BD', padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+                                                  </div>
                                                 </div>,
                                                 document.body
                                               )}
