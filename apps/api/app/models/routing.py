@@ -97,6 +97,18 @@ class RoutingOperation(BaseModel):
         comment="Ссылка на каталог операций (Шаг 3 v2.15)",
     )
 
+    stage_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("project_stages.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Этап проекта (Шаг 4b)",
+    )
+
+    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Подразделение (Шаг 4b)",
+    )
+
     predecessors: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )  # "1,3" — sequence_number предшественников
