@@ -20,6 +20,7 @@ type Props = {
   onSelect?: (row: any) => void;
   onManageEdit?: (row: any) => void;
   onManageDelete?: (row: any) => void;
+  onManageCalendar?: (row: any) => void;
   compact?: boolean;
   synonyms?: Record<string, string[]>;
   /** Счётчик — при изменении список перезагружается (после удаления извне) */
@@ -33,7 +34,7 @@ type Props = {
   };
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, compact, synonyms, refreshKey = 0, endpoints }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, compact, synonyms, refreshKey = 0, endpoints }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -243,6 +244,16 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
             >
               🗑 Удалить
             </button>
+            {onManageCalendar && (
+              <button
+                disabled={!selId}
+                onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onManageCalendar(row); }}
+                title="Календарь ресурса: эффективный график, версии, исключения"
+                style={{ background: selId ? 'rgba(34,211,238,.12)' : '#1E3252', border: '1px solid ' + (selId ? 'rgba(34,211,238,.45)' : '#2A4060'), borderRadius: 6, color: selId ? '#22D3EE' : '#5A7090', cursor: selId ? 'pointer' : 'not-allowed', padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }}
+              >
+                🗓 Календарь
+              </button>
+            )}
             <button
               disabled={!selId}
               onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onSelect(row); }}

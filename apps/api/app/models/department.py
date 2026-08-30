@@ -21,3 +21,6 @@ class Department(BaseModel):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("work_schedules.id", ondelete="SET NULL"), nullable=True
+    )  # график подразделения (каскад календарей, уровень 2)

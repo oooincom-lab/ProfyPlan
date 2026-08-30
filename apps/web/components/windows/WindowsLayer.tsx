@@ -85,6 +85,15 @@ type WindowsLayerProps = {
   onOrderResChange?: (orderId: string, item: any, patch: Record<string, any>) => void;
   /** Убрать переопределение/связь */
   onOrderResRemove?: (orderId: string, item: any) => void;
+  /** Открыть окно календаря ресурса (v2.16) */
+  onDirCalendar?: (resourceId: string | null, resourceName: string | null) => void;
+  /** Данные календаря ресурса {resourceId: {effective, assignments, exceptions}} */
+  calData?: Record<string, any>;
+  onCalLoad?: (resourceId: string) => void;
+  onCalAddAssignment?: (resourceId: string, scheduleId: string, validFrom: string) => void;
+  onCalDelAssignment?: (assignmentId: string) => void;
+  onCalAddException?: (resourceId: string, payload: { kind: string; date_from: string; date_to: string; note?: string }) => void;
+  onCalDelException?: (exceptionId: string) => void;
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
   debug?: boolean;
@@ -122,6 +131,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
     schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove,
+    onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
     debug = false,
   } = props;
 
@@ -145,6 +155,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   }, [wins, onOrderResLoad]);
   // Селектор «Узел» на вкладке «Маршрут» (Шаг 4): фильтр маршрутов по узлу BOM
   const [routeSelNode, setRouteSelNode] = useState<Record<string, string | null>>({});
+  // Формы окна календаря ресурса (v2.16)
+  const [calForm, setCalForm] = useState<Record<string, { kind: string; dateFrom: string; dateTo: string; note: string }>>({});
+  const [calAssignForm, setCalAssignForm] = useState<Record<string, { scheduleId: string; validFrom: string }>>({});
   const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
@@ -161,6 +174,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
     if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
+    if (w.kind === 'cal') return w.title || 'Календарь ресурса';
     const o = w.data || orderById(w.orderId);
     const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + full : full;
@@ -179,6 +193,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'list') return { badge: `[list:openListWin:${w.listKind || '?'} #${n}]`, copy: `[list:openListWin:${w.listKind || '?'} #${n}] «${title}»` };
     if (w.kind === 'dir') return { badge: `[dir:openDirWin:${w.data?.entity || '?'} #${n}]`, copy: `[dir:openDirWin:${w.data?.entity || '?'} #${n}] «${title}»` };
     if (w.kind === 'opadd') return { badge: `[opadd:openWin #${n}]`, copy: `[opadd:openWin #${n}] «${title}»` };
+    if (w.kind === 'cal') return { badge: `[cal:openCalWin #${n}]`, copy: `[cal:openCalWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
   };
 
@@ -204,6 +219,96 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         if (!isList && !isDir && !isResEdit && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
+
+        // ── Окно «Календарь ресурса» (v2.16): эффективный график, версии графиков, исключения ──
+        if (w.kind === 'cal') {
+          const rid = w.data?.resourceId || null;
+          const cd = (calData || {})[rid || ''] || { effective: null, assignments: [], exceptions: [] };
+          const eff = cd.effective as any | undefined;
+          const effSrc: Record<string, string> = { resource_calendar: 'собственный календарь ресурса', resource_schedule: 'график ресурса', department: 'график подразделения', project: 'график проекта', default: 'программа по умолчанию (пн–пт 8–17)' };
+          const KIND_LABEL: Record<string, string> = { repair: 'Ремонт', downtime: 'Простой', vacation: 'Отпуск', force_majeure: 'Форс-мажор', maintenance: 'Обслуживание' };
+          const cf = calForm[w.id] || { kind: 'repair', dateFrom: '', dateTo: '', note: '' };
+          const af = calAssignForm[w.id] || { scheduleId: '', validFrom: '' };
+          return (
+            <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+              style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+              onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
+                <span className="ttl">{w.title || 'Календарь ресурса'}</span>
+                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
+                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
+                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
+              </div>
+              <div style={{ padding: '12px 14px', overflow: 'auto', height: 'calc(100% - 32px)' }}>
+                <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Ресурс: <b style={{ color: '#E8EEF5' }}>{w.data?.resourceName || '—'}</b></div>
+
+                <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
+                  <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Эффективный график — источник: <b style={{ color: '#22D3EE' }}>{eff ? (effSrc[eff.source] || eff.source) : '…'}</b></div>
+                  {eff?.schedule_name && <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>График: <b style={{ color: '#E8EEF5' }}>{eff.schedule_name}</b></div>}
+                  {eff?.slots?.length ? (
+                    <div style={{ marginTop: 4 }}>
+                      {eff.slots.filter((s: any) => s.exception_date === null || !s.exception_date).map((s: any, i: number) => (
+                        <span key={i} style={{ display: 'inline-block', background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 5, padding: '2px 7px', fontSize: 11, marginRight: 4, marginBottom: 4 }}>
+                          {['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][((s.day_of_week % 7) + 7) % 7] || '?'} {s.start_hour}–{s.end_hour} ч
+                        </span>
+                      ))}
+                    </div>
+                  ) : <div style={{ fontSize: 11.5, color: '#5A7090' }}>Слоты не заданы</div>}
+                </div>
+
+                <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '8px 0 4px' }}>Версии графиков (смена режима с даты):</div>
+                {(cd.assignments || []).length === 0 && <div style={{ fontSize: 11.5, color: '#5A7090' }}>Назначений нет — действует эффективный график выше.</div>}
+                {(cd.assignments || []).map((a: any) => (
+                  <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12 }}>
+                    <span style={{ color: '#93C5FD', flex: 1 }}>{a.schedule_name || a.schedule_id}</span>
+                    <span style={{ color: '#FCD34D' }}>с {a.valid_from}</span>
+                    <button className="pp-wbtn" title="Удалить назначение" onClick={() => onCalDelAssignment?.(a.id)}>✕</button>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', margin: '6px 0 10px', flexWrap: 'wrap' }}>
+                  <select value={af.scheduleId} onChange={(e) => setCalAssignForm(prev => ({ ...prev, [w.id]: { ...af, scheduleId: e.target.value } }))}
+                    style={{ flex: 1, minWidth: 140, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }}>
+                    <option value="">График…</option>
+                    {(schedules || []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <input type="date" value={af.validFrom} onChange={(e) => setCalAssignForm(prev => ({ ...prev, [w.id]: { ...af, validFrom: e.target.value } }))}
+                    style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }} />
+                  <button className="btn btn-primary btn-sm" disabled={!af.scheduleId || !af.validFrom}
+                    onClick={() => { if (rid && af.scheduleId && af.validFrom) onCalAddAssignment?.(rid, af.scheduleId, af.validFrom); }}
+                    style={{ opacity: af.scheduleId && af.validFrom ? 1 : .5 }}>+ Назначить</button>
+                </div>
+
+                <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '8px 0 4px' }}>Исключения доступности (ремонт, простой, отпуск, форс-мажор, обслуживание):</div>
+                {(cd.exceptions || []).length === 0 && <div style={{ fontSize: 11.5, color: '#5A7090' }}>Исключений нет.</div>}
+                {(cd.exceptions || []).map((x: any) => (
+                  <div key={x.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12 }}>
+                    <span style={{ color: '#F87171', width: 96, flexShrink: 0 }}>{KIND_LABEL[x.kind] || x.kind}</span>
+                    <span style={{ flex: 1, color: '#E8EEF5' }}>{String(x.date_from).slice(0, 10)} — {String(x.date_to).slice(0, 10)}{x.hours_override != null ? ` · ${x.hours_override} ч/д` : ''}{x.note ? ` · ${x.note}` : ''}</span>
+                    <button className="pp-wbtn" title="Удалить исключение" onClick={() => onCalDelException?.(x.id)}>✕</button>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', margin: '6px 0 0', flexWrap: 'wrap' }}>
+                  <select value={cf.kind} onChange={(e) => setCalForm(prev => ({ ...prev, [w.id]: { ...cf, kind: e.target.value } }))}
+                    style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 6px', fontSize: 12, fontFamily: 'inherit' }}>
+                    <option value="repair">Ремонт</option>
+                    <option value="downtime">Простой</option>
+                    <option value="vacation">Отпуск</option>
+                    <option value="force_majeure">Форс-мажор</option>
+                    <option value="maintenance">Обслуживание</option>
+                  </select>
+                  <input type="date" value={cf.dateFrom} onChange={(e) => setCalForm(prev => ({ ...prev, [w.id]: { ...cf, dateFrom: e.target.value } }))}
+                    style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }} />
+                  <input type="date" value={cf.dateTo} onChange={(e) => setCalForm(prev => ({ ...prev, [w.id]: { ...cf, dateTo: e.target.value } }))}
+                    style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }} />
+                  <button className="btn btn-primary btn-sm" disabled={!cf.dateFrom || !cf.dateTo}
+                    onClick={() => { if (rid && cf.dateFrom && cf.dateTo) onCalAddException?.(rid, { kind: cf.kind, date_from: cf.dateFrom, date_to: cf.dateTo, note: cf.note || undefined }); }}
+                    style={{ opacity: cf.dateFrom && cf.dateTo ? 1 : .5 }}>+ Исключение</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         // ── Окно «Добавить операцию в маршрут» (MDI): простое окно рабочего стола с формой ──
         if (w.kind === 'opadd') {
@@ -326,6 +431,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   endpoints={w.data?.endpoints}
                   onManageEdit={w.data?.onManageEdit ? (row: any) => onDirManageEdit?.(w.data?.entity || '', row) : undefined}
                   onManageDelete={w.data?.onManageDelete ? (row: any) => onDirManageDelete?.(w.data?.entity || '', row) : undefined}
+                  onManageCalendar={w.data?.onManageCalendar}
                 />
               )}
               {isResEdit && (

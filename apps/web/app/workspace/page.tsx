@@ -893,7 +893,9 @@ export default function AppShell() {
       (row: any) => { onPick(row); win.closeWin(wid); },
       entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
       entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id) : undefined,
-      { zBoost: 4300, endpoints: extraEndpoints },
+      { zBoost: 4300, endpoints: extraEndpoints,
+        onManageCalendar: entity === 'resources' ? (row: any) => win.openCalWin(row.id, row.name || row.code || 'Ресурс') : undefined,
+      },
     );
   };
 
@@ -1340,6 +1342,40 @@ export default function AppShell() {
       if (item.id) await apiF(`/order-resources/${item.id}`, { method: 'DELETE' });
       await loadOrderResources(orderId);
     } catch (e: any) { setMsg('Ошибка удаления ресурса: ' + (e.message || String(e))); }
+  };
+
+  // ── v2.16: календарь ресурса (эффективный график + версии + исключения) ──
+  const [calData, setCalData] = useState<Record<string, any>>({});
+  const loadCalData = async (resourceId: string) => {
+    try {
+      const [effective, assignments, exceptions] = await Promise.all([
+        apiF<any>(`/resources/${resourceId}/effective-schedule?project_id=${selectedProject?.id || ''}`),
+        apiF<any>(`/resources/${resourceId}/schedule-assignments`),
+        apiF<any>(`/calendar-exceptions?resource_id=${resourceId}`),
+      ]);
+      setCalData(prev => ({ ...prev, [resourceId]: { effective, assignments, exceptions } }));
+    } catch { }
+  };
+  const handleCalAddAssignment = async (resourceId: string, scheduleId: string, validFrom: string) => {
+    try {
+      await apiF(`/resources/${resourceId}/schedule-assignments`, { method: 'POST', body: JSON.stringify({ schedule_id: scheduleId, valid_from: validFrom }) });
+      await loadCalData(resourceId);
+    } catch (e: any) { setMsg('Ошибка назначения графика: ' + (e.message || String(e))); }
+  };
+  const handleCalDelAssignment = async (assignmentId: string) => {
+    try { await apiF(`/schedule-assignments/${assignmentId}`, { method: 'DELETE' }); } catch { }
+    // перезагрузить все открытые календари (простой путь: обновить по ключу)
+    for (const rid of Object.keys(calData)) loadCalData(rid);
+  };
+  const handleCalAddException = async (resourceId: string, payload: any) => {
+    try {
+      await apiF('/calendar-exceptions', { method: 'POST', body: JSON.stringify({ level: 'resource', resource_id: resourceId, ...payload }) });
+      await loadCalData(resourceId);
+    } catch (e: any) { setMsg('Ошибка добавления исключения: ' + (e.message || String(e))); }
+  };
+  const handleCalDelException = async (exceptionId: string) => {
+    try { await apiF(`/calendar-exceptions/${exceptionId}`, { method: 'DELETE' }); } catch { }
+    for (const rid of Object.keys(calData)) loadCalData(rid);
   };
   const [nomQuery, setNomQuery] = useState('');
   const [nomenclatureList, setNomenclatureList] = useState<any[]>([]);
@@ -3571,6 +3607,13 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   onOrderResLoad={loadOrderResources}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
+                  onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}
+                  calData={calData}
+                  onCalLoad={loadCalData}
+                  onCalAddAssignment={handleCalAddAssignment}
+                  onCalDelAssignment={handleCalDelAssignment}
+                  onCalAddException={handleCalAddException}
+                  onCalDelException={handleCalDelException}
                   opNameSuggestions={Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean))))}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}

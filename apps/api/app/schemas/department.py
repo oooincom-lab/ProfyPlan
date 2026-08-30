@@ -14,6 +14,7 @@ class DepartmentCreate(BaseModel):
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     code: Optional[str] = Field(None, max_length=50)
+    schedule_id: Optional[UUID] = None
 
 
 class DepartmentOut(BaseModel):
@@ -23,4 +24,5 @@ class DepartmentOut(BaseModel):
     tenant_id: UUID
     name: str
     code: Optional[str] = None
+    schedule_id: Optional[UUID] = None
     created_at: datetime

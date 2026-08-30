@@ -39,6 +39,9 @@ class Project(BaseModel):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[str] = mapped_column(String(20), default="normal")
     customer: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("work_schedules.id", ondelete="SET NULL"), nullable=True
+    )  # график проекта (каскад календарей, уровень 3)
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

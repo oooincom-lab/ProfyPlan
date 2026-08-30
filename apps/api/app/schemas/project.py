@@ -26,6 +26,7 @@ class ProjectUpdate(BaseModel):
     default_method: Optional[str] = Field(default=None, pattern="^(cpm|pert_cpm|cpm_ccm|pert_ccm)$")
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     start_date: Optional[datetime] = None
+    schedule_id: Optional[UUID] = None
 
 
 class ProjectOut(BaseModel):
@@ -39,6 +40,7 @@ class ProjectOut(BaseModel):
     mode: str
     default_method: str
     country_code: str
+    schedule_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     created_by: Optional[UUID] = None

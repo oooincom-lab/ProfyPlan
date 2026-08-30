@@ -16,6 +16,7 @@ class ResourceCreate(BaseModel):
     unit: Optional[str] = None
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     schedule_id: Optional[str] = None
+    department_id: Optional[str] = None
     is_active: bool = True
 
 
@@ -27,6 +28,7 @@ class ResourceUpdate(BaseModel):
     unit: Optional[str] = None
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     schedule_id: Optional[str] = None
+    department_id: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -41,6 +43,7 @@ class ResourceOut(BaseModel):
     unit: Optional[str] = None
     country_code: Optional[str] = None
     schedule_id: Optional[str] = None
+    department_id: Optional[str] = None
     is_active: bool
 
     class Config:

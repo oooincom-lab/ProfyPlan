@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd';
+  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -188,6 +188,30 @@ export function useWindows(sidebarWidth: number = 260) {
     return id;
   };
 
+  // Окно календаря ресурса (v2.16): эффективный график + версии + исключения
+  const openCalWin = (resourceId: string | null, resourceName?: string) => {
+    const d = deskRect();
+    winZ.current += 1;
+    const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    setWins(prev => [...prev, {
+      id,
+      kind: 'cal' as const,
+      orderId: '',
+      data: { resourceId, resourceName },
+      title: resourceName ? `🗓 Календарь: ${resourceName}` : '🗓 Календарь ресурса',
+      x: d.x + Math.max(40, Math.round(d.w / 2) - 260),
+      y: d.y + Math.max(30, Math.round(d.h / 2) - 200),
+      w: 540,
+      h: 420,
+      min: false,
+      z: winZ.current,
+      tab: 'route' as OrderTab,
+      editing: false,
+      form: {},
+    }]);
+    return id;
+  };
+
   // Окно добавления операции в маршрут (в MDI-режиме — простое окно, не модальный диалог)
   const openOpAddWin = (routingId: string, title?: string) => {
     const d = deskRect();
@@ -212,7 +236,7 @@ export function useWindows(sidebarWidth: number = 260) {
     return id;
   };
 
-  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void, opts?: { zBoost?: number; endpoints?: any }) => {
+  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void, opts?: { zBoost?: number; endpoints?: any; onManageCalendar?: (row: any) => void }) => {
     const d = deskRect();
     if (!onSelect) {
       const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
@@ -230,7 +254,7 @@ export function useWindows(sidebarWidth: number = 260) {
       id,
       kind: 'dir' as const,
       orderId: '',
-      data: { entity, columns, onSelect, onManageEdit, onManageDelete, endpoints: opts?.endpoints },
+      data: { entity, columns, onSelect, onManageEdit, onManageDelete, endpoints: opts?.endpoints, onManageCalendar: opts?.onManageCalendar },
       title,
       x: d.x + 60,
       y: d.y + 40,
@@ -444,7 +468,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openCalWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }
