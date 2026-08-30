@@ -1374,6 +1374,7 @@ async def resource_usage(
             "total_hours": round(u["hours"], 2) if u else 0,
             "operation_count": u["ops"] if u else 0,
             "is_shared": len(projects) > 1,
+            "scope": getattr(r, "scope", None) or "shared",
         })
     out.sort(key=lambda x: (-x["is_shared"], -x["total_hours"]))
     return out

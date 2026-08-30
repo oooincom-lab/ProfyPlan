@@ -30,6 +30,8 @@ def _to_out(r: Resource) -> ResourceOut:
         unit=r.unit,
         country_code=r.country_code,
         schedule_id=str(r.schedule_id) if r.schedule_id else None,
+        scope=r.scope if getattr(r, 'scope', None) else 'shared',
+        department_id=str(r.department_id) if r.department_id else None,
         is_active=r.is_active,
     )
 

@@ -39,6 +39,10 @@ class Project(BaseModel):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[str] = mapped_column(String(20), default="normal")
     customer: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    use_shared_resources: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )  # использовать ли общие (shared) ресурсы каталога
+
     schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("work_schedules.id", ondelete="SET NULL"), nullable=True
     )  # график проекта (каскад календарей, уровень 3)

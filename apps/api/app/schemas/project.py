@@ -27,6 +27,7 @@ class ProjectUpdate(BaseModel):
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     start_date: Optional[datetime] = None
     schedule_id: Optional[UUID] = None
+    use_shared_resources: Optional[bool] = None
 
 
 class ProjectOut(BaseModel):
@@ -41,6 +42,7 @@ class ProjectOut(BaseModel):
     default_method: str
     country_code: str
     schedule_id: Optional[UUID] = None
+    use_shared_resources: Optional[bool] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     created_by: Optional[UUID] = None

@@ -85,6 +85,7 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'capacity_per_unit', label: 'Мощн./ед.', width: 100 },
       { key: 'capacity_unit', label: 'Ед.', width: 70 },
       { key: 'country_code', label: 'Страна', width: 80 },
+      { key: 'scope', label: 'Доступ', width: 100 },
     ],
   },
 };
@@ -3440,7 +3441,21 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>🧩 Этапы проекта</div>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginBottom: 12 }}>
+                    <input type="checkbox" id="pp-use-shared" checked={selectedProject.use_shared_resources !== false}
+                      onChange={async (e) => {
+                        try {
+                          await apiF(`/projects/${selectedProject.id}`, { method: 'PUT', body: JSON.stringify({ use_shared_resources: e.target.checked }) });
+                          setSelectedProject({ ...selectedProject, use_shared_resources: e.target.checked });
+                        } catch {}
+                      }}
+                      style={{ accentColor: '#3B82F6', width: 15, height: 15, cursor: 'pointer' }} />
+                    <label htmlFor="pp-use-shared" style={{ fontSize: 13, cursor: 'pointer' }}>
+                      <b>Использовать общие ресурсы каталога</b>
+                      <div style={{ fontSize: 11.5, color: '#5A7090' }}>Включает в выбор межпроектные (shared) ресурсы; проектные (project) резервируются под один проект</div>
+                    </label>
+                  </div>
+<div style={{ fontWeight: 600, fontSize: 14 }}>🧩 Этапы проекта</div>
                         <div style={{ fontSize: 12, color: '#5A7090' }}>Регистр этапов для группировки операций маршрутов</div>
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {

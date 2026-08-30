@@ -50,6 +50,10 @@ class Resource(BaseModel):
     )  # график работы по умолчанию
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="shared", server_default="shared"
+    )  # 'project' (эксклюзивно под проект) | 'shared' (межпроектный пул)
+
     department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
     )  # принадлежность подразделению (каскад календарей, уровень 2)
