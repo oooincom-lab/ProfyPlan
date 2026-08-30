@@ -20,6 +20,7 @@ class ResourceCreate(BaseModel):
     scope: Optional[str] = None
     department_name: Optional[str] = None
     schedule_name: Optional[str] = None
+    usage_count: int = 0
     is_active: bool = True
 
 

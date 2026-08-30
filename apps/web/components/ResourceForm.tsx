@@ -1,6 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import ReferenceField from './ReferenceField';
 
 export const RES_TYPES: { v: string; l: string }[] = [
   { v: 'equipment', l: 'Оборудование' },
@@ -67,6 +68,22 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
             <option value="">Наследовать от проекта</option>
             {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={lbl()}>Доступ</span>
+          <select value={form.scope || 'shared'} onChange={e => onChange({ scope: e.target.value })} style={input()}>
+            <option value="shared">🌐 Общий (межпроектный пул)</option>
+            <option value="project">🔒 Проектный (резерв под один проект)</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: 'span 2' }}>
+          <span style={lbl()}>Подразделение</span>
+          <ReferenceField
+            entity="departments"
+            value={form.department_id || null}
+            onChange={(v) => onChange({ department_id: v || '' })}
+            placeholder="Выбрать подразделение…"
+          />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>График (по умолчанию)</span>

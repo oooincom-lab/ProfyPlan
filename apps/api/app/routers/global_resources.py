@@ -36,6 +36,7 @@ def _to_out(r: Resource, dept_names=None, sched_names=None) -> ResourceOut:
         department_id=str(r.department_id) if r.department_id else None,
         department_name=dept_names.get(str(r.department_id)),
         schedule_name=sched_names.get(str(r.schedule_id)),
+        usage_count=getattr(r, '_usage_count', 0) or 0,
         is_active=r.is_active,
     )
 
@@ -65,6 +66,28 @@ async def list_global_resources(
         dept_names = {str(d.id): d.name for d in (await db.execute(select(Department).where(Department.id.in_(dept_ids)))).scalars().all()}
     if sched_ids:
         sched_names = {str(s.id): s.name for s in (await db.execute(select(WorkSchedule).where(WorkSchedule.id.in_(sched_ids)))).scalars().all()}
+    # Счётчик использования: сколько операций маршрутов ссылаются на ресурс (напрямую или через дочерний экземпляр)
+    from sqlalchemy import func
+    from app.models.routing import Routing, RoutingOperation
+    child_map = {}
+    child_rows = await db.execute(
+        select(Resource).where(Resource.tenant_id == tenant_id, Resource.parent_id.isnot(None))
+    )
+    parent_of = {str(c.id): str(c.parent_id) for c in child_rows.scalars().all()}
+    all_res_ids = [str(r.id) for r in rows] + list(parent_of.keys())
+    per_rid: dict = {}
+    if all_res_ids:
+        cnt_rows = await db.execute(
+            select(RoutingOperation.resource_type_id, func.count())
+            .join(Routing, RoutingOperation.routing_id == Routing.id)
+            .where(RoutingOperation.resource_type_id.in_(all_res_ids), Routing.tenant_id == tenant_id)
+            .group_by(RoutingOperation.resource_type_id)
+        )
+        per_rid = {str(k): int(v) for k, v in cnt_rows.all()}
+    for r in rows:
+        gid = str(r.id)
+        r._usage_count = per_rid.get(gid, 0) + sum(per_rid.get(cid, 0) for cid, p in parent_of.items() if p == gid)
+
     return [_to_out(r, dept_names, sched_names) for r in rows]
 
 

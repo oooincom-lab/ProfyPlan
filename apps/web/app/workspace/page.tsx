@@ -88,6 +88,7 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'department_name', label: 'Подразделение', width: 140, render: (v: any) => v || '—' },
       { key: 'schedule_name', label: 'График', width: 130, render: (v: any) => v || '—' },
       { key: 'scope', label: 'Доступ', width: 100, render: (v: any) => v === 'project' ? '🔒 Проектный' : '🌐 Общий' },
+      { key: 'usage_count', label: 'Исп.', width: 60, render: (v: any) => v || '0' },
     ],
   },
 };
