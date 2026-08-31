@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'pcal';
+  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'pcal' | 'neworder';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -184,6 +184,30 @@ export function useWindows(sidebarWidth: number = 260) {
         name: '', resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour',
         unit: '', country_code: '', schedule_id: '',
       },
+    }]);
+    return id;
+  };
+
+  // Окно создания заказа (черновик) из мастера проекта — полный набор полей
+  const openOrderDraftWin = () => {
+    const d = deskRect();
+    winZ.current += 1;
+    const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    setWins(prev => [...prev, {
+      id,
+      kind: 'neworder' as const,
+      orderId: '',
+      data: {},
+      title: 'Новый заказ',
+      x: d.x + Math.max(40, Math.round(d.w / 2) - 220),
+      y: d.y + Math.max(30, Math.round(d.h / 2) - 200),
+      w: 460,
+      h: 460,
+      min: false,
+      z: winZ.current,
+      tab: 'route' as OrderTab,
+      editing: false,
+      form: {},
     }]);
     return id;
   };
@@ -494,7 +518,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openCalWin, openManagerWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

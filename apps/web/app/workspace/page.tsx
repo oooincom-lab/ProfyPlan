@@ -207,6 +207,7 @@ export default function AppShell() {
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [wizOrder, setWizOrder] = useState<Record<string, string> | null>(null); // черновик заказа из MDI-окна мастера
   const [dupCheck, setDupCheck] = useState<null | { spec: string; existing: any[] }>(null);
   const [editingOrder, setEditingOrder] = useState<string | null>(null);
   const [showBulkPaste, setShowBulkPaste] = useState(false);
@@ -3338,7 +3339,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 
           {/* ═══ NEW PROJECT ═══ */}
           {view === 'new-project' && (
-            <NewProjectWizard onBack={() => navTo('projects')} onCreated={() => { load().then(() => navTo('projects')); }} />
+            <NewProjectWizard onBack={() => navTo('projects')} onCreated={() => { load().then(() => navTo('projects')); }} onOpenNewOrder={() => win.openOrderDraftWin()} wizOrder={wizOrder} onWizOrderConsumed={() => setWizOrder(null)} />
           )}
 
           {/* ═══ SETTINGS ═══ */}
@@ -3713,6 +3714,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   onResAssignLoad={loadResAssign}
                   onResAssignAdd={handleResAssignAdd}
                   onResAssignDel={handleResAssignDel}
+                  onNewOrderDraftSave={(draft) => setWizOrder(draft)}
                   opNameSuggestions={Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean))))}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}
@@ -4168,7 +4170,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 }
 
 // ═══ NEW PROJECT WIZARD ═══
-function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated: () => void }) {
+function NewProjectWizard({ onBack, onCreated, onOpenNewOrder, wizOrder, onWizOrderConsumed }: { onBack: () => void; onCreated: () => void; onOpenNewOrder: () => void; wizOrder: Record<string, string> | null; onWizOrderConsumed: () => void }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [mode, setMode] = useState('cpm');
@@ -4181,6 +4183,9 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
   const [newOrderName, setNewOrderName] = useState('');
   const [newOrderQty, setNewOrderQty] = useState('1');
   const [newOrderUnit, setNewOrderUnit] = useState('pcs');
+  useEffect(() => {
+    if (wizOrder) { setManualRows(r => [...r, wizOrder]); onWizOrderConsumed(); }
+  }, [wizOrder]);
   const [creating, setCreating] = useState(false);
   const [excelFile, setExcelFile] = useState<File | null>(null);
 
@@ -4314,27 +4319,11 @@ function NewProjectWizard({ onBack, onCreated }: { onBack: () => void; onCreated
           />
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #1E3252' }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary btn-sm" onClick={() => setNewOrderOpen(o => !o)}>+ Новый заказ</button>
+              <button className="btn btn-primary btn-sm" onClick={() => onOpenNewOrder()}>+ Новый заказ</button>
               <button className="btn btn-sm" style={{ background: 'transparent', border: '1px solid #2A4060', color: '#B0C4DE', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
                 onClick={() => { setShowManual(false); }}>Отмена</button>
               <span style={{ fontSize: 12, color: '#5A7090', marginLeft: 'auto' }}>Заказов вручную: {manualRows.length}</span>
             </div>
-            {newOrderOpen && (
-              <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 90px 90px auto', gap: 8, alignItems: 'center' }}>
-                <input value={newOrderName} onChange={e => setNewOrderName(e.target.value)} placeholder="Название заказа"
-                  style={{ padding: '9px 12px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, color: '#E8EEF5', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
-                <input type="number" min="0" step="any" value={newOrderQty} onChange={e => setNewOrderQty(e.target.value)} placeholder="Кол-во"
-                  style={{ padding: '9px 12px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, color: '#E8EEF5', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
-                <input value={newOrderUnit} onChange={e => setNewOrderUnit(e.target.value)} placeholder="Ед."
-                  style={{ padding: '9px 12px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, color: '#E8EEF5', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
-                <button className="btn btn-primary btn-sm" disabled={!newOrderName.trim()}
-                  onClick={() => {
-                    setManualRows(r => [...r, { specification_name: newOrderName.trim(), quantity: newOrderQty || '1', unit: newOrderUnit || 'pcs' }]);
-                    setNewOrderName(''); setNewOrderQty('1'); setNewOrderUnit('pcs'); setNewOrderOpen(false);
-                  }}
-                  style={{ opacity: newOrderName.trim() ? 1 : .5 }}>Добавить</button>
-              </div>
-            )}
           </div>
         </div>
       )}

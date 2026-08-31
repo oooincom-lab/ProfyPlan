@@ -95,6 +95,9 @@ type WindowsLayerProps = {
   onOrderResChange?: (orderId: string, item: any, patch: Record<string, any>) => void;
   /** Убрать переопределение/связь */
   onOrderResRemove?: (orderId: string, item: any) => void;
+  /** Сохранение черновика заказа из окна «Новый заказ» (мастер проекта) */
+  onNewOrderDraftSave?: (draft: Record<string, string>) => void;
+
   /** Открыть окно календаря ресурса (v2.16) */
   onDirCalendar?: (resourceId: string | null, resourceName: string | null) => void;
   /** Данные календаря ресурса {resourceId: {effective, assignments, exceptions}} */
@@ -142,6 +145,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
     schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
+    onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
     debug = false,
   } = props;
@@ -155,6 +159,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
   const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
   const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null }>>({});
+  const [newOrderForm, setNewOrderForm] = useState<Record<string, Record<string, string>>>({});
   // Единица длительности для инлайн-редактирования операций маршрута (Шаг 4): д/ч/мин/с
   const [durUnit, setDurUnit] = useState<Record<string, string>>({});
 
@@ -207,6 +212,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'cal') return w.title || 'Календарь ресурса';
     if (w.kind === 'wsched') return w.title || 'Графики работы';
     if (w.kind === 'pcal') return w.title || 'Производственные календари';
+    if (w.kind === 'neworder') return w.title || 'Новый заказ';
     const o = w.data || orderById(w.orderId);
     const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + full : full;
@@ -228,6 +234,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'cal') return { badge: `[cal:openCalWin #${n}]`, copy: `[cal:openCalWin #${n}] «${title}»` };
     if (w.kind === 'wsched') return { badge: `[wsched:openWin #${n}]`, copy: `[wsched:openWin #${n}] «${title}»` };
     if (w.kind === 'pcal') return { badge: `[pcal:openWin #${n}]`, copy: `[pcal:openWin #${n}] «${title}»` };
+    if (w.kind === 'neworder') return { badge: `[neworder:openWin #${n}]`, copy: `[neworder:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
   };
 
@@ -253,6 +260,82 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         if (!isList && !isDir && !isResEdit && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
+
+        // ── Окно «Новый заказ» (черновик из мастера проекта) ──
+        if (w.kind === 'neworder') {
+          const f = newOrderForm[w.id] || {};
+          const set = (k: string, v: string) => setNewOrderForm(prev => ({ ...prev, [w.id]: { ...f, [k]: v } }));
+          const canSave = !!(f.specification_name || '').trim();
+          return (
+            <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+              style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+              onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
+                <span className="ttl">{w.title || 'Новый заказ'}</span>
+                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
+                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
+                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
+              </div>
+              <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto', height: 'calc(100% - 32px)' }}>
+                <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название заказа *</div>
+                <input value={f.specification_name || ''} onChange={e => set('specification_name', e.target.value)} placeholder="Например: Мост автомобильный"
+                  style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Клиент</div>
+                <ReferenceField entity="counterparties" value={f.client_id || null} onChange={v => set('client_id', v || '')}
+                  onPickItem={(row) => set('client', row.name)} placeholder="Выбрать клиента…" />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Кол-во</div>
+                    <input type="number" min="0" step="any" value={f.quantity || '1'} onChange={e => set('quantity', e.target.value)}
+                      style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Ед.</div>
+                    <input value={f.unit || 'pcs'} onChange={e => set('unit', e.target.value)}
+                      style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Начало</div>
+                    <input type="date" value={f.start_date || ''} onChange={e => set('start_date', e.target.value)}
+                      style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Окончание</div>
+                    <input type="date" value={f.due_date || ''} onChange={e => set('due_date', e.target.value)}
+                      style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Приоритет</div>
+                  <select value={f.priority || 'normal'} onChange={e => set('priority', e.target.value)}
+                    style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, fontFamily: 'inherit' }}>
+                    <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                  <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+                  <button disabled={!canSave} onClick={() => {
+                    onNewOrderDraftSave?.({
+                      specification_name: f.specification_name || '',
+                      quantity: f.quantity || '1',
+                      unit: f.unit || 'pcs',
+                      client: f.client || '',
+                      client_id: f.client_id || '',
+                      start_date: f.start_date || '',
+                      due_date: f.due_date || '',
+                      priority: f.priority || 'normal',
+                    });
+                    onClose(w.id);
+                  }}
+                    style={{ background: canSave ? '#3B82F6' : '#123047', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: canSave ? 'pointer' : 'default', opacity: canSave ? 1 : .5, fontFamily: 'inherit' }}>✓ В список</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         // ── Окна менеджеров (графики работы / производственные календари) — MDI ──
         if (w.kind === 'wsched' || w.kind === 'pcal') {
