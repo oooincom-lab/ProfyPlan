@@ -327,3 +327,35 @@ async def effective_schedule(
             for x in applicable
         ],
     }
+
+
+@router.get("/{resource_id}/project-assignments")
+async def resource_project_assignments(
+    resource_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Привязки глобального ресурса к проектам (ProjectResource) — для resedit-окна."""
+    from app.models.project_resource import ProjectResource
+    from app.models.project import Project
+    rows = (await db.execute(
+        select(ProjectResource, Project.name)
+        .join(Project, Project.id == ProjectResource.project_id)
+        .where(
+            ProjectResource.resource_id == resource_id,
+            ProjectResource.tenant_id == tenant_id,
+        )
+        .order_by(Project.name)
+    )).all()
+    return [
+        {
+            "id": str(pr.id),
+            "project_id": str(pr.project_id),
+            "project_name": pname,
+            "schedule_id": str(pr.schedule_id) if pr.schedule_id else None,
+            "capacity_share": float(pr.capacity_share) if pr.capacity_share is not None else None,
+            "date_from": str(pr.date_from) if pr.date_from else None,
+            "date_to": str(pr.date_to) if pr.date_to else None,
+        }
+        for pr, pname in rows
+    ]

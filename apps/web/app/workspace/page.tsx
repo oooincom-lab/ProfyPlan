@@ -1394,6 +1394,28 @@ export default function AppShell() {
     try { await apiF(`/calendar-exceptions/${exceptionId}`, { method: 'DELETE' }); } catch { }
     for (const rid of Object.keys(calData)) loadCalData(rid);
   };
+
+  // ── Привязка ресурса к проектам (ProjectResource) — resedit-окно ──
+  const [resAssign, setResAssign] = useState<Record<string, any[]>>({});
+  const loadResAssign = async (resourceId: string) => {
+    try {
+      const data = await apiF<any[]>(`/resources/${resourceId}/project-assignments`);
+      setResAssign(prev => ({ ...prev, [resourceId]: data }));
+    } catch { }
+  };
+  const handleResAssignAdd = async (resourceId: string, projectId: string, capacityShare: number) => {
+    try {
+      await apiF(`/projects/${projectId}/project-resources`, { method: 'POST', body: JSON.stringify({ resource_id: resourceId, capacity_share: capacityShare }) });
+      await loadResAssign(resourceId);
+    } catch (e: any) { setMsg('Ошибка привязки: ' + (e.message || String(e))); }
+  };
+  const handleResAssignDel = async (resourceId: string, assignmentId: string) => {
+    try {
+      const a = (resAssign[resourceId] || []).find(x => x.id === assignmentId);
+      if (a) await apiF(`/projects/${a.project_id}/project-resources/${assignmentId}`, { method: 'DELETE' });
+      await loadResAssign(resourceId);
+    } catch (e: any) { setMsg('Ошибка отвязки: ' + (e.message || String(e))); }
+  };
   const [nomQuery, setNomQuery] = useState('');
   const [nomenclatureList, setNomenclatureList] = useState<any[]>([]);
   const [panelShowOps, setPanelShowOps] = useState(false); // чекбокс «показывать операции» в панели заказа
@@ -3209,7 +3231,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 { id: 'production-calendars', icon: '📅', title: 'Производственные календари', desc: 'Рабочие и праздничные дни по странам' },
                 { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
               ].map(d => (
-                <div key={d.id} className="dir-card" onClick={() => ['work-schedules', 'production-calendars', 'resources'].includes(d.id) ? navTo(d.id as View) : setDirectoryModal(d.id)}>
+                <div key={d.id} className="dir-card" onClick={() => {
+                        if (['work-schedules', 'production-calendars'].includes(d.id)) { navTo(d.id as View); return; }
+                        if (DIR_COLUMNS[d.id]) openDirectory(d.id); else setDirectoryModal(d.id);
+                      }}>
                   <div className="dc-icon">{d.icon}</div>
                   <div className="dc-title">{d.title}</div>
                   <div className="dc-count">{d.desc}</div>
@@ -3505,6 +3530,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>
                       {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'units' ? 'Единицы измерения' : directoryModal === 'counterparties' ? 'Контрагенты' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
                     </span>
+                    <DebugBadge debug={debugMode} text={`[dir:manager:${directoryModal}]`} copy={`[dir:manager:${directoryModal}] «${directoryModal}»`} />
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations'].map(tab => (
@@ -3661,6 +3687,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   onCalDelAssignment={handleCalDelAssignment}
                   onCalAddException={handleCalAddException}
                   onCalDelException={handleCalDelException}
+                  resAssign={resAssign}
+                  onResAssignLoad={loadResAssign}
+                  onResAssignAdd={handleResAssignAdd}
+                  onResAssignDel={handleResAssignDel}
                   opNameSuggestions={Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean))))}
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}

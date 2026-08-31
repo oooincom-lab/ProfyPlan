@@ -76,6 +76,13 @@ type WindowsLayerProps = {
   onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
   onRoutingOpCreate?: (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null) => Promise<boolean>;
   opNameSuggestions?: string[];
+  projects?: any[];
+  /** Привязки ресурса к проектам (resedit): {resourceId: items[]} */
+  resAssign?: Record<string, any[]>;
+  onResAssignLoad?: (resourceId: string) => void;
+  onResAssignAdd?: (resourceId: string, projectId: string, capacityShare: number) => void;
+  onResAssignDel?: (resourceId: string, assignmentId: string) => void;
+
   /** Ресурсы заказа (Шаг 5): {orderId: items[]} — из операций маршрутов + переопределения */
   orderRes?: Record<string, any[]>;
   /** Добавить ресурс в заказ (ReferenceField) */
@@ -132,6 +139,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
     schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove,
+    projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
     debug = false,
   } = props;
@@ -152,8 +160,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   useEffect(() => {
     for (const w of wins) {
       if (!w.min && w.tab === 'res' && w.orderId && onOrderResLoad) onOrderResLoad(w.orderId);
+      if (!w.min && w.kind === 'resedit' && w.data?.id && onResAssignLoad) onResAssignLoad(String(w.data.id));
     }
-  }, [wins, onOrderResLoad]);
+  }, [wins, onOrderResLoad, onResAssignLoad]);
   // Селектор «Узел» на вкладке «Маршрут» (Шаг 4): фильтр маршрутов по узлу BOM
   const [routeSelNode, setRouteSelNode] = useState<Record<string, string | null>>({});
   // Dropdown «Предш. оп.» (Шаг 4): список операций маршрута с чекбоксами
@@ -454,14 +463,26 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 />
               )}
               {isResEdit && (
-                <ResourceForm
-                  form={w.form}
-                  onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
-                  schedules={schedules}
-                  saving={!!w.saving}
-                  onSave={() => onSaveResourceEdit && onSaveResourceEdit(w)}
-                  onCancel={() => onClose(w.id)}
-                />
+                <>
+                  <ResourceForm
+                    form={w.form}
+                    onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
+                    schedules={schedules}
+                    saving={!!w.saving}
+                    onSave={() => onSaveResourceEdit && onSaveResourceEdit(w)}
+                    onCancel={() => onClose(w.id)}
+                  />
+                  {/* Привязка ресурса к проектам (ProjectResource) */}
+                  {w.data?.id && (
+                    <ResAssignSection
+                      resourceId={String(w.data.id)}
+                      projects={projects}
+                      assignments={(resAssign || {})[String(w.data.id)] || []}
+                      onAdd={onResAssignAdd}
+                      onDel={onResAssignDel}
+                    />
+                  )}
+                </>
               )}
               {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
                 <table className="tbl">
@@ -989,5 +1010,42 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         );
       })()}
     </>
+  );
+}
+
+
+function ResAssignSection({ resourceId, projects, assignments, onAdd, onDel }: {
+  resourceId: string;
+  projects: any[];
+  assignments: any[];
+  onAdd?: (resourceId: string, projectId: string, capacityShare: number) => void;
+  onDel?: (resourceId: string, assignmentId: string) => void;
+}) {
+  const [selProj, setSelProj] = useState('');
+  const [selShare, setSelShare] = useState('1');
+  const avail = (projects || []).filter((p2: any) => !assignments.some((a: any) => a.project_id === p2.id));
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+      <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 6 }}>Привязка к проектам (доля мощности):</div>
+      {assignments.length === 0 && <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 6 }}>Ресурс не привязан ни к одному проекту.</div>}
+      {assignments.map((a: any) => (
+        <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
+          <span style={{ flex: 1 }}>{a.project_name || a.project_id}</span>
+          <span style={{ color: '#34D399', fontWeight: 600 }}>{Math.round((a.capacity_share ?? 1) * 100)}%</span>
+          <button className="pp-wbtn" title="Отвязать" onClick={() => onDel?.(resourceId, a.id)}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+        <select value={selProj} onChange={e => setSelProj(e.target.value)} style={{ flex: 1, minWidth: 150, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }}>
+          <option value="">Проект…</option>
+          {avail.map((p2: any) => <option key={p2.id} value={p2.id}>{p2.name}</option>)}
+        </select>
+        <input type="number" min="0" max="1" step="0.05" value={selShare} onChange={e => setSelShare(e.target.value)} title="Доля мощности (0–1)"
+          style={{ width: 70, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }} />
+        <button className="btn btn-primary btn-sm" disabled={!selProj}
+          onClick={() => { if (selProj) { onAdd?.(resourceId, selProj, parseFloat(String(selShare).replace(',', '.')) || 1); setSelProj(''); setSelShare('1'); } }}
+          style={{ opacity: selProj ? 1 : .5 }}>+ Привязать</button>
+      </div>
+    </div>
   );
 }
