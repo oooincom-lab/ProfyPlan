@@ -6,6 +6,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
 import ReferenceField from '@/components/ReferenceField';
+import WorkScheduleManager from '@/components/WorkScheduleManager';
+import ProductionCalendarManager from '@/components/ProductionCalendarManager';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
 import ResourceForm from '@/components/ResourceForm';
@@ -203,6 +205,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'resedit') return w.title || 'Ресурс';
     if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
     if (w.kind === 'cal') return w.title || 'Календарь ресурса';
+    if (w.kind === 'wsched') return w.title || 'Графики работы';
+    if (w.kind === 'pcal') return w.title || 'Производственные календари';
     const o = w.data || orderById(w.orderId);
     const full = o ? ((o.ext_id || o.id) + ' · ' + (o.specification_name || '')) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + full : full;
@@ -222,6 +226,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'dir') return { badge: `[dir:openDirWin:${w.data?.entity || '?'} #${n}]`, copy: `[dir:openDirWin:${w.data?.entity || '?'} #${n}] «${title}»` };
     if (w.kind === 'opadd') return { badge: `[opadd:openWin #${n}]`, copy: `[opadd:openWin #${n}] «${title}»` };
     if (w.kind === 'cal') return { badge: `[cal:openCalWin #${n}]`, copy: `[cal:openCalWin #${n}] «${title}»` };
+    if (w.kind === 'wsched') return { badge: `[wsched:openWin #${n}]`, copy: `[wsched:openWin #${n}] «${title}»` };
+    if (w.kind === 'pcal') return { badge: `[pcal:openWin #${n}]`, copy: `[pcal:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
   };
 
@@ -247,6 +253,27 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         if (!isList && !isDir && !isResEdit && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
+
+        // ── Окна менеджеров (графики работы / производственные календари) — MDI ──
+        if (w.kind === 'wsched' || w.kind === 'pcal') {
+          return (
+            <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+              style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+              onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.kind === 'wsched' ? '#A78BFA' : '#F59E0B', flexShrink: 0 }} />
+                <span className="ttl">{w.title || (w.kind === 'wsched' ? 'Графики работы' : 'Производственные календари')}</span>
+                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
+                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
+                <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>⛶</button>
+                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                {w.kind === 'wsched' ? <WorkScheduleManager debug={debug} /> : <ProductionCalendarManager debug={debug} />}
+              </div>
+            </div>
+          );
+        }
 
         // ── Окно «Календарь ресурса» (v2.16): эффективный график, версии графиков, исключения ──
         if (w.kind === 'cal') {

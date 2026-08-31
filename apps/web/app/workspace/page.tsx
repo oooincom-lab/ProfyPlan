@@ -64,6 +64,16 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'notes', label: 'Примечание' },
     ],
   },
+  organizations: {
+    title: '🏭 Организации', columns: [
+      { key: 'name', label: 'Наименование', width: 240 },
+      { key: 'inn', label: 'ИНН', width: 110 },
+      { key: 'kpp', label: 'КПП', width: 100 },
+      { key: 'ogrn', label: 'ОГРН', width: 120 },
+      { key: 'address', label: 'Адрес' },
+      { key: 'phone', label: 'Телефон', width: 130 },
+    ],
+  },
   departments: {
     title: 'Подразделения', columns: [
       { key: 'name', label: 'Подразделение' },
@@ -3232,7 +3242,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
               ].map(d => (
                 <div key={d.id} className="dir-card" onClick={() => {
-                        if (['work-schedules', 'production-calendars'].includes(d.id)) { navTo(d.id as View); return; }
+                        if (d.id === 'work-schedules') { if (panelMode === 'window') win.openManagerWin('wsched', '🕒 Графики работы'); else navTo('work-schedules' as View); return; }
+                        if (d.id === 'production-calendars') { if (panelMode === 'window') win.openManagerWin('pcal', '📅 Производственные календари'); else navTo('production-calendars' as View); return; }
                         if (DIR_COLUMNS[d.id]) openDirectory(d.id); else setDirectoryModal(d.id);
                       }}>
                   <div className="dc-icon">{d.icon}</div>

@@ -19,7 +19,8 @@ from app.models.catalog_operation import CatalogOperation
 from app.models.department import Department
 from app.models.order_resource import OrderResource
 from app.models.schedule_assignment import ScheduleAssignment
-from app.models.calendar_exception import CalendarException  # noqa: F401
+from app.models.calendar_exception import CalendarException
+from app.models.organization import Organization  # noqa: F401
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot  # noqa: F401
 from app.models.production_calendar import ProductionCalendar, ProductionCalendarDay  # noqa: F401
 from app.models.plan_version import (

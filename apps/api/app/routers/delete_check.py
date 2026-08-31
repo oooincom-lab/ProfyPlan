@@ -20,6 +20,7 @@ from app.models.nomenclature import Nomenclature
 from app.models.project_stage import ProjectStage
 from app.models.catalog_operation import CatalogOperation
 from app.models.department import Department
+from app.models.organization import Organization
 from app.models.unit import Unit
 from app.models.order_group import OrderGroup
 from app.models.order_pool import OrderPool
@@ -143,6 +144,13 @@ DEPENDENCY_MAP = {
         "cascade": [],
         "blocking": [],
     },
+    "organization": {
+        "model": Organization,
+        "label": "Организация",
+        "name_field": "name",
+        "cascade": [],
+        "blocking": [],
+    },
     "department": {
         "model": Department,
         "label": "Подразделение",
@@ -227,6 +235,7 @@ async def delete_check(
             'stages': 'stage',
             'operations': 'catalog_operation',
             'departments': 'department',
+            'organizations': 'organization',
         }
         mapped = _alias.get(entity_type)
         if mapped:
@@ -339,6 +348,7 @@ async def safe_delete(
             'stages': 'stage',
             'operations': 'catalog_operation',
             'departments': 'department',
+            'organizations': 'organization',
         }
         mapped = _alias.get(entity_type)
         if mapped:
