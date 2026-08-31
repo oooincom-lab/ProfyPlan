@@ -364,8 +364,8 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                     </>
                   ) : (
                     <>
-                      <button onClick={() => { setEditingId(row.id); setEditVals({}); }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
-                      <button onClick={() => deleteRow(row.id, row.name || row.specification_name || '')} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
+                      <button onClick={() => { if (onManageEdit) onManageEdit(row); else { setEditingId(row.id); setEditVals({}); } }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
+                      <button onClick={() => { if (onManageDelete) onManageDelete(row); else deleteRow(row.id, row.name || row.specification_name || ''); }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
                     </>
                   )}
                 </td>
