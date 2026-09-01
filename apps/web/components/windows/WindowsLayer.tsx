@@ -283,7 +283,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Клиент</div>
                 <ReferenceField entity="counterparties" value={f.client_id || null} onChange={v => set('client_id', v || '')}
-                  onPickItem={(row) => set('client', row.name)} placeholder="Выбрать клиента…" />
+                  onOpenBrowser={onOpenDirPick} onPickItem={(row) => set('client', row.name)} placeholder="Выбрать клиента…" />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Кол-во</div>

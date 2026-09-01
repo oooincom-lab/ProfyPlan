@@ -451,10 +451,16 @@ export default function AppShell() {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
     if (panelMode === 'window') {
+      const dirEndpoints = (entity === 'departments' || entity === 'organizations')
+        ? { item: (id: string) => `https://profyplan.ru/api/v1/${entity}/${id}`, method: 'PATCH' as const }
+        : undefined;
       win.openDirWin(entity, cfg.title, cfg.columns, undefined,
         entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
         entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.id) : undefined,
-        entity === 'resources' ? { onManageCalendar: (row: any) => win.openCalWin(row.id, row.name) } : undefined,
+        {
+          onManageCalendar: entity === 'resources' ? (row: any) => win.openCalWin(row.id, row.name) : undefined,
+          endpoints: dirEndpoints,
+        },
       );
     } else {
       setDirManager({ title: cfg.title, entity, columns: cfg.columns, variant: panelMode === 'modal' ? 'modal' : 'panel' });
@@ -3627,11 +3633,12 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     />
                   )}
                   {directoryModal === 'organizations' && (
-                    <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>🏭</div>
-                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Раздел в разработке</div>
-                      <div>Здесь будет справочник организаций</div>
-                    </div>
+                    <DirectoryTable
+                      entity="organizations"
+                      apiBase="https://profyplan.ru/api"
+                      columns={DIR_COLUMNS.organizations.columns}
+                      endpoints={{ item: (id: string) => `https://profyplan.ru/api/v1/organizations/${id}`, method: 'PATCH' as const }}
+                    />
                   )}
                 </div>
               </div>
