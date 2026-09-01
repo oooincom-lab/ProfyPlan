@@ -277,6 +277,7 @@ async def import_excel(
 async def _import_orders(
     ws, project_id: Optional[str], tenant_id: str,
     db: AsyncSession, result: ExcelImportResult,
+    default_client: Optional[str] = None,
 ) -> ExcelImportResult:
     """Парсинг вкладки 'Заказы'.
 
