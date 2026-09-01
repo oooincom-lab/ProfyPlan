@@ -196,10 +196,20 @@ async def import_excel(
 
     result = ExcelImportResult()
 
+    # ── Вкладка 1-Настройки: параметры (Клиент по умолчанию) ─────
+    default_client: Optional[str] = None
+    ws_set = _pick_sheet(wb, ["1-Настройки", "Настройки"])
+    if ws_set is not None:
+        for row in ws_set.iter_rows(min_row=2, values_only=True):
+            if not row or _str(row[0] if len(row) > 0 else None).rstrip(" *") != "Клиент":
+                continue
+            default_client = _str(row[1] if len(row) > 1 else None) or None
+            break
+
     # ── Вкладка 1: Заказы (Заказы / Orders / 2-Заказы) ─────
     ws = _pick_sheet(wb, ["Заказы", "Orders", "2-Заказы"])
     if ws is not None:
-        result = await _import_orders(ws, project_id, tenant_id, db, result)
+        result = await _import_orders(ws, project_id, tenant_id, db, result, default_client=default_client)
 
     # ── Вкладка 2: BOM (Состав / BOM / 3-BOM) ──────────────
     ws = _pick_sheet(wb, ["Состав", "BOM", "3-BOM"])
@@ -207,9 +217,11 @@ async def import_excel(
         result = await _import_bom(ws, tenant_id, project_id, db, result)
 
     # ── Вкладка 4: Ресурсы (4-Ресурсы / Ресурсы) ────────
+    res_map: dict[str, UUID] = {}
+    dept_map: dict[str, UUID] = {}
     ws = _pick_sheet(wb, ["4-Ресурсы", "Ресурсы"])
     if ws is not None:
-        result = await _import_resources(ws, tenant_id, project_id, db, result)
+        result, res_map, dept_map = await _import_resources(ws, tenant_id, project_id, db, result)
 
     # ── Вкладка 6: Этапы (6-Этапы) ──
     stage_map: dict[str, str] = {}
@@ -228,7 +240,7 @@ async def import_excel(
     ws = _pick_sheet(wb, ["5-Маршруты", "Маршруты", "Routes"])
     is_7tab = ws is not None and ws.title == "5-Маршруты"
     if ws is not None:
-        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab, stage_map=stage_map)
+        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab, stage_map=stage_map, res_map=res_map, dept_map=dept_map)
 
     # Предупреждение: нет ресурсов
     if result.resources_created == 0:
@@ -297,6 +309,22 @@ async def _import_orders(
                 message="обязательное поле 'Кол-во' не заполнено",
             ))
             continue
+        client = _str(row[7]) if len(row) > 7 else ""
+        if not client and default_client:
+            client = default_client
+        client_id = None
+        if client:
+            cp = (await db.execute(
+                select(Counterparty).where(
+                    Counterparty.tenant_id == tenant_id, Counterparty.name == client
+                )
+            )).scalar_one_or_none()
+            if not cp:
+                cp = Counterparty(id=uuid4(), tenant_id=tenant_id, name=client)
+                db.add(cp)
+                await db.flush()
+            client_id = cp.id
+        client_name = client or None
         try:
             order = ProductionOrder(
                 id=uuid4(),
@@ -309,7 +337,8 @@ async def _import_orders(
                 start_date=_parse_date(row[4] if len(row) > 4 else None),
                 due_date=_parse_date(row[5] if len(row) > 5 else None),
                 priority=PRIORITY_MAP_RU.get(_str(row[6]).lower(), "normal"),
-                client=_str(row[7]) if len(row) > 7 else None,
+                client=client_name,
+                client_id=client_id,
                 status="draft",
             )
             db.add(order)
@@ -499,12 +528,15 @@ async def _import_bom(
 
 async def _import_resources(
     ws, tenant_id: str, project_id: Optional[str], db: AsyncSession, result: ExcelImportResult,
-) -> ExcelImportResult:
+) -> tuple[ExcelImportResult, dict[str, UUID], dict[str, UUID]]:
     """Парсинг вкладки 'Ресурсы'.
 
     Колонки: ID ресурса | Название | Тип | Подразделение | Доступно | Ед.
+    Подразделение создаётся/находится в справочнике (v2.17, Шаг 4b).
     """
     rows = list(ws.iter_rows(min_row=2, values_only=True))
+    res_map: dict[str, UUID] = {}
+    dept_map: dict[str, UUID] = {}
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
             continue
@@ -519,6 +551,19 @@ async def _import_resources(
         rtype = RESOURCE_TYPE_MAP_RU.get(rtype_raw, "equipment")
         available = _parse_decimal(row[4] if len(row) > 4 else 1, Decimal("1"))
         unit = _str(row[5]) if len(row) > 5 else "pcs"
+        dept_name = _str(row[3]) if len(row) > 3 else ""
+        dept_id = None
+        if dept_name:
+            dept = (await db.execute(
+                select(Department).where(
+                    Department.tenant_id == tenant_id, Department.name == dept_name
+                )
+            )).scalar_one_or_none()
+            if not dept:
+                dept = Department(id=uuid4(), tenant_id=tenant_id, name=dept_name)
+                db.add(dept)
+            dept_id = dept.id
+            dept_map[dept_name] = dept_id
         try:
             res = Resource(
                 id=uuid4(),
@@ -529,9 +574,11 @@ async def _import_resources(
                 capacity_per_unit=available,
                 capacity_unit="hour",
                 unit=unit,
+                department_id=dept_id,
                 ext_id=_str(row[0]) if len(row) > 0 else None,
             )
             db.add(res)
+            res_map[name] = res.id
             result.resources_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
@@ -539,7 +586,7 @@ async def _import_resources(
                 message=str(e),
             ))
     await db.flush()
-    return result
+    return result, res_map, dept_map
 
 
 def _find_cycles_multi(graph: dict[UUID, set[UUID]]) -> list[list[UUID]]:
@@ -648,7 +695,8 @@ async def _validate_order_chain(
 async def _import_routes(
     ws, tenant_id: str, db: AsyncSession, result: ExcelImportResult,
     project_id: Optional[str] = None, is_7tab: bool = False,
-    stage_map: Optional[dict] = None,
+    stage_map: Optional[dict] = None, res_map: Optional[dict[str, UUID]] = None,
+    dept_map: Optional[dict[str, UUID]] = None,
 ) -> ExcelImportResult:
     """Парсинг вкладки 'Маршруты'.
 
@@ -674,6 +722,48 @@ async def _import_routes(
         node_id = _str(row[0]) if len(row) > 0 else ""
         if node_id:
             routings_by_node.setdefault(node_id, []).append((i, row))
+
+    # Справочники для сопоставления: подразделение и этап по имени (get_or_create)
+    from app.models.project_stage import ProjectStage
+    stage_ids: dict[str, UUID] = {}
+
+    async def _get_or_create_stage(name: str) -> Optional[UUID]:
+        if not name or not project_id:
+            return None
+        key = name.strip().lower()
+        if key in stage_ids:
+            return stage_ids[key]
+        st = (await db.execute(
+            select(ProjectStage).where(
+                ProjectStage.project_id == UUID(project_id),
+                ProjectStage.name == name.strip(),
+            )
+        )).scalar_one_or_none()
+        if not st:
+            st = ProjectStage(
+                id=uuid4(), tenant_id=tenant_id, project_id=UUID(project_id),
+                name=name.strip(), position=len(stage_ids) + 1,
+            )
+            db.add(st)
+        stage_ids[key] = st.id
+        return st.id
+
+    async def _get_or_create_department(name: str) -> Optional[UUID]:
+        if not name:
+            return None
+        if dept_map and name in dept_map:
+            return dept_map[name]
+        d = (await db.execute(
+            select(Department).where(
+                Department.tenant_id == tenant_id, Department.name == name.strip()
+            )
+        )).scalar_one_or_none()
+        if not d:
+            d = Department(id=uuid4(), tenant_id=tenant_id, name=name.strip())
+            db.add(d)
+        if dept_map is not None:
+            dept_map[name] = d.id
+        return d.id
 
     # Находим BOM-узлы по ext_id
     for node_ext_id, node_rows in routings_by_node.items():
@@ -719,6 +809,17 @@ async def _import_routes(
                 if not res_name:
                     ops_without_resource += 1
                 try:
+                    # Сопоставление по имени: ресурс и подразделение — из справочников
+                    res_id = (res_map or {}).get(res_name)
+                    if res_name and not res_id:
+                        res_lookup = (await db.execute(
+                            select(Resource).where(
+                                Resource.tenant_id == tenant_id, Resource.name == res_name
+                            )
+                        )).scalar_one_or_none()
+                        res_id = res_lookup.id if res_lookup else None
+                    dept_id2 = await _get_or_create_department(dept_val)
+                    stage_id2 = await _get_or_create_stage(stage_name_val or stage_val)
                     rop = RoutingOperation(
                         id=uuid4(),
                         routing_id=routing.id,
@@ -726,10 +827,12 @@ async def _import_routes(
                         name=name_val,
                         duration_hours=_parse_decimal(dur_val),
                         setup_hours=Decimal("0"),
-                        resource_type_id=res_name or None,
+                        resource_type_id=str(res_id) if res_id else (res_name or None),
                         stage=stage_val or None,
-                        stage_name=stage_name_val or None,
+                        stage_name=stage_name_val or stage_val or None,
                         department=dept_val or None,
+                        department_id=dept_id2,
+                        stage_id=stage_id2,
                         output_product=(
                             _str(row[c_out]) if c_out is not None and len(row) > c_out and _str(row[c_out]) else None
                         ),
