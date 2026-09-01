@@ -881,6 +881,7 @@ async def _import_routes(
 
 # ── GET / ──────────────────────────────────────────────────────
 
+@router.get("", response_model=list[ProductionOrderOut])
 @router.get("/", response_model=list[ProductionOrderOut])
 async def list_orders(
     project_id: Optional[str] = None,
