@@ -822,6 +822,24 @@ async def _import_routes(
                         res_id = res_lookup.id if res_lookup else None
                     dept_id2 = await _get_or_create_department(dept_val)
                     stage_id2 = await _get_or_create_stage(stage_name_val or stage_val)
+                    # Каталог операций: найти по имени, создать при отсутствии (v2.17)
+                    cat_id = None
+                    if name_val:
+                        from app.models.catalog_operation import CatalogOperation
+                        cat = (await db.execute(
+                            select(CatalogOperation).where(
+                                CatalogOperation.tenant_id == tenant_id,
+                                func.lower(CatalogOperation.name) == name_val.strip().lower(),
+                            )
+                        )).scalar_one_or_none()
+                        if not cat:
+                            cat = CatalogOperation(
+                                id=uuid4(), tenant_id=tenant_id,
+                                name=name_val.strip(),
+                                default_duration_hours=_parse_decimal(dur_val) or Decimal("1"),
+                            )
+                            db.add(cat)
+                        cat_id = cat.id
                     rop = RoutingOperation(
                         id=uuid4(),
                         routing_id=routing.id,
@@ -833,6 +851,7 @@ async def _import_routes(
                         stage=stage_val or None,
                         stage_name=stage_name_val or stage_val or None,
                         department=dept_val or None,
+                        catalog_operation_id=cat_id,
                         department_id=dept_id2,
                         stage_id=stage_id2,
                         output_product=(
