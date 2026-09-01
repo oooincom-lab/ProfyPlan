@@ -18,6 +18,7 @@ from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
 from app.models.nomenclature import Nomenclature
 from app.models.counterparty import Counterparty
+from app.models.department import Department
 from app.models.resource import Resource
 from app.schemas.production_order import (
     ProductionOrderCreate,
