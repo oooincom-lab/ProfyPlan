@@ -338,7 +338,7 @@ async def _import_orders(
                 quantity=_parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1")),
                 start_date=_parse_date(row[4] if len(row) > 4 else None),
                 due_date=_parse_date(row[5] if len(row) > 5 else None),
-                priority=PRIORITY_MAP_RU.get(_str(row[6]).lower(), "normal"),
+                priority=PRIORITY_MAP_RU.get(_str(row[6] if len(row) > 6 else None).lower(), "normal"),
                 client=client_name,
                 client_id=client_id,
                 status="draft",
