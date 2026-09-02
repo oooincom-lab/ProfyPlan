@@ -1542,6 +1542,7 @@ export default function AppShell() {
     setSelectedProject(p);
     loadBomTree(p.id);
     loadNomenclature();
+    apiF<any[]>('/resources').then((rs) => { if (Array.isArray(rs)) setResourcesList(rs); }).catch(() => {});
     reloadRoutings(p.id);
     if (panelMode === 'window') {
       try {
