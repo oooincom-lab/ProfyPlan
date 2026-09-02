@@ -368,7 +368,7 @@ export default function AppShell() {
   const loadPanelData = async (p: any) => {
     try {
       const [r, rs] = await Promise.all([
-        apiF<any>('/bom/routings?page_size=200').catch(() => null),
+        apiF<any>(`/bom/routings?page_size=200&project_id=${p.id}`).catch(() => null),
         apiF<any[]>('/resources').catch(() => []),
       ]);
       if (r && Array.isArray(r.items)) setRoutings(r.items);
