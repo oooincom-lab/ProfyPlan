@@ -310,15 +310,17 @@ export interface ExcelImportResult {
   nomenclature_created: number;
   nomenclature_linked: number;
   resources_created: number;
+  missing_bom_nodes?: string[];
   errors: ImportValidationError[];
   warnings: string[];
 }
 
-export function importProductionOrders(file: File, projectId?: string) {
+export function importProductionOrders(file: File, projectId?: string, createMissingBom?: boolean) {
   const token = getToken();
   const formData = new FormData();
   formData.append('file', file);
   if (projectId) formData.append('project_id', projectId);
+  if (createMissingBom) formData.append('create_missing_bom', 'true');
   return fetch(`${API_BASE}/v1/production-orders/import`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},

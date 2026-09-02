@@ -16,13 +16,14 @@ interface Props {
   debug?: boolean;
 }
 
-type Step = 'upload' | 'importing' | 'result' | 'exploding' | 'done';
+type Step = 'upload' | 'importing' | 'result' | 'exploding' | 'done' | 'confirm-missing';
 
 export default function ExcelImportWizard({ projectId, onComplete, onClose, debug = false }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<ExcelImportResult | null>(null);
+  const [confirmMissing, setConfirmMissing] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [explodeResult, setExplodeResult] = useState<any>(null);
   const [cpmResult, setCpmResult] = useState<any>(null);
@@ -45,30 +46,40 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose, debu
     if (f) { setFile(f); setError(null); }
   };
 
-  const doImport = async () => {
+  const continueImport = async (r: ExcelImportResult) => {
+    setResult(r);
+    if (r.orders_created === 0 && r.bom_nodes_created === 0) {
+      setStep('result');
+    } else {
+      // Auto-explode BOM
+      setStep('exploding');
+      try {
+        const exp = await explodeAndSaveBOM(projectId);
+        setExplodeResult(exp);
+        // Run CPM
+        try {
+          const cpm = await runCPM(projectId);
+          setCpmResult(cpm);
+        } catch { /* CPM optional */ }
+      } catch { /* explode optional */ }
+      setStep('done');
+      onComplete?.(r);
+    }
+  };
+
+  const doImport = async (createMissingBom?: boolean) => {
     if (!file) return;
     setStep('importing');
     setError(null);
     try {
-      const r = await importProductionOrders(file, projectId);
+      const r = await importProductionOrders(file, projectId, createMissingBom);
       setResult(r);
-      if (r.orders_created === 0 && r.bom_nodes_created === 0) {
-        setStep('result');
-      } else {
-        // Auto-explode BOM
-        setStep('exploding');
-        try {
-          const exp = await explodeAndSaveBOM(projectId);
-          setExplodeResult(exp);
-          // Run CPM
-          try {
-            const cpm = await runCPM(projectId);
-            setCpmResult(cpm);
-          } catch { /* CPM optional */ }
-        } catch { /* explode optional */ }
-        setStep('done');
-        onComplete?.(r);
+      if (!createMissingBom && r.missing_bom_nodes && r.missing_bom_nodes.length > 0) {
+        setConfirmMissing(r.missing_bom_nodes);
+        setStep('confirm-missing');
+        return;
       }
+      await continueImport(r);
     } catch (e: any) {
       setError(e.message || 'Ошибка импорта');
       setStep('upload');
@@ -146,7 +157,33 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose, debu
 
         {/* Body */}
         <div style={style.body}>
-          {step === 'upload' && (
+          {step === 'confirm-missing' && confirmMissing && (
+        <>
+          <div style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#FCD34D' }}>⚠ Обнаружены маршруты без BOM-узлов</div>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#B0C4DE' }}>
+            Во вкладке «5-Маршруты» указаны узлы, которых нет во вкладке «3-BOM» ({confirmMissing.length} шт.).
+            Они будут <b>созданы автоматически</b> как полуфабрикаты, чтобы маршруты не потерялись:
+          </p>
+          <div style={{ background: 'rgba(252,211,77,.07)', border: '1px solid rgba(252,211,77,.25)', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 12.5, maxHeight: 140, overflow: 'auto' }}>
+            {confirmMissing.slice(0, 15).map(n => <div key={n}>• {n}</div>)}
+            {confirmMissing.length > 15 && <div style={{ color: '#5A7090' }}>… и ещё {confirmMissing.length - 15}</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={() => { setConfirmMissing(null); setStep('upload'); }}
+              style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '9px 18px', fontSize: 13, cursor: 'pointer' }}>
+              Отмена
+            </button>
+            <button onClick={async () => { setConfirmMissing(null); await doImport(true); }}
+              style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)', border: 'none', color: '#fff', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Создать узлы ({confirmMissing.length})
+            </button>
+          </div>
+          <p style={{ margin: '12px 0 0', fontSize: 12, color: '#5A7090' }}>
+            Если выбрать «Отмена» — эти маршруты будут пропущены (узел добавите вручную в «3-BOM» и переимпортируете).
+          </p>
+        </>
+      )}
+      {step === 'upload' && (
             <>
               <p style={{ margin: '0 0 16px', fontSize: 13 }}>
                 Загрузите Excel-файл с вкладками <strong>2-Заказы</strong>, <strong>3-BOM</strong> и <strong>5-Маршруты</strong> (дополнительные вкладки «1-Настройки», «4-Ресурсы», «6-Этапы», «7-Подразделения» — справочные).
@@ -193,7 +230,7 @@ export default function ExcelImportWizard({ projectId, onComplete, onClose, debu
                 <button
                   style={{ ...style.btn('primary'), opacity: file ? 1 : 0.5 }}
                   disabled={!file}
-                  onClick={doImport}
+                  onClick={() => doImport()}
                 >
                   Импортировать
                 </button>

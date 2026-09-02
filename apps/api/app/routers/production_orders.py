@@ -172,6 +172,7 @@ def _pick_sheet(wb, names):
 async def import_excel(
     file: UploadFile = File(...),
     project_id: str = Form(None),
+    create_missing_bom: bool = Form(False),
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -241,7 +242,22 @@ async def import_excel(
     ws = _pick_sheet(wb, ["5-Маршруты", "Маршруты", "Routes"])
     is_7tab = ws is not None and ws.title == "5-Маршруты"
     if ws is not None:
-        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab, stage_map=stage_map, res_map=res_map, dept_map=dept_map)
+        # Авто-создание BOM-узлов при отсутствии: узлы из маршрутов, которых нет в BOM
+        missing: list[str] = []
+        if ws is not None:
+            bom_ext = set()
+            ws_bom = _pick_sheet(wb, ["3-BOM", "BOM", "Состав"])
+            if ws_bom is not None:
+                for brow in ws_bom.iter_rows(min_row=2, values_only=True):
+                    if brow and _str(brow[1] if len(brow) > 1 else None):
+                        bom_ext.add(_str(brow[1]).strip())
+            route_ext = set()
+            for rrow in ws.iter_rows(min_row=2, values_only=True):
+                if rrow and _str(rrow[0] if len(rrow) > 0 else None):
+                    route_ext.add(_str(rrow[0]).strip())
+            missing = sorted(route_ext - bom_ext)
+        result.missing_bom_nodes = missing
+        result = await _import_routes(ws, tenant_id, db, result, project_id, is_7tab=is_7tab, stage_map=stage_map, res_map=res_map, dept_map=dept_map, create_missing_bom=create_missing_bom)
 
     # Предупреждение: нет ресурсов
     if result.resources_created == 0:
@@ -699,6 +715,7 @@ async def _import_routes(
     project_id: Optional[str] = None, is_7tab: bool = False,
     stage_map: Optional[dict] = None, res_map: Optional[dict[str, UUID]] = None,
     dept_map: Optional[dict[str, UUID]] = None,
+    create_missing_bom: bool = False,
 ) -> ExcelImportResult:
     """Парсинг вкладки 'Маршруты'.
 
@@ -778,7 +795,27 @@ async def _import_routes(
             res = await db.execute(stmt)
             bom_node = res.scalar_one_or_none()
             if not bom_node:
-                continue
+                # Авто-создание BOM-узла (при подтверждении пользователя)
+                if create_missing_bom and node_ext_id:
+                    bom_node = ProductStructure(
+                        id=uuid4(),
+                        tenant_id=tenant_id,
+                        project_id=UUID(project_id) if project_id else None,
+                        level=0,
+                        node_type="semi_finished",
+                        nomenclature_id=node_ext_id,
+                        nomenclature_name=node_ext_id,
+                        quantity_per_parent=Decimal("1"),
+                        unit="pcs",
+                        is_make_or_buy="make",
+                        sort_order=0,
+                        ext_id=node_ext_id,
+                    )
+                    db.add(bom_node)
+                    result.bom_nodes_created += 1
+                    result.warnings.append(f"Авто-создан BOM-узел «{node_ext_id}» (не был указан в составе)")
+                else:
+                    continue
 
             # Создаём Routing
             routing = Routing(
