@@ -583,21 +583,30 @@ async def _import_resources(
             dept_id = dept.id
             dept_map[dept_name] = dept_id
         try:
-            res = Resource(
-                id=uuid4(),
-                tenant_id=tenant_id,
-                project_id=UUID(project_id) if project_id else None,
-                name=name,
-                resource_type=rtype,
-                capacity_per_unit=available,
-                capacity_unit="hour",
-                unit=unit,
-                department_id=dept_id,
-                ext_id=_str(row[0]) if len(row) > 0 else None,
-            )
-            db.add(res)
+            # Глобальный каталог предприятия: найти по имени или создать (проектных НЕ создаём —
+            # лимиты к проекту привязываются отдельно через ProjectResource)
+            res = (await db.execute(
+                select(Resource).where(
+                    Resource.tenant_id == tenant_id,
+                    Resource.project_id.is_(None),
+                    Resource.name == name,
+                )
+            )).scalar_one_or_none()
+            if not res:
+                res = Resource(
+                    id=uuid4(),
+                    tenant_id=tenant_id,
+                    name=name,
+                    resource_type=rtype,
+                    capacity_per_unit=available,
+                    capacity_unit="hour",
+                    unit=unit,
+                    department_id=dept_id,
+                    ext_id=_str(row[0]) if len(row) > 0 else None,
+                )
+                db.add(res)
+                result.resources_created += 1
             res_map[name] = res.id
-            result.resources_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
                 row=i + 2, sheet="Ресурсы", field="*",
