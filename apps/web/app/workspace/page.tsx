@@ -322,7 +322,10 @@ export default function AppShell() {
   };
 
   const loadBomTree = async (projId: string) => {
-    if (bomTrees[projId] || bomLoading[projId]) return;
+    if (bomLoading[projId]) return;
+    // Пустой кэш ([]) — тоже повод перезагрузить: проект мог быть пуст при выборе,
+    // а данные появились после импорта
+    if (Array.isArray(bomTrees[projId]) && bomTrees[projId].length > 0) return;
     await reloadBomTree(projId);
   };
 
@@ -3824,7 +3827,16 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         projectId={importProjectId}
         debug={debugMode}
         onClose={() => setImportProjectId(null)}
-        onComplete={() => { setImportProjectId(null); refresh(); }}
+        onComplete={() => {
+          const pid = importProjectId;
+          setImportProjectId(null);
+          if (pid) {
+            reloadBomTree(pid);
+            reloadRoutings();
+            loadProjectOrders(pid);
+          }
+          refresh();
+        }}
       />
     )}
 

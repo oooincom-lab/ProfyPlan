@@ -110,7 +110,9 @@ class ImportValidationError(BaseModel):
 
 class ExcelImportResult(BaseModel):
     orders_created: int = 0
+    orders_updated: int = 0
     bom_nodes_created: int = 0
+    bom_reused: int = 0
     routings_created: int = 0
     routing_ops_created: int = 0
     nomenclature_created: int = 0

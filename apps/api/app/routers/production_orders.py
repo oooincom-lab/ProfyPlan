@@ -8,7 +8,7 @@ from typing import List, Optional
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -344,22 +344,45 @@ async def _import_orders(
             client_id = cp.id
         client_name = client or None
         try:
-            order = ProductionOrder(
-                id=uuid4(),
-                tenant_id=tenant_id,
-                project_id=project_id or None,
-                ext_id=ext_id,
-                specification_name=spec_name,
-                specification_id=_str(row[2]) if len(row) > 2 else None,
-                quantity=_parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1")),
-                start_date=_parse_date(row[4] if len(row) > 4 else None),
-                due_date=_parse_date(row[5] if len(row) > 5 else None),
-                priority=PRIORITY_MAP_RU.get(_str(row[6] if len(row) > 6 else None).lower(), "normal"),
-                client=client_name,
-                client_id=client_id,
-                status="draft",
-            )
-            db.add(order)
+            # Идемпотентность: повторный импорт ОБНОВЛЯЕТ существующий заказ по (project, ext_id),
+            # а не плодит дубль
+            order = None
+            if project_id:
+                order = (await db.execute(
+                    select(ProductionOrder).where(
+                        ProductionOrder.tenant_id == tenant_id,
+                        ProductionOrder.project_id == UUID(project_id),
+                        ProductionOrder.ext_id == ext_id,
+                    ).order_by(ProductionOrder.created_at.asc().nullslast())
+                )).scalars().first()
+            if order:
+                order.specification_name = spec_name
+                order.specification_id = _str(row[2]) if len(row) > 2 else None
+                order.quantity = _parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1"))
+                order.start_date = _parse_date(row[4] if len(row) > 4 else None)
+                order.due_date = _parse_date(row[5] if len(row) > 5 else None)
+                order.priority = PRIORITY_MAP_RU.get(_str(row[6] if len(row) > 6 else None).lower(), "normal")
+                order.client = client_name
+                order.client_id = client_id
+                result.orders_updated += 1
+            else:
+                order = ProductionOrder(
+                    id=uuid4(),
+                    tenant_id=tenant_id,
+                    project_id=project_id or None,
+                    ext_id=ext_id,
+                    specification_name=spec_name,
+                    specification_id=_str(row[2]) if len(row) > 2 else None,
+                    quantity=_parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1")),
+                    start_date=_parse_date(row[4] if len(row) > 4 else None),
+                    due_date=_parse_date(row[5] if len(row) > 5 else None),
+                    priority=PRIORITY_MAP_RU.get(_str(row[6] if len(row) > 6 else None).lower(), "normal"),
+                    client=client_name,
+                    client_id=client_id,
+                    status="draft",
+                )
+                db.add(order)
+                result.orders_created += 1
             if order.ext_id:
                 ext_to_id[order.ext_id] = order.id
             # parent_order_id — ext_id родителя, разрешаем после создания всех заказов
@@ -372,7 +395,6 @@ async def _import_orders(
                     ))
                 else:
                     pending_parent.append((order, parent_ext, i + 2))
-            result.orders_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
                 row=i + 2, sheet="Заказы", field="*",
@@ -482,23 +504,45 @@ async def _import_bom(
             elif nact == "linked":
                 result.nomenclature_linked += 1
 
-            node = ProductStructure(
-                id=uuid4(),
-                tenant_id=tenant_id,
-                project_id=UUID(project_id) if project_id else None,
-                nomenclature_id=node_ext_id,
-                nomenclature_ref_id=nref_id,
-                nomenclature_name=nomenclature_name,
-                node_type=node_type,
-                is_phantom=is_phantom,
-                quantity_per_parent=_parse_decimal(row[6] if len(row) > 6 else 1, Decimal("1")),
-                unit=unit_str,
-                procurement_lead_time_days=_parse_decimal(row[7] if len(row) > 7 else None, None),
-                is_make_or_buy="make" if node_type in ("assembly","semi_finished") else "buy",
-            )
-            # Используем id родительской спецификации (spec) как путь
-            node.path = f"{spec_name}/{node_ext_id}" if spec_name else node_ext_id
-            db.add(node)
+            # Идемпотентность: повторный импорт переиспользует узел по (project, path)
+            node = None
+            node_path = f"{spec_name}/{node_ext_id}" if spec_name else node_ext_id
+            if project_id:
+                node = (await db.execute(
+                    select(ProductStructure).where(
+                        ProductStructure.tenant_id == tenant_id,
+                        ProductStructure.project_id == UUID(project_id),
+                        ProductStructure.path == node_path,
+                    ).order_by(ProductStructure.created_at.asc().nullslast())
+                )).scalars().first()
+            if node:
+                node.nomenclature_ref_id = nref_id
+                node.nomenclature_name = nomenclature_name
+                node.node_type = node_type
+                node.is_phantom = is_phantom
+                node.quantity_per_parent = _parse_decimal(row[6] if len(row) > 6 else 1, Decimal("1"))
+                node.unit = unit_str
+                node.procurement_lead_time_days = _parse_decimal(row[7] if len(row) > 7 else None, None)
+                node.path = node_path
+                result.bom_reused += 1
+            else:
+                node = ProductStructure(
+                    id=uuid4(),
+                    tenant_id=tenant_id,
+                    project_id=UUID(project_id) if project_id else None,
+                    nomenclature_id=node_ext_id,
+                    nomenclature_ref_id=nref_id,
+                    nomenclature_name=nomenclature_name,
+                    node_type=node_type,
+                    is_phantom=is_phantom,
+                    quantity_per_parent=_parse_decimal(row[6] if len(row) > 6 else 1, Decimal("1")),
+                    unit=unit_str,
+                    procurement_lead_time_days=_parse_decimal(row[7] if len(row) > 7 else None, None),
+                    is_make_or_buy="make" if node_type in ("assembly","semi_finished") else "buy",
+                )
+                node.path = node_path
+                db.add(node)
+                result.bom_nodes_created += 1
             node_map[node_ext_id] = node.id
 
             # order_id — ext_id заказа-производителя (куст заказов)
@@ -826,7 +870,17 @@ async def _import_routes(
                 else:
                     continue
 
-            # Создаём Routing
+            # Идемпотентность: при повторном импорте заменяем маршрут узла
+            # (импорт — источник истины для импортированных маршрутов)
+            if bom_node.routing_id:
+                old_rt = await db.get(Routing, bom_node.routing_id)
+                if old_rt:
+                    await db.execute(
+                        delete(RoutingOperation).where(RoutingOperation.routing_id == old_rt.id)
+                    )
+                    await db.delete(old_rt)
+                    await db.flush()
+                bom_node.routing_id = None
             routing = Routing(
                 id=uuid4(),
                 tenant_id=tenant_id,
