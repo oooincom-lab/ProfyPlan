@@ -241,6 +241,31 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     // в собственных окнах заказов.
     const opsVisible = !rootOpsOnly ? true : (isRoot || (depth === 1 && n.node_type !== 'semi_finished'));
     const hasOps = showOps && ops.length > 0 && opsVisible;
+    // Правило принадлежности: операция не может «висеть» под материалом —
+    // для материала она рисуется на уровне самого узла (параллельно с ним, под родителем).
+    const opsUnderNode = !(n.node_type === 'material' && !isRoot);
+    const opsRows = hasOps ? ops.map((op: any) => {
+              const det = [
+                op.department ? 'Подразделение: ' + op.department : '',
+                op.predecessors ? 'Предш.: ' + op.predecessors : '',
+                op.setup_hours ? 'Наладка ' + op.setup_hours + ' ч' : '',
+                op.teardown_hours ? 'Снятие ' + op.teardown_hours + ' ч' : '',
+                Number(op.output_quantity) ? 'Вых. годн. ' + op.output_quantity : '',
+              ].filter(Boolean).join(' · ');
+              return (
+                <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 6 }}>
+                  <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
+                  {op.stage ? (
+                    <span style={{ flex: '0 0 auto', fontSize: 10, color: '#C4B5FD', background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, padding: '1px 6px', whiteSpace: 'nowrap' }}>Этап {op.stage}{op.stage_name ? ' · ' + op.stage_name : ''}</span>
+                  ) : null}
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName ? resName(op.resource_type_id) : op.resource_type_id}{det ? ' · ' + det : ''}</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
+                </div>
+              );
+            }) : null;
     // Узел с операциями всегда раскрываем (иначе чекбокс «показывать операции»
     // в окне заказа не показывает операции при childExpandable=false)
     const expandable = hasOps || (hasChildren && (isRoot || childExpandable));
@@ -415,31 +440,11 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
         </div>
         {expandable && !isCollapsed && (
           <div style={{ marginLeft: 14, paddingLeft: 12, borderLeft: isSub && ownerCol ? `1px solid ${ownerCol}55` : '1px solid #2A4060' }}>
-            {hasOps && ops.map((op: any) => {
-              const det = [
-                op.department ? 'Подразделение: ' + op.department : '',
-                op.predecessors ? 'Предш.: ' + op.predecessors : '',
-                op.setup_hours ? 'Наладка ' + op.setup_hours + ' ч' : '',
-                op.teardown_hours ? 'Снятие ' + op.teardown_hours + ' ч' : '',
-                Number(op.output_quantity) ? 'Вых. годн. ' + op.output_quantity : '',
-              ].filter(Boolean).join(' · ');
-              return (
-                <div key={op.id || op.sequence_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 6 }}>
-                  <span style={{ width: 18, height: 18, borderRadius: 5, flex: '0 0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,.14)', color: '#60A5FA', fontSize: 10.5, fontWeight: 700 }}>{op.sequence_number}</span>
-                  {op.stage ? (
-                    <span style={{ flex: '0 0 auto', fontSize: 10, color: '#C4B5FD', background: 'rgba(139,92,246,.14)', border: '1px solid rgba(139,92,246,.3)', borderRadius: 5, padding: '1px 6px', whiteSpace: 'nowrap' }}>Этап {op.stage}{op.stage_name ? ' · ' + op.stage_name : ''}</span>
-                  ) : null}
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 12, color: '#E2E8F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.name}</span>
-                    <span style={{ display: 'block', fontSize: 10.5, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ресурс: {resName ? resName(op.resource_type_id) : op.resource_type_id}{det ? ' · ' + det : ''}</span>
-                  </span>
-                  <span style={{ fontSize: 12, color: '#FCD34D', fontWeight: 600, whiteSpace: 'nowrap' }}>{Number(op.duration_hours) || 0} ч</span>
-                </div>
-              );
-            })}
+            {opsUnderNode && opsRows}
             {children.map(c => renderNode(c, depth + 1))}
           </div>
         )}
+        {!opsUnderNode && opsRows}
       </div>
     );
   };
