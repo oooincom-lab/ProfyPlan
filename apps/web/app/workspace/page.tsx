@@ -752,9 +752,11 @@ export default function AppShell() {
     } catch (e: any) { setMsg('Ошибка замены номенклатуры: ' + (e.message || String(e))); }
   };
 
-  const reloadRoutings = async () => {
+  const reloadRoutings = async (pid?: string) => {
     try {
-      const r = await apiF<any>('/bom/routings?page_size=200').catch(() => null);
+      const projId = pid || selectedProject?.id || '';
+      const q = projId ? `?page_size=200&project_id=${projId}` : '?page_size=200';
+      const r = await apiF<any>(`/bom/routings${q}`).catch(() => null);
       if (r && Array.isArray(r.items)) setRoutings(r.items);
     } catch {}
   };
@@ -1540,7 +1542,7 @@ export default function AppShell() {
     setSelectedProject(p);
     loadBomTree(p.id);
     loadNomenclature();
-    reloadRoutings();
+    reloadRoutings(p.id);
     if (panelMode === 'window') {
       try {
         const [o, g, pl] = await Promise.all([
@@ -3832,7 +3834,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           setImportProjectId(null);
           if (pid) {
             reloadBomTree(pid);
-            reloadRoutings();
+            reloadRoutings(pid);
             loadProjectOrders(pid);
           }
           refresh();

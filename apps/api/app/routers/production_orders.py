@@ -550,7 +550,6 @@ async def _import_bom(
             if order_ext:
                 pending_order_link.append((node, order_ext, i + 2))
 
-            result.bom_nodes_created += 1
         except Exception as e:
             result.errors.append(ImportValidationError(
                 row=i + 2, sheet="BOM", field="*",
