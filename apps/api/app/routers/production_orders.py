@@ -335,8 +335,8 @@ async def _import_orders(
             cp = (await db.execute(
                 select(Counterparty).where(
                     Counterparty.tenant_id == tenant_id, Counterparty.name == client
-                )
-            )).scalar_one_or_none()
+                ).order_by(Counterparty.created_at.asc().nullslast())
+            )).scalars().first()
             if not cp:
                 cp = Counterparty(id=uuid4(), tenant_id=tenant_id, name=client)
                 db.add(cp)
@@ -575,8 +575,8 @@ async def _import_resources(
             dept = (await db.execute(
                 select(Department).where(
                     Department.tenant_id == tenant_id, Department.name == dept_name
-                )
-            )).scalar_one_or_none()
+                ).order_by(Department.created_at.asc().nullslast())
+            )).scalars().first()
             if not dept:
                 dept = Department(id=uuid4(), tenant_id=tenant_id, name=dept_name)
                 db.add(dept)
@@ -590,8 +590,8 @@ async def _import_resources(
                     Resource.tenant_id == tenant_id,
                     Resource.project_id.is_(None),
                     Resource.name == name,
-                )
-            )).scalar_one_or_none()
+                ).order_by(Resource.created_at.asc().nullslast())
+            )).scalars().first()
             if not res:
                 res = Resource(
                     id=uuid4(),
@@ -765,8 +765,8 @@ async def _import_routes(
             select(ProjectStage).where(
                 ProjectStage.project_id == UUID(project_id),
                 ProjectStage.name == name.strip(),
-            )
-        )).scalar_one_or_none()
+            ).order_by(ProjectStage.created_at.asc().nullslast())
+        )).scalars().first()
         if not st:
             st = ProjectStage(
                 id=uuid4(), tenant_id=tenant_id, project_id=UUID(project_id),
@@ -784,8 +784,8 @@ async def _import_routes(
         d = (await db.execute(
             select(Department).where(
                 Department.tenant_id == tenant_id, Department.name == name.strip()
-            )
-        )).scalar_one_or_none()
+            ).order_by(Department.created_at.asc().nullslast())
+        )).scalars().first()
         if not d:
             d = Department(id=uuid4(), tenant_id=tenant_id, name=name.strip())
             db.add(d)
@@ -863,8 +863,8 @@ async def _import_routes(
                         res_lookup = (await db.execute(
                             select(Resource).where(
                                 Resource.tenant_id == tenant_id, Resource.name == res_name
-                            )
-                        )).scalar_one_or_none()
+                            ).order_by(Resource.created_at.asc().nullslast())
+                        )).scalars().first()
                         res_id = res_lookup.id if res_lookup else None
                     dept_id2 = await _get_or_create_department(dept_val)
                     stage_id2 = await _get_or_create_stage(stage_name_val or stage_val)
@@ -876,8 +876,8 @@ async def _import_routes(
                             select(CatalogOperation).where(
                                 CatalogOperation.tenant_id == tenant_id,
                                 func.lower(CatalogOperation.name) == name_val.strip().lower(),
-                            )
-                        )).scalar_one_or_none()
+                            ).order_by(CatalogOperation.created_at.asc().nullslast())
+                        )).scalars().first()
                         if not cat:
                             cat = CatalogOperation(
                                 id=uuid4(), tenant_id=tenant_id,
