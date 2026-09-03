@@ -227,20 +227,17 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
   // Recursive render — but filter-aware: a node shows if it matches OR any descendant matches.
   const renderNode = (n: BomTreeNode, depth: number): React.ReactNode => {
     const meta = TYPE_META[n.node_type] || TYPE_META.material;
-    if (!showMaterials && n.node_type === 'material') return null;
     const isRoot = depth === 0;
     const rawChildren = tree.childrenMap[n.id] || [];
-    const children = showMaterials ? rawChildren : rawChildren.filter((c: BomTreeNode) => c.node_type !== 'material');
-    const hasChildren = children.length > 0;
     const rt = showOps && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
     const ops = rt ? (rt.operations || []) : [];
-    // Окно заказа (rootOpsOnly): операции показываются у корневого узла продукции
-    // и у прямых детей корня, которые НЕ полуфабрикаты (материалы продукции —
-    // напр. «Монтаж ограждений» у материала «Ограждение барьерное»). Операции
-    // полуфабрикатов (любой глубины) не показываются — их детализация доступна
-    // в собственных окнах заказов.
     const opsVisible = !rootOpsOnly ? true : (isRoot || (depth === 1 && n.node_type !== 'semi_finished'));
     const hasOps = showOps && ops.length > 0 && opsVisible;
+    // Режим «Маршруты»: показываем ТОЛЬКО узлы, несущие видимые операции текущего слоя
+    // (полуфабрикаты/материалы без маршрута скрываются — их детализация в собственных окнах)
+    if (!showMaterials && !hasOps) return null;
+    const children = showMaterials ? rawChildren : rawChildren;
+    const hasChildren = children.length > 0;
     // Правило принадлежности: операция не может «висеть» под материалом —
     // для материала она рисуется на уровне самого узла (параллельно с ним, под родителем).
     const opsUnderNode = !(n.node_type === 'material' && !isRoot);
