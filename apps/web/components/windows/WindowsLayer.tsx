@@ -934,7 +934,32 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 );
               })()}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'res' && o && (() => {
-                const list = (orderRes || {})[o.id] || [];
+                const saved = (orderRes || {})[o.id] || [];
+                // §15.19: ресурсы заказа производны от операций слоя — показываем их
+                // + переопределения из order_resources поверх
+                const seenRes = new Set<string>();
+                const derived: any[] = [];
+                for (const rt of routingsFor(o)) {
+                  for (const op of (rt.operations || [])) {
+                    const rid = String(op.resource_type_id || '');
+                    if (!rid || seenRes.has(rid)) continue;
+                    seenRes.add(rid);
+                    const cat = resourcesList.find((x: any) => x.id === rid);
+                    derived.push({
+                      resource_id: rid,
+                      resource_name: cat?.name || rid,
+                      resource_unit: cat?.unit || '',
+                      resource_type: cat?.resource_type || '',
+                      capacity: cat?.capacity_per_unit ?? null,
+                      _fromOps: true,
+                    });
+                  }
+                }
+                const savedByRes = new Map(saved.map((x: any) => [String(x.resource_id), x]));
+                const list = [
+                  ...derived.map((d: any) => ({ ...d, ...(savedByRes.get(d.resource_id) || {}) })),
+                  ...saved.filter((x: any) => !seenRes.has(String(x.resource_id))),
+                ];
                 return (
                   <div style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
