@@ -69,6 +69,8 @@ interface BomTreeProps {
   onRoutingAdd?: (routingId: string, nodeId?: string) => void;
   /** Кнопки ＋/⇥/⛭ показывать только у корневых узлов (форма состава окна заказа) */
   addRootOnly?: boolean;
+  /** Плоский режим слоя: корень + прямые дети, операции слоя параллельно узлам */
+  layerMode?: boolean;
   /** Операции маршрутов раскрывать только у корневых узлов */
   rootOpsOnly?: boolean;
   /** Дочерние узлы не раскрываются (форма состава окна заказа: дочерний полуфабрикат без вложенного списка) */
@@ -143,7 +145,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd, addRootOnly = false, rootOpsOnly = false, childExpandable = true, onNodeNomenclatureChange, onNodeUnlink }: BomTreeProps) {
+export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, chainControl = false, currentOrderId, anomalyIds, routings, showOps = false, showMaterials = true, resName, onOrderFocus, onRoutingAdd, addRootOnly = false, rootOpsOnly = false, childExpandable = true, layerMode = false, onNodeNomenclatureChange, onNodeUnlink }: BomTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'structure' | 'cpm' | 'ccm' | 'pert'>('structure');
   const [query, setQuery] = useState('');
@@ -266,9 +268,18 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
                 </div>
               );
             }) : null;
+    // Режим «Маршруты»: не-root узлы выводятся только своими операциями (строка узла скрыта)
+    if (!showMaterials && !isRoot) {
+      if (!hasOps) return null;
+      return (
+        <div key={'ro-' + n.id} style={{ marginLeft: 14 * Math.max(depth - 1, 0), marginBottom: 4 }}>
+          {opsRows}
+        </div>
+      );
+    }
     // Узел с операциями всегда раскрываем (иначе чекбокс «показывать операции»
     // в окне заказа не показывает операции при childExpandable=false)
-    const expandable = hasOps || (hasChildren && (isRoot || childExpandable));
+    const expandable = hasOps || (hasChildren && (isRoot || (childExpandable && !layerMode)));
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
     const lead = fmtNum(n.procurement_lead_time_days);

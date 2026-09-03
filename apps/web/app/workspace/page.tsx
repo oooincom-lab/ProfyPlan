@@ -1004,6 +1004,7 @@ export default function AppShell() {
   };
 
   // Содержимое BOM-окна (оконный режим): то же, что в модалке «Развернуть полностью»
+  const [bomWinScope, setBomWinScope] = useState<'own' | 'chain'>('own');
   const renderBomWindow = (w: any) => {
     const o = w.data || orders.find((x: any) => x.id === w.orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === w.orderId);
     if (!o) return null;
@@ -1012,7 +1013,10 @@ export default function AppShell() {
       
       <BomExpand
         order={o}
-        nodes={orderBomNodesWithSuborders(o)}
+        scope={bomWinScope}
+        onScopeChange={setBomWinScope}
+        layerMode={bomWinScope === 'own'}
+        nodes={bomWinScope === 'own' ? orderBomNodes(o) : orderBomNodesWithSuborders(o)}
         orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
         anomalies={bomAnomalies}
         anomaliesLoading={bomAnomaliesLoading}
@@ -2012,7 +2016,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
                                     </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} layerMode onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
                                 </td>
                               </tr>
