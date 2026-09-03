@@ -273,7 +273,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
               );
             }) : null;
     // Режим «Маршруты»: не-root узлы выводятся только своими операциями (строка узла скрыта)
-    if (!showMaterials && !isRoot) {
+    if (!showMaterials && lm && !isRoot) {
       if (!hasOps) return null;
       return (
         <div key={'ro-' + n.id} style={{ marginLeft: 14 * Math.max(depth - 1, 0), marginBottom: 4 }}>
@@ -281,6 +281,9 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
         </div>
       );
     }
+    // «Вся цепочка» + «Маршруты»: операции открываются под своими узлами (полуфабрикатами);
+    // материалы без операций скрыты
+    if (!showMaterials && !lm && n.node_type === 'material' && !hasOps) return null;
     // Узел с операциями всегда раскрываем (иначе чекбокс «показывать операции»
     // в окне заказа не показывает операции при childExpandable=false)
     const expandable = hasOps || (hasChildren && (isRoot || (childExpandable && !lm)));
