@@ -1375,6 +1375,26 @@ export default function AppShell() {
       await loadOrderResources(orderId);
     } catch (e: any) { setMsg('Ошибка сохранения ресурса заказа: ' + (e.message || String(e))); }
   };
+
+  // «＋ Персональный график» (этап 1): копия эффективного графика ресурса → персональный календарь
+  const handleOrderResPersonalize = async (orderId: string, it: any) => {
+    const pid = selectedProject?.id;
+    if (!pid || !it.resource_id) return;
+    setMsg('Создаю персональный график из эффективного…');
+    try {
+      const eff = await apiF<any>(`/resources/${it.resource_id}/effective-schedule?project_id=${pid}`);
+      const slots = (eff?.slots || []).map((s: any) => ({
+        day_of_week: s.day_of_week,
+        start_hour: s.start_hour,
+        end_hour: s.end_hour,
+        is_active: s.is_active !== false,
+      }));
+      await apiF(`/projects/${pid}/resources/${it.resource_id}/calendar`, { method: 'PUT', body: JSON.stringify({ name: 'Персональный график', timezone: 'Europe/Moscow', is_active: true, slots }) });
+      setMsg('Персональный график создан из эффективного — правьте его в окне календаря ресурса.');
+      win.openCalWin(it.resource_id, it.resource_name || 'Ресурс');
+      loadCalData(it.resource_id);
+    } catch (e: any) { setMsg('Ошибка создания персонального графика: ' + (e.message || String(e))); }
+  };
   // Удаление переопределения/связи (ресурс из операций остаётся с дефолтами)
   const handleOrderResRemove = async (orderId: string, item: any) => {
     try {
@@ -3714,6 +3734,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   onRoutingOpCreate={handleRoutingOpCreate}
                   orderRes={orderRes}
                   onOrderResLoad={loadOrderResources}
+        onOrderResPersonalize={handleOrderResPersonalize}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}

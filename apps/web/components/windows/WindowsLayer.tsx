@@ -100,6 +100,8 @@ type WindowsLayerProps = {
 
   /** Открыть окно календаря ресурса (v2.16) */
   onDirCalendar?: (resourceId: string | null, resourceName: string | null) => void;
+  /** Создать персональный график ресурса из эффективного (этап 1, v2.18) */
+  onOrderResPersonalize?: (orderId: string, it: any) => void;
   /** Данные календаря ресурса {resourceId: {effective, assignments, exceptions}} */
   calData?: Record<string, any>;
   onCalLoad?: (resourceId: string) => void;
@@ -143,7 +145,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -973,6 +975,26 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                             placeholder="Выбрать подразделение…"
                             style={{ flex: 1, minWidth: 170 }}
                           />
+                        </div>
+                        {(() => {
+                          const cat = resourcesList.find((x: any) => x.id === it.resource_id || x.name === it.resource_name);
+                          const cap = cat ? (cat.capacity_per_unit ?? null) : null;
+                          const capUnit = cat?.capacity_unit || '';
+                          if (cap === null || cap === undefined) return null;
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Мощность (каталог):</span>
+                              <span style={{ fontSize: 12, color: '#93C5FD', fontWeight: 600 }}>{cap} {capUnit}</span>
+                            </div>
+                          );
+                        })()}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                          <button type="button" title="Открыть окно календаря ресурса (график, версии, исключения)"
+                            onClick={() => onDirCalendar?.(it.resource_id, it.resource_name || 'Ресурс')}
+                            style={{ background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🗓 Изменить график</button>
+                          <button type="button" title="Создать персональный график ресурса из эффективного (каскад)"
+                            onClick={() => onOrderResPersonalize?.(o.id, it)}
+                            style={{ background: 'rgba(252,211,77,.08)', border: '1px solid rgba(252,211,77,.4)', color: '#FCD34D', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ Персональный</button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                           <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Доступно:</span>
