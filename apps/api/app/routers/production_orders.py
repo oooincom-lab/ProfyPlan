@@ -870,15 +870,33 @@ async def _import_routes(
                     continue
 
             # Правило (решение 03.09.2026): материал не может быть узлом маршрута.
-            # Маршруты создаются только для узлов продукция (assembly/product) и полуфабрикат (semi_finished).
+            # Маршрут material-узла переносится на ближайший родительский узел (продукция/полуфабрикат).
             if bom_node.node_type == 'material':
-                # Отметка маршрута на material-узел ИГНОРИРУЕТСЯ (существующие маршруты не трогаем)
+                owner = await db.get(ProductStructure, bom_node.parent_id) if bom_node.parent_id else None
+                hops = 0
+                while owner is not None and owner.node_type == 'material' and hops < 8:
+                    owner = await db.get(ProductStructure, owner.parent_id) if owner.parent_id else None
+                    hops += 1
+                if owner is None:
+                    result.warnings.append(
+                        f'Отметка маршрута для узла «{node_ext_id} · {bom_node.nomenclature_name}» '
+                        'проигнорирована: материал не может быть узлом маршрута, а родительский узел '
+                        'продукции/полуфабриката не найден.'
+                    )
+                    continue
+                # Перенос существующего маршрута материала на владельца (операция не теряется)
+                if bom_node.routing_id and not owner.routing_id:
+                    old_rt = await db.get(Routing, bom_node.routing_id)
+                    if old_rt:
+                        old_rt.product_node_id = owner.id
+                        owner.routing_id = old_rt.id
+                    bom_node.routing_id = None
                 result.warnings.append(
-                    f'Отметка маршрута для узла «{node_ext_id} · {bom_node.nomenclature_name}» '
-                    'проигнорирована: материал не может быть узлом маршрута. Смените тип номенклатуры '
-                    'узла на «Продукция» или «Полуфабрикат», если он должен иметь маршрут.'
+                    f'Маршрут узла «{node_ext_id} · {bom_node.nomenclature_name}» (материал) закреплён за '
+                    f'родительским узлом «{owner.nomenclature_id or ""} · {owner.nomenclature_name}»: '
+                    'материал не может быть узлом маршрута.'
                 )
-                continue
+                bom_node = owner
 
             # Идемпотентность: при повторном импорте заменяем маршрут узла
             # (импорт — источник истины для импортированных маршрутов)
