@@ -236,7 +236,11 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     // Режим «Маршруты» (showMaterials=false) — полная развёртка операций: показываются
     // операции ВСЕХ узлов (продукции и полуфабрикатов). Ограничение слоя действует
     // только в «Состав + Маршруты» (rootOpsOnly).
-    const opsVisible = !showMaterials ? true : (!rootOpsOnly ? true : (isRoot || (depth === 1 && n.node_type !== 'semi_finished')));
+    // Плоский слой: layerMode (список) или «Только свой BOM» BOM-окна (chainControl && !chainAll)
+    const lm = layerMode || (chainControl && !chainAll);
+    const opsVisible = lm
+      ? (isRoot || (depth === 1 && n.node_type !== 'semi_finished'))
+      : true;
     const hasOps = showOps && ops.length > 0 && opsVisible;
     // Режим «Маршруты»: показываем ТОЛЬКО узлы, несущие видимые операции текущего слоя
     // (полуфабрикаты/материалы без маршрута скрываются — их детализация в собственных окнах)
@@ -279,7 +283,7 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     }
     // Узел с операциями всегда раскрываем (иначе чекбокс «показывать операции»
     // в окне заказа не показывает операции при childExpandable=false)
-    const expandable = hasOps || (hasChildren && (isRoot || (childExpandable && !layerMode)));
+    const expandable = hasOps || (hasChildren && (isRoot || (childExpandable && !lm)));
     const isCollapsed = collapsed.has(n.id);
     const isBuy = n.is_make_or_buy === 'buy';
     const lead = fmtNum(n.procurement_lead_time_days);

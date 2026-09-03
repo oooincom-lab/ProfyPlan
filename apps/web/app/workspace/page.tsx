@@ -1004,7 +1004,6 @@ export default function AppShell() {
   };
 
   // Содержимое BOM-окна (оконный режим): то же, что в модалке «Развернуть полностью»
-  const [bomWinScope, setBomWinScope] = useState<'own' | 'chain'>('own');
   const renderBomWindow = (w: any) => {
     const o = w.data || orders.find((x: any) => x.id === w.orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === w.orderId);
     if (!o) return null;
@@ -1013,10 +1012,7 @@ export default function AppShell() {
       
       <BomExpand
         order={o}
-        scope={bomWinScope}
-        onScopeChange={setBomWinScope}
-        layerMode={bomWinScope === 'own'}
-        nodes={bomWinScope === 'own' ? orderBomNodes(o) : orderBomNodesWithSuborders(o)}
+        nodes={orderBomNodesWithSuborders(o)}
         orders={(projectOrders[selectedProject?.id || ''] || []).map((x: any) => ({ id: x.id, ext_id: x.ext_id, specification_name: x.specification_name }))}
         anomalies={bomAnomalies}
         anomaliesLoading={bomAnomaliesLoading}

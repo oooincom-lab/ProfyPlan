@@ -24,9 +24,6 @@ export type BomExpandProps = {
   onCreateOrderFromNode: (nodeId: string) => void;
   routings?: any[];
   resName?: (rid: any) => string;
-  scope?: 'own' | 'chain';
-  onScopeChange?: (s: 'own' | 'chain') => void;
-  layerMode?: boolean;
 };
 
 const CAT_LABEL: Record<string, string> = {
@@ -46,7 +43,7 @@ export default function BomExpand(props: BomExpandProps) {
     timeline, timelineDraft, timelineLoading, onLoadTimeline,
     onNodeOrderChange, onNodeQuantityChange, onNodeRemove, onNodeAdd, onOrderFocus, onRoutingAdd,
     onCreateMissingOrders, onCreateOrderFromNode,
-    routings, resName, scope = 'own', onScopeChange, layerMode = false,
+    routings, resName,
   } = props;
 
   const [treeMode, setTreeMode] = useState<'bom' | 'both' | 'routes'>('both');
@@ -85,13 +82,6 @@ export default function BomExpand(props: BomExpandProps) {
           {editing ? '✓ Редактирование включено' : '✏️ Редактирование'}
         </button>
         <span style={{ fontSize: 11, color: '#5A7090' }}>{editing ? 'Кнопки ＋ ⇥ ✕ и смена заказа доступны' : 'Структура только для просмотра'}</span>
-        {onScopeChange && (
-          <div style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2, marginLeft: 'auto' }}>
-            {([['own', 'Только свой BOM'], ['chain', 'Вся цепочка']] as const).map(([v, label]) => (
-              <button key={v} onClick={() => onScopeChange(v)} style={{ border: 0, background: scope === v ? '#7C3AED' : 'transparent', color: scope === v ? '#fff' : '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
-            ))}
-          </div>
-        )}
       </div>
 
       {(() => {
@@ -153,8 +143,6 @@ export default function BomExpand(props: BomExpandProps) {
         onOrderFocus={onOrderFocus}
         onRoutingAdd={onRoutingAdd}
         chainControl
-        layerMode={layerMode}
-        childExpandable={!layerMode}
         currentOrderId={order.id}
         anomalyIds={anomalyIds}
         routings={routings}
