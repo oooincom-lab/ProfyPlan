@@ -231,7 +231,10 @@ export default function BomTree({ nodes, compact = false, orderName, poolName, o
     const rawChildren = tree.childrenMap[n.id] || [];
     const rt = showOps && n.routing_id && routings ? routings.find((r: any) => r.id === n.routing_id) : undefined;
     const ops = rt ? (rt.operations || []) : [];
-    const opsVisible = !rootOpsOnly ? true : (isRoot || (depth === 1 && n.node_type !== 'semi_finished'));
+    // Режим «Маршруты» (showMaterials=false) — полная развёртка операций: показываются
+    // операции ВСЕХ узлов (продукции и полуфабрикатов). Ограничение слоя действует
+    // только в «Состав + Маршруты» (rootOpsOnly).
+    const opsVisible = !showMaterials ? true : (!rootOpsOnly ? true : (isRoot || (depth === 1 && n.node_type !== 'semi_finished')));
     const hasOps = showOps && ops.length > 0 && opsVisible;
     // Режим «Маршруты»: показываем ТОЛЬКО узлы, несущие видимые операции текущего слоя
     // (полуфабрикаты/материалы без маршрута скрываются — их детализация в собственных окнах)
