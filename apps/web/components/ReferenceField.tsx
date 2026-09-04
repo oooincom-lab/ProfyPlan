@@ -26,6 +26,8 @@ type Props = {
   filterIds?: string[] | null;
   /** Показывать в dropdown пункт «Другое…» (с подтверждением) — разрешить выбор вне filterIds */
   allowOther?: boolean;
+  /** Метка элемента списка (бейдж справа): (item) => ReactNode | null */
+  itemMeta?: (item: any) => React.ReactNode;
   placeholder?: string;
   style?: React.CSSProperties;
 };
@@ -38,6 +40,7 @@ export default function ReferenceField({
   placeholder = 'Выбрать…',
   filterIds = null,
   allowOther = false,
+  itemMeta,
   style,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -162,12 +165,14 @@ export default function ReferenceField({
                 key={String(it.id)}
                 onClick={() => { onChange(String(it.id)); onPickItem?.(it); setOpen(false); setSearch(''); }}
                 style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
                   padding: '7px 10px', fontSize: 12.5, cursor: 'pointer',
                   borderBottom: '1px dashed rgba(30,58,95,.4)',
                   color: String(it.id) === String(value) ? '#93C5FD' : '#E8EEF5',
                 }}
               >
-                {String(it[displayField] || it.name || it.id)}
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(it[displayField] || it.name || it.id)}</span>
+                {itemMeta ? itemMeta(it) : null}
               </div>
             ))}
           </div>

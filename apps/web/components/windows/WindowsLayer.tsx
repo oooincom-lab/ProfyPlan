@@ -507,6 +507,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, resId: v } }))}
                   onOpenBrowser={onOpenDirPick}
                   placeholder="Выбрать ресурс…"
+                itemMeta={(it: any) => {
+                  const rec = ((orderRes || {})[o.id] || []).find((x: any) => String(x.resource_id) === String(it.id));
+                  if (!rec) return null;
+                  const used = routingsFor(o).some((r: any) => (r.operations || []).some((op: any) => String(op.resource_type_id) === String(it.id)));
+                  const label = used ? '✓ в операциях' : 'без операций';
+                  const col = used ? '#34D399' : '#FCD34D';
+                  const bd = used ? 'rgba(52,211,153,.4)' : 'rgba(252,211,77,.4)';
+                  return <span style={{ fontSize: 10, color: col, border: `1px solid ${bd}`, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>{label}</span>;
+                }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                   <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
@@ -865,6 +874,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                       <ReferenceField
                                         entity="resources"
                                         value={op.resource_type_id || null}
+                itemMeta={(it: any) => {
+                  const rec = ((orderRes || {})[o.id] || []).find((x: any) => String(x.resource_id) === String(it.id));
+                  if (!rec) return null;
+                  const used = routingsFor(o).some((r: any) => (r.operations || []).some((op: any) => String(op.resource_type_id) === String(it.id)));
+                  const label = used ? '✓ в операциях' : 'без операций';
+                  const col = used ? '#34D399' : '#FCD34D';
+                  const bd = used ? 'rgba(52,211,153,.4)' : 'rgba(252,211,77,.4)';
+                  return <span style={{ fontSize: 10, color: col, border: `1px solid ${bd}`, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>{label}</span>;
+                }}
                                         onChange={(v) => {
                                           const zone = zoneOf(v ? String(v) : null);
                                           const res = resourcesList.find((x: any) => x.id === v);
