@@ -24,3 +24,6 @@ class Department(BaseModel):
     schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("work_schedules.id", ondelete="SET NULL"), nullable=True
     )  # график подразделения (каскад календарей, уровень 2)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )  # родительское подразделение (иерархия: цех → участок → бригада)

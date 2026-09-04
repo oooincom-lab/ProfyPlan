@@ -249,22 +249,33 @@ async def effective_schedule(
         if ws is None:
             dept_ws = None
             if resource.department_id:
+                # Каскад по иерархии подразделений (03.09.2026): ресурс → его подразделение →
+                # родитель → … (первый заданный график вниз-вверх не меняется; идём ВВЕРХ по дереву)
                 dept = (await db.execute(
                     select(Department).where(Department.id == resource.department_id)
                 )).scalar_one_or_none()
-                if dept and dept.schedule_id:
-                    dept_ws = (await db.execute(
-                        select(WorkSchedule).where(
-                            WorkSchedule.id == dept.schedule_id,
-                            WorkSchedule.is_active == True,  # noqa: E712
-                        )
-                    )).scalar_one_or_none()
-                    if dept_ws:
-                        source, schedule_id, schedule_name, fill_mode = "department", str(dept_ws.id), dept_ws.name, dept_ws.fill_mode
-                        rows = (await db.execute(
-                            select(WorkScheduleSlot).where(WorkScheduleSlot.schedule_id == dept_ws.id)
-                        )).scalars().all()
-                        slots = slots_out(rows)
+                hops = 0
+                while dept and hops < 8:
+                    if dept.schedule_id:
+                        ws_cand = (await db.execute(
+                            select(WorkSchedule).where(
+                                WorkSchedule.id == dept.schedule_id,
+                                WorkSchedule.is_active == True,  # noqa: E712
+                            )
+                        )).scalar_one_or_none()
+                        if ws_cand:
+                            dept_ws = ws_cand
+                            break
+                    dept = (await db.execute(
+                        select(Department).where(Department.id == dept.parent_id)
+                    )).scalar_one_or_none() if dept.parent_id else None
+                    hops += 1
+                if dept_ws:
+                    source, schedule_id, schedule_name, fill_mode = "department", str(dept_ws.id), dept_ws.name, dept_ws.fill_mode
+                    rows = (await db.execute(
+                        select(WorkScheduleSlot).where(WorkScheduleSlot.schedule_id == dept_ws.id)
+                    )).scalars().all()
+                    slots = slots_out(rows)
             if ws is None and dept_ws is None:
                 proj_ws = None
                 if project_id:

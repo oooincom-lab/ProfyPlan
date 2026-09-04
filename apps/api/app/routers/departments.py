@@ -31,12 +31,40 @@ async def list_items(
     return res.scalars().all()
 
 
+async def _validate_parent(db: AsyncSession, tenant_id: str, parent_id, self_id=None):
+    """Родитель должен существовать в тенанте; циклы и self запрещены."""
+    if parent_id is None:
+        return
+    cur = (await db.execute(
+        select(Department).where(Department.id == parent_id, Department.tenant_id == tenant_id)
+    )).scalar_one_or_none()
+    if not cur:
+        raise HTTPException(400, "Родительское подразделение не найдено")
+    if self_id and str(cur.id) == str(self_id):
+        raise HTTPException(400, "Подразделение не может быть родителем самого себя")
+    hops = 0
+    seen = set()
+    while cur.parent_id and hops < 12:
+        if str(cur.id) in seen:
+            break
+        seen.add(str(cur.id))
+        if self_id and str(cur.parent_id) == str(self_id):
+            raise HTTPException(400, "Цикл в иерархии подразделений")
+        cur = (await db.execute(
+            select(Department).where(Department.id == cur.parent_id, Department.tenant_id == tenant_id)
+        )).scalar_one_or_none()
+        if not cur:
+            break
+        hops += 1
+
+
 @router.post("/", response_model=DepartmentOut, status_code=201)
 async def create_item(
     body: DepartmentCreate,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
+    await _validate_parent(db, tenant_id, body.parent_id)
     item = Department(id=uuid4(), tenant_id=tenant_id, **body.model_dump())
     db.add(item)
     await db.commit()
@@ -58,6 +86,7 @@ async def update_item(
     )).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Подразделение не найдено")
+    await _validate_parent(db, tenant_id, body.parent_id, self_id=item.id)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
     await db.commit()

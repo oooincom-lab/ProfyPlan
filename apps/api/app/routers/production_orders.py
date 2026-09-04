@@ -948,6 +948,16 @@ async def _import_routes(
                             ).order_by(Resource.created_at.asc().nullslast())
                         )).scalars().first()
                         res_id = res_lookup.id if res_lookup else None
+                    # Автоподстановка (03.09.2026): подразделение операции наследуется от ресурса,
+                    # если в файле не указано (правило: операция выполняется там, где стоит ресурс)
+                    if not dept_val and res_id:
+                        r_dept = (await db.execute(
+                            select(Resource).where(Resource.id == res_id)
+                        )).scalar_one_or_none()
+                        if r_dept and r_dept.department_id:
+                            r_d = await db.get(Department, r_dept.department_id)
+                            if r_d:
+                                dept_val = r_d.name
                     dept_id2 = await _get_or_create_department(dept_val)
                     stage_id2 = await _get_or_create_stage(stage_name_val or stage_val)
                     # Каталог операций: найти по имени, создать при отсутствии (v2.17)
