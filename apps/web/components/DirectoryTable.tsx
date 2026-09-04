@@ -364,7 +364,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
             <tr
               key={row.id}
               onClick={onSelect ? () => setSelId(row.id) : undefined}
-              onDoubleClick={onSelect ? () => onSelect(row) : undefined}
+              onDoubleClick={() => { if (onEditWindow) onEditWindow(row); else if (onSelect) onSelect(row); }}
               style={{
                 borderBottom: '1px solid #162844',
                 background: onSelect && selId === row.id ? 'rgba(59,130,246,.12)' : undefined,
