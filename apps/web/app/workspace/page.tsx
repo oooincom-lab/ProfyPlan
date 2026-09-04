@@ -490,11 +490,31 @@ export default function AppShell() {
           onManageCalendar: entity === 'resources' ? (row: any) => win.openCalWin(row.id, row.name) : undefined,
           endpoints: dirEndpoints,
           onEditWindow: (row: any) => openDirEditWindow(entity, row),
+          onAddWindow: () => openDirAddWindow(entity),
         },
       );
     } else {
       setDirManager({ title: cfg.title, entity, columns: cfg.columns, variant: panelMode === 'modal' ? 'modal' : 'panel' });
     }
+  };
+
+  const openDirAddWindow = (entity: string) => {
+    const cfg = DIR_COLUMNS[entity];
+    const dirEndpoints = (entity === 'departments' || entity === 'organizations')
+      ? { item: (id: string) => `https://profyplan.ru/api/v1/${entity}/${id}`, method: 'PATCH' as const, list: `https://profyplan.ru/api/v1/${entity}/` }
+      : undefined;
+    win.openDirAddWin(entity, 'Добавить — ' + (cfg?.title || entity), cfg?.columns || [], dirEndpoints);
+  };
+
+  const handleDirAddSave = async (entity: string, form: Record<string, string>, endpoints?: any): Promise<boolean> => {
+    try {
+      const url = endpoints?.list || `https://profyplan.ru/api/v1/${entity}/`;
+      await apiF(url, { method: 'POST', body: JSON.stringify(form) });
+      setDirRefreshKey(k => k + 1);
+      loadDepartmentsAll();
+      setMsg('Добавлено.');
+      return true;
+    } catch (e: any) { setMsg('Ошибка добавления: ' + (e.message || String(e))); return false; }
   };
 
   const startEditOrder = () => {
@@ -3762,6 +3782,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onOrderResAdd={handleOrderResAdd}
         onOrderResPersonalize={handleOrderResPersonalize}
         departments={departmentsAll}
+        onDirAddSave={handleDirAddSave}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}

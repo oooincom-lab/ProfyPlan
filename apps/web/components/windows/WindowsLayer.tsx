@@ -106,6 +106,8 @@ type WindowsLayerProps = {
   departments?: any[];
   /** Сохранить запись справочника из окна редактирования */
   onDirEditSave?: (entity: string, id: string, form: Record<string, string>, endpoints?: any) => Promise<boolean>;
+  /** Добавить запись справочника из окна добавления */
+  onDirAddSave?: (entity: string, form: Record<string, string>, endpoints?: any) => Promise<boolean>;
   /** Данные календаря ресурса {resourceId: {effective, assignments, exceptions}} */
   calData?: Record<string, any>;
   onCalLoad?: (resourceId: string) => void;
@@ -149,7 +151,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -518,6 +520,40 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
                     <button onClick={async () => { const ok = await onDirEditSave?.('departments', w.data.id, f); if (ok !== false) onClose(w.id); }}
                       style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Сохранить</button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // ── Окно добавления записи справочника (универсальное по колонкам) ──
+          if (w.kind === 'diradd') {
+            const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position', 'ntype', 'unit', 'country_code', 'capacity_per_unit', 'capacity_unit', 'schedule_id', 'resource_type', 'article', 'description'].includes(c.key));
+            const rowsForm = (w.form || {}) as Record<string, string>;
+            const up = (patch: Record<string, string>) => setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x));
+            return (
+              <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+                style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+                onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+                <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} />
+                  <span className="ttl">{w.data?.title || w.title}</span>
+                  {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
+                  <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
+                  <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>×</button>
+                </div>
+                <div style={{ padding: '12px 14px', overflow: 'auto' }}>
+                  {cols.map((c: any) => (
+                    <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                      <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>{c.label || c.key}</span>
+                      <input value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
+                        style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                    </label>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                    <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+                    <button onClick={async () => { const ok = await onDirAddSave?.(w.data.entity, rowsForm, w.data.endpoints); if (ok !== false) onClose(w.id); }}
+                      style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Добавить</button>
                   </div>
                 </div>
               </div>

@@ -23,6 +23,8 @@ type Props = {
   onManageCalendar?: (row: any) => void;
   /** Открыть окно редактирования записи (вместо inline-редактирования) */
   onEditWindow?: (row: any) => void;
+  /** Открыть окно добавления записи (вместо inline-строки) */
+  onAddWindow?: () => void;
   compact?: boolean;
   synonyms?: Record<string, string[]>;
   /** Счётчик — при изменении список перезагружается (после удаления извне) */
@@ -36,7 +38,7 @@ type Props = {
   };
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, compact, synonyms, refreshKey = 0, endpoints }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, onAddWindow, compact, synonyms, refreshKey = 0, endpoints }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -79,6 +81,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
   const [deleteCheckTarget, setDeleteCheckTarget] = useState<{ id: string; name: string } | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
 
@@ -272,6 +275,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
           <button
             className="btn btn-primary btn-sm"
             onClick={() => {
+              if (onAddWindow) { onAddWindow(); return; }
               const hasPos = columns.some(c => c.key === 'position');
               const maxPos = rows.reduce((m, r) => Math.max(m, Number((r as any).position) || 0), 0);
               setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '', ...(hasPos ? { position: String(maxPos + 1) } : {}) });
@@ -364,11 +368,13 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
             <tr
               key={row.id}
               onClick={onSelect ? () => setSelId(row.id) : undefined}
+              onMouseEnter={() => setHoverId(String(row.id))}
+              onMouseLeave={() => setHoverId((h) => (h === String(row.id) ? null : h))}
               onDoubleClick={() => { if (onEditWindow) onEditWindow(row); else if (onSelect) onSelect(row); }}
               style={{
                 borderBottom: '1px solid #162844',
-                background: onSelect && selId === row.id ? 'rgba(59,130,246,.12)' : undefined,
-                cursor: onSelect ? 'pointer' : undefined,
+                background: (onSelect && selId === row.id) || hoverId === String(row.id) ? 'rgba(59,130,246,.14)' : undefined,
+                cursor: onSelect ? 'pointer' : (onEditWindow ? 'pointer' : undefined),
               }}
             >
               {columns.map(c => (
@@ -397,7 +403,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                     </>
                   ) : (
                     <>
-                      <button onClick={() => { if (onManageEdit) onManageEdit(row); else { setEditingId(row.id); setEditVals({}); } }} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
+                      <button onClick={() => { if (onEditWindow) onEditWindow(row); else if (onManageEdit) onManageEdit(row); else { setEditingId(row.id); setEditVals({}); } }} style={{ background: 'none', border: 'none', color: onEditWindow ? '#60A5FA' : '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
                       <button onClick={() => { if (onManageDelete) onManageDelete(row); else deleteRow(row.id, row.name || row.specification_name || ''); }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
                     </>
                   )}
