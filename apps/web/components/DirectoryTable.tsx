@@ -21,6 +21,8 @@ type Props = {
   onManageEdit?: (row: any) => void;
   onManageDelete?: (row: any) => void;
   onManageCalendar?: (row: any) => void;
+  /** Открыть окно редактирования записи (вместо inline-редактирования) */
+  onEditWindow?: (row: any) => void;
   compact?: boolean;
   synonyms?: Record<string, string[]>;
   /** Счётчик — при изменении список перезагружается (после удаления извне) */
@@ -34,7 +36,7 @@ type Props = {
   };
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, compact, synonyms, refreshKey = 0, endpoints }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, compact, synonyms, refreshKey = 0, endpoints }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
