@@ -1016,7 +1016,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                           entity="resources"
                           value={null}
                           onChange={() => {}}
-                          onPickItem={(row) => onOrderResAdd?.(o.id, String(row.id))}
+                          onPickItem={(row) => { onOrderResAdd?.(o.id, String(row.id)); setShowOrphans(true); }}
                           onOpenBrowser={onOpenDirPick}
                           placeholder="+ Ресурс"
                           style={{ flex: '0 1 260px', minWidth: 180 }}

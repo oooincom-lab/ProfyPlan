@@ -1354,15 +1354,8 @@ export default function AppShell() {
       setOrderRes(prev => ({ ...prev, [orderId]: data }));
     } catch { }
   };
-  // Добавление ресурса: только если ресурс уже используется операциями маршрута заказа
+  // Добавление ресурса в заказ (справочная карточка «Без операций», если ресурс не в операциях)
   const handleOrderResAdd = async (orderId: string, resourceId: string) => {
-    const o = orders.find((x: any) => x.id === orderId);
-    const used = new Set<string>();
-    for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
-    if (!used.has(String(resourceId))) {
-      setMsg('Ресурс не используется в операциях маршрута этого заказа — сначала назначьте его в операции (вкладка «Маршрут»).');
-      return;
-    }
     try {
       await apiF(`/orders/${orderId}/resources`, { method: 'POST', body: JSON.stringify({ resource_id: resourceId }) });
       await loadOrderResources(orderId);
