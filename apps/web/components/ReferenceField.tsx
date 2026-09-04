@@ -22,6 +22,10 @@ type Props = {
   displayField?: string;
   /** Отображаемое имя, когда value не id из списка (напр. строка stage_name) */
   displayValue?: string;
+  /** Разрешённые id (зона ресурса и т.п.). null — без фильтра */
+  filterIds?: string[] | null;
+  /** Показывать в dropdown пункт «Другое…» (с подтверждением) — разрешить выбор вне filterIds */
+  allowOther?: boolean;
   placeholder?: string;
   style?: React.CSSProperties;
 };
@@ -32,11 +36,14 @@ export default function ReferenceField({
   displayField = 'name',
   displayValue,
   placeholder = 'Выбрать…',
+  filterIds = null,
+  allowOther = false,
   style,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<any[]>([]);
+  const [otherMode, setOtherMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -87,7 +94,8 @@ export default function ReferenceField({
 
   const sel = value ? items.find(i => String(i.id) === String(value)) : null;
   const q = search.trim().toLowerCase();
-  const filtered = q ? items.filter(i => String(i[displayField] || i.name || '').toLowerCase().includes(q)) : items;
+  const baseList = filterIds && !otherMode ? items.filter((i: any) => filterIds.includes(String(i.id))) : items;
+  const filtered = q ? baseList.filter(i => String(i[displayField] || i.name || '').toLowerCase().includes(q)) : baseList;
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex', gap: 4, alignItems: 'center', minWidth: 130, flex: 1, ...style }}>
@@ -143,7 +151,12 @@ export default function ReferenceField({
           />
           <div style={{ overflow: 'auto' }}>
             {loading && <div style={{ color: '#5A7090', padding: 8, fontSize: 12 }}>Загрузка…</div>}
-            {!loading && filtered.length === 0 && <div style={{ color: '#5A7090', padding: 8, fontSize: 12 }}>Ничего не найдено</div>}
+            {!loading && filtered.length === 0 && (
+              <div style={{ color: '#5A7090', padding: 8, fontSize: 12 }}>Ничего не найдено</div>
+            )}
+            {filterIds && allowOther && !otherMode && (
+              <button type="button" onClick={() => { if (window.confirm('Ресурс будет работать вне своего подразделения (кооперация). Показать все подразделения?')) { setOtherMode(true); } }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, color: '#FCD34D', fontSize: 11.5, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit', borderTop: '1px solid #1E3252' }}>Другое подразделение…</button>
+            )}
             {filtered.map((it: any) => (
               <div
                 key={String(it.id)}

@@ -1004,6 +1004,10 @@ export default function AppShell() {
   };
 
   // Содержимое BOM-окна (оконный режим): то же, что в модалке «Развернуть полностью»
+  const [departmentsAll, setDepartmentsAll] = useState<any[]>([]);
+  const loadDepartmentsAll = async () => {
+    try { const r = await apiF<any[]>('/departments/'); if (Array.isArray(r)) setDepartmentsAll(r); } catch {}
+  };
   const renderBomWindow = (w: any) => {
     const o = w.data || orders.find((x: any) => x.id === w.orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === w.orderId);
     if (!o) return null;
@@ -1563,6 +1567,7 @@ export default function AppShell() {
     loadBomTree(p.id);
     loadNomenclature();
     apiF<any[]>('/resources').then((rs) => { if (Array.isArray(rs)) setResourcesList(rs); }).catch(() => {});
+    loadDepartmentsAll();
     reloadRoutings(p.id);
     if (panelMode === 'window') {
       try {
@@ -3735,6 +3740,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   orderRes={orderRes}
                   onOrderResLoad={loadOrderResources}
         onOrderResPersonalize={handleOrderResPersonalize}
+        departments={departmentsAll}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}

@@ -102,6 +102,8 @@ type WindowsLayerProps = {
   onDirCalendar?: (resourceId: string | null, resourceName: string | null) => void;
   /** Создать персональный график ресурса из эффективного (этап 1, v2.18) */
   onOrderResPersonalize?: (orderId: string, it: any) => void;
+  /** Каталог подразделений тенанта (для зоны ресурса в выборе подразделения операции) */
+  departments?: any[];
   /** Данные календаря ресурса {resourceId: {effective, assignments, exceptions}} */
   calData?: Record<string, any>;
   onCalLoad?: (resourceId: string) => void;
@@ -145,12 +147,29 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [],
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
     debug = false,
   } = props;
+
+  // Зона ресурса: подразделение ресурса + все его потомки (по дереву подразделений)
+  const zoneOf = (rid: string | null): string[] | null => {
+    const res = resourcesList.find((x: any) => x.id === rid);
+    const rootDept = res?.department_id ? String(res.department_id) : null;
+    if (!rootDept) return null;
+    const out: string[] = [rootDept];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const d of departments) {
+        const pid = d.parent_id ? String(d.parent_id) : null;
+        if (pid && out.includes(pid) && !out.includes(String(d.id))) { out.push(String(d.id)); changed = true; }
+      }
+    }
+    return out;
+  };
 
   const maxZ = wins.reduce((m: number, w: WinRec) => Math.max(m, w.z), 0);
   const allMin = wins.length > 0 && wins.every(w => w.min);
@@ -844,7 +863,18 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                       <ReferenceField
                                         entity="resources"
                                         value={op.resource_type_id || null}
-                                        onChange={(v) => onRoutingOpUpdate?.(op.id, { resource_type_id: v })}
+                                        onChange={(v) => {
+                                          const zone = zoneOf(v ? String(v) : null);
+                                          const res = resourcesList.find((x: any) => x.id === v);
+                                          const newDept = res?.department_id ? String(res.department_id) : null;
+                                          const inZone = !op.department_id || !zone || zone.includes(String(op.department_id));
+                                          if (newDept && (!op.department_id || !inZone)) {
+                                            const d = departments.find((x: any) => String(x.id) === newDept);
+                                            onRoutingOpUpdate?.(op.id, { resource_type_id: v, department_id: newDept, department: d?.name || null });
+                                          } else {
+                                            onRoutingOpUpdate?.(op.id, { resource_type_id: v });
+                                          }
+                                        }}
                                         onOpenBrowser={onOpenDirPick}
                                         placeholder="Выбрать ресурс…"
                                         style={{ flex: 1, minWidth: 140 }}
@@ -859,9 +889,22 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                         onChange={() => {}}
                                         onPickItem={(row) => onRoutingOpUpdate?.(op.id, { department_id: row.id, department: row.name })}
                                         onOpenBrowser={onOpenDirPick}
+                                        filterIds={zoneOf(op.resource_type_id || null)}
+                                        allowOther
                                         placeholder="Выбрать подразделение…"
                                         style={{ flex: 1, minWidth: 140 }}
                                       />
+                                      {(() => {
+                                        const rid = op.resource_type_id;
+                                        const layerOps = routingsFor(o).flatMap((r: any) => (r.operations || []).map((x: any) => ({ ...x, _node: r.product_node_id })));
+                                        const same = layerOps.filter((x: any) => x.resource_type_id === rid && x.id !== op.id);
+                                        if (!op.department_id || same.length === 0) return null;
+                                        return (
+                                          <button type="button" title={`Применить подразделение «${op.department}» ко всем ${same.length} операциям этого ресурса в заказе`}
+                                            onClick={() => { for (const x of same) onRoutingOpUpdate?.(x.id, { department_id: op.department_id, department: op.department }); }}
+                                            style={{ background: 'rgba(167,139,250,.1)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>⤺ Ко всем ({same.length})</button>
+                                        );
+                                      })()}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                                       <span style={{ flexShrink: 0, width: 108, paddingTop: 5, fontSize: 11.5, color: '#8FA3BD' }}>Предш. оп.:</span>
