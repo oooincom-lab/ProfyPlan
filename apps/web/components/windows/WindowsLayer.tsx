@@ -215,7 +215,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [calForm, setCalForm] = useState<Record<string, { kind: string; dateFrom: string; dateTo: string; note: string }>>({});
   const [calAssignForm, setCalAssignForm] = useState<Record<string, { scheduleId: string; validFrom: string }>>({});
   const [showBomOps, setShowBomOps] = useState(false);
-  const [showOrphans, setShowOrphans] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
+  const [showOrphans, setShowOrphans] = useState(false);
+  const [orphanCleanup, setOrphanCleanup] = useState<any[] | null>(null); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
@@ -1119,6 +1120,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         <div onClick={() => setShowOrphans(s => !s)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
                           <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>{showOrphans ? '▾' : '▸'}</span>
                           <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Без операций ({orphans.length}) — справочно: мобилизация, резерв настроек</span>
+                          {w.editing && (
+                            <button type="button" title="Удалить все ресурсы без операций (только справочные записи)"
+                              onClick={(e) => { e.stopPropagation(); setOrphanCleanup(orphans.filter((x: any) => x.id)); }}
+                              style={{ marginLeft: 'auto', background: 'rgba(248,113,113,.1)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🗑 Убрать все</button>
+                          )}
                         </div>
                         {showOrphans && orphans.map((it: any) => (
                           <div key={it.resource_id} style={{ background: 'rgba(10,22,40,.6)', border: '1px dashed #1E3252', borderRadius: 8, padding: '7px 10px', marginTop: 6 }}>
@@ -1243,6 +1249,28 @@ export default function WindowsLayer(props: WindowsLayerProps) {
           </div>
         </AppModal>
       )}
+
+      {orphanCleanup && (() => {
+        const o = orphanCleanup.length ? wins.find((w: any) => w.orderId === orphanCleanup[0].order_id) : null;
+        void o;
+        return (
+          <AppModal title="Убрать ресурсы без операций" onClose={() => setOrphanCleanup(null)} accent="#F87171" width={480}>
+            <div style={{ fontSize: 12.5, color: '#B0C4DE' }}>
+              Будут удалены справочные записи ресурсов, не используемых в операциях ({orphanCleanup.length}):
+              <div style={{ margin: '8px 0', padding: '8px 10px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8 }}>
+                {orphanCleanup.map((x: any) => (
+                  <div key={x.id} style={{ fontSize: 12, padding: '2px 0', color: '#E8EEF5' }}>• {x.resource_name || x.resource_id}{x.capacity != null ? ` — ${x.capacity} ${x.resource_unit || ''}` : ''}</div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#5A7090' }}>Эти записи не участвуют в расчёте (у ресурса нет операций в маршруте). Настройки «впрок» будут потеряны.</div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+              <button onClick={() => setOrphanCleanup(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button onClick={() => { for (const x of orphanCleanup) onOrderResRemove?.(x.order_id, x); setOrphanCleanup(null); }} style={{ background: '#EF4444', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Удалить ({orphanCleanup.length})</button>
+            </div>
+          </AppModal>
+        );
+      })()}
 
       {attachOpen && (() => {
         const cur = orderById(attachOpen.orderId);
