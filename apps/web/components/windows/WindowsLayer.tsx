@@ -214,7 +214,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   // Формы окна календаря ресурса (v2.16)
   const [calForm, setCalForm] = useState<Record<string, { kind: string; dateFrom: string; dateTo: string; note: string }>>({});
   const [calAssignForm, setCalAssignForm] = useState<Record<string, { scheduleId: string; validFrom: string }>>({});
-  const [showBomOps, setShowBomOps] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
+  const [showBomOps, setShowBomOps] = useState(false);
+  const [showOrphans, setShowOrphans] = useState(false); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
@@ -1003,10 +1004,12 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   ...derived.map((d: any) => ({ ...d, ...(savedByRes.get(d.resource_id) || {}) })),
                   ...saved.filter((x: any) => !seenRes.has(String(x.resource_id))),
                 ];
+                const active = list.filter((x: any) => x._fromOps);
+                const orphans = list.filter((x: any) => !x._fromOps);
                 return (
                   <div style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      <span style={{ fontSize: 11.5, color: '#5A7090', flex: 1 }}>Ресурсы заказа: {list.length} <span style={{ fontSize: 10.5 }}>{w.editing ? '(здесь задаётся подразделение и доступная мощность)' : '(только просмотр — включите ✏️ Редактировать)'}</span></span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 11.5, color: '#5A7090', flex: 1 }}>Активные (в операциях): {active.length} <span style={{ fontSize: 10.5 }}>{w.editing ? '· здесь задаётся подразделение и доступная мощность' : '· только просмотр — включите ✏️ Редактировать'}</span></span>
                       {w.editing && (
                         <ReferenceField
                           entity="resources"
@@ -1019,10 +1022,10 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         />
                       )}
                     </div>
-                    {list.length === 0 && (
+                    {active.length === 0 && (
                       <div style={{ color: '#5A7090', fontSize: 12 }}>Ресурсы появятся автоматически, когда назначите их операциям маршрута (вкладка «Маршрут»), либо добавьте вручную полем «+ Ресурс».</div>
                     )}
-                    {list.map((it: any) => (
+                    {active.map((it: any) => (
                       <div key={it.resource_id} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ flex: 1, fontWeight: 600, fontSize: 12.5 }}>{it.resource_name}</span>
@@ -1092,8 +1095,52 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                           )}
                           <span style={{ color: '#5A7090', fontSize: 11 }}>{it.resource_unit || ''}</span>
                         </div>
+                        {(() => {
+                          const opsList = routingsFor(o).flatMap((r: any) => (r.operations || []).filter((op: any) => String(op.resource_type_id) === String(it.resource_id)).map((op: any) => ({ op, rname: r.name })));
+                          if (!opsList.length) return null;
+                          return (
+                            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed rgba(30,58,95,.5)' }}>
+                              <div style={{ fontSize: 10.5, color: '#5A7090', marginBottom: 3 }}>Операции этого ресурса:</div>
+                              {opsList.map(({ op, rname }: any) => (
+                                <div key={op.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11.5, padding: '2px 0' }}>
+                                  <span style={{ color: '#8FA3BD' }}>{op.sequence_number}. {op.name}</span>
+                                  <span style={{ color: '#5A7090', whiteSpace: 'nowrap' }}>· {Number(op.duration_hours) || 0} ч · {op.department || rname}</span>
+                                  <button type="button" onClick={() => setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, tab: 'route' } : x))} title="Открыть вкладку «Маршрут»"
+                                    style={{ marginLeft: 'auto', background: 'transparent', border: 0, color: '#60A5FA', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>→ Маршрут</button>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
+                    {orphans.length > 0 && (
+                      <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #1E3252' }}>
+                        <div onClick={() => setShowOrphans(s => !s)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                          <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>{showOrphans ? '▾' : '▸'}</span>
+                          <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Без операций ({orphans.length}) — справочно: мобилизация, резерв настроек</span>
+                        </div>
+                        {showOrphans && orphans.map((it: any) => (
+                          <div key={it.resource_id} style={{ background: 'rgba(10,22,40,.6)', border: '1px dashed #1E3252', borderRadius: 8, padding: '7px 10px', marginTop: 6 }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span style={{ flex: 1, fontWeight: 600, fontSize: 12.5, color: '#B0C4DE' }}>{it.resource_name}</span>
+                              <span style={{ color: '#5A7090', fontSize: 11 }}>Ед.: {it.resource_unit || '—'}</span>
+                              <span style={{ color: '#5A7090', fontSize: 11 }}>Тип: {it.resource_type || '—'}</span>
+                              <span title="Ресурс не используется в операциях — справочно"
+                                style={{ fontSize: 10, color: '#5A7090', border: '1px solid rgba(90,112,144,.4)', borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>без операций</span>
+                              {w.editing && it.id && (
+                                <button type="button" title="Убрать из заказа" onClick={() => onOrderResRemove?.(o.id, it)}
+                                  style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                              <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Доступно:</span>
+                              <span style={{ fontSize: 12.5, color: '#E8EEF5', fontWeight: 600 }}>{it.capacity ?? '—'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
