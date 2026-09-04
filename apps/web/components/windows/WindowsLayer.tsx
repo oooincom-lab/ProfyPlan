@@ -608,6 +608,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <>
                   <ResourceForm
                     form={w.form}
+                    onOpenDirPick={onOpenDirPick}
                     onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
                     schedules={schedules}
                     saving={!!w.saving}

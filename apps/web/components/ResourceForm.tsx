@@ -28,13 +28,14 @@ type Props = {
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
+  onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
 };
 
 /**
  * Форма создания/редактирования глобального ресурса.
  * Используется и в модальном окне ResourceManager, и в MDI-окне WindowsLayer.
  */
-export default function ResourceForm({ form, onChange, schedules, saving, onSave, onCancel }: Props) {
+export default function ResourceForm({ form, onChange, schedules, saving, onSave, onCancel, onOpenDirPick }: Props) {
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
@@ -82,6 +83,7 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
             entity="departments"
             value={form.department_id || null}
             onChange={(v) => onChange({ department_id: v || '' })}
+            onOpenBrowser={onOpenDirPick}
             placeholder="Выбрать подразделение…"
           />
         </label>

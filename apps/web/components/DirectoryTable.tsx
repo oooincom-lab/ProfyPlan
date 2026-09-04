@@ -98,7 +98,38 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
     setLoading(true);
     try {
       const r = await af(endpoints?.list || `${apiBase}/v1/${entity}/`);
-      if (r.ok) setRows(await r.json());
+      if (r.ok) {
+        let rows: any[] = await r.json();
+        // Иерархия подразделений (03.09.2026): обогащение (головное подразделение, глубина) + порядок по дереву
+        if (entity === 'departments') {
+          const byId = new Map<string, any>(rows.map((x: any) => [String(x.id), x]));
+          const depthOf = (x: any): number => {
+            let d = 0, cur = x, hops = 0;
+            while (cur?.parent_id && hops < 12) {
+              const p = byId.get(String(cur.parent_id));
+              if (!p) break;
+              d += 1; cur = p; hops += 1;
+            }
+            return d;
+          };
+          const seen = new Set<string>();
+          const ordered: any[] = [];
+          const walk = (pid: string | null) => {
+            for (const x of rows) {
+              const p = x.parent_id ? String(x.parent_id) : null;
+              if (p === pid && !seen.has(String(x.id))) {
+                seen.add(String(x.id));
+                ordered.push({ ...x, _depth: depthOf(x), _parent_name: x.parent_id ? (byId.get(String(x.parent_id))?.name || '') : '' });
+                walk(String(x.id));
+              }
+            }
+          };
+          walk(null);
+          for (const x of rows) if (!seen.has(String(x.id))) ordered.push({ ...x, _depth: 0, _parent_name: '' });
+          rows = ordered;
+        }
+        setRows(rows);
+      }
     } catch { }
     setLoading(false);
   };

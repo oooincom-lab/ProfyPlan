@@ -76,8 +76,14 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
   },
   departments: {
     title: 'Подразделения', columns: [
-      { key: 'name', label: 'Подразделение' },
+      { key: 'name', label: 'Подразделение', render: (val: any, row: any) => (
+        <span style={{ paddingLeft: (row._depth || 0) * 18, display: 'inline-block' }}>
+          {(row._depth || 0) > 0 && <span style={{ color: '#5A7090', marginRight: 4 }}>└</span>}
+          <span style={{ fontWeight: (row._depth || 0) === 0 ? 600 : 400 }}>{val}</span>
+        </span>
+      ) },
       { key: 'code', label: 'Код' },
+      { key: '_parent_name', label: 'Головное подразделение' },
     ],
   },
   stages: {
@@ -1005,6 +1011,17 @@ export default function AppShell() {
 
   // Содержимое BOM-окна (оконный режим): то же, что в модалке «Развернуть полностью»
   const [departmentsAll, setDepartmentsAll] = useState<any[]>([]);
+  const [dirDeptEdit, setDirDeptEdit] = useState<null | { id: string; name: string; code: string; parent_id: string; parent_name: string }>(null);
+  const saveDirDept = async () => {
+    if (!dirDeptEdit) return;
+    try {
+      await apiF('/departments/' + dirDeptEdit.id, { method: 'PATCH', body: JSON.stringify({ name: dirDeptEdit.name, code: dirDeptEdit.code || null, parent_id: dirDeptEdit.parent_id || null }) });
+      setDirDeptEdit(null);
+      setDirRefreshKey(k => k + 1);
+      loadDepartmentsAll();
+      setMsg('Подразделение обновлено.');
+    } catch (e: any) { setMsg('Ошибка сохранения подразделения: ' + (e.message || String(e))); }
+  };
   const loadDepartmentsAll = async () => {
     try { const r = await apiF<any[]>('/departments/'); if (Array.isArray(r)) setDepartmentsAll(r); } catch {}
   };
@@ -3753,7 +3770,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         dirRefreshKey={dirRefreshKey}
         onOrderFocus={focusOrderByBom}
         onOpenDirectory={openDirectory}
-        onDirManageEdit={(entity, row) => { if (entity === 'resources') win.openResEdit(row); }}
+        onDirManageEdit={(entity, row) => {
+          if (entity === 'resources') win.openResEdit(row);
+          if (entity === 'departments') setDirDeptEdit({ id: String(row.id), name: row.name || '', code: row.code || '', parent_id: row.parent_id ? String(row.parent_id) : '', parent_name: row._parent_name || '' });
+        }}
         onDirManageDelete={(entity, row) => { if (entity === 'resources') runDeleteCheck('resource', row.id, row.name || row.code || row.id); }}
         schedules={workSchedules}
         onSaveResourceEdit={saveResourceEdit}
@@ -3934,7 +3954,41 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     })()}
 
     {/* Стилизованные диалоги: ввод имени узла/операции, подтверждение удаления операции */}
-    {appModal && (() => {
+    {dirDeptEdit && (
+        <AppModal title={'Редактировать подразделение — ' + dirDeptEdit.name} onClose={() => setDirDeptEdit(null)} width={460}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название</span>
+              <input value={dirDeptEdit.name} onChange={e => setDirDeptEdit({ ...dirDeptEdit, name: e.target.value })}
+                style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Код</span>
+              <input value={dirDeptEdit.code} onChange={e => setDirDeptEdit({ ...dirDeptEdit, code: e.target.value })}
+                style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Головное подразделение</span>
+              <ReferenceField
+                entity="departments"
+                value={dirDeptEdit.parent_id || null}
+                displayValue={dirDeptEdit.parent_name || undefined}
+                onChange={() => {}}
+                onPickItem={(row) => setDirDeptEdit({ ...dirDeptEdit, parent_id: String(row.id), parent_name: row.name })}
+                onOpenBrowser={openDirForPick}
+                placeholder="— корневое —"
+                style={{ flex: 1, minWidth: 200 }}
+              />
+            </label>
+            <div style={{ fontSize: 11, color: '#5A7090' }}>Материал не может быть головным подразделением — иерархия влияет на каскад календарей (подразделение → головное → …).</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+            <button onClick={() => setDirDeptEdit(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+            <button onClick={saveDirDept} style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Сохранить</button>
+          </div>
+        </AppModal>
+      )}
+      {appModal && (() => {
       if (appModal.kind === 'node-add') {
         const isSemi = appModal.nodeType === 'semi_finished';
         return (
