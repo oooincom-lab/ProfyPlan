@@ -3732,6 +3732,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   onRoutingOpCreate={handleRoutingOpCreate}
                   orderRes={orderRes}
                   onOrderResLoad={loadOrderResources}
+        onOrderResAdd={handleOrderResAdd}
         onOrderResPersonalize={handleOrderResPersonalize}
         departments={departmentsAll}
                   onOrderResChange={handleOrderResChange}
