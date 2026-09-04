@@ -508,7 +508,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   onOpenBrowser={onOpenDirPick}
                   placeholder="Выбрать ресурс…"
                 itemMeta={(it: any) => {
-                  const rec = ((orderRes || {})[o.id] || []).find((x: any) => String(x.resource_id) === String(it.id));
+                  const rec = ((orderRes || {})[w.orderId] || []).find((x: any) => String(x.resource_id) === String(it.id));
                   if (!rec) return null;
                   const used = routingsFor(o).some((r: any) => (r.operations || []).some((op: any) => String(op.resource_type_id) === String(it.id)));
                   const label = used ? '✓ в операциях' : 'без операций';

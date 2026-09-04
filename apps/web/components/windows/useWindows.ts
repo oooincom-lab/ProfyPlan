@@ -261,14 +261,14 @@ export function useWindows(sidebarWidth: number = 260) {
   };
 
   // Окно добавления операции в маршрут (в MDI-режиме — простое окно, не модальный диалог)
-  const openOpAddWin = (routingId: string, title?: string) => {
+  const openOpAddWin = (routingId: string, title?: string, orderId?: string) => {
     const d = deskRect();
     winZ.current += 1;
     const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     setWins(prev => [...prev, {
       id,
       kind: 'opadd' as const,
-      orderId: '',
+      orderId: orderId || '',
       data: { routingId },
       title: title || 'Добавить операцию в маршрут',
       x: d.x + Math.max(40, Math.round(d.w / 2) - 200),

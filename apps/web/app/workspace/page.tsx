@@ -803,14 +803,14 @@ export default function AppShell() {
   };
 
   // Создание операции из MDI-окна «Добавить операцию в маршрут» (Шаг 1 модуля справочников)
-  const handleRoutingOpCreate = async (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null): Promise<boolean> => {
+  const handleRoutingOpCreate = async (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null, departmentId?: string | null, departmentName?: string | null): Promise<boolean> => {
     try {
       const rt = routings.find((r: any) => r.id === routingId);
       const ops = (rt?.operations || []).slice();
       const maxSeq = ops.reduce((m: number, o: any) => Math.max(m, Number(o.sequence_number) || 0), 0);
       await apiF('/bom/routing-operations', {
         method: 'POST',
-        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: durationHours || 1, output_quantity: 1, yield_rate: 1, resource_type_id: resourceId, catalog_operation_id: catalogOperationId || null }),
+        body: JSON.stringify({ routing_id: routingId, name, sequence_number: maxSeq + 1, duration_hours: durationHours || 1, output_quantity: 1, yield_rate: 1, resource_type_id: resourceId, catalog_operation_id: catalogOperationId || null, department_id: departmentId || null, department: departmentName || null }),
       });
       await reloadRoutings();
       return true;
