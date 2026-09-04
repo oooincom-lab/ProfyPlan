@@ -963,16 +963,18 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 return (
                   <div style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      <span style={{ fontSize: 11.5, color: '#5A7090', flex: 1 }}>Ресурсы заказа: {list.length} <span style={{ fontSize: 10.5 }}>(из операций маршрутов; здесь задаётся подразделение и доступная мощность)</span></span>
-                      <ReferenceField
-                        entity="resources"
-                        value={null}
-                        onChange={() => {}}
-                        onPickItem={(row) => onOrderResAdd?.(o.id, String(row.id))}
-                        onOpenBrowser={onOpenDirPick}
-                        placeholder="+ Ресурс"
-                        style={{ flex: '0 1 260px', minWidth: 180 }}
-                      />
+                      <span style={{ fontSize: 11.5, color: '#5A7090', flex: 1 }}>Ресурсы заказа: {list.length} <span style={{ fontSize: 10.5 }}>{w.editing ? '(здесь задаётся подразделение и доступная мощность)' : '(только просмотр — включите ✏️ Редактировать)'}</span></span>
+                      {w.editing && (
+                        <ReferenceField
+                          entity="resources"
+                          value={null}
+                          onChange={() => {}}
+                          onPickItem={(row) => onOrderResAdd?.(o.id, String(row.id))}
+                          onOpenBrowser={onOpenDirPick}
+                          placeholder="+ Ресурс"
+                          style={{ flex: '0 1 260px', minWidth: 180 }}
+                        />
+                      )}
                     </div>
                     {list.length === 0 && (
                       <div style={{ color: '#5A7090', fontSize: 12 }}>Ресурсы появятся автоматически, когда назначите их операциям маршрута (вкладка «Маршрут»), либо добавьте вручную полем «+ Ресурс».</div>
@@ -983,23 +985,31 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                           <span style={{ flex: 1, fontWeight: 600, fontSize: 12.5 }}>{it.resource_name}</span>
                           <span style={{ color: '#5A7090', fontSize: 11 }}>Ед.: {it.resource_unit || '—'}</span>
                           <span style={{ color: '#5A7090', fontSize: 11 }}>Тип: {it.resource_type || '—'}</span>
-                          {it.id && (
+                          {it._fromOps && (
+                            <span title="Ресурс используется в операциях маршрута — управляется на вкладке «Маршрут»"
+                              style={{ fontSize: 10, color: '#93C5FD', border: '1px solid rgba(147,197,253,.35)', borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>из операций</span>
+                          )}
+                          {w.editing && it.id && (
                             <button type="button" title="Убрать из заказа" onClick={() => onOrderResRemove?.(o.id, it)}
                               style={{ background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 5, width: 22, height: 22, fontSize: 12, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
                           <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Подразделение:</span>
-                          <ReferenceField
-                            entity="departments"
-                            value={it.department_id || null}
-                            displayValue={it.department_name || undefined}
-                            onChange={() => {}}
-                            onPickItem={(row) => onOrderResChange?.(o.id, it, { department_id: row.id })}
-                            onOpenBrowser={onOpenDirPick}
-                            placeholder="Выбрать подразделение…"
-                            style={{ flex: 1, minWidth: 170 }}
-                          />
+                          {w.editing ? (
+                            <ReferenceField
+                              entity="departments"
+                              value={it.department_id || null}
+                              displayValue={it.department_name || undefined}
+                              onChange={() => {}}
+                              onPickItem={(row) => onOrderResChange?.(o.id, it, { department_id: row.id })}
+                              onOpenBrowser={onOpenDirPick}
+                              placeholder="Выбрать подразделение…"
+                              style={{ flex: 1, minWidth: 170 }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 12.5, color: it.department_name ? '#E8EEF5' : '#5A7090' }}>{it.department_name || '—'}</span>
+                          )}
                         </div>
                         {(() => {
                           const cat = resourcesList.find((x: any) => x.id === it.resource_id || x.name === it.resource_name);
@@ -1017,20 +1027,26 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                           <button type="button" title="Открыть окно календаря ресурса (график, версии, исключения)"
                             onClick={() => onDirCalendar?.(it.resource_id, it.resource_name || 'Ресурс')}
                             style={{ background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🗓 Изменить график</button>
-                          <button type="button" title="Создать персональный график ресурса из эффективного (каскад)"
-                            onClick={() => onOrderResPersonalize?.(o.id, it)}
-                            style={{ background: 'rgba(252,211,77,.08)', border: '1px solid rgba(252,211,77,.4)', color: '#FCD34D', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ Персональный</button>
+                          {w.editing && (
+                            <button type="button" title="Создать персональный график ресурса из эффективного (каскад)"
+                              onClick={() => onOrderResPersonalize?.(o.id, it)}
+                              style={{ background: 'rgba(252,211,77,.08)', border: '1px solid rgba(252,211,77,.4)', color: '#FCD34D', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ Персональный</button>
+                          )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                           <span style={{ fontSize: 11.5, color: '#8FA3BD', width: 112 }}>Доступно:</span>
-                          <input
-                            type="number" min="0" step="any"
-                            defaultValue={it.capacity ?? ''}
-                            key={'cap-' + (it.id || it.resource_id) + '-' + (it.capacity ?? '')}
-                            onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0) onOrderResChange?.(o.id, it, { capacity: v }); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            style={{ width: 90, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12.5, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
-                          />
+                          {w.editing ? (
+                            <input
+                              type="number" min="0" step="any"
+                              defaultValue={it.capacity ?? ''}
+                              key={'cap-' + (it.id || it.resource_id) + '-' + (it.capacity ?? '')}
+                              onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0) onOrderResChange?.(o.id, it, { capacity: v }); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                              style={{ width: 90, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12.5, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 12.5, color: '#E8EEF5', fontWeight: 600 }}>{it.capacity ?? '—'}</span>
+                          )}
                           <span style={{ color: '#5A7090', fontSize: 11 }}>{it.resource_unit || ''}</span>
                         </div>
                       </div>
