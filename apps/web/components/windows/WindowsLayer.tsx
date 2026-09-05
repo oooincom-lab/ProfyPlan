@@ -220,7 +220,8 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [calAssignForm, setCalAssignForm] = useState<Record<string, { scheduleId: string; validFrom: string }>>({});
   const [showBomOps, setShowBomOps] = useState(false);
   const [showOrphans, setShowOrphans] = useState(false);
-  const [orphanCleanup, setOrphanCleanup] = useState<any[] | null>(null); // чекбокс «показывать операции» (вкладка Состав)
+  const [orphanCleanup, setOrphanCleanup] = useState<any[] | null>(null);
+  const [warnDept, setWarnDept] = useState<string | null>(null); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
     if (w.kind === 'list') return w.title || 'Список';
@@ -1012,13 +1013,19 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                           const zone = zoneOf(v ? String(v) : null);
                                           const res = resourcesList.find((x: any) => x.id === v);
                                           const newDept = res?.department_id ? String(res.department_id) : null;
-                                          const inZone = !op.department_id || !zone || zone.includes(String(op.department_id));
-                                          if (newDept && (!op.department_id || !inZone)) {
+                                          const newDeptName = newDept ? (departments.find((x: any) => String(x.id) === newDept)?.name || null) : null;
+                                          if (newDept && zone && op.department_id && !zone.includes(String(op.department_id))) {
+                                            // Ошибка выбора: подразделение операции вне зоны нового ресурса — очистить и предупредить
+                                            onRoutingOpUpdate?.(op.id, { resource_type_id: v, department_id: null, department: '' });
+                                            setWarnDept(`Ошибка выбора подразделения: у ресурса «${res?.name || ''}» назначено подразделение «${newDeptName || ''}». Подразделение операции должно быть равно подразделению ресурса или входить в его дочерние подразделения. Выберите подразделение из списка зоны ресурса — поле очищено.`);
+                                            return;
+                                          }
+                                          if (newDept && !op.department_id) {
                                             const d = departments.find((x: any) => String(x.id) === newDept);
                                             onRoutingOpUpdate?.(op.id, { resource_type_id: v, department_id: newDept, department: d?.name || null });
-                                          } else {
-                                            onRoutingOpUpdate?.(op.id, { resource_type_id: v });
+                                            return;
                                           }
+                                          onRoutingOpUpdate?.(op.id, { resource_type_id: v });
                                         }}
                                         onOpenBrowser={onOpenDirPick}
                                         placeholder="Выбрать ресурс…"
@@ -1414,6 +1421,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
           </AppModal>
         );
       })()}
+
+      {warnDept && (
+        <AppModal title="Ошибка выбора подразделения" onClose={() => setWarnDept(null)} accent="#F87171" width={500}>
+          <div style={{ fontSize: 12.5, color: '#FCA5A5', lineHeight: 1.6 }}>{warnDept}</div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+            <button onClick={() => setWarnDept(null)} style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Понятно</button>
+          </div>
+        </AppModal>
+      )}
 
       {attachOpen && (() => {
         const cur = orderById(attachOpen.orderId);
