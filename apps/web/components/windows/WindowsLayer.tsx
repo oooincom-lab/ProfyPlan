@@ -76,7 +76,7 @@ type WindowsLayerProps = {
   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
   onPickResource: (opId: string) => void;
   onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
-  onRoutingOpCreate?: (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null) => Promise<boolean>;
+  onRoutingOpCreate?: (routingId: string, name: string, resourceId: string, catalogOperationId?: string | null, durationHours?: number | null, departmentId?: string | null, departmentName?: string | null) => Promise<boolean>;
   opNameSuggestions?: string[];
   projects?: any[];
   /** Привязки ресурса к проектам (resedit): {resourceId: items[]} */
@@ -183,7 +183,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
   const [attachOpen, setAttachOpen] = useState<{ orderId: string } | null>(null);
-  const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null }>>({});
+  const [opAddForm, setOpAddForm] = useState<Record<string, { opId: string | null; opName: string | null; opDur: number | null; resId: string | null; deptId: string | null; deptName: string | null }>>({});
   const [newOrderForm, setNewOrderForm] = useState<Record<string, Record<string, string>>>({});
   // Единица длительности для инлайн-редактирования операций маршрута (Шаг 4): д/ч/мин/с
   const [durUnit, setDurUnit] = useState<Record<string, string>>({});
@@ -597,7 +597,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
         // ── Окно «Добавить операцию в маршрут» (MDI): простое окно рабочего стола с формой ──
         if (w.kind === 'opadd') {
-          const f = opAddForm[w.id] || { opId: null, opName: null, opDur: null, resId: null };
+          const f = opAddForm[w.id] || { opId: null, opName: null, opDur: null, resId: null, deptId: null, deptName: null };
           const canAdd = !!f.opId && !!f.resId;
           return (
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
@@ -628,7 +628,13 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <ReferenceField
                   entity="resources"
                   value={f.resId}
-                  onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, resId: v } }))}
+                  onChange={(v) => {
+                    const res = resourcesList.find((x: any) => x.id === v);
+                    const newDept = res?.department_id ? String(res.department_id) : null;
+                    const dName = newDept ? (departments.find((x: any) => String(x.id) === newDept)?.name || null) : null;
+                    if (newDept && !f.deptId) setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, resId: v, deptId: newDept, deptName: dName } }));
+                    else setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, resId: v } }));
+                  }}
                   onOpenBrowser={onOpenDirPick}
                   placeholder="Выбрать ресурс…"
                 itemMeta={(it: any) => {
@@ -641,12 +647,27 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   return <span style={{ fontSize: 10, color: col, border: `1px solid ${bd}`, borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap' }}>{label}</span>;
                 }}
                 />
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 6 }}>
+                  <span style={{ flexShrink: 0, width: 108, paddingTop: 5, fontSize: 11.5, color: '#8FA3BD' }}>Подразделение:</span>
+                  <ReferenceField
+                    entity="departments"
+                    value={f.deptId}
+                    displayValue={f.deptName || undefined}
+                    onChange={() => {}}
+                    onPickItem={(row) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, deptId: row.id, deptName: row.name } }))}
+                    onOpenBrowser={onOpenDirPick}
+                    filterIds={zoneOf(f.resId)}
+                    allowOther
+                    placeholder="Выбрать подразделение…"
+                    style={{ flex: 1, minWidth: 140 }}
+                  />
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                   <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
                   <button
                     onClick={async () => {
                       if (!canAdd || !onRoutingOpCreate) return;
-                      const ok = await onRoutingOpCreate(w.data.routingId, (f.opName || '').trim(), f.resId as string, f.opId, f.opDur);
+                      const ok = await onRoutingOpCreate(w.data.routingId, (f.opName || '').trim(), f.resId as string, f.opId, f.opDur, f.deptId, f.deptName);
                       if (ok !== false) onClose(w.id);
                     }}
                     disabled={!canAdd}
