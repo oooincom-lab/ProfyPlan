@@ -247,6 +247,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
     if (w.kind === 'cal') return w.title || 'Календарь ресурса';
     if (w.kind === 'wsched') return w.title || 'Графики работы';
+    if (w.kind === 'wsched-edit') return w.title || 'Редактирование графика';
     if (w.kind === 'pcal') return w.title || 'Производственные календари';
     if (w.kind === 'neworder') return w.title || 'Новый заказ';
     const o = w.data || orderById(w.orderId);
@@ -269,6 +270,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'opadd') return { badge: `[opadd:openWin #${n}]`, copy: `[opadd:openWin #${n}] «${title}»` };
     if (w.kind === 'cal') return { badge: `[cal:openCalWin #${n}]`, copy: `[cal:openCalWin #${n}] «${title}»` };
     if (w.kind === 'wsched') return { badge: `[wsched:openWin #${n}]`, copy: `[wsched:openWin #${n}] «${title}»` };
+    if (w.kind === 'wsched-edit') return { badge: `[wsched-edit:openWin #${n}]`, copy: `[wsched-edit:openWin #${n}] «${title}»` };
     if (w.kind === 'pcal') return { badge: `[pcal:openWin #${n}]`, copy: `[pcal:openWin #${n}] «${title}»` };
     if (w.kind === 'neworder') return { badge: `[neworder:openWin #${n}]`, copy: `[neworder:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
