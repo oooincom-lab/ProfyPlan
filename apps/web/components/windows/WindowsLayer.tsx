@@ -729,6 +729,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   onManageEdit={w.data?.onManageEdit ? (row: any) => onDirManageEdit?.(w.data?.entity || '', row) : undefined}
                   onManageDelete={w.data?.onManageDelete ? (row: any) => onDirManageDelete?.(w.data?.entity || '', row) : undefined}
                   onManageCalendar={w.data?.onManageCalendar}
+                  highlightId={w.data?.highlightId}
                 />
               )}
               {isResEdit && (

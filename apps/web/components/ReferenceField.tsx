@@ -14,8 +14,10 @@ type Props = {
   entity: string;
   value: string | null;
   onChange: (id: string | null) => void;
-  onOpenBrowser?: (entity: string, onPick: (row: any) => void) => void;
+  onOpenBrowser?: (entity: string, onPick: (row: any) => void, currentValue?: string | null) => void;
   onPickItem?: (row: any) => void;
+  /** Открыть окно редактирования выбранного элемента справочника (минуя список) */
+  onEditItem?: (entity: string, id: string, row: any) => void;
   /** Переопределение пути API (напр. /api/v1/catalog-operations/) */
   pathOverride?: string;
   apiBase?: string;
@@ -33,7 +35,7 @@ type Props = {
 };
 
 export default function ReferenceField({
-  entity, value, onChange, onOpenBrowser, onPickItem, pathOverride,
+  entity, value, onChange, onOpenBrowser, onPickItem, onEditItem, pathOverride,
   apiBase = 'https://profyplan.ru/api',
   displayField = 'name',
   displayValue,
@@ -116,11 +118,22 @@ export default function ReferenceField({
       >
         {sel ? String(sel[displayField] || sel.name || sel.id) : (!sel && value && displayValue ? displayValue : placeholder)} <span style={{ color: '#3B82F6' }}>▾</span>
       </button>
+      {value && onEditItem && (
+        <button
+          type="button"
+          title="Редактировать выбранный элемент"
+          onClick={() => onEditItem(entity, String(value), sel)}
+          style={{
+            background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.35)', color: '#34D399',
+            borderRadius: 6, width: 27, height: 30, fontSize: 12, cursor: 'pointer', flex: '0 0 auto', fontFamily: 'inherit',
+          }}
+        >✎</button>
+      )}
       {onOpenBrowser && (
         <button
           type="button"
           title="Открыть справочник: список, добавление, редактирование, удаление"
-          onClick={() => onOpenBrowser(entity, (row: any) => { onChange(String(row.id)); onPickItem?.(row); setOpen(false); })}
+          onClick={() => onOpenBrowser(entity, (row: any) => { onChange(String(row.id)); onPickItem?.(row); setOpen(false); }, value)}
           style={{
             background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD',
             borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: 'pointer', flex: '0 0 auto', fontFamily: 'inherit',

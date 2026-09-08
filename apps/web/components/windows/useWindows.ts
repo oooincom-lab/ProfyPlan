@@ -346,7 +346,7 @@ export function useWindows(sidebarWidth: number = 260) {
     return id;
   };
 
-  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void, opts?: { zBoost?: number; endpoints?: any; onManageCalendar?: (row: any) => void; onEditWindow?: (row: any) => void; onAddWindow?: () => void }) => {
+  const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void, onManageEdit?: (row: any) => void, onManageDelete?: (row: any) => void, opts?: { zBoost?: number; endpoints?: any; onManageCalendar?: (row: any) => void; onEditWindow?: (row: any) => void; onAddWindow?: () => void; highlightId?: string | null }) => {
     const d = deskRect();
     if (!onSelect) {
       const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
@@ -366,7 +366,7 @@ export function useWindows(sidebarWidth: number = 260) {
       id,
       kind: 'dir' as const,
       orderId: '',
-      data: { entity, columns, onSelect, onManageEdit, onManageDelete, endpoints: opts?.endpoints, onManageCalendar: opts?.onManageCalendar, onEditWindow: opts?.onEditWindow, onAddWindow: opts?.onAddWindow },
+      data: { entity, columns, onSelect, onManageEdit, onManageDelete, endpoints: opts?.endpoints, onManageCalendar: opts?.onManageCalendar, onEditWindow: opts?.onEditWindow, onAddWindow: opts?.onAddWindow, highlightId: opts?.highlightId },
       title,
       x: d.x + 60,
       y: d.y + 40,

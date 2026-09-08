@@ -29,6 +29,8 @@ type Props = {
   synonyms?: Record<string, string[]>;
   /** Счётчик — при изменении список перезагружается (после удаления извне) */
   refreshKey?: number;
+  /** id строки, которую нужно выделить/прокрутить при открытии (окно выбора справочника) */
+  highlightId?: string | null;
   /** Переопределение URL (проектные справочники: этапы и т.п.). Если задан — используется вместо /v1/{entity}/... */
   endpoints?: {
     list?: string;
@@ -38,7 +40,7 @@ type Props = {
   };
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, onAddWindow, compact, synonyms, refreshKey = 0, endpoints }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, onAddWindow, compact, synonyms, refreshKey = 0, endpoints, highlightId = null }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -220,6 +222,22 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   };
 
   // Filter → Sort chain
+  // автовыделение строки при открытии окна выбора (currentValue)
+  useEffect(() => {
+    if (!highlightId || !rows || rows.length === 0) return;
+    const found = rows.find((r: any) => String(r.id) === String(highlightId));
+    if (!found) return;
+    // setSelId устанавливает выделение (если окно в режиме выбора)
+    // @ts-ignore
+    setSelId(String(highlightId));
+    // прокрутка к строке
+    requestAnimationFrame(() => {
+      const tbody = document.querySelector('[data-dt-row="' + String(highlightId) + '"]');
+      if (tbody) tbody.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, highlightId]);
+
   const filtered = useMemo(() => {
     let result = rows;
     if (filter) {
@@ -397,6 +415,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
         <tbody>
           {(entity === 'departments' ? visibleRows : filtered).map(row => (
             <tr
+              data-dt-row={String(row.id)}
               key={row.id}
               onClick={onSelect ? () => setSelId(row.id) : undefined}
               onMouseEnter={() => setHoverId(String(row.id))}

@@ -957,7 +957,7 @@ export default function AppShell() {
   // ── Универсальное открытие окна справочника в режиме выбора (Шаг 1 модуля справочников) ──
   // Окно рабочего стола: выбор кликом по строке, CRUD доступен там же. Режим «модально»
   // для справочников-обзоров покрывается настройкой panelMode (Настройки Рабочего стола).
-  const openDirForPick = (entity: string, onPick: (row: any) => void) => {
+  const openDirForPick = (entity: string, onPick: (row: any) => void, currentValue?: string | null) => {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
     const extraEndpoints = entity === 'operations'
@@ -978,6 +978,7 @@ export default function AppShell() {
       entity === 'resources' ? (row: any) => runDeleteCheck('resource', row.id, row.name || row.code || row.id) : undefined,
       { zBoost: 4300, endpoints: extraEndpoints,
         onManageCalendar: entity === 'resources' ? (row: any) => win.openCalWin(row.id, row.name || row.code || 'Ресурс') : undefined,
+        highlightId: currentValue || null,
       },
     );
   };
