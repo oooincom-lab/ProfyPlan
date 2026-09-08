@@ -110,7 +110,8 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
   const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts?.headers as any || {}) };
   if (tok) h['Authorization'] = `Bearer ${tok}`;
-  const r = await fetch(`${API}${path}`, { ...opts, headers: h });
+  const url = path.startsWith('http') ? path : `${API}${path}`;
+  const r = await fetch(url, { ...opts, headers: h });
   if (r.status === 401) {
     localStorage.removeItem('profyplan_token');
     throw new Error('AUTH_REQUIRED');
