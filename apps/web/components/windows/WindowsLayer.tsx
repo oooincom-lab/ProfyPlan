@@ -662,6 +662,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     onChange={() => {}}
                     onPickItem={(row) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, deptId: row.id, deptName: row.name } }))}
                     onOpenBrowser={onOpenDirPick}
+                    onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
                     filterIds={zoneOf(f.resId)}
                     allowOther
                     placeholder="Выбрать подразделение…"

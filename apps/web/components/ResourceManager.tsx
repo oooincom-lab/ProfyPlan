@@ -42,7 +42,7 @@ const periodLabel = (a: Assignment) => {
   return `${f || '…'} – ${t || '…'}`;
 };
 
-export default function ResourceManager({ projects, windowMode = false, debug = false, onOpenResEdit }: { projects: Project[]; windowMode?: boolean; debug?: boolean; onOpenResEdit?: (res: any | null) => void }) {
+export default function ResourceManager({ projects, windowMode = false, debug = false, onOpenResEdit, onOpenDirPick, onEditItem }: { projects: Project[]; windowMode?: boolean; debug?: boolean; onOpenResEdit?: (res: any | null) => void; onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void; onEditItem?: (entity: string, id: string, row: any) => void }) {
   // Глобальный справочник
   const [rows, setRows] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -193,7 +193,7 @@ export default function ResourceManager({ projects, windowMode = false, debug = 
                 <DebugBadge debug={debug} text="[resedit:modal]" copy={editingId ? `[resedit:modal] «Редактирование ресурса · ${editingId.slice(0, 8)}»` : '[resedit:modal] «Новый ресурс»'} />
                 <button onClick={() => { setFormOpen(false); setEditingId(null); setForm({}); }} style={{ background: 'transparent', border: 'none', color: '#5A7090', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
-              <ResourceForm form={form} onChange={patch => setForm({ ...form, ...patch })} schedules={schedules} saving={saving} onSave={save} onCancel={() => { setFormOpen(false); setEditingId(null); setForm({}); }} />
+              <ResourceForm form={form} onChange={patch => setForm({ ...form, ...patch })} schedules={schedules} saving={saving} onSave={save} onCancel={() => { setFormOpen(false); setEditingId(null); setForm({}); }} onOpenDirPick={onOpenDirPick} onEditItem={onEditItem} />
             </div>
           </>
         )}

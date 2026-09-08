@@ -3399,7 +3399,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} />}
           {view === 'production-calendars' && <ProductionCalendarManager debug={debugMode} />}
 
-          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} />}
+          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
