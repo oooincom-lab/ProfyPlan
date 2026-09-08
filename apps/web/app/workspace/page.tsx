@@ -456,7 +456,6 @@ export default function AppShell() {
 
   const openDirEditWindow = (entity: string, row: any) => {
     if (entity === 'resources') { win.openResEdit(row); return; }
-    if (entity === 'departments') { win.openDeptEditWin(row); return; }
     const dirEndpoints = (entity === 'departments' || entity === 'organizations')
       ? { item: (id: string) => `https://profyplan.ru/api/v1/${entity}/${id}`, method: 'PATCH' as const }
       : undefined;

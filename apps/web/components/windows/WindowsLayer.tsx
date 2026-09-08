@@ -477,57 +477,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         }
 
           // ── Окно редактирования подразделения ──
-          if (w.kind === 'deptedit') {
-            const f = (w.form || {}) as Record<string, string>;
-            const g = (k: string) => (f as any)[k] ?? '';
-            const up = (patch: Record<string, string>) => setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x));
-            return (
-              <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
-                style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
-                onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-                <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} />
-                  <span className="ttl">{w.title}</span>
-                  {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                  <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                  <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>×</button>
-                </div>
-                <div style={{ padding: '12px 14px', overflow: 'auto' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-                    <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название</span>
-                    <input value={g('name')} onChange={e => up({ name: e.target.value })}
-                      style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
-                  </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-                    <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Код</span>
-                    <input value={g('code')} onChange={e => up({ code: e.target.value })}
-                      style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 8 }}>
-                    <span style={{ flexShrink: 0, width: 108, paddingTop: 5, fontSize: 11.5, color: '#8FA3BD' }}>Головное подразделение:</span>
-                    <ReferenceField
-                      entity="departments"
-                      value={g('parent_id') || null}
-                      displayValue={g('parent_name') || undefined}
-                      onChange={() => {}}
-                      onPickItem={(row) => up({ parent_id: String(row.id), parent_name: row.name })}
-                      onOpenBrowser={onOpenDirPick}
-                      placeholder="— корневое —"
-                      style={{ flex: 1, minWidth: 160 }}
-                    />
-                  </div>
-                  <div style={{ fontSize: 11, color: '#5A7090', marginBottom: 8 }}>Каскад календарей: ресурс → подразделение → головное → … → проект → программа.</div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
-                    <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-                    <button onClick={async () => { const ok = await onDirEditSave?.('departments', w.data.id, f); if (ok !== false) onClose(w.id); }}
-                      style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Сохранить</button>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          // ── Окно добавления записи справочника (универсальное по колонкам) ──
+                    // ── Окно добавления записи справочника (универсальное по колонкам) ──
           if (w.kind === 'diradd') {
             const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position', 'ntype', 'unit', 'country_code', 'capacity_per_unit', 'capacity_unit', 'schedule_id', 'resource_type', 'article', 'description'].includes(c.key));
             const rowsForm = (w.form || {}) as Record<string, string>;

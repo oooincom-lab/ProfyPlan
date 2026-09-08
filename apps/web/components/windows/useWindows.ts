@@ -290,29 +290,6 @@ export function useWindows(sidebarWidth: number = 260) {
     return id;
   };
 
-  const openDeptEditWin = (row: any) => {
-    const d = deskRect();
-    winZ.current += 1;
-    const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    setWins(prev => [...prev, {
-      id,
-      kind: 'deptedit' as const,
-      orderId: '',
-      data: { id: String(row.id) },
-      form: { name: row.name || '', code: row.code || '', parent_id: row.parent_id ? String(row.parent_id) : '', parent_name: row._parent_name || '' },
-      title: 'Редактирование подразделения',
-      x: d.x + Math.max(40, Math.round(d.w / 2) - 220),
-      y: d.y + Math.max(40, Math.round(d.h / 2) - 160),
-      w: 460,
-      h: 320,
-      min: false,
-      z: winZ.current,
-      tab: 'route' as OrderTab,
-      editing: true,
-    }]);
-    return id;
-  };
-
   const openDirEditWin = (entity: string, row: any, columns: any[], endpoints?: any) => {
     const d = deskRect();
     winZ.current += 1;
@@ -322,6 +299,10 @@ export function useWindows(sidebarWidth: number = 260) {
       if (c.editable === false) continue;
       if (['id', '_depth', '_parent_name', 'position'].includes(c.key)) continue;
       form[c.key] = row[c.key] != null ? String(row[c.key]) : '';
+    }
+    if (entity === 'departments') {
+      form.parent_id = row.parent_id != null ? String(row.parent_id) : '';
+      form.parent_name = row._parent_name || '';
     }
     setWins(prev => [...prev, {
       id,
@@ -599,7 +580,7 @@ export function useWindows(sidebarWidth: number = 260) {
 
   return {
     wins, setWins, lay, setLay, snapZone,
-    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDeptEditWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }
