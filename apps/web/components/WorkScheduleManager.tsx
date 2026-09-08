@@ -152,6 +152,7 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
       else await af(`/work-schedules/${editing.id}`, { method: 'PUT', body: JSON.stringify(body) });
       setEditing(null); setIsNew(false);
       await load();
+      if (onSaved) onSaved();
     } catch (e: any) { setError(String(e)); }
     setSaving(false);
   };
@@ -211,7 +212,7 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
       <div className="panel-hdr" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>🕒 Графики работы{selectMode ? ' — выбор' : ''}</span>
         <DebugBadge debug={debug} text="[wschedule:manager]" copy="[wschedule:manager] «Графики работы»" />
-        {!editing && <button onClick={startNew} style={btn('#3B82F6')}>＋ Новый график</button>}
+        {!editing && <button onClick={onCreate || startNew} style={btn('#3B82F6')}>＋ Новый график</button>}
       </div>
 
       {error && <div style={{ color: '#FCA5A5', fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
@@ -227,10 +228,10 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {list.map(s => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, padding: '10px 14px', cursor: 'pointer' }} onClick={() => selectMode ? onPick?.(s) : startEdit(s)}>
+                                <div key={s.id} onMouseEnter={() => setHoverId(String(s.id))} onMouseLeave={() => setHoverId((h) => h === String(s.id) ? null : h)} onDoubleClick={() => (onEditItem ? onEditItem(s) : startEdit(s))} onClick={() => (selectMode ? (onPick ? onPick(s) : null) : null)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: hoverId === String(s.id) ? '#122A47' : '#0D1F3A', border: '1px solid ' + (hoverId === String(s.id) ? 'rgba(59,130,246,.45)' : '#1E3252'), borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'background .12s, border-color .12s' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.fill_mode === 'cycle' ? '#22D3EE' : '#3B82F6', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5' }}>{s.name}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: hoverId === String(s.id) ? '#BBD3F5' : '#E8EEF5' }}>{s.name}</div>
                     <div style={{ fontSize: 11.5, color: '#5A7090' }}>{MODE_LABEL[s.fill_mode]}{s.fill_mode === 'cycle' ? ` · цикл ${s.cycle_length} дн` : ''} · {workHours(s).toFixed(1)} ч/нед · {s.slots.filter(x => x.kind === 'work').length} интервалов</div>
                   </div>
                   {!selectMode && (

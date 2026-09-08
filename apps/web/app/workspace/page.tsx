@@ -161,6 +161,12 @@ export default function AppShell() {
     return 'side';
   });
   const [schedRefresh, setSchedRefresh] = useState(0);
+  // открытие окна/модалки редактирования графика по настройке «Интерфейс работы со списками»
+  const openWschedEditWin = (schedule: any) => {
+    if (panelMode === 'window') win.openWschedEdit(schedule === 'new' ? null : schedule);
+    else setWschedEditModal(schedule);
+  };
+
   // 🧪 Режим отладки: технические идентификаторы окон и форм (для описания проблем)
   const [debugMode, setDebugMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -225,7 +231,8 @@ export default function AppShell() {
   // ── Context menu ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project?: any; pool?: any; group?: any } | null>(null);
   const [sidebarCtx, setSidebarCtx] = useState<{ x: number; y: number; view: string } | null>(null);
-  const [directoryModal, setDirectoryModal] = useState<string | null>(null); // e.g. 'nomenclature'
+  const [directoryModal, setDirectoryModal] = useState<string | null>(null);
+  const [wschedEditModal, setWschedEditModal] = useState<any>(null); // 'new' | Schedule | null // e.g. 'nomenclature'
 
   // ── Inline create inputs (replaces prompt()) ──
   const [newGroupInput, setNewGroupInput] = useState(false);
@@ -3398,7 +3405,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </div>
           )}
 
-          {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} onEditItem={(s) => win.openWschedEdit(s)} onCreate={() => win.openWschedEdit(null)} refreshKey={schedRefresh} />}
+          {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} onEditItem={(s) => openWschedEditWin(s)} onCreate={() => openWschedEditWin(null)} refreshKey={schedRefresh} />}
           {view === 'production-calendars' && <ProductionCalendarManager debug={debugMode} />}
 
           {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')} onOpenWschedPick={(onPick) => win.openManagerWin('wsched', '🕒 Графики работы', { selectMode: true, onPick })} />}
@@ -3716,6 +3723,19 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </>
           )}
 
+          {/* ═══ WSCHED EDIT MODAL (по настройке «Интерфейс работы со списками») ═══ */}
+          {wschedEditModal !== null && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,12,24,.6)', zIndex: 950, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setWschedEditModal(null)}>
+              <div style={{ background: '#0F1E36', border: '1px solid #1E3A5F', borderRadius: 12, padding: 20, width: 920, maxWidth: '94vw', maxHeight: '88vh', overflow: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: '#E8EEF5' }}>🕒 {wschedEditModal === 'new' ? 'Новый график работы' : 'Редактирование графика — ' + ((wschedEditModal && wschedEditModal.name) || '')}</span>
+                  <button onClick={() => setWschedEditModal(null)} style={{ background: 'transparent', border: 'none', color: '#8FA3BD', fontSize: 16, cursor: 'pointer' }}>✕</button>
+                </div>
+                <WorkScheduleManager debug={debugMode} mode="edit" schedule={wschedEditModal === 'new' ? null : wschedEditModal} onSaved={() => { setWschedEditModal(null); setSchedRefresh(x => x + 1); }} onClose={() => setWschedEditModal(null)} />
+              </div>
+            </div>
+          )}
+
           {/* ═══ REPORTS / CCM ═══ */}
           {view === 'reports' && (
             <div className="panel">
@@ -3786,7 +3806,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                    onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')}
                    onOpenWschedPick={(onPick) => win.openManagerWin('wsched', '🕒 Графики работы', { selectMode: true, onPick })}
                   onOrderResChange={handleOrderResChange}
-                  onOpenWschedEdit={(s) => win.openWschedEdit(s)}
+                  onOpenWschedEdit={(s) => openWschedEditWin(s)}
                   refreshWsched={schedRefresh}
                   onWschedChanged={() => setSchedRefresh(x => x + 1)}
                   onOrderResRemove={handleOrderResRemove}
