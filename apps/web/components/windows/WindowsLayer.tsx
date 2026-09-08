@@ -481,7 +481,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
           // ── Окно редактирования подразделения ──
                     // ── Окно добавления записи справочника (универсальное по колонкам) ──
           if (w.kind === 'diradd') {
-            const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position', 'ntype', 'unit', 'country_code', 'capacity_per_unit', 'capacity_unit', 'schedule_id', 'resource_type', 'article', 'description'].includes(c.key));
+            const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position'].includes(c.key));
             const rowsForm = (w.form || {}) as Record<string, string>;
             const up = (patch: Record<string, string>) => setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x));
             return (
@@ -499,7 +499,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   {cols.map((c: any) => (
                     <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                       <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>{c.label || c.key}</span>
-                      {c.ref ? (
+                      {c.key === 'ntype' ? (
+                        <select value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
+                          style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }}>
+                          <option value="product">Продукция</option>
+                          <option value="material">Материал</option>
+                          <option value="semi_finished">Полуфабрикат</option>
+                          <option value="service">Услуга</option>
+                        </select>
+                      ) : c.ref ? (
                         <ReferenceField
                           entity={c.ref}
                           value={rowsForm[c.key] ?? null}
@@ -542,7 +550,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
           // ── Окно редактирования записи справочника (универсальное по колонкам) ──
           if (w.kind === 'diredit') {
-            const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position', 'ntype', 'unit', 'country_code', 'capacity_per_unit', 'capacity_unit', 'schedule_id', 'resource_type', 'article', 'description'].includes(c.key));
+            const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position'].includes(c.key));
             const rowsForm = (w.form || {}) as Record<string, string>;
             const up = (patch: Record<string, string>) => setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x));
             return (
@@ -560,7 +568,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   {cols.map((c: any) => (
                     <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                       <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>{c.label || c.key}</span>
-                      {c.ref ? (
+                      {c.key === 'ntype' ? (
+                        <select value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
+                          style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }}>
+                          <option value="product">Продукция</option>
+                          <option value="material">Материал</option>
+                          <option value="semi_finished">Полуфабрикат</option>
+                          <option value="service">Услуга</option>
+                        </select>
+                      ) : c.ref ? (
                         <ReferenceField
                           entity={c.ref}
                           value={rowsForm[c.key] ?? null}
