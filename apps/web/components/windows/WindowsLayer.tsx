@@ -376,7 +376,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
         }
 
         // ── Окна менеджеров (графики работы / производственные календари) — MDI ──
-        if (w.kind === 'wsched' || w.kind === 'pcal') {
+        if (w.kind === 'wsched' || w.kind === 'pcal' || (w.kind as any) === 'wsched-edit') {
           return (
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
