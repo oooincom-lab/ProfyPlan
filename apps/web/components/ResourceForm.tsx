@@ -63,15 +63,7 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>Ед. продукции</span>
-          <ReferenceField
-            entity="units"
-            value={form.unit || null}
-            onChange={(v) => onChange({ unit: v || '' })}
-            onOpenBrowser={onOpenDirPick}
-            onEditItem={onEditItem ? (e, i, r) => onEditItem('units', i, r) : undefined}
-            placeholder="Единица…"
-            style={{ minWidth: 180 }}
-          />
+          <input value={form.unit || ''} onChange={e => onChange({ unit: e.target.value })} style={input()} placeholder="шт / кг" />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>Страна (календарь)</span>
@@ -94,20 +86,16 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
             value={form.department_id || null}
             onChange={(v) => onChange({ department_id: v || '' })}
             onOpenBrowser={onOpenDirPick}
+            onEditItem={onEditItem ? (e, i, r) => onEditItem('departments', i, r) : undefined}
             placeholder="Выбрать подразделение…"
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>График (по умолчанию)</span>
-          <ReferenceField
-            entity="work-schedules"
-            value={form.schedule_id || null}
-            onChange={(v) => onChange({ schedule_id: v || '' })}
-            onOpenBrowser={onOpenDirPick}
-            onEditItem={onEditItem ? (e, i, r) => onEditItem('work-schedules', i, r) : undefined}
-            placeholder="Выбрать график…"
-            style={{ minWidth: 180 }}
-          />
+          <select value={form.schedule_id || ''} onChange={e => onChange({ schedule_id: e.target.value })} style={input()}>
+            <option value="">— не задан —</option>
+            {schedules.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </label>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

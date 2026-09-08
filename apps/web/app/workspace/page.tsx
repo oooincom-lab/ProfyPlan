@@ -3794,6 +3794,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   onResAssignLoad={loadResAssign}
                   onResAssignAdd={handleResAssignAdd}
                   onResAssignDel={handleResAssignDel}
+                  projects={projects}
                   onNewOrderDraftSave={(draft) => setWizOrder(draft)}
                   opNameSuggestions={Array.from(new Set(routings.flatMap((r: any) => ((r.operations || []) as any[]).map((o: any) => o.name).filter(Boolean))))}
         dirRefreshKey={dirRefreshKey}
