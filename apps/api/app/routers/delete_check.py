@@ -320,7 +320,7 @@ async def delete_check(
             result["detach"].append({
                 "key": key, "label": BLOCKING_LABELS.get(key, key),
                 "count": count, "items": items,
-                "message": "Будут освобождены из пула, не удалены",
+                "message": "Будут отвязаны (сброшен график работы), не удалены" if entity_type == "work_schedule" else "Будут освобождены из пула, не удалены",
             })
 
     # Custom: nomenclature → product_structures by ext_id
