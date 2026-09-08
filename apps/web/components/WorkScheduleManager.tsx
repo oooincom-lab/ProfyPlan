@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type CSSProperties } from 'react';
 import DebugBadge from './DebugBadge';
+import DeleteCheckDialog from './DeleteCheckDialog';
 
 const API = 'https://profyplan.ru/api/v1';
 
@@ -48,6 +49,9 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
   const [copyFrom, setCopyFrom] = useState<number | null>(null);
   const [copyTo, setCopyTo] = useState<number[]>([]);
   const [delTarget, setDelTarget] = useState<Schedule | null>(null);
+  const [dcResult, setDcResult] = useState<any | null>(null);
+  const [dcLoading, setDcLoading] = useState(false);
+  const [dcError, setDcError] = useState<string | null>(null);
 
   const af = async (path: string, opts?: RequestInit) => {
     const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -158,11 +162,13 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
     setSaving(false);
   };
 
-  const del = (s: Schedule) => { setDelTarget(s); };
-  const doDelete = async (s: Schedule) => {
-    setDelTarget(null);
-    if (!s.id) return;
-    try { await af(`/work-schedules/${s.id}`, { method: 'DELETE' }); setEditing(null); setIsNew(false); await load(); if (onSaved) onSaved(); } catch (e: any) { setError(String(e)); }
+  const del = async (s: Schedule) => {
+    setDelTarget(s);
+    setDcResult(null);
+    setDcLoading(true);
+    setDcError(null);
+    try { setDcResult(await af(`/delete-check/work_schedule/${s.id}`)); } catch (e: any) { setDcError(String(e)); }
+    setDcLoading(false);
   };
 
   // ── preview ──
@@ -341,18 +347,19 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
         </div>
       )}
 
-      {/* Подтверждение удаления графика */}
+      {/* Подтверждение удаления графика (с проверкой связей) */}
       {delTarget && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,12,24,.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#0F1E36', border: '1px solid #1E3A5F', borderRadius: 10, padding: 18, width: 380 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5', marginBottom: 4 }}>Удалить график?</div>
-            <div style={{ fontSize: 12.5, color: '#8FA3BD', marginBottom: 14 }}>«{delTarget.name}» будет удалён безвозвратно.</div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => doDelete(delTarget)} style={{ ...btn('#EF4444') }}>Удалить</button>
-              <button onClick={() => setDelTarget(null)} style={{ ...btn('transparent'), border: '1px solid #1E3A5F', color: '#8FA3BD' }}>Отмена</button>
-            </div>
-          </div>
-        </div>
+        <DeleteCheckDialog
+          entityType="work_schedule"
+          entityId={delTarget.id as string}
+          entityName={delTarget.name}
+          result={dcResult}
+          loading={dcLoading}
+          error={dcError}
+          debug={debug}
+          onClose={() => setDelTarget(null)}
+          onDeleted={() => { setDelTarget(null); setEditing(null); setIsNew(false); load(); if (onSaved) onSaved(); }}
+        />
       )}
     </div>
   );

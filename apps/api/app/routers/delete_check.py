@@ -20,6 +20,7 @@ from app.models.nomenclature import Nomenclature
 from app.models.project_stage import ProjectStage
 from app.models.catalog_operation import CatalogOperation
 from app.models.department import Department
+from app.models.work_schedule import WorkSchedule
 from app.models.organization import Organization
 from app.models.unit import Unit
 from app.models.order_group import OrderGroup
@@ -73,6 +74,18 @@ DEPENDENCY_MAP = {
         "cascade": [],
         "blocking": [
             ("nomenclature", Nomenclature, "unit_id", "name"),
+        ],
+    },
+    "work_schedule": {
+        "model": WorkSchedule,
+        "label": "График работы",
+        "name_field": "name",
+        "cascade": [],
+        "blocking": [],
+        "detach": [
+            ("resources", Resource, "schedule_id", "name"),
+            ("departments", Department, "schedule_id", "name"),
+            ("projects", Project, "schedule_id", "name"),
         ],
     },
     "order_group": {
@@ -187,6 +200,9 @@ BLOCKING_LABELS = {
     "actual_executions": "Фактическое выполнение",
     "inter_project_deps_source": "Межпроектные зависимости (источник)",
     "inter_project_deps_target": "Межпроектные зависимости (цель)",
+    "resources": "Ресурсы",
+    "departments": "Подразделения",
+    "projects": "Проекты",
 }
 
 
