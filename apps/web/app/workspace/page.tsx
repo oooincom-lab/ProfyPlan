@@ -3779,7 +3779,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onOrderResAdd={handleOrderResAdd}
         onOrderResPersonalize={handleOrderResPersonalize}
         departments={departmentsAll}
-        onDirAddSave={handleDirAddSave}
+        onDirAddSave={handleDirAddSave} onDirEditSave={handleDirEditSave}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}
