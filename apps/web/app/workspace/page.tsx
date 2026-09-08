@@ -26,7 +26,7 @@ import ReferenceField from '@/components/ReferenceField';
 const API = 'https://profyplan.ru/api/v1';
 const C = (s: string) => s;
 
-const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number; render?: (val: any, row: any) => React.ReactNode }[] }> = {
+const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number; render?: (val: any, row: any) => React.ReactNode; ref?: string }[] }> = {
   counterparties: {
     title: '👥 Контрагенты',
     columns: [
@@ -54,7 +54,7 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'code', label: 'Код', width: 120 },
       { key: 'article', label: 'Артикул', width: 150 },
       { key: 'ntype', label: 'Тип', width: 130 },
-      { key: 'unit', label: 'Ед.', width: 70 },
+      { key: 'unit', label: 'Ед.', width: 70, ref: 'units' },
     ],
   },
   operations: {
@@ -3780,7 +3780,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onOrderResAdd={handleOrderResAdd}
         onOrderResPersonalize={handleOrderResPersonalize}
         departments={departmentsAll}
-        onDirAddSave={handleDirAddSave} onDirEditSave={handleDirEditSave}
+        onDirAddSave={handleDirAddSave} onDirEditSave={handleDirEditSave} onDirEditWindow={openDirEditWindow}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}

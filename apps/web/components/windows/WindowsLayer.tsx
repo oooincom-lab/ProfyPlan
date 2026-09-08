@@ -103,6 +103,8 @@ type WindowsLayerProps = {
   /** Создать персональный график ресурса из эффективного (этап 1, v2.18) */
   onOrderResPersonalize?: (orderId: string, it: any) => void;
   /** Каталог подразделений тенанта (для зоны ресурса в выборе подразделения операции) */
+  /** Открыть окно редактирования элемента справочника (для кнопки ✎ поля-ссылки) */
+  onDirEditWindow?: (entity: string, row: any) => void;
   departments?: any[];
   /** Сохранить запись справочника из окна редактирования */
   onDirEditSave?: (entity: string, id: string, form: Record<string, string>, endpoints?: any) => Promise<boolean>;
@@ -151,7 +153,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -497,8 +499,20 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   {cols.map((c: any) => (
                     <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                       <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>{c.label || c.key}</span>
-                      <input value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
-                        style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      {c.ref ? (
+                        <ReferenceField
+                          entity={c.ref}
+                          value={rowsForm[c.key] ?? null}
+                          onChange={(v) => up({ [c.key]: v || '' })}
+                          onOpenBrowser={onOpenDirPick}
+                          onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
+                          placeholder={'Выбрать ' + (c.label || c.key) + '…'}
+                          style={{ minWidth: 180 }}
+                        />
+                      ) : (
+                        <input value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
+                          style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      )}
                     </label>
                   ))}
                   {w.data?.entity === 'departments' && (
@@ -546,8 +560,20 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   {cols.map((c: any) => (
                     <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                       <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>{c.label || c.key}</span>
-                      <input value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
-                        style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      {c.ref ? (
+                        <ReferenceField
+                          entity={c.ref}
+                          value={rowsForm[c.key] ?? null}
+                          onChange={(v) => up({ [c.key]: v || '' })}
+                          onOpenBrowser={onOpenDirPick}
+                          onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
+                          placeholder={'Выбрать ' + (c.label || c.key) + '…'}
+                          style={{ minWidth: 180 }}
+                        />
+                      ) : (
+                        <input value={rowsForm[c.key] ?? ''} onChange={e => up({ [c.key]: e.target.value })}
+                          style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      )}
                     </label>
                   ))}
                   {w.data?.entity === 'departments' && (
@@ -737,6 +763,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   <ResourceForm
                     form={w.form}
                     onOpenDirPick={onOpenDirPick}
+                    onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
                     onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
                     schedules={schedules}
                     saving={!!w.saving}

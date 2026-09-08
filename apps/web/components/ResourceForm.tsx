@@ -29,13 +29,15 @@ type Props = {
   onSave: () => void;
   onCancel: () => void;
   onOpenDirPick?: (entity: string, onPick: (row: any) => void) => void;
+  /** Открыть окно редактирования элемента справочника (кнопка ✎) */
+  onEditItem?: (entity: string, id: string, row: any) => void;
 };
 
 /**
  * Форма создания/редактирования глобального ресурса.
  * Используется и в модальном окне ResourceManager, и в MDI-окне WindowsLayer.
  */
-export default function ResourceForm({ form, onChange, schedules, saving, onSave, onCancel, onOpenDirPick }: Props) {
+export default function ResourceForm({ form, onChange, schedules, saving, onSave, onCancel, onOpenDirPick, onEditItem }: Props) {
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
@@ -61,7 +63,15 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>Ед. продукции</span>
-          <input value={form.unit || ''} onChange={e => onChange({ unit: e.target.value })} style={input()} placeholder="шт / кг" />
+          <ReferenceField
+            entity="units"
+            value={form.unit || null}
+            onChange={(v) => onChange({ unit: v || '' })}
+            onOpenBrowser={onOpenDirPick}
+            onEditItem={onEditItem ? (e, i, r) => onEditItem('units', i, r) : undefined}
+            placeholder="Единица…"
+            style={{ minWidth: 180 }}
+          />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>Страна (календарь)</span>
@@ -89,10 +99,15 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>График (по умолчанию)</span>
-          <select value={form.schedule_id || ''} onChange={e => onChange({ schedule_id: e.target.value })} style={input()}>
-            <option value="">— не задан —</option>
-            {schedules.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <ReferenceField
+            entity="work-schedules"
+            value={form.schedule_id || null}
+            onChange={(v) => onChange({ schedule_id: v || '' })}
+            onOpenBrowser={onOpenDirPick}
+            onEditItem={onEditItem ? (e, i, r) => onEditItem('work-schedules', i, r) : undefined}
+            placeholder="Выбрать график…"
+            style={{ minWidth: 180 }}
+          />
         </label>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
