@@ -37,7 +37,7 @@ const dec = (s: string) => {
 
 const MODE_LABEL: Record<string, string> = { weekdays: 'По дням недели', cycle: 'По циклу' };
 
-export default function WorkScheduleManager({ debug = false }: { debug?: boolean }) {
+export default function WorkScheduleManager({ debug = false, selectMode = false, onPick }: { debug?: boolean; selectMode?: boolean; onPick?: (s: Schedule) => void }) {
   const [list, setList] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +196,7 @@ export default function WorkScheduleManager({ debug = false }: { debug?: boolean
   return (
     <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
       <div className="panel-hdr" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>🕒 Графики работы</span>
+        <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5' }}>🕒 Графики работы{selectMode ? ' — выбор' : ''}</span>
         <DebugBadge debug={debug} text="[wschedule:manager]" copy="[wschedule:manager] «Графики работы»" />
         {!editing && <button onClick={startNew} style={btn('#3B82F6')}>＋ Новый график</button>}
       </div>
@@ -214,13 +214,13 @@ export default function WorkScheduleManager({ debug = false }: { debug?: boolean
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {list.map(s => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, padding: '10px 14px', cursor: 'pointer' }} onClick={() => startEdit(s)}>
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 8, padding: '10px 14px', cursor: 'pointer' }} onClick={() => selectMode ? onPick?.(s) : startEdit(s)}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.fill_mode === 'cycle' ? '#22D3EE' : '#3B82F6', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5' }}>{s.name}</div>
                     <div style={{ fontSize: 11.5, color: '#5A7090' }}>{MODE_LABEL[s.fill_mode]}{s.fill_mode === 'cycle' ? ` · цикл ${s.cycle_length} дн` : ''} · {workHours(s).toFixed(1)} ч/нед · {s.slots.filter(x => x.kind === 'work').length} интервалов</div>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); del(s); }} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer' }}>Удалить</button>
+                  {!selectMode && <button onClick={(e) => { e.stopPropagation(); del(s); }} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer' }}>Удалить</button>}
                 </div>
               ))}
             </div>

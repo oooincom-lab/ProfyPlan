@@ -3400,7 +3400,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} />}
           {view === 'production-calendars' && <ProductionCalendarManager debug={debugMode} />}
 
-          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')} />}
+          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')} onOpenWschedPick={(onPick) => win.openManagerWin('wsched', '🕒 Графики работы', { selectMode: true, onPick })} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
@@ -3783,6 +3783,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         departments={departmentsAll}
         onDirAddSave={handleDirAddSave} onDirEditSave={handleDirEditSave} onDirEditWindow={openDirEditWindow}
                    onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')}
+                   onOpenWschedPick={(onPick) => win.openManagerWin('wsched', '🕒 Графики работы', { selectMode: true, onPick })}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}

@@ -107,6 +107,7 @@ type WindowsLayerProps = {
   onDirEditWindow?: (entity: string, row: any) => void;
   /** Открыть специализированный менеджер графиков (wsched) */
   onOpenWsched?: () => void;
+  onOpenWschedPick?: (onPick: (row: any) => void) => void;
   departments?: any[];
   /** Сохранить запись справочника из окна редактирования */
   onDirEditSave?: (entity: string, id: string, form: Record<string, string>, endpoints?: any) => Promise<boolean>;
@@ -155,7 +156,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -384,7 +385,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
               </div>
               <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                {w.kind === 'wsched' ? <WorkScheduleManager debug={debug} /> : <ProductionCalendarManager debug={debug} />}
+                {w.kind === 'wsched' ? <WorkScheduleManager debug={debug} selectMode={!!(w.data as any)?.selectMode} onPick={(s: any) => { const cb = (w.data as any)?.onPick; cb?.(s); setWins(prev => prev.filter((x: any) => x.id !== w.id)); }} /> : <ProductionCalendarManager debug={debug} />}
               </div>
             </div>
           );
@@ -784,6 +785,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     onOpenDirPick={onOpenDirPick}
                     onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
                     onOpenWsched={onOpenWsched}
+                    onOpenWschedPick={onOpenWschedPick}
                     onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
                     schedules={schedules}
                     saving={!!w.saving}

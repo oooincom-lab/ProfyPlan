@@ -213,7 +213,7 @@ export function useWindows(sidebarWidth: number = 260) {
   };
 
   // Окно менеджера (графики работы / производственные календари) — в MDI-режиме
-  const openManagerWin = (kind: 'wsched' | 'pcal', title: string) => {
+  const openManagerWin = (kind: 'wsched' | 'pcal', title: string, opts?: { selectMode?: boolean; onPick?: (row: any) => void }) => {
     const d = deskRect();
     winZ.current += 1;
     const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -221,7 +221,7 @@ export function useWindows(sidebarWidth: number = 260) {
       id,
       kind,
       orderId: '',
-      data: {},
+      data: { selectMode: !!opts?.selectMode, onPick: opts?.onPick },
       title,
       x: d.x + Math.max(40, Math.round(d.w / 2) - 420),
       y: d.y + Math.max(30, Math.round(d.h / 2) - 280),
