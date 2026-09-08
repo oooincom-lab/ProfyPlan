@@ -104,16 +104,7 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'usage_count', label: 'Исп.', width: 60, render: (v: any) => v || '0' },
     ],
   },
-  'work-schedules': {
-    title: '🕒 Графики работы',
-    columns: [
-      { key: 'name', label: 'Название', width: 240 },
-      { key: 'fill_mode', label: 'Заполнение', width: 120 },
-      { key: 'cycle_length', label: 'Цикл, дн.', width: 90 },
-      { key: 'timezone', label: 'TZ', width: 90 },
-      { key: 'is_active', label: 'Акт.', width: 60, render: (v: any) => v ? 'Да' : 'Нет' },
-    ],
-  },
+
 };
 
 async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
@@ -3409,7 +3400,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} />}
           {view === 'production-calendars' && <ProductionCalendarManager debug={debugMode} />}
 
-          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} />}
+          {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')} />}
 
           {['departments', 'organizations'].includes(view) && (
             <div className="panel">
@@ -3791,6 +3782,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onOrderResPersonalize={handleOrderResPersonalize}
         departments={departmentsAll}
         onDirAddSave={handleDirAddSave} onDirEditSave={handleDirEditSave} onDirEditWindow={openDirEditWindow}
+                   onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')}
                   onOrderResChange={handleOrderResChange}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}

@@ -105,6 +105,8 @@ type WindowsLayerProps = {
   /** Каталог подразделений тенанта (для зоны ресурса в выборе подразделения операции) */
   /** Открыть окно редактирования элемента справочника (для кнопки ✎ поля-ссылки) */
   onDirEditWindow?: (entity: string, row: any) => void;
+  /** Открыть специализированный менеджер графиков (wsched) */
+  onOpenWsched?: () => void;
   departments?: any[];
   /** Сохранить запись справочника из окна редактирования */
   onDirEditSave?: (entity: string, id: string, form: Record<string, string>, endpoints?: any) => Promise<boolean>;
@@ -153,7 +155,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -781,6 +783,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     form={w.form}
                     onOpenDirPick={onOpenDirPick}
                     onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
+                    onOpenWsched={onOpenWsched}
                     onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
                     schedules={schedules}
                     saving={!!w.saving}
