@@ -37,12 +37,13 @@ const dec = (s: string) => {
 
 const MODE_LABEL: Record<string, string> = { weekdays: 'По дням недели', cycle: 'По циклу' };
 
-export default function WorkScheduleManager({ debug = false, selectMode = false, onPick }: { debug?: boolean; selectMode?: boolean; onPick?: (s: Schedule) => void }) {
+export default function WorkScheduleManager({ debug = false, selectMode = false, onPick, mode = 'list', schedule = null, onEditItem, onCreate, onSaved, onClose, refreshKey = 0 }: { debug?: boolean; selectMode?: boolean; onPick?: (s: Schedule) => void; mode?: 'list' | 'edit'; schedule?: Schedule | null; onEditItem?: (s: Schedule) => void; onCreate?: () => void; onSaved?: () => void; onClose?: () => void; refreshKey?: number }) {
   const [list, setList] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Schedule | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [copyFrom, setCopyFrom] = useState<number | null>(null);
   const [copyTo, setCopyTo] = useState<number[]>([]);
@@ -65,7 +66,8 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (mode === 'list') load(); }, []);
+  useEffect(() => { if (mode === 'list' && refreshKey > 0) load(); }, [refreshKey]);
 
   const dayCount = (d: Schedule) => d.fill_mode === 'cycle' ? (d.cycle_length || 4) : 7;
   const dayKey = (d: Schedule, i: number) => d.fill_mode === 'cycle' ? i + 1 : i;
@@ -83,7 +85,18 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
 
   const startNew = () => { setEditing(newDraft()); setIsNew(true); };
   const startEdit = (s: Schedule) => { setEditing({ ...s, slots: s.slots.map(x => ({ ...x })) }); setIsNew(false); };
-  const cancel = () => { setEditing(null); setIsNew(false); setCopyFrom(null); };
+  const isEdit = mode === 'edit';
+
+  // в режиме отдельного окна-редактора сразу устанавливаем редактируемый график
+  useEffect(() => {
+    if (mode === 'edit') {
+      if (schedule) { setEditing({ ...schedule, slots: (schedule.slots || []).map(x => ({ ...x })) }); setIsNew(false); }
+      else { setEditing(newDraft()); setIsNew(true); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cancel = () => { setEditing(null); setIsNew(false); setCopyFrom(null); if (mode === 'edit' && onClose) onClose(); };
 
   // ── slot mutations ──
   const addSlot = (d: Schedule, dayIdx: number) => {
@@ -220,7 +233,12 @@ export default function WorkScheduleManager({ debug = false, selectMode = false,
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: '#E8EEF5' }}>{s.name}</div>
                     <div style={{ fontSize: 11.5, color: '#5A7090' }}>{MODE_LABEL[s.fill_mode]}{s.fill_mode === 'cycle' ? ` · цикл ${s.cycle_length} дн` : ''} · {workHours(s).toFixed(1)} ч/нед · {s.slots.filter(x => x.kind === 'work').length} интервалов</div>
                   </div>
-                  {!selectMode && <button onClick={(e) => { e.stopPropagation(); del(s); }} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer' }}>Удалить</button>}
+                  {!selectMode && (
+                    <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button title="Редактировать" onClick={(e) => { e.stopPropagation(); onEditItem ? onEditItem(s) : startEdit(s); }} style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, width: 28, height: 28, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✎</button>
+                      <button title="Удалить" onClick={(e) => { e.stopPropagation(); del(s); }} style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5', borderRadius: 6, width: 28, height: 28, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🗑</button>
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

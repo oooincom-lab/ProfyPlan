@@ -160,6 +160,7 @@ export default function AppShell() {
     if (v == null && localStorage.getItem('profyplan_list_windows') === '1') return 'window';
     return 'side';
   });
+  const [schedRefresh, setSchedRefresh] = useState(0);
   // 🧪 Режим отладки: технические идентификаторы окон и форм (для описания проблем)
   const [debugMode, setDebugMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -3397,7 +3398,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </div>
           )}
 
-          {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} />}
+          {view === 'work-schedules' && <WorkScheduleManager debug={debugMode} onEditItem={(s) => win.openWschedEdit(s)} onCreate={() => win.openWschedEdit(null)} refreshKey={schedRefresh} />}
           {view === 'production-calendars' && <ProductionCalendarManager debug={debugMode} />}
 
           {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} onOpenDirPick={openDirForPick} onEditItem={openDirEditWindow} onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')} onOpenWschedPick={(onPick) => win.openManagerWin('wsched', '🕒 Графики работы', { selectMode: true, onPick })} />}
@@ -3785,6 +3786,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                    onOpenWsched={() => win.openManagerWin('wsched', '🕒 Графики работы')}
                    onOpenWschedPick={(onPick) => win.openManagerWin('wsched', '🕒 Графики работы', { selectMode: true, onPick })}
                   onOrderResChange={handleOrderResChange}
+                  onOpenWschedEdit={(s) => win.openWschedEdit(s)}
+                  refreshWsched={schedRefresh}
+                  onWschedChanged={() => setSchedRefresh(x => x + 1)}
                   onOrderResRemove={handleOrderResRemove}
                   onDirCalendar={(rid, rname) => win.openCalWin(rid, rname || 'Ресурс')}
                   calData={calData}

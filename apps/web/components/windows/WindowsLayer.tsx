@@ -108,6 +108,9 @@ type WindowsLayerProps = {
   /** Открыть специализированный менеджер графиков (wsched) */
   onOpenWsched?: () => void;
   onOpenWschedPick?: (onPick: (row: any) => void) => void;
+  onOpenWschedEdit?: (schedule: any | null) => void;
+  refreshWsched?: number;
+  onWschedChanged?: () => void;
   departments?: any[];
   /** Сохранить запись справочника из окна редактирования */
   onDirEditSave?: (entity: string, id: string, form: Record<string, string>, endpoints?: any) => Promise<boolean>;
@@ -156,7 +159,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -377,15 +380,15 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
               onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
               <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: w.kind === 'wsched' ? '#A78BFA' : '#F59E0B', flexShrink: 0 }} />
-                <span className="ttl">{w.title || (w.kind === 'wsched' ? 'Графики работы' : 'Производственные календари')}</span>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: ((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? '#A78BFA' : '#F59E0B', flexShrink: 0 }} />
+                <span className="ttl">{w.title || (((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? 'Графики работы' : 'Производственные календари')}</span>
                 {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
                 <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
                 <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>⛶</button>
                 <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
               </div>
               <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                {w.kind === 'wsched' ? <WorkScheduleManager debug={debug} selectMode={!!(w.data as any)?.selectMode} onPick={(s: any) => { const cb = (w.data as any)?.onPick; cb?.(s); setWins(prev => prev.filter((x: any) => x.id !== w.id)); }} /> : <ProductionCalendarManager debug={debug} />}
+                {((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? <WorkScheduleManager debug={debug} selectMode={(w.kind as any) === 'wsched' ? !!(w.data as any)?.selectMode : false} mode={(w.kind as any) === 'wsched-edit' ? 'edit' : 'list'} schedule={(w.kind as any) === 'wsched-edit' ? (w.data as any)?.schedule : null} onEditItem={(w.kind as any) === 'wsched' ? ((s: any) => onOpenWschedEdit ? onOpenWschedEdit(s) : null) : undefined} onCreate={(w.kind as any) === 'wsched' ? (() => onOpenWschedEdit ? onOpenWschedEdit(null) : null) : undefined} refreshKey={refreshWsched} onPick={(w.kind as any) === 'wsched' ? ((s: any) => { const cb = (w.data as any)?.onPick; cb?.(s); setWins(prev => prev.filter((x: any) => x.id !== w.id)); }) : undefined} onSaved={(w.kind as any) === 'wsched-edit' ? (() => { setWins(prev => prev.filter((x: any) => x.id !== w.id)); onWschedChanged?.(); }) : undefined} onClose={(w.kind as any) === 'wsched-edit' ? (() => setWins(prev => prev.filter((x: any) => x.id !== w.id))) : undefined} /> : <ProductionCalendarManager debug={debug} />}
               </div>
             </div>
           );

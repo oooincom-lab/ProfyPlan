@@ -6,7 +6,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd';
+  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'wsched-edit' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -227,6 +227,32 @@ export function useWindows(sidebarWidth: number = 260) {
       y: d.y + Math.max(30, Math.round(d.h / 2) - 280),
       w: 860,
       h: 580,
+      min: false,
+      z: winZ.current,
+      tab: 'route' as OrderTab,
+      editing: false,
+      form: {},
+    }]);
+    return id;
+  };
+
+  // Окно редактирования графика работы (отдельное окно)
+  const openWschedEdit = (schedule: any | null) => {
+    const d = deskRect();
+    winZ.current += 1;
+    const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const w = Math.min(920, d.w - 80);
+    const h = Math.min(660, d.h - 80);
+    setWins(prev => [...prev, {
+      id,
+      kind: 'wsched-edit' as const,
+      orderId: '',
+      data: { schedule },
+      title: schedule ? 'Редактирование графика — ' + (schedule.name || '') : 'Новый график работы',
+      x: d.x + Math.max(28, (d.w - w) / 2),
+      y: d.y + Math.max(18, (d.h - h) / 2),
+      w,
+      h,
       min: false,
       z: winZ.current,
       tab: 'route' as OrderTab,
@@ -581,6 +607,7 @@ export function useWindows(sidebarWidth: number = 260) {
   return {
     wins, setWins, lay, setLay, snapZone,
     openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
+    openWschedEdit,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }
