@@ -77,10 +77,7 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
   departments: {
     title: 'Подразделения', columns: [
       { key: 'name', label: 'Подразделение', render: (val: any, row: any) => (
-        <span style={{ paddingLeft: (row._depth || 0) * 18, display: 'inline-block' }}>
-          {(row._depth || 0) > 0 && <span style={{ color: '#5A7090', marginRight: 4 }}>└</span>}
-          <span style={{ fontWeight: (row._depth || 0) === 0 ? 600 : 400 }}>{val}</span>
-        </span>
+        <span style={{ fontWeight: (row._depth || 0) === 0 ? 600 : 400 }}>{val}</span>
       ) },
       { key: 'code', label: 'Код' },
       { key: '_parent_name', label: 'Головное подразделение' },

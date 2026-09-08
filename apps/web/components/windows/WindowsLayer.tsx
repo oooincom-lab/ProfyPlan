@@ -551,6 +551,21 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
                     </label>
                   ))}
+                  {w.data?.entity === 'departments' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ flexShrink: 0, width: 150, fontSize: 11.5, color: '#8FA3BD' }}>Головное подразделение:</span>
+                      <ReferenceField
+                        entity="departments"
+                        value={rowsForm.parent_id || null}
+                        displayValue={rowsForm.parent_name || undefined}
+                        onChange={() => {}}
+                        onPickItem={(row) => up({ parent_id: String(row.id), parent_name: row.name })}
+                        onOpenBrowser={onOpenDirPick}
+                        placeholder="— корневое —"
+                        style={{ flex: 1, minWidth: 160 }}
+                      />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
                     <button onClick={async () => { const ok = await onDirAddSave?.(w.data.entity, rowsForm, w.data.endpoints); if (ok !== false) onClose(w.id); }}
@@ -585,9 +600,24 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
                     </label>
                   ))}
+                  {w.data?.entity === 'departments' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ flexShrink: 0, width: 150, fontSize: 11.5, color: '#8FA3BD' }}>Головное подразделение:</span>
+                      <ReferenceField
+                        entity="departments"
+                        value={rowsForm.parent_id || null}
+                        displayValue={rowsForm.parent_name || undefined}
+                        onChange={() => {}}
+                        onPickItem={(row) => up({ parent_id: String(row.id), parent_name: row.name })}
+                        onOpenBrowser={onOpenDirPick}
+                        placeholder="— корневое —"
+                        style={{ flex: 1, minWidth: 160 }}
+                      />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-                    <button onClick={async () => { const ok = await onDirEditSave?.(w.data.entity, w.data.rowId, rowsForm, w.data.endpoints); if (ok !== false) onClose(w.id); }}
+                    <button onClick={async () => { const ok = w.data.rowId == null ? await onDirAddSave?.(w.data.entity, rowsForm, w.data.endpoints) : await onDirEditSave?.(w.data.entity, w.data.rowId, rowsForm, w.data.endpoints); if (ok !== false) onClose(w.id); }}
                       style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Сохранить</button>
                   </div>
                 </div>
@@ -744,6 +774,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   apiBase="https://profyplan.ru/api"
                   onSelect={w.data?.onSelect}
                   onEditWindow={w.data?.onEditWindow}
+                  onAddWindow={w.data?.onAddWindow}
                   endpoints={w.data?.endpoints}
                   onManageEdit={w.data?.onManageEdit ? (row: any) => onDirManageEdit?.(w.data?.entity || '', row) : undefined}
                   onManageDelete={w.data?.onManageDelete ? (row: any) => onDirManageDelete?.(w.data?.entity || '', row) : undefined}

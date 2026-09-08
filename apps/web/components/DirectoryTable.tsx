@@ -245,16 +245,25 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
       if (!kids.has(pid)) kids.set(pid, []);
       kids.get(pid)!.push(r);
     }
+    // Сортировка по колонке — в рамках каждого уровня дерева (ствол и каждая ветвь отдельно внутри себя)
+    const cmp = (a: any, b: any) => {
+      if (!sortKey) return 0;
+      const va = String((a as any)[sortKey] ?? '').toLowerCase();
+      const vb = String((b as any)[sortKey] ?? '').toLowerCase();
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    };
     const out: any[] = [];
     const walk = (pid: string) => {
-      for (const child of (kids.get(pid) || [])) {
+      const arr = [...(kids.get(pid) || [])];
+      if (sortKey) arr.sort(cmp);
+      for (const child of arr) {
         out.push(child);
         if (expanded.has(String(child.id))) walk(String(child.id));
       }
     };
     walk('');
     return out;
-  }, [rows, filtered, entity, expanded]);
+  }, [rows, filtered, entity, expanded, sortKey, sortDir]);
 
   if (loading) return <div style={{ padding: 16, color: '#5A7090' }}>Загрузка...</div>;
 
@@ -400,10 +409,10 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
               }}
             >
               {columns.map(c => (
-                <td key={c.key} style={{ padding: '7px 10px', color: '#B0C4DE' }}>
+                <td key={c.key} style={{ padding: '7px 10px', color: '#B0C4DE', ...(entity === 'departments' && c.key === 'name' ? { paddingLeft: 6 + (Number((row as any)._depth) || 0) * 18 } : {}) }}>
                   {entity === 'departments' && c.key === 'name' && (() => {
                     const hasKids = rows.some((r: any) => r.parent_id && String(r.parent_id) === String(row.id));
-                    if (!hasKids) return null;
+                    if (!hasKids) return <span style={{ display: 'inline-block', width: 18 }} />;
                     const open = expanded.has(String(row.id));
                     return (
                       <button type="button" title={open ? 'Свернуть' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); toggleExpanded(String(row.id)); }}
