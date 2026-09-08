@@ -51,6 +51,8 @@ export default function ReferenceField({
   valueField,
   style,
 }: Props) {
+  // поле отображения: у единиц нет 'name' (bilingual), используем name_ru
+  const disp = entity === 'units' ? (displayField && displayField !== 'name' ? displayField : 'name_ru') : (displayField || 'name');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<any[]>([]);
@@ -107,7 +109,7 @@ export default function ReferenceField({
     || (matchValueFields ? items.find(i => matchValueFields.some(f => String(i[f] ?? '') === String(value))) : null)) : null;
   const q = search.trim().toLowerCase();
   const baseList = filterIds && !otherMode ? items.filter((i: any) => filterIds.includes(String(i.id))) : items;
-  const filtered = q ? baseList.filter(i => String(i[displayField] || i.name || '').toLowerCase().includes(q)) : baseList;
+  const filtered = q ? baseList.filter(i => String(i[disp] || i.name || '').toLowerCase().includes(q)) : baseList;
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex', gap: 4, alignItems: 'center', minWidth: 130, flex: 1, ...style }}>
@@ -115,7 +117,7 @@ export default function ReferenceField({
         ref={btnRef}
         type="button"
         onClick={() => { syncRect(); setOpen(o => !o); }}
-        title={sel ? String(sel[displayField] || '') : placeholder}
+        title={sel ? String(sel[disp] || '') : placeholder}
         style={{
           background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6,
           color: (sel || (value && displayValue)) ? '#E8EEF5' : '#5A7090',
@@ -123,7 +125,7 @@ export default function ReferenceField({
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'inherit',
         }}
       >
-        {sel ? String(sel[displayField] || sel.name || sel.id) : (!sel && value && displayValue ? displayValue : placeholder)} <span style={{ color: '#3B82F6' }}>▾</span>
+        {sel ? String(sel[disp] || sel.name || sel.id) : (!sel && value && displayValue ? displayValue : placeholder)} <span style={{ color: '#3B82F6' }}>▾</span>
       </button>
       {value && onEditItem && (
         <button
@@ -191,7 +193,7 @@ export default function ReferenceField({
                   color: String(it.id) === String(value) ? '#93C5FD' : '#E8EEF5',
                 }}
               >
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(it[displayField] || it.name || it.id)}</span>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(it[disp] || it.name || it.id)}</span>
                 {itemMeta ? itemMeta(it) : null}
               </div>
             ))}
