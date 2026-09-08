@@ -82,6 +82,8 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const [deleteCheckTarget, setDeleteCheckTarget] = useState<{ id: string; name: string } | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
 
@@ -224,7 +226,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
       const q = filter.toLowerCase();
       result = rows.filter(r => String(r[searchField] ?? '').toLowerCase().includes(q));
     }
-    if (sortKey) {
+    if (sortKey && entity !== 'departments') {
       result = [...result].sort((a, b) => {
         const va = (a[sortKey] ?? '').toString().toLowerCase();
         const vb = (b[sortKey] ?? '').toString().toLowerCase();
@@ -233,6 +235,26 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
     }
     return result;
   }, [rows, filter, searchField, sortKey, sortDir]);
+
+  // Иерархическое раскрытие подразделений
+  const visibleRows = useMemo(() => {
+    if (entity !== 'departments') return filtered;
+    const kids = new Map<string, any[]>();
+    for (const r of rows) {
+      const pid = r.parent_id ? String(r.parent_id) : '';
+      if (!kids.has(pid)) kids.set(pid, []);
+      kids.get(pid)!.push(r);
+    }
+    const out: any[] = [];
+    const walk = (pid: string) => {
+      for (const child of (kids.get(pid) || [])) {
+        out.push(child);
+        if (expanded.has(String(child.id))) walk(String(child.id));
+      }
+    };
+    walk('');
+    return out;
+  }, [rows, filtered, entity, expanded]);
 
   if (loading) return <div style={{ padding: 16, color: '#5A7090' }}>Загрузка...</div>;
 
@@ -364,7 +386,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
           </tr>
         </thead>
         <tbody>
-          {filtered.map(row => (
+          {(entity === 'departments' ? visibleRows : filtered).map(row => (
             <tr
               key={row.id}
               onClick={onSelect ? () => setSelId(row.id) : undefined}
@@ -379,6 +401,17 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
             >
               {columns.map(c => (
                 <td key={c.key} style={{ padding: '7px 10px', color: '#B0C4DE' }}>
+                  {entity === 'departments' && c.key === 'name' && (() => {
+                    const hasKids = rows.some((r: any) => r.parent_id && String(r.parent_id) === String(row.id));
+                    if (!hasKids) return null;
+                    const open = expanded.has(String(row.id));
+                    return (
+                      <button type="button" title={open ? 'Свернуть' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); toggleExpanded(String(row.id)); }}
+                        style={{ background: 'transparent', border: 0, color: '#5A7090', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: '0 6px 0 0', width: 18, textAlign: 'left' }}>
+                        {open ? '▾' : '▸'}
+                      </button>
+                    );
+                  })()}
                   {editingId === row.id && c.editable !== false ? (
                     <input
                       value={editVals[c.key] ?? row[c.key] ?? ''}

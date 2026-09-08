@@ -160,6 +160,7 @@ class RoutingOpUpdate(BaseModel):
     stage: Optional[str] = None
     stage_name: Optional[str] = None
     department: Optional[str] = None
+    department_id: Optional[UUID] = None
     sequence_number: Optional[int] = Field(default=None, ge=1)
     predecessors: Optional[str] = None
     input_materials: Optional[str] = None
