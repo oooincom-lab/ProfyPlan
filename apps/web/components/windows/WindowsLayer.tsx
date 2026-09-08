@@ -791,6 +791,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     onEditItem={onDirEditWindow ? (e, i, r) => onDirEditWindow(e, r) : undefined}
                     onOpenWsched={onOpenWsched}
                     onOpenWschedPick={onOpenWschedPick}
+                    onOpenWschedEdit={onOpenWschedEdit}
                     onChange={patch => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x))}
                     schedules={schedules}
                     saving={!!w.saving}

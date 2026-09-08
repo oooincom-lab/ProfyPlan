@@ -35,6 +35,8 @@ type Props = {
   onOpenWsched?: () => void;
   /** Открыть менеджер графиков в режиме выбора (клик возвращает график) */
   onOpenWschedPick?: (onPick: (row: any) => void) => void;
+  /** Открыть окно редактирования графика (кнопка ✎ у поля «График») */
+  onOpenWschedEdit?: (schedule: any | null) => void;
 };
 
 /**
@@ -42,7 +44,7 @@ type Props = {
  * Используется и в модальном окне ResourceManager, и в MDI-окне WindowsLayer.
  */
 export default function ResourceForm({ form, onChange, schedules, saving, onSave, onCancel, onOpenDirPick, onEditItem,
-  onOpenWsched, onOpenWschedPick,}: Props) {
+  onOpenWsched, onOpenWschedPick, onOpenWschedEdit,}: Props) {
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
@@ -113,7 +115,7 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
             value={form.schedule_id || null}
             onChange={(v) => onChange({ schedule_id: v || '' })}
             onOpenBrowser={(e, onPick) => onOpenWschedPick ? onOpenWschedPick(onPick) : (onOpenDirPick ? onOpenDirPick(e, onPick) : null)}
-            onEditItem={onOpenWsched || (onEditItem ? (e, i, r) => onEditItem('work-schedules', i, r) : undefined)}
+            onEditItem={onOpenWschedEdit ? ((e, i, r) => onOpenWschedEdit(r)) : (onOpenWsched || (onEditItem ? (e, i, r) => onEditItem('work-schedules', i, r) : undefined))}
             placeholder="Выбрать график…"
             style={{ minWidth: 180 }}
           />
