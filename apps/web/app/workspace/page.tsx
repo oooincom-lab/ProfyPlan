@@ -104,6 +104,16 @@ const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label
       { key: 'usage_count', label: 'Исп.', width: 60, render: (v: any) => v || '0' },
     ],
   },
+  'work-schedules': {
+    title: '🕒 Графики работы',
+    columns: [
+      { key: 'name', label: 'Название', width: 240 },
+      { key: 'fill_mode', label: 'Заполнение', width: 120 },
+      { key: 'cycle_length', label: 'Цикл, дн.', width: 90 },
+      { key: 'timezone', label: 'TZ', width: 90 },
+      { key: 'is_active', label: 'Акт.', width: 60, render: (v: any) => v ? 'Да' : 'Нет' },
+    ],
+  },
 };
 
 async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import DataImport from './DataImport';
 import DeleteCheckDialog from './DeleteCheckDialog';
 
@@ -85,6 +85,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const [selId, setSelId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const treeInitRef = useRef(false);
   const toggleExpanded = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -222,6 +223,16 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   };
 
   // Filter → Sort chain
+  // Дерево (подразделения): по умолчанию всё развёрнуто + кнопки «Свернуть/Развернуть все»
+  useEffect(() => {
+    if (entity !== 'departments' || treeInitRef.current) return;
+    if (!rows || rows.length === 0) return;
+    const parents = rows.filter((r: any) => rows.some((x: any) => x.parent_id && String(x.parent_id) === String(r.id))).map((r: any) => String(r.id));
+    if (parents.length) setExpanded(new Set(parents));
+    treeInitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, entity]);
+
   // автовыделение строки при открытии окна выбора (currentValue)
   useEffect(() => {
     if (!highlightId || !rows || rows.length === 0) return;
@@ -334,6 +345,20 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
           >
             + Добавить
           </button>
+        )}
+        {entity === 'departments' && (
+          <>
+            <button
+              className="btn btn-sm"
+              style={{ background: '#162844', color: '#93C5FD', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+              onClick={() => setExpanded(new Set(rows.filter((r: any) => rows.some((x: any) => x.parent_id && String(x.parent_id) === String(r.id))).map((r: any) => String(r.id))))}
+            >⤵ Развернуть все</button>
+            <button
+              className="btn btn-sm"
+              style={{ background: '#162844', color: '#93C5FD', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+              onClick={() => setExpanded(new Set())}
+            >⤴ Свернуть все</button>
+          </>
         )}
         {onSelect && (
           <>

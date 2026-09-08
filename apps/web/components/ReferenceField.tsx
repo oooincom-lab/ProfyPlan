@@ -30,6 +30,10 @@ type Props = {
   allowOther?: boolean;
   /** Метка элемента списка (бейдж справа): (item) => ReactNode | null */
   itemMeta?: (item: any) => React.ReactNode;
+  /** Поля, по которым сопоставлять value с элементом (когда value не id), напр. symbol_ru/code */
+  matchValueFields?: string[];
+  /** Поле, значение которого подставляется при выборе элемента (default 'id') */
+  valueField?: string;
   placeholder?: string;
   style?: React.CSSProperties;
 };
@@ -43,6 +47,8 @@ export default function ReferenceField({
   filterIds = null,
   allowOther = false,
   itemMeta,
+  matchValueFields,
+  valueField,
   style,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -97,7 +103,8 @@ export default function ReferenceField({
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, []);
 
-  const sel = value ? items.find(i => String(i.id) === String(value)) : null;
+  const sel = value ? (items.find(i => String(i.id) === String(value))
+    || (matchValueFields ? items.find(i => matchValueFields.some(f => String(i[f] ?? '') === String(value))) : null)) : null;
   const q = search.trim().toLowerCase();
   const baseList = filterIds && !otherMode ? items.filter((i: any) => filterIds.includes(String(i.id))) : items;
   const filtered = q ? baseList.filter(i => String(i[displayField] || i.name || '').toLowerCase().includes(q)) : baseList;
@@ -176,7 +183,7 @@ export default function ReferenceField({
             {filtered.map((it: any) => (
               <div
                 key={String(it.id)}
-                onClick={() => { onChange(String(it.id)); onPickItem?.(it); setOpen(false); setSearch(''); }}
+                onClick={() => { onChange(String(it[valueField || 'id'])); onPickItem?.(it); setOpen(false); setSearch(''); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '7px 10px', fontSize: 12.5, cursor: 'pointer',
