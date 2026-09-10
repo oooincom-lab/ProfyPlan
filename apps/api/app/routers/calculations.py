@@ -4,7 +4,7 @@
 """
 import math
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -21,6 +21,7 @@ from app.models.project import Project
 from app.models.department import Department
 from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
+from app.models.resource_event import ResourceEvent
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
 from app.services.cpm import CPMResult, calculate_cpm
 from app.services.scheduling import (
@@ -29,9 +30,65 @@ from app.services.scheduling import (
     normalize_to_hours,
     schedule_hours_per_day,
     working_day_index_to_date,
+    date_to_working_day_index,
 )
 
 calculator_router = APIRouter(prefix="/v1/projects/{project_id}/calculate", tags=["calculations"])
+
+
+# Порог предупреждения muri: форсаж дольше N рабочих дней — риск перегрузки
+FORSAZH_MAX_WORKDAYS = 5
+
+
+def format_duration(total_minutes: float, hours_per_day: float = 8.0) -> str:
+    """Длительность в формате «N дн H ч M мин» (часы/минуты — остаток рабочего дня)."""
+    tm = int(round(total_minutes))
+    if tm <= 0:
+        return "0 мин"
+    day_min = max(int(round(hours_per_day * 60)), 1)
+    d = tm // day_min
+    rem = tm % day_min
+    h = rem // 60
+    mi = rem % 60
+    parts = []
+    if d:
+        parts.append("%d дн" % d)
+    if h:
+        parts.append("%d ч" % h)
+    if mi or not parts:
+        parts.append("%d мин" % mi)
+    return " ".join(parts)
+
+
+def _capacity_factor(events, w0: datetime, w1: datetime):
+    """Взвешенный множитель мощности по перекрытию событий с окном [w0, w1].
+
+    Возвращает (m_eff, использованные события). multiplier=0 обнуляет мощность
+    на своей доле; неперекрытые доли считаются нормой (×1.0).
+    """
+    total = (w1 - w0).total_seconds() / 60.0
+    if total <= 0:
+        return 1.0, []
+    m = 1.0
+    used = []
+    for ev in events:
+        mult = ev.capacity_multiplier
+        if mult is None:
+            continue
+        a_ = max(ev.date_from, w0)
+        b_ = min(ev.date_to, w1)
+        if b_ <= a_:
+            continue
+        share = ((b_ - a_).total_seconds() / 60.0) / total
+        m += share * (float(mult) - 1.0)
+        used.append({
+            "event_id": str(ev.id),
+            "event_type": ev.event_type,
+            "capacity_multiplier": float(mult),
+            "share": round(share, 4),
+            "reason": ev.reason,
+        })
+    return max(m, 0.0), used
 
 
 @calculator_router.post("/cpm")
@@ -108,6 +165,9 @@ async def run_cpm(
             "id": nid,
             "name": node.name,
             "duration": float(node.total_duration),
+            "duration_hours": round(float(node.total_duration), 4),
+            "duration_minutes": int(round(float(node.total_duration) * 60)),
+            "duration_text": format_duration(float(node.total_duration) * 60, 8.0),
             "early_start": float(node.early_start),
             "early_finish": float(node.early_finish),
             "late_start": float(node.late_start),
@@ -312,40 +372,155 @@ async def run_schedule(
 
     resolver = CalendarResolver(db, tenant_id, project.country_code or "RU", extra_exceptions=exc_intervals)
 
-    nodes = []
-    for nid, node in result.nodes.items():
-        es_days = node.early_start
-        ef_days = node.early_finish
-        ls_days = node.late_start
-        lf_days = node.late_finish
-        start_idx = int(math.floor(float(es_days)))
-        finish_idx = int(math.ceil(float(ef_days)) - 1) if ef_days > 0 else 0
-        ls_idx = int(math.floor(float(ls_days)))
-        lf_idx = int(math.ceil(float(lf_days)) - 1) if lf_days > 0 else 0
-        s_date = await working_day_index_to_date(resolver, anchor, max(start_idx, 0))
-        f_date = await working_day_index_to_date(resolver, anchor, max(finish_idx, 0))
-        ls_date = await working_day_index_to_date(resolver, anchor, max(ls_idx, 0))
-        lf_date = await working_day_index_to_date(resolver, anchor, max(lf_idx, 0))
-        nodes.append({
-            "id": nid,
-            "name": node.name,
-            "duration_days": float(node.total_duration),
-            "hours_per_day": hpd_by_id.get(nid, 8.0),
-            "early_start_day": float(es_days),
-            "early_finish_day": float(ef_days),
-            "early_start_date": s_date.isoformat(),
-            "early_finish_date": f_date.isoformat(),
-            "late_start_day": float(ls_days),
-            "late_finish_day": float(lf_days),
-            "late_start_date": ls_date.isoformat(),
-            "late_finish_date": lf_date.isoformat(),
-            "total_float_days": float(node.total_float),
-            "is_critical": node.is_critical,
-        })
+    # --- построение узлов (даты/время по календарю, длительность Д+Ч+М) ---
+    async def build_nodes(res):
+        out = []
+        meta = {}
+        for nid, node in res.nodes.items():
+            es_days = node.early_start
+            ef_days = node.early_finish
+            ls_days = node.late_start
+            lf_days = node.late_finish
+            start_idx = int(math.floor(float(es_days)))
+            finish_idx = int(math.ceil(float(ef_days)) - 1) if ef_days > 0 else 0
+            ls_idx = int(math.floor(float(ls_days)))
+            lf_idx = int(math.ceil(float(lf_days)) - 1) if lf_days > 0 else 0
+            s_date = await working_day_index_to_date(resolver, anchor, max(start_idx, 0))
+            f_date = await working_day_index_to_date(resolver, anchor, max(finish_idx, 0))
+            ls_date = await working_day_index_to_date(resolver, anchor, max(ls_idx, 0))
+            lf_date = await working_day_index_to_date(resolver, anchor, max(lf_idx, 0))
+            # Точность до минут: остаток рабочего дня переводим в часы/минуты
+            hpd_n = float(hpd_by_id.get(nid, 8.0)) or 8.0
+            dur_days = float(node.total_duration)
+            start_abs = float(es_days)
+            end_abs = start_abs + dur_days
+            di_s, fr_s = int(math.floor(start_abs)), start_abs - math.floor(start_abs)
+            di_e, fr_e = int(math.floor(end_abs)), end_abs - math.floor(end_abs)
+            sd_dt = await working_day_index_to_date(resolver, anchor, max(di_s, 0))
+            ed_dt = await working_day_index_to_date(resolver, anchor, max(di_e, 0))
+            start_dt = (datetime.combine(sd_dt, time.min) + timedelta(hours=fr_s * hpd_n)).replace(second=0, microsecond=0)
+            end_dt = (datetime.combine(ed_dt, time.min) + timedelta(hours=fr_e * hpd_n)).replace(second=0, microsecond=0)
+            dur_min = dur_days * hpd_n * 60.0
+            meta[nid] = {"start": s_date, "finish": f_date}
+            out.append({
+                "id": nid,
+                "name": node.name,
+                "duration_days": dur_days,
+                "duration_hours": round(dur_days * hpd_n, 4),
+                "duration_minutes": int(round(dur_min)),
+                "duration_text": format_duration(dur_min, hpd_n),
+                "hours_per_day": hpd_by_id.get(nid, 8.0),
+                "start_datetime": start_dt.isoformat(timespec="minutes"),
+                "finish_datetime": end_dt.isoformat(timespec="minutes"),
+                "early_start_day": float(es_days),
+                "early_finish_day": float(ef_days),
+                "early_start_date": s_date.isoformat(),
+                "early_finish_date": f_date.isoformat(),
+                "late_start_day": float(ls_days),
+                "late_finish_day": float(lf_days),
+                "late_start_date": ls_date.isoformat(),
+                "late_finish_date": lf_date.isoformat(),
+                "total_float_days": float(node.total_float),
+                "is_critical": node.is_critical,
+            })
+        fin = await working_day_index_to_date(
+            resolver, anchor, max(int(math.ceil(float(res.total_duration)) - 1), 0)
+        )
+        return out, fin, meta
 
-    project_finish = await working_day_index_to_date(
-        resolver, anchor, max(int(math.ceil(float(result.total_duration)) - 1), 0)
-    )
+    # ---- События мощности ресурсов (форсаж / ограничение / простой) ----
+    def lead_resource(op: Operation):
+        """Ведущий ресурс операции (primary, иначе первый) — его события влияют на длительность."""
+        ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
+        for or_ in ors:
+            r = resources.get(or_.resource_id)
+            if r:
+                return r
+        return None
+
+    events_by_res: dict = defaultdict(list)
+    if res_ids:
+        ev_rows = await db.execute(
+            select(ResourceEvent).where(
+                ResourceEvent.tenant_id == tenant_id,
+                ResourceEvent.resource_id.in_(res_ids),
+                ResourceEvent.is_active.is_(True),
+            )
+        )
+        for ev in ev_rows.scalars().all():
+            if ev.project_id is None or str(ev.project_id) == str(project_id):
+                events_by_res[ev.resource_id].append(ev)
+
+    warnings: list = []
+    nodes, project_finish, node_dates = await build_nodes(result)
+
+    factors: dict = {}
+    ev_used: dict = {}
+    for op in operations:
+        r = lead_resource(op)
+        if not r:
+            continue
+        evs = events_by_res.get(r.id) or []
+        if not evs:
+            continue
+        d = node_dates.get(str(op.id))
+        if not d:
+            continue
+        w0 = datetime.combine(d["start"], time.min)
+        w1 = datetime.combine(d["finish"], time.max)
+        m, used = _capacity_factor(evs, w0, w1)
+        if not used or abs(m - 1.0) < 1e-9:
+            continue
+        factors[str(op.id)] = m
+        ev_used[str(op.id)] = used
+        if m <= 0:
+            warnings.append({
+                "type": "blocked",
+                "operation_id": str(op.id),
+                "operation_name": op.name,
+                "resource_id": str(r.id),
+                "resource_name": r.name,
+                "message": "Операция «%s» попадает в простой ресурса «%s» (мощность 0) — срок невыполним" % (op.name, r.name),
+            })
+
+    # Второй проход: пересчёт длительностей с учётом эффективной мощности
+    if any(m > 0 for m in factors.values()):
+        ops_dicts2 = []
+        for od in ops_dicts:
+            m = factors.get(od["id"], 1.0)
+            dur = od["duration_base"]
+            if m > 0 and abs(m - 1.0) > 1e-9:
+                dur = dur / m
+            ops_dicts2.append({**od, "duration_base": dur})
+        try:
+            result = calculate_cpm(ops_dicts2, deps_dicts)
+            nodes, project_finish, node_dates = await build_nodes(result)
+        except ValueError:
+            pass
+
+    for n in nodes:
+        m = factors.get(n["id"])
+        n["capacity_multiplier"] = round(float(m), 4) if m else 1.0
+        n["capacity_events"] = ev_used.get(n["id"], [])
+
+    # muri: длительный форсаж (риск перегрузки)
+    for rid, evs in events_by_res.items():
+        for ev in evs:
+            if ev.event_type != "boost" or ev.capacity_multiplier is None:
+                continue
+            i0 = await date_to_working_day_index(resolver, anchor, ev.date_from.date())
+            i1 = await date_to_working_day_index(resolver, anchor, ev.date_to.date())
+            days = i1 - i0 + 1
+            if days > FORSAZH_MAX_WORKDAYS:
+                r = resources.get(rid)
+                warnings.append({
+                    "type": "muri",
+                    "resource_id": str(rid),
+                    "resource_name": (r.name if r else ""),
+                    "event_id": str(ev.id),
+                    "days": days,
+                    "message": "Форсаж «%s» длится %d раб. дн. (больше %d) — риск перегрузки (muri)" % ((r.name if r else ""), days, FORSAZH_MAX_WORKDAYS),
+                })
 
     return {
         "project_id": str(project_id),
@@ -359,4 +534,6 @@ async def run_schedule(
         "critical_path": result.critical_path,
         "nodes": nodes,
         "node_count": len(nodes),
+        "warnings": warnings,
+        "capacity_applied": bool(factors),
     }
