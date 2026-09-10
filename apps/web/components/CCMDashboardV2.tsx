@@ -228,7 +228,10 @@ export default function CCMV2Dashboard() {
                 <th style={{ padding: '4px 8px' }}>Тип</th>
                 <th style={{ padding: '4px 8px' }}>Мощность</th>
                 <th style={{ padding: '4px 8px' }}>Проекты</th>
-                <th style={{ padding: '4px 8px' }}>Часы</th>
+                <th style={{ padding: '4px 8px' }}>План</th>
+                <th style={{ padding: '4px 8px' }}>С событиями</th>
+                <th style={{ padding: '4px 8px' }}>Потери</th>
+                <th style={{ padding: '4px 8px' }}>Выработка</th>
                 <th style={{ padding: '4px 8px' }}>Оп.</th>
                 <th style={{ padding: '4px 8px' }}>Совм.</th>
               </tr>
@@ -240,7 +243,13 @@ export default function CCMV2Dashboard() {
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.type || '—'}</td>
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.capacity_per_unit || '—'} {r.capacity_unit || ''}</td>
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.projects.join(', ') || '—'}</td>
-                  <td style={{ padding: '4px 8px' }}>{r.total_hours}</td>
+                  <td style={{ padding: '4px 8px' }} title={'Событий: ' + (r.events_count || 0)}>{r.total_text || (r.total_hours + ' ч')}</td>
+                  <td style={{ padding: '4px 8px', color: '#93C5FD' }}>{r.effective_text || '—'}</td>
+                  <td style={{ padding: '4px 8px', color: (r.lost_hours ? '#FCA5A5' : '#5A7090') }}
+                    title={(r.lost_by_reason || []).map((x: any) => x.reason + ': ' + x.text).join('; ')}>
+                    {r.lost_hours ? r.lost_text : '—'}
+                  </td>
+                  <td style={{ padding: '4px 8px', color: (r.extra_hours ? '#86EFAC' : '#5A7090') }}>{r.extra_hours ? r.extra_text : '—'}</td>
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.operation_count}</td>
                   <td style={{ padding: '4px 8px' }}>
                     {r.is_shared ? <span style={{ color: '#FCD34D', fontWeight: 700 }}>⚠ общий</span> : <span style={{ color: '#5A7090' }}>—</span>}
