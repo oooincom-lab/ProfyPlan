@@ -59,7 +59,15 @@ export default function CapacityEvents({
     const h: Record<string, string> = { 'Content-Type': 'application/json', ...((opts?.headers as any) || {}) };
     if (tok) h['Authorization'] = `Bea` + `rer ` + tok;
     const r = await fetch(`${API}${path}`, { ...opts, headers: h });
-    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    if (!r.ok) {
+      let msg = `${r.status}`;
+      try {
+        const j = await r.json();
+        const d = j?.detail;
+        msg = typeof d === 'string' ? d : Array.isArray(d) ? (d[0]?.msg || JSON.stringify(d)) : (d ? JSON.stringify(d) : msg);
+      } catch { try { msg = await r.text(); } catch { } }
+      throw new Error(msg);
+    }
     if (r.status === 204) return undefined as any;
     return r.json();
   };
@@ -82,7 +90,7 @@ export default function CapacityEvents({
       resource_id: resourceId,
       project_id: projectId || null,
       event_type,
-      capacity_multiplier: event_type === 'boost' ? 1.25 : event_type === 'reduced' ? 0.6 : null,
+      capacity_multiplier: event_type === 'boost' ? 1.25 : event_type === 'reduced' ? 0.6 : (event_type === 'breakdown' ? 0 : null),
       reason: '',
       date_from: '',
       date_to: '',
@@ -182,7 +190,7 @@ export default function CapacityEvents({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>Тип</span>
-                <select value={modal.event_type} onChange={(e) => setModal({ ...modal, event_type: e.target.value })}
+                <select value={modal.event_type} onChange={(e) => { const et = e.target.value; setModal((m) => m ? { ...m, event_type: et, capacity_multiplier: et === 'breakdown' ? 0 : (m.capacity_multiplier ?? (et === 'boost' ? 1.25 : et === 'reduced' ? 0.6 : null)) } : m); }}
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}>
                   {Object.entries(TYPE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>

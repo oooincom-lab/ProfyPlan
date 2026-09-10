@@ -15,7 +15,7 @@ class ResourceEventCreate(BaseModel):
     resource_id: UUID
     project_id: Optional[UUID] = None
     event_type: str = Field("boost", pattern=EVENT_TYPE_PATTERN)
-    capacity_multiplier: Optional[Decimal] = Field(None, gt=0, le=100)
+    capacity_multiplier: Optional[Decimal] = Field(None, ge=0, le=100)
     capacity_absolute: Optional[Decimal] = Field(None, ge=0)
     reason: str = Field(..., min_length=1, max_length=2000)
     related_operation_id: Optional[UUID] = None
@@ -28,7 +28,7 @@ class ResourceEventCreate(BaseModel):
 class ResourceEventUpdate(BaseModel):
     project_id: Optional[UUID] = None
     event_type: Optional[str] = Field(None, pattern=EVENT_TYPE_PATTERN)
-    capacity_multiplier: Optional[Decimal] = Field(None, gt=0, le=100)
+    capacity_multiplier: Optional[Decimal] = Field(None, ge=0, le=100)
     capacity_absolute: Optional[Decimal] = Field(None, ge=0)
     reason: Optional[str] = Field(None, min_length=1, max_length=2000)
     related_operation_id: Optional[UUID] = None
