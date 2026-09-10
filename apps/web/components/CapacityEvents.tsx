@@ -33,6 +33,21 @@ const fmtDate = (s: string) => {
   const [y, m, d] = s.split('-');
   return `${d}.${m}.${y.slice(2)}`;
 };
+const fmtDT = (s?: string | null) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return String(s);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+// значение для <input type="datetime-local"> — 'YYYY-MM-DDTHH:MM'
+const toLocalInput = (s?: string | null) => (s ? String(s).slice(0, 16) : '');
+// диапазон: если это «весь день» — только даты, иначе дата+время
+const fmtRange = (a?: string | null, b?: string | null) => {
+  const aAll = !!a && /T00:00(:00)?$/.test(String(a));
+  const bAll = !!b && /T23:59/.test(String(b));
+  return aAll && bAll ? `${fmtDate(String(a))}–${fmtDate(String(b))}` : `${fmtDT(a)} – ${fmtDT(b)}`;
+};
 const num = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
 
 export default function CapacityEvents({
@@ -99,7 +114,7 @@ export default function CapacityEvents({
   const save = async () => {
     if (!modal) return;
     if (!modal.reason.trim()) { setErr('Укажите причину'); return; }
-    if (!modal.date_from || !modal.date_to) { setErr('Укажите период (даты от/до)'); return; }
+    if (!modal.date_from || !modal.date_to) { setErr('Укажите период (от и до)'); return; }
     setSaving(true); setErr(null);
     try {
       const body: any = {
@@ -133,8 +148,9 @@ export default function CapacityEvents({
     setSaving(false);
   };
 
-  const today = new Date().toISOString().slice(0, 10);
-  const isActive = (e: Ev) => e.is_active !== false && e.date_from <= today && e.date_to >= today;
+  const now = Date.now();
+  const isActive = (e: Ev) =>
+    e.is_active !== false && new Date(e.date_from).getTime() <= now && new Date(e.date_to).getTime() >= now;
 
   return (
     <div style={{ marginTop: 5 }}>
@@ -172,7 +188,7 @@ export default function CapacityEvents({
                 style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: '#CBD5E1', cursor: editing ? 'pointer' : 'default', padding: '2px 4px', borderRadius: 5, opacity: e.is_active === false ? 0.45 : 1 }}
                 title={editing ? 'Клик — редактировать' : undefined}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
-                <span style={{ color: '#8FA3BD', flexShrink: 0 }}>{fmtDate(e.date_from)}–{fmtDate(e.date_to)}</span>
+                <span style={{ color: '#8FA3BD', flexShrink: 0 }}>{fmtRange(e.date_from, e.date_to)}</span>
                 <span style={{ color: m.fg, flexShrink: 0 }}>{m.label}{e.capacity_multiplier ? ' ×' + num(e.capacity_multiplier) : ''}</span>
                 <span style={{ color: '#7C93B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.reason}</span>
               </div>
@@ -205,13 +221,13 @@ export default function CapacityEvents({
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>С даты</span>
-                <input type="date" value={modal.date_from} onChange={(e) => setModal({ ...modal, date_from: e.target.value })}
+                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>С даты и времени</span>
+                <input type="datetime-local" value={toLocalInput(modal.date_from)} onChange={(e) => setModal({ ...modal, date_from: e.target.value })}
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>По дату</span>
-                <input type="date" value={modal.date_to} onChange={(e) => setModal({ ...modal, date_to: e.target.value })}
+                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>По дату и время</span>
+                <input type="datetime-local" value={toLocalInput(modal.date_to)} onChange={(e) => setModal({ ...modal, date_to: e.target.value })}
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>

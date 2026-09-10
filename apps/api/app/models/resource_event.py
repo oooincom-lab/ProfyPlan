@@ -4,11 +4,11 @@
 абсолютная мощность (capacity_absolute). См. промт §3.5, §7.2.
 """
 import uuid
-from datetime import date
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,7 +20,7 @@ from app.models.base import BaseModel
 
 
 class ResourceEvent(BaseModel):
-    """Событие мощности ресурса на период (даты от/до)."""
+    """Событие мощности ресурса на период (от/до с точностью до минут)."""
     __tablename__ = "resource_events"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -55,6 +55,6 @@ class ResourceEvent(BaseModel):
     base_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    date_from: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    date_to: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    date_from: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    date_to: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

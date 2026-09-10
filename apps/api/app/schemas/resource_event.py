@@ -1,5 +1,5 @@
 """Pydantic-схемы событий мощности ресурса (ResourceEvent)."""
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -21,8 +21,8 @@ class ResourceEventCreate(BaseModel):
     related_operation_id: Optional[UUID] = None
     base_document_type: Optional[str] = Field(None, max_length=50)
     base_document_id: Optional[UUID] = None
-    date_from: date
-    date_to: date
+    date_from: datetime
+    date_to: datetime
 
 
 class ResourceEventUpdate(BaseModel):
@@ -34,8 +34,8 @@ class ResourceEventUpdate(BaseModel):
     related_operation_id: Optional[UUID] = None
     base_document_type: Optional[str] = Field(None, max_length=50)
     base_document_id: Optional[UUID] = None
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
     is_active: Optional[bool] = None
 
 
@@ -53,7 +53,7 @@ class ResourceEventOut(BaseModel):
     related_operation_id: Optional[UUID] = None
     base_document_type: Optional[str] = None
     base_document_id: Optional[UUID] = None
-    date_from: date
-    date_to: date
+    date_from: datetime
+    date_to: datetime
     is_active: bool
     created_at: datetime

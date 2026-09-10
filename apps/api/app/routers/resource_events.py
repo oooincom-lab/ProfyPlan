@@ -1,5 +1,5 @@
 """CRUD для событий мощности ресурса (ResourceEvent)."""
-from datetime import date
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,8 +24,8 @@ async def list_items(
     project_id: UUID | None = None,
     event_type: str | None = None,
     active_only: bool = False,
-    date_from: date | None = None,
-    date_to: date | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
