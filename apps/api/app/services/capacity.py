@@ -137,3 +137,41 @@ def spread_work_hours(es_days: float, dur_days: float, hpd: float, win_hours: fl
             end_hour = day_start
         guard += 1
     return start_hour, di_e, end_hour
+
+async def event_work_hours(ev, resolver, hpd: float, day_start: float, win_hours: float) -> dict:
+    """Рабочие часы периода события: рабочие дни × часы дня (окно графика).
+
+    Возвращает {"days": N, "hours": H, "minutes": M} — с учётом календаря
+    (выходные/нерабочие дни пропускаются) и окна рабочего дня из графика.
+    """
+    from datetime import date as _date, timedelta as _td
+
+    d0 = ev.date_from.date() if hasattr(ev.date_from, "date") else ev.date_from
+    d1 = ev.date_to.date() if hasattr(ev.date_to, "date") else ev.date_to
+    days = 0
+    d = d0
+    guard = 0
+    while d <= d1 and guard < MAX_DAYS_PER_OP * 4:
+        try:
+            if await resolver.is_working(d):
+                days += 1
+        except Exception:
+            pass
+        d = d + _td(days=1)
+        guard += 1
+    hours = days * float(hpd or 8.0)
+    return {"days": days, "hours": round(hours, 4), "minutes": int(round(hours * 60))}
+
+
+def loss_split(mult, work_hours: float) -> dict:
+    """Потери/выработка от события: (m<1) потери, (m>1) дополнительная выработка."""
+    m = float(mult or 0.0)
+    h = float(work_hours or 0.0)
+    lost = max(0.0, 1.0 - m) * h
+    extra = max(0.0, m - 1.0) * h
+    return {
+        "lost_hours": round(lost, 4),
+        "extra_hours": round(extra, 4),
+        "lost_minutes": int(round(lost * 60)),
+        "extra_minutes": int(round(extra * 60)),
+    }

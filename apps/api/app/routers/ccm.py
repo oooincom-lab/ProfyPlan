@@ -589,6 +589,25 @@ async def analyze_bottleneck(
         for op in operations
     ]
 
+    # CPM с учётом событий мощности (форсаж/ограничение/простой)
+    cpm_cap = None
+    try:
+        from app.routers.calculations import run_cpm as _run_cpm_cap
+        cpm_cap = await _run_cpm_cap(project_id, db, tenant_id)
+    except Exception:
+        cpm_cap = None
+    if cpm_cap:
+        _by_id = {n.get("id"): n for n in (cpm_cap.get("nodes") or [])}
+        for od in ops_dicts:
+            n = _by_id.get(od["id"])
+            if n:
+                od["duration_base"] = float(n.get("duration_hours") or od["duration_base"])
+                od["early_start"] = float(n.get("early_start") or 0)
+                od["early_finish"] = float(n.get("early_finish") or 0)
+                od["late_start"] = float(n.get("late_start") or 0)
+                od["late_finish"] = float(n.get("late_finish") or 0)
+        project_duration = float(cpm_cap.get("total_duration") or 0)
+
     try:
         deps = await db.execute(
             select(OperationDependency).join(
@@ -596,7 +615,7 @@ async def analyze_bottleneck(
             ).where(Operation.project_id == project_id)
         )
         deps_list = deps.scalars().all()
-        if ops_dicts and deps_list:
+        if ops_dicts and deps_list and not cpm_cap:
             from app.services.cpm import calculate_cpm
             cpm_deps_dicts = [
                 {"predecessor_id": str(d.predecessor_id),
@@ -631,6 +650,60 @@ async def analyze_bottleneck(
         for r in resources
     ]
 
+    # Потери/выработка по событиям мощности ресурсов проекта
+    from app.models.resource_event import ResourceEvent as _RE
+    from app.models.work_schedule import WorkSchedule as _WS, WorkScheduleSlot as _WSS
+    from app.services.capacity import (
+        event_work_hours as _ewh,
+        format_duration as _fdur,
+        loss_split as _lsplit,
+        schedule_window as _swin,
+    )
+    from app.services.scheduling import CalendarResolver as _CRes, schedule_hours_per_day as _shpd
+
+    res_ids_bn = [r.id for r in resources]
+    evs_bn = []
+    if res_ids_bn and project_id:
+        evs_bn = (await db.execute(
+            select(_RE).where(
+                _RE.tenant_id == tenant_id,
+                _RE.resource_id.in_(res_ids_bn),
+                _RE.is_active.is_(True),
+                ((_RE.project_id == project_id) | (_RE.project_id.is_(None))),
+            )
+        )).scalars().all()
+    sch_ids_bn = {r.schedule_id for r in resources if r.schedule_id}
+    slots_bn = {}
+    sched_bn = {}
+    if sch_ids_bn:
+        sched_bn = {x.id: x for x in (await db.execute(select(_WS).where(_WS.id.in_(sch_ids_bn)))).scalars().all()}
+        for _sl in (await db.execute(select(_WSS).where(_WSS.schedule_id.in_(sch_ids_bn)))).scalars().all():
+            slots_bn.setdefault(_sl.schedule_id, []).append(_sl)
+    res_byname = {str(r.id): r for r in resources}
+    res_cap = {}
+    if evs_bn:
+        _proj_row = (await db.execute(
+            select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+        )).scalar_one_or_none()
+        c_res = _CRes(db, tenant_id, ((_proj_row.country_code if _proj_row else None) or "RU"))
+        for ev in evs_bn:
+            r0 = res_byname.get(str(ev.resource_id))
+            if not r0:
+                continue
+            ds_h, win_h, hpd = 8.0, 8.0, 8.0
+            if r0.schedule_id and slots_bn.get(r0.schedule_id) and sched_bn.get(r0.schedule_id):
+                ds_h, win_h = _swin(slots_bn[r0.schedule_id])
+                hpd = float(_shpd(sched_bn[r0.schedule_id], slots_bn[r0.schedule_id]))
+            try:
+                wh = await _ewh(ev, c_res, hpd, ds_h, win_h)
+            except Exception:
+                continue
+            sp = _lsplit(ev.capacity_multiplier, wh["hours"])
+            c = res_cap.setdefault(str(ev.resource_id), {"lost": 0.0, "extra": 0.0, "events": 0})
+            c["lost"] += sp["lost_hours"]
+            c["extra"] += sp["extra_hours"]
+            c["events"] += 1
+
     result = analyze_bottlenecks(
         ops_dicts, or_dicts, res_dicts,
         project_duration_hours=project_duration,
@@ -655,6 +728,12 @@ async def analyze_bottleneck(
                 "avg_wait_hours": float(round(r.avg_wait_hours, 2)),
                 "bottleneck_level": r.bottleneck_level,
                 "recommendations": r.recommendations,
+                "lost_hours": round(res_cap.get(r.resource_id, {}).get("lost", 0.0), 2),
+                "lost_text": _fdur(res_cap.get(r.resource_id, {}).get("lost", 0.0) * 60, 8.0),
+                "extra_hours": round(res_cap.get(r.resource_id, {}).get("extra", 0.0), 2),
+                "extra_text": _fdur(res_cap.get(r.resource_id, {}).get("extra", 0.0) * 60, 8.0),
+                "capacity_events": res_cap.get(r.resource_id, {}).get("events", 0),
+                "available_hours_effective": round(float(r.available_hours) - res_cap.get(r.resource_id, {}).get("lost", 0.0), 2),
             }
             for r in result.resources
         ],
@@ -1359,6 +1438,53 @@ async def resource_usage(
         select(Project).where(Project.tenant_id == tenant_id)
     )).scalars().all()}
 
+    # ---- События мощности: эффективные часы и потери (muda) ----
+    from app.models.resource_event import ResourceEvent
+    from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
+    from app.services.capacity import event_work_hours, format_duration, loss_split, schedule_window
+    from app.services.scheduling import CalendarResolver, schedule_hours_per_day
+
+    ev_rows = (await db.execute(
+        select(ResourceEvent).where(
+            ResourceEvent.tenant_id == tenant_id, ResourceEvent.is_active.is_(True)
+        )
+    )).scalars().all()
+
+    sch_ids = {r.schedule_id for r in global_rows if r.schedule_id}
+    slots_map = defaultdict(list)
+    sched_map = {}
+    if sch_ids:
+        sched_map = {x.id: x for x in (await db.execute(
+            select(WorkSchedule).where(WorkSchedule.id.in_(sch_ids))
+        )).scalars().all()}
+        for sl in (await db.execute(
+            select(WorkScheduleSlot).where(WorkScheduleSlot.schedule_id.in_(sch_ids))
+        )).scalars().all():
+            slots_map[sl.schedule_id].append(sl)
+
+    resolver = CalendarResolver(db, tenant_id, "RU")
+    cap = defaultdict(lambda: {"lost": 0.0, "extra": 0.0, "events": 0, "reasons": defaultdict(float)})
+    for ev in ev_rows:
+        gid = parent_of.get(str(ev.resource_id), str(ev.resource_id))
+        if gid not in globals_map:
+            continue
+        r0 = globals_map[gid]
+        ds_h, win_h, hpd = 8.0, 8.0, 8.0
+        if r0.schedule_id and slots_map.get(r0.schedule_id) and sched_map.get(r0.schedule_id):
+            ds_h, win_h = schedule_window(slots_map[r0.schedule_id])
+            hpd = float(schedule_hours_per_day(sched_map[r0.schedule_id], slots_map[r0.schedule_id]))
+        try:
+            wh = await event_work_hours(ev, resolver, hpd, ds_h, win_h)
+        except Exception:
+            continue
+        sp = loss_split(ev.capacity_multiplier, wh["hours"])
+        c = cap[gid]
+        c["lost"] += sp["lost_hours"]
+        c["extra"] += sp["extra_hours"]
+        c["events"] += 1
+        if sp["lost_hours"] > 0:
+            c["reasons"][ev.reason or "—"] += sp["lost_hours"]
+
     out = []
     for gid, r in globals_map.items():
         u = usage.get(gid)
@@ -1372,9 +1498,22 @@ async def resource_usage(
             "projects": projects,
             "project_count": len(projects),
             "total_hours": round(u["hours"], 2) if u else 0,
+            "total_text": format_duration((u["hours"] if u else 0) * 60, 8.0),
             "operation_count": u["ops"] if u else 0,
             "is_shared": len(projects) > 1,
             "scope": getattr(r, "scope", None) or "shared",
+            # События мощности: эффективные часы и потери
+            "hours_effective": round(((u["hours"] if u else 0) + cap[gid]["lost"] - cap[gid]["extra"]), 2),
+            "effective_text": format_duration((((u["hours"] if u else 0) + cap[gid]["lost"] - cap[gid]["extra"])) * 60, 8.0),
+            "lost_hours": round(cap[gid]["lost"], 2),
+            "lost_text": format_duration(cap[gid]["lost"] * 60, 8.0),
+            "extra_hours": round(cap[gid]["extra"], 2),
+            "extra_text": format_duration(cap[gid]["extra"] * 60, 8.0),
+            "events_count": cap[gid]["events"],
+            "lost_by_reason": [
+                {"reason": k, "hours": round(v, 2), "text": format_duration(v * 60, 8.0)}
+                for k, v in sorted(cap[gid]["reasons"].items(), key=lambda x: -x[1])
+            ],
         })
     out.sort(key=lambda x: (-x["is_shared"], -x["total_hours"]))
     return out
