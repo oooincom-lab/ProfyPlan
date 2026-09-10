@@ -953,6 +953,12 @@ POST {erp_webhook_url}
 
 ---
 
+### 12.13 Resource Events — события мощности ресурса (реализовано ✅) — НОВОЕ
+- `GET /v1/resource-events/` — список (фильтры: resource_id, project_id, event_type, active_only, date_from, date_to).
+- `POST /v1/resource-events/` — создать событие мощности (201).
+- `GET|PUT|DELETE /v1/resource-events/{id}` — получить / изменить / удалить.
+- Типы: boost, reduced, breakdown, maintenance, modernization, condition_change, other. Период — timestamp (часы и минуты).
+
 ## 13. Фронтенд-компоненты
 
 ### 13.1 NetworkGraphV2 (реализовано)
@@ -1036,6 +1042,10 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 - Предустановленные словари синонимов: NOMENCLATURE_SYNONYMS, RESOURCE_SYNONYMS, UNIT_SYNONYMS
 
 ---
+
+### 13.11 CapacityEvents — события мощности ресурса (реализовано ✅) — НОВОЕ
+- Блок «События мощности» в карточке ресурса заказа: чипы активных событий, список событий (🟢 форсаж / 🟠 снижение / 🔴 простой), кнопки «＋ Форсаж / ＋ Ограничение / ＋ Простой/поломка», модалка (тип, коэффициент, период в формате ДД.ММ.ГГ ЧЧ:ММ, причина).
+- Файл: `components/CapacityEvents.tsx`; встроен в `components/windows/WindowsLayer.tsx` (вкладка «Ресурсы» заказа).
 
 ## 14. Принципы аудита
 
@@ -1217,6 +1227,15 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 - Текущий скоуп (слой 1): глобальный справочник ресурсов (CRUD без project_id, вью на уровне тенанта) + миграция регистра (capacity_share/date_from/date_to) + UI назначения «ресурс→проект» с переопределением графика + фикс движка на register-override + миграция project-scoped ресурсов без потери.
 - НЕ делаем сейчас: слои 2–3 (выравнивание/алгоритм загрузки) — преждевременно до появления кросспроектных данных.
 
+### 17.11 События мощности ресурса (ResourceEvent) — реализовано 2026-09-10
+- Назначение: модификаторы мощности ресурса на период. Типы: **boost** (форсаж), **reduced** (снижение), **breakdown** (простой/поломка), **maintenance** (ТО), **modernization** (модернизация), **condition_change** (изменение состояния), **other**. Основа Lean/CCM: muda (потери), muri (перегрузка).
+- Модель `resource_events` (миграции 0027, 0028): tenant_id (CASCADE), resource_id (CASCADE), project_id (SET NULL), event_type, **capacity_multiplier** numeric(6,3) (ge=0; **0 = ресурс недоступен**), capacity_absolute numeric(14,3), **reason** (обязательна — трассируемость «почему сдвиг»), related_operation_id (SET NULL), base_document_type / base_document_id (документ-основание, аудит), **date_from / date_to — timestamp (точность до часов и минут)**, is_active.
+- API `/v1/resource-events/` (CRUD): GET список (фильтры resource_id, project_id, event_type, active_only, date_from/date_to — пересечение интервалов), POST (201), GET/PUT/DELETE по id. Валидация: date_to >= date_from → 400; reason обязательна.
+- UI: компонент `CapacityEvents` в карточке ресурса заказа (вкладка «Ресурсы»). Строка «Мощность: норма ×1.0» + чипы активных на текущий момент событий + список всех событий + кнопки **«＋ Форсаж / ＋ Ограничение / ＋ Простой/поломка»** (в режиме «✏️ Редактировать»). Модалка: тип, коэффициент мощности, период, причина. Клик по событию — редактирование/удаление.
+- **Формат периода — единый по системе: ДД.ММ.ГГ (ЧЧ:ММ)**. Поля ввода — текстовые с автоматической маской (НЕ нативные `datetime-local`: они показывают формат локали браузера). Пример: `15.09.26 (08:30) – 16.09.26 (17:45)`.
+- Правило расчёта (для учёта в CPM): эффективная длительность `D_eff = D_base / multiplier`; при частичном перекрытии периода — взвешенно по доле перекрытия. При `multiplier = 0` (простой) ресурс недоступен — **деление на ноль запрещено**, операция помечается как невыполнимая в этом окне.
+- Предупреждения (план): форсаж > N рабочих дней → предупреждение muri; отчёт «потерянные часы по причинам» (muda) по событиям reduced/breakdown/maintenance.
+
 ## 18. Мультитенантность: общая база + tenant_id, аудит изоляции (решено 2026-08-21, вечер)
 
 ### 18.1 Решение по масштабированию
@@ -1227,7 +1246,7 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 
 ### 18.2 Модель доступа
 - JWT несёт `sub` (user_id) + `tenant_id`; `get_current_tenant_id` извлекает tenant_id; каждый тенант-скопленный роутер обязан `Depends(get_current_tenant_id)` + фильтровать ВСЕ запросы по tenant_id.
-- Модели С tenant_id: Project, Resource, ProjectResource, Operation, ProductionOrder, OrderGroup, OrderPool, Nomenclature, Unit, Counterparty, WorkSchedule, ProductionCalendar, Tenant, UserTenant.
+- Модели С tenant_id: Project, Resource, ProjectResource, Operation, ProductionOrder, OrderGroup, OrderPool, Nomenclature, Unit, Counterparty, WorkSchedule, ProductionCalendar, ResourceEvent, Tenant, UserTenant.
 - Модели БЕЗ tenant_id (скоп через родителя): OperationDependency, OperationResource, ActualExecution, PlanBaseline, InterProjectDependency, WorkScheduleSlot, ProductionCalendarDay — для них изоляция обязана идти через родителя (Operation.tenant_id / Project.tenant_id / WorkSchedule.tenant_id).
 
 ### 18.3 Аудит изоляции (2026-08-21) — результаты
