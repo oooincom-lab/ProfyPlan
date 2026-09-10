@@ -23,6 +23,16 @@ from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
 from app.models.resource_event import ResourceEvent
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
+from app.services.capacity import (
+    DEFAULT_DAY_START,
+    DEFAULT_WINDOW_HOURS,
+    FORSAZH_MAX_WORKDAYS,
+    day_factor,
+    format_duration,
+    op_day_windows,
+    schedule_window,
+    spread_work_hours,
+)
 from app.services.cpm import CPMResult, calculate_cpm
 from app.services.scheduling import (
     DEFAULT_HOURS_PER_DAY,
@@ -36,113 +46,7 @@ from app.services.scheduling import (
 calculator_router = APIRouter(prefix="/v1/projects/{project_id}/calculate", tags=["calculations"])
 
 
-# Начало рабочего дня (час) — для сопоставления периодов событий с рабочими днями
-WORKDAY_START_HOUR = 8
-
-# Порог предупреждения muri: форсаж дольше N рабочих дней — риск перегрузки
-FORSAZH_MAX_WORKDAYS = 5
-
-
-def format_duration(total_minutes: float, hours_per_day: float = 8.0) -> str:
-    """Длительность в формате «N дн H ч M мин» (часы/минуты — остаток рабочего дня)."""
-    tm = int(round(total_minutes))
-    if tm <= 0:
-        return "0 мин"
-    day_min = max(int(round(hours_per_day * 60)), 1)
-    d = tm // day_min
-    rem = tm % day_min
-    h = rem // 60
-    mi = rem % 60
-    parts = []
-    if d:
-        parts.append("%d дн" % d)
-    if h:
-        parts.append("%d ч" % h)
-    if mi or not parts:
-        parts.append("%d мин" % mi)
-    return " ".join(parts)
-
-
-def _capacity_factor(events, w0: datetime, w1: datetime):
-    """Взвешенный множитель мощности по перекрытию событий с окном [w0, w1].
-
-    Возвращает (m_eff, использованные события). multiplier=0 обнуляет мощность
-    на своей доле; неперекрытые доли считаются нормой (×1.0).
-    """
-    total = (w1 - w0).total_seconds() / 60.0
-    if total <= 0:
-        return 1.0, []
-    m = 1.0
-    used = []
-    for ev in events:
-        mult = ev.capacity_multiplier
-        if mult is None:
-            continue
-        a_ = max(ev.date_from, w0)
-        b_ = min(ev.date_to, w1)
-        if b_ <= a_:
-            continue
-        share = ((b_ - a_).total_seconds() / 60.0) / total
-        m += share * (float(mult) - 1.0)
-        used.append({
-            "event_id": str(ev.id),
-            "event_type": ev.event_type,
-            "capacity_multiplier": float(mult),
-            "share": round(share, 4),
-            "reason": ev.reason,
-        })
-    return max(m, 0.0), used
-
-def _op_day_factor(events, day_windows):
-    """Множитель мощности операции по перекрытию событий с её рабочими днями.
-
-    day_windows: список (начало_рабочего_дня, конец_рабочего_дня) — по одному на
-    каждый рабочий день операции. Доля покрытия дня — пересечение с окном дня.
-    """
-    n = len(day_windows)
-    if n <= 0:
-        return 1.0, []
-    m = 1.0
-    used = []
-    for (w0, w1) in day_windows:
-        wlen = (w1 - w0).total_seconds() / 60.0
-        if wlen <= 0:
-            continue
-        for ev in events:
-            mult = ev.capacity_multiplier
-            if mult is None:
-                continue
-            a_ = max(ev.date_from, w0)
-            b_ = min(ev.date_to, w1)
-            if b_ <= a_:
-                continue
-            share = ((b_ - a_).total_seconds() / 60.0) / wlen / n
-            m += share * (float(mult) - 1.0)
-            used.append({
-                "event_id": str(ev.id),
-                "event_type": ev.event_type,
-                "capacity_multiplier": float(mult),
-                "share": round(share * n, 4),
-                "reason": ev.reason,
-            })
-    return max(m, 0.0), used
-
-
-async def _op_day_windows(node, hpd, resolver, anchor):
-    """Рабочие дни операции как интервалы календарного времени."""
-    dur = float(node.total_duration)
-    es = float(node.early_start)
-    start_idx = int(math.floor(es))
-    n_days = max(int(math.ceil(dur - 1e-9)), 1) if dur > 0 else 1
-    extra = (es - start_idx) * hpd
-    wins = []
-    for k in range(min(n_days, 400)):
-        d = await working_day_index_to_date(resolver, anchor, start_idx + k)
-        w0 = datetime.combine(d, time(hour=WORKDAY_START_HOUR))
-        if k == 0:
-            w0 = w0 + timedelta(hours=extra)
-        wins.append((w0, w0 + timedelta(hours=hpd)))
-    return wins
+# Логика эффективной мощности — в app/services/capacity.py (единая для всех расчётов)
 
 
 @calculator_router.post("/cpm")
@@ -212,6 +116,107 @@ async def run_cpm(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    # ---- Учёт событий мощности ресурсов (форсаж / ограничение / простой) ----
+    op_ids_cpm = [op.id for op in operations]
+    or_rows_cpm = await db.execute(
+        select(OperationResource).where(OperationResource.operation_id.in_(op_ids_cpm))
+    )
+    op_res_cpm: dict = defaultdict(list)
+    for or_ in or_rows_cpm.scalars().all():
+        op_res_cpm[or_.operation_id].append(or_)
+    res_ids_cpm = {or_.resource_id for ors in op_res_cpm.values() for or_ in ors}
+    res_map_cpm: dict = {}
+    if res_ids_cpm:
+        rr_cpm = await db.execute(
+            select(Resource).where(Resource.id.in_(res_ids_cpm), Resource.tenant_id == tenant_id)
+        )
+        res_map_cpm = {r.id: r for r in rr_cpm.scalars().all()}
+
+    ev_map_cpm: dict = defaultdict(list)
+    if res_ids_cpm:
+        evr_cpm = await db.execute(
+            select(ResourceEvent).where(
+                ResourceEvent.tenant_id == tenant_id,
+                ResourceEvent.resource_id.in_(res_ids_cpm),
+                ResourceEvent.is_active.is_(True),
+            )
+        )
+        for ev in evr_cpm.scalars().all():
+            if ev.project_id is None or str(ev.project_id) == str(project_id):
+                ev_map_cpm[ev.resource_id].append(ev)
+
+    warnings_cpm: list = []
+    factors_cpm: dict = {}
+    ev_used_cpm: dict = {}
+    if ev_map_cpm:
+        anchor_cpm = project.start_date.date() if project.start_date else date.today()
+        res_cpm = CalendarResolver(db, tenant_id, project.country_code or "RU")
+        for op in operations:
+            node_cpm = result.nodes.get(str(op.id))
+            if not node_cpm:
+                continue
+            wins_cpm = await op_day_windows(node_cpm, DEFAULT_WINDOW_HOURS, DEFAULT_DAY_START, res_cpm, anchor_cpm)
+            if not wins_cpm:
+                continue
+            ors_cpm = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
+            lead_cpm = None
+            for or_ in ors_cpm:
+                if res_map_cpm.get(or_.resource_id):
+                    lead_cpm = res_map_cpm[or_.resource_id]
+                    break
+            m_final_cpm, used_all_cpm = 1.0, []
+            blocked_cpm = None
+            if lead_cpm and ev_map_cpm.get(lead_cpm.id):
+                m1, u1 = day_factor(ev_map_cpm[lead_cpm.id], wins_cpm)
+                if u1 and abs(m1 - 1.0) > 1e-9:
+                    m_final_cpm, used_all_cpm = m1, list(u1)
+                    if m1 <= 0:
+                        blocked_cpm = lead_cpm
+            for or_ in ors_cpm:
+                r2 = res_map_cpm.get(or_.resource_id)
+                if not r2 or (lead_cpm and r2.id == lead_cpm.id):
+                    continue
+                if not ev_map_cpm.get(r2.id):
+                    continue
+                m2, u2 = day_factor(ev_map_cpm[r2.id], wins_cpm)
+                if not u2:
+                    continue
+                if m2 < 1.0 - 1e-9 and m2 < m_final_cpm:
+                    m_final_cpm = m2
+                    used_all_cpm = used_all_cpm + list(u2)
+                elif m2 < 1.0 - 1e-9:
+                    used_all_cpm = used_all_cpm + list(u2)
+                if m2 <= 0 and blocked_cpm is None:
+                    blocked_cpm = r2
+            if not used_all_cpm or abs(m_final_cpm - 1.0) < 1e-9:
+                continue
+            factors_cpm[str(op.id)] = m_final_cpm
+            ev_used_cpm[str(op.id)] = used_all_cpm
+            if m_final_cpm <= 0:
+                br = blocked_cpm or lead_cpm
+                warnings_cpm.append({
+                    "type": "blocked",
+                    "operation_id": str(op.id),
+                    "operation_name": op.name,
+                    "resource_id": str(br.id) if br else "",
+                    "resource_name": br.name if br else "",
+                    "message": "Операция «%s» попадает в простой ресурса «%s» (мощность 0) — срок невыполним" % (op.name, (br.name if br else "")),
+                })
+
+        # Пересчёт с учётом эффективной мощности
+        if any(m > 0 for m in factors_cpm.values()):
+            ops_cpm2 = []
+            for od in ops_dicts:
+                m = factors_cpm.get(od["id"], 1.0)
+                dur = od["duration_base"]
+                if m > 0 and abs(m - 1.0) > 1e-9:
+                    dur = dur / m
+                ops_cpm2.append({**od, "duration_base": dur})
+            try:
+                result = calculate_cpm(ops_cpm2, deps_dicts)
+            except ValueError:
+                pass
+
     # Формируем ответ
     nodes = []
     for nid, node in result.nodes.items():
@@ -219,6 +224,8 @@ async def run_cpm(
             "id": nid,
             "name": node.name,
             "duration": float(node.total_duration),
+            "capacity_multiplier": round(float(factors_cpm.get(nid, 1.0)), 4),
+            "capacity_events": ev_used_cpm.get(nid, []),
             "duration_hours": round(float(node.total_duration), 4),
             "duration_minutes": int(round(float(node.total_duration) * 60)),
             "duration_text": format_duration(float(node.total_duration) * 60, 8.0),
@@ -239,6 +246,8 @@ async def run_cpm(
         "nodes": nodes,
         "node_count": len(nodes),
         "critical_count": len(result.critical_path),
+        "warnings": warnings_cpm,
+        "capacity_applied": bool(factors_cpm),
     }
 
 
@@ -337,22 +346,38 @@ async def run_schedule(
         for sl in slot_rows.scalars().all():
             slots_by_sched[sl.schedule_id].append(sl)
 
-    def op_hours_per_day(op: Operation) -> Decimal:
+    def op_sched_id(op: Operation):
+        """График операции (по её ресурсам, с учётом переопределений на проект)."""
         ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
         for or_ in ors:
             r = resources.get(or_.resource_id)
             if r:
                 sched_id = override_sched.get(r.id) or r.schedule_id or dept_sched.get(r.department_id) or project_sched_id
                 if sched_id and sched_id in schedules:
-                    return schedule_hours_per_day(schedules[sched_id], slots_by_sched[sched_id])
+                    return sched_id
+        return None
+
+    def op_hours_per_day(op: Operation) -> Decimal:
+        sid = op_sched_id(op)
+        if sid:
+            return schedule_hours_per_day(schedules[sid], slots_by_sched[sid])
         return DEFAULT_HOURS_PER_DAY
+
+    def op_day_window(op: Operation):
+        """(начало смены, длина рабочего окна в часах) из графика операции."""
+        sid = op_sched_id(op)
+        if sid:
+            return schedule_window(slots_by_sched[sid])
+        return DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS
 
     # CPM в рабочих днях
     hpd_by_id: dict = {}
+    win_by_id: dict = {}
     ops_dicts = []
     for op in operations:
         hpd = op_hours_per_day(op)
         hpd_by_id[str(op.id)] = float(hpd)
+        win_by_id[str(op.id)] = op_day_window(op)
         hours = (
             normalize_to_hours(op.duration_base, op.duration_unit)
             + normalize_to_hours(op.setup_time, op.duration_unit)
@@ -443,26 +468,13 @@ async def run_schedule(
             f_date = await working_day_index_to_date(resolver, anchor, max(finish_idx, 0))
             ls_date = await working_day_index_to_date(resolver, anchor, max(ls_idx, 0))
             lf_date = await working_day_index_to_date(resolver, anchor, max(lf_idx, 0))
-            # Точность до минут: рабочие часы распределяются по рабочим дням
-            # (рабочий день начинается в WORKDAY_START_HOUR, ночь и выходные пропускаются)
+            # Точность до минут: рабочие часы раскладываются по рабочим дням
+            # (окно дня — из графика работы: начало смены и её длительность)
             hpd_n = float(hpd_by_id.get(nid, 8.0)) or 8.0
+            ds_h, win_h = win_by_id.get(nid) or (DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS)
             dur_days = float(node.total_duration)
             di_s = int(math.floor(float(es_days)))
-            start_hour = WORKDAY_START_HOUR + (float(es_days) - di_s) * hpd_n
-            rem_h = dur_days * hpd_n
-            di_e = di_s
-            end_hour = start_hour
-            guard = 0
-            while rem_h > 1e-9 and guard < 2000:
-                avail = hpd_n - (end_hour - WORKDAY_START_HOUR)
-                if rem_h <= avail:
-                    end_hour += rem_h
-                    rem_h = 0.0
-                else:
-                    rem_h -= avail
-                    di_e += 1
-                    end_hour = WORKDAY_START_HOUR
-                guard += 1
+            start_hour, di_e, end_hour = spread_work_hours(float(es_days), dur_days, hpd_n, win_h, ds_h)
             sd_dt = await working_day_index_to_date(resolver, anchor, max(di_s, 0))
             ed_dt = await working_day_index_to_date(resolver, anchor, max(di_e, 0))
             start_dt = (datetime.combine(sd_dt, time.min) + timedelta(hours=start_hour)).replace(second=0, microsecond=0)
@@ -524,30 +536,57 @@ async def run_schedule(
     factors: dict = {}
     ev_used: dict = {}
     for op in operations:
-        r = lead_resource(op)
-        if not r:
-            continue
-        evs = events_by_res.get(r.id) or []
-        if not evs:
-            continue
         node = result.nodes.get(str(op.id))
         if not node:
             continue
-        hpd_op = float(hpd_by_id.get(str(op.id), 8.0)) or 8.0
-        wins = await _op_day_windows(node, hpd_op, resolver, anchor)
-        m, used = _op_day_factor(evs, wins)
-        if not used or abs(m - 1.0) < 1e-9:
+        ds_h, win_h = win_by_id.get(str(op.id)) or (DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS)
+        wins = await op_day_windows(node, win_h, ds_h, resolver, anchor)
+        if not wins:
             continue
-        factors[str(op.id)] = m
-        ev_used[str(op.id)] = used
-        if m <= 0:
+        # Ведущий ресурс задаёт форсаж/ограничение; ограничения (m<1) других
+        # ресурсов операции учитываются как самое узкое звено.
+        lead = lead_resource(op)
+        m_final, used_all = 1.0, []
+        blocked_res = None
+        if lead:
+            evs = events_by_res.get(lead.id) or []
+            if evs:
+                m_lead, used_lead = day_factor(evs, wins)
+                if used_lead and abs(m_lead - 1.0) > 1e-9:
+                    m_final, used_all = m_lead, list(used_lead)
+                    if m_lead <= 0:
+                        blocked_res = lead
+        for or_ in op_resources.get(op.id, []):
+            r2 = resources.get(or_.resource_id)
+            if not r2 or (lead and r2.id == lead.id):
+                continue
+            evs2 = events_by_res.get(r2.id) or []
+            if not evs2:
+                continue
+            m2, used2 = day_factor(evs2, wins)
+            if not used2:
+                continue
+            if m2 < 1.0 - 1e-9:
+                if m2 < m_final or m_final >= 1.0:
+                    if m2 < m_final:
+                        m_final, used_all = m2, list(used_all) + list(used2)
+                    else:
+                        used_all = used_all + list(used2)
+                if m2 <= 0:
+                    blocked_res = r2
+        if not used_all or abs(m_final - 1.0) < 1e-9:
+            continue
+        factors[str(op.id)] = m_final
+        ev_used[str(op.id)] = used_all
+        if m_final <= 0:
+            br = blocked_res or lead
             warnings.append({
                 "type": "blocked",
                 "operation_id": str(op.id),
                 "operation_name": op.name,
-                "resource_id": str(r.id),
-                "resource_name": r.name,
-                "message": "Операция «%s» попадает в простой ресурса «%s» (мощность 0) — срок невыполним" % (op.name, r.name),
+                "resource_id": str(br.id) if br else "",
+                "resource_name": br.name if br else "",
+                "message": "Операция «%s» попадает в простой ресурса «%s» (мощность 0) — срок невыполним" % (op.name, (br.name if br else "")),
             })
 
     # Второй проход: пересчёт длительностей с учётом эффективной мощности
