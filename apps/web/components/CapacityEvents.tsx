@@ -157,6 +157,8 @@ export default function CapacityEvents({
               style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}>＋ Форсаж</button>
             <button type="button" onClick={() => openNew('reduced')} title="Ограничение — снижение мощности на период"
               style={{ background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}>＋ Ограничение</button>
+            <button type="button" onClick={() => openNew('breakdown')} title="Простой/поломка — ресурс недоступен (мощность 0) на период"
+              style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', color: '#FCA5A5', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}>＋ Простой/поломка</button>
           </span>
         )}
       </div>
