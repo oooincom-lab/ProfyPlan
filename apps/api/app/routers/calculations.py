@@ -198,7 +198,8 @@ async def run_cpm(
                 pass
 
             n_cpm = _NodeCpm()
-            n_cpm.early_start = node_cpm.early_start
+            # в CPM время в часах → переводим старт в рабочие дни
+            n_cpm.early_start = float(node_cpm.early_start) / hpd_cpm
             n_cpm.total_duration = days_cpm
             wins_cpm = await op_day_windows(n_cpm, win_cpm, ds_cpm, res_cpm, anchor_cpm)
             if not wins_cpm:
