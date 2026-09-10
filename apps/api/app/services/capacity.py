@@ -55,10 +55,7 @@ def schedule_window(slots) -> tuple:
     de = max(ends)
     if de <= ds:
         de = ds + DEFAULT_WINDOW_HOURS
-    hpd = 0.0
-    for sl in work:
-        hpd += max(float(sl.end_hour) - float(sl.start_hour), 0.0)
-    win = max(de - ds, hpd, 0.5)
+    win = max(de - ds, 0.5)
     return ds, win
 
 

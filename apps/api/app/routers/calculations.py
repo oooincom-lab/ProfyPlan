@@ -132,6 +132,24 @@ async def run_cpm(
         )
         res_map_cpm = {r.id: r for r in rr_cpm.scalars().all()}
 
+    # Графики работы ресурсов → рабочее окно дня (как в календарном расчёте)
+    sched_ids_cpm = {r.schedule_id for r in res_map_cpm.values() if r.schedule_id}
+    slots_map_cpm: dict = defaultdict(list)
+    if sched_ids_cpm:
+        slr_cpm = await db.execute(
+            select(WorkScheduleSlot).where(WorkScheduleSlot.schedule_id.in_(sched_ids_cpm))
+        )
+        for sl in slr_cpm.scalars().all():
+            slots_map_cpm[sl.schedule_id].append(sl)
+
+    def win_for_op_cpm(op: Operation):
+        ors = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
+        for or_ in ors:
+            r0 = res_map_cpm.get(or_.resource_id)
+            if r0 and r0.schedule_id and slots_map_cpm.get(r0.schedule_id):
+                return schedule_window(slots_map_cpm[r0.schedule_id])
+        return DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS
+
     ev_map_cpm: dict = defaultdict(list)
     if res_ids_cpm:
         evr_cpm = await db.execute(
@@ -155,7 +173,8 @@ async def run_cpm(
             node_cpm = result.nodes.get(str(op.id))
             if not node_cpm:
                 continue
-            wins_cpm = await op_day_windows(node_cpm, DEFAULT_WINDOW_HOURS, DEFAULT_DAY_START, res_cpm, anchor_cpm)
+            ds_cpm, win_cpm = win_for_op_cpm(op)
+            wins_cpm = await op_day_windows(node_cpm, win_cpm, ds_cpm, res_cpm, anchor_cpm)
             if not wins_cpm:
                 continue
             ors_cpm = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
