@@ -443,17 +443,30 @@ async def run_schedule(
             f_date = await working_day_index_to_date(resolver, anchor, max(finish_idx, 0))
             ls_date = await working_day_index_to_date(resolver, anchor, max(ls_idx, 0))
             lf_date = await working_day_index_to_date(resolver, anchor, max(lf_idx, 0))
-            # Точность до минут: остаток рабочего дня переводим в часы/минуты
+            # Точность до минут: рабочие часы распределяются по рабочим дням
+            # (рабочий день начинается в WORKDAY_START_HOUR, ночь и выходные пропускаются)
             hpd_n = float(hpd_by_id.get(nid, 8.0)) or 8.0
             dur_days = float(node.total_duration)
-            start_abs = float(es_days)
-            end_abs = start_abs + dur_days
-            di_s, fr_s = int(math.floor(start_abs)), start_abs - math.floor(start_abs)
-            di_e, fr_e = int(math.floor(end_abs)), end_abs - math.floor(end_abs)
+            di_s = int(math.floor(float(es_days)))
+            start_hour = WORKDAY_START_HOUR + (float(es_days) - di_s) * hpd_n
+            rem_h = dur_days * hpd_n
+            di_e = di_s
+            end_hour = start_hour
+            guard = 0
+            while rem_h > 1e-9 and guard < 2000:
+                avail = hpd_n - (end_hour - WORKDAY_START_HOUR)
+                if rem_h <= avail:
+                    end_hour += rem_h
+                    rem_h = 0.0
+                else:
+                    rem_h -= avail
+                    di_e += 1
+                    end_hour = WORKDAY_START_HOUR
+                guard += 1
             sd_dt = await working_day_index_to_date(resolver, anchor, max(di_s, 0))
             ed_dt = await working_day_index_to_date(resolver, anchor, max(di_e, 0))
-            start_dt = (datetime.combine(sd_dt, time.min) + timedelta(hours=fr_s * hpd_n)).replace(second=0, microsecond=0)
-            end_dt = (datetime.combine(ed_dt, time.min) + timedelta(hours=fr_e * hpd_n)).replace(second=0, microsecond=0)
+            start_dt = (datetime.combine(sd_dt, time.min) + timedelta(hours=start_hour)).replace(second=0, microsecond=0)
+            end_dt = (datetime.combine(ed_dt, time.min) + timedelta(hours=end_hour)).replace(second=0, microsecond=0)
             dur_min = dur_days * hpd_n * 60.0
             meta[nid] = {"start": s_date, "finish": f_date}
             out.append({

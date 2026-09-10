@@ -2838,14 +2838,23 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               })()}
               {ganttLoading && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Загрузка данных CPM...</div>}
               {!ganttLoading && !ganttData && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Нет данных. Запустите CPM-расчёт для проекта.</div>}
+              {!ganttLoading && ganttData && (ganttData.warnings || []).length > 0 && (
+                <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(ganttData.warnings || []).map((wn: any, i: number) => (
+                    <div key={'w' + i} style={{ fontSize: 12, color: wn.type === 'blocked' ? '#FCA5A5' : '#FCD34D', background: wn.type === 'blocked' ? 'rgba(239,68,68,.08)' : 'rgba(245,158,11,.08)', border: `1px solid ${wn.type === 'blocked' ? 'rgba(239,68,68,.35)' : 'rgba(245,158,11,.35)'}`, borderRadius: 8, padding: '6px 10px' }}>
+                      {wn.type === 'blocked' ? '⛔ ' : '⚠️ '}{wn.message}
+                    </div>
+                  ))}
+                </div>
+              )}
               {!ganttLoading && ganttData && (
                 <div style={{ overflowX: 'auto' }}>
                   <table className="tbl">
                     <thead><tr>
                       <th style={{ width: 280 }}>Операция</th>
-                      <th style={{ width: 70 }}>Длит. (дн)</th>
-                      <th style={{ width: 105 }}>Старт</th>
-                      <th style={{ width: 105 }}>Финиш</th>
+                      <th style={{ width: 150 }}>Длительность</th>
+                      <th style={{ width: 130 }}>Старт</th>
+                      <th style={{ width: 130 }}>Финиш</th>
                       <th style={{ width: 105 }}>Поздн. старт</th>
                       <th style={{ width: 105 }}>Поздн. финиш</th>
                       <th style={{ width: 72 }}>Резерв</th>
@@ -2862,14 +2871,24 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                         const isCritical = n.is_critical === true || n.total_float_days === 0;
                         const tf = n.total_float_days ?? 0;
                         const fmt = (d: string) => d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '—';
+                        const fmtDT = (s?: string) => {
+                          if (!s) return '—';
+                          return s.length > 10 ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)} ${s.slice(11, 16)}` : fmt(s);
+                        };
                         return (
                           <tr key={n.id}>
                             <td style={{ color: isCritical ? '#f87171' : '#E8EEF5', fontWeight: isCritical ? 600 : 400 }}>
                               {isCritical ? '🔴 ' : ''}{n.name}
+                              {n.capacity_multiplier && Number(n.capacity_multiplier) !== 1 ? (
+                                <span title={(n.capacity_events || []).map((e: any) => `${e.event_type} ×${e.capacity_multiplier} — ${e.reason}`).join('; ')}
+                                  style={{ marginLeft: 8, fontSize: 10.5, color: Number(n.capacity_multiplier) > 1 ? '#86EFAC' : '#FCD34D', border: '1px solid rgba(134,239,172,.3)', borderRadius: 10, padding: '1px 6px', whiteSpace: 'nowrap' }}>
+                                  ×{n.capacity_multiplier}
+                                </span>
+                              ) : null}
                             </td>
-                            <td className="t-mono">{Number(dur).toFixed(1)}</td>
-                            <td className="t-mono">{fmt(n.early_start_date)}</td>
-                            <td className="t-mono">{fmt(n.early_finish_date)}</td>
+                            <td className="t-mono">{n.duration_text || (Number(dur).toFixed(1) + ' дн')}</td>
+                            <td className="t-mono">{fmtDT(n.start_datetime || n.early_start_date)}</td>
+                            <td className="t-mono">{fmtDT(n.finish_datetime || n.early_finish_date)}</td>
                             <td className="t-mono">{fmt(n.late_start_date)}</td>
                             <td className="t-mono">{fmt(n.late_finish_date)}</td>
                             <td className="t-mono" style={{ color: tf === 0 ? '#10B981' : '#F59E0B' }}>{tf === 0 ? '0 (КП)' : Number(tf).toFixed(1)}</td>
