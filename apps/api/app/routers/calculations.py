@@ -135,7 +135,12 @@ async def run_cpm(
     # Графики работы ресурсов → рабочее окно дня (как в календарном расчёте)
     sched_ids_cpm = {r.schedule_id for r in res_map_cpm.values() if r.schedule_id}
     slots_map_cpm: dict = defaultdict(list)
+    schedules_cpm: dict = {}
     if sched_ids_cpm:
+        sch_cpm = await db.execute(
+            select(WorkSchedule).where(WorkSchedule.id.in_(sched_ids_cpm), WorkSchedule.tenant_id == tenant_id)
+        )
+        schedules_cpm = {x.id: x for x in sch_cpm.scalars().all()}
         slr_cpm = await db.execute(
             select(WorkScheduleSlot).where(WorkScheduleSlot.schedule_id.in_(sched_ids_cpm))
         )
@@ -149,6 +154,17 @@ async def run_cpm(
             if r0 and r0.schedule_id and slots_map_cpm.get(r0.schedule_id):
                 return schedule_window(slots_map_cpm[r0.schedule_id])
         return DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS
+
+    def hpd_for_op_cpm(op: Operation) -> float:
+        """Рабочих часов в день по графику ресурса (для перевода часов в дни)."""
+        ors = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
+        for or_ in ors:
+            r0 = res_map_cpm.get(or_.resource_id)
+            if r0 and r0.schedule_id and slots_map_cpm.get(r0.schedule_id):
+                sched0 = schedules_cpm.get(r0.schedule_id)
+                if sched0:
+                    return float(schedule_hours_per_day(sched0, slots_map_cpm[r0.schedule_id]))
+        return 8.0
 
     ev_map_cpm: dict = defaultdict(list)
     if res_ids_cpm:
@@ -174,7 +190,17 @@ async def run_cpm(
             if not node_cpm:
                 continue
             ds_cpm, win_cpm = win_for_op_cpm(op)
-            wins_cpm = await op_day_windows(node_cpm, win_cpm, ds_cpm, res_cpm, anchor_cpm)
+            hpd_cpm = hpd_for_op_cpm(op) or 8.0
+            dur_days_cpm = float(node_cpm.total_duration) / hpd_cpm
+            days_cpm = max(int(math.ceil(dur_days_cpm - 1e-9)), 1)
+
+            class _NodeCpm:
+                pass
+
+            n_cpm = _NodeCpm()
+            n_cpm.early_start = node_cpm.early_start
+            n_cpm.total_duration = days_cpm
+            wins_cpm = await op_day_windows(n_cpm, win_cpm, ds_cpm, res_cpm, anchor_cpm)
             if not wins_cpm:
                 continue
             ors_cpm = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
