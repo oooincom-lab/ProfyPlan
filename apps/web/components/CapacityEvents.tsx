@@ -28,26 +28,39 @@ const TYPE_META: Record<string, { label: string; dot: string; fg: string }> = {
 };
 const meta = (t: string) => TYPE_META[t] || TYPE_META.other;
 
-const fmtDate = (s: string) => {
-  if (!s) return '—';
-  const [y, m, d] = s.split('-');
-  return `${d}.${m}.${y.slice(2)}`;
-};
 const fmtDT = (s?: string | null) => {
   if (!s) return '—';
   const d = new Date(s);
   if (isNaN(d.getTime())) return String(s);
   const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)} (${p(d.getHours())}:${p(d.getMinutes())})`;
 };
-// значение для <input type="datetime-local"> — 'YYYY-MM-DDTHH:MM'
-const toLocalInput = (s?: string | null) => (s ? String(s).slice(0, 16) : '');
-// диапазон: если это «весь день» — только даты, иначе дата+время
-const fmtRange = (a?: string | null, b?: string | null) => {
-  const aAll = !!a && /T00:00(:00)?$/.test(String(a));
-  const bAll = !!b && /T23:59/.test(String(b));
-  return aAll && bAll ? `${fmtDate(String(a))}–${fmtDate(String(b))}` : `${fmtDT(a)} – ${fmtDT(b)}`;
+// ISO (2026-09-15T08:30:00) → 'ДД.ММ.ГГ ЧЧ:ММ'
+const isoToDisp = (s?: string | null) => {
+  if (!s) return '';
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!m) return String(s).slice(0, 16);
+  return `${m[3]}.${m[2]}.${m[1].slice(2)} ${m[4]}:${m[5]}`;
 };
+// 'ДД.ММ.ГГ ЧЧ:ММ' → ISO 'YYYY-MM-DDTHH:MM'
+const parseDisp = (s?: string | null) => {
+  const m = String(s || '').match(/^(\d{2})\.(\d{2})\.(\d{2,4})\s+(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const yy = m[3].length === 4 ? m[3] : '20' + m[3];
+  return `${yy}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`;
+};
+// маска ввода: цифры → ДД.ММ.ГГ ЧЧ:ММ
+const maskDisp = (raw: string) => {
+  const d = String(raw).replace(/\D/g, '').slice(0, 10);
+  let out = d.slice(0, 2);
+  if (d.length > 2) out += '.' + d.slice(2, 4);
+  if (d.length > 4) out += '.' + d.slice(4, 6);
+  if (d.length > 6) out += ' ' + d.slice(6, 8);
+  if (d.length > 8) out += ':' + d.slice(8, 10);
+  return out;
+};
+// диапазон всегда в формате ДД.ММ.ГГ (ЧЧ:ММ)
+const fmtRange = (a?: string | null, b?: string | null) => `${fmtDT(a)} – ${fmtDT(b)}`;
 const num = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
 
 export default function CapacityEvents({
@@ -114,7 +127,9 @@ export default function CapacityEvents({
   const save = async () => {
     if (!modal) return;
     if (!modal.reason.trim()) { setErr('Укажите причину'); return; }
-    if (!modal.date_from || !modal.date_to) { setErr('Укажите период (от и до)'); return; }
+    const fromIso = parseDisp(modal.date_from);
+    const toIso = parseDisp(modal.date_to);
+    if (!fromIso || !toIso) { setErr('Укажите период в формате ДД.ММ.ГГ ЧЧ:ММ'); return; }
     setSaving(true); setErr(null);
     try {
       const body: any = {
@@ -124,8 +139,8 @@ export default function CapacityEvents({
         capacity_multiplier: num(modal.capacity_multiplier),
         capacity_absolute: num(modal.capacity_absolute),
         reason: modal.reason.trim(),
-        date_from: modal.date_from,
-        date_to: modal.date_to,
+        date_from: fromIso,
+        date_to: toIso,
       };
       if (modal.id) await af('/resource-events/' + modal.id, { method: 'PUT', body: JSON.stringify(body) });
       else await af('/resource-events/', { method: 'POST', body: JSON.stringify(body) });
@@ -184,7 +199,7 @@ export default function CapacityEvents({
           {list.map((e) => {
             const m = meta(e.event_type);
             return (
-              <div key={e.id} onClick={() => editing && setModal({ ...e })}
+              <div key={e.id} onClick={() => editing && setModal({ ...e, date_from: isoToDisp(e.date_from), date_to: isoToDisp(e.date_to) })}
                 style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: '#CBD5E1', cursor: editing ? 'pointer' : 'default', padding: '2px 4px', borderRadius: 5, opacity: e.is_active === false ? 0.45 : 1 }}
                 title={editing ? 'Клик — редактировать' : undefined}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
@@ -221,13 +236,15 @@ export default function CapacityEvents({
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>С даты и времени</span>
-                <input type="datetime-local" value={toLocalInput(modal.date_from)} onChange={(e) => setModal({ ...modal, date_from: e.target.value })}
+                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>С — ДД.ММ.ГГ ЧЧ:ММ</span>
+                <input value={modal.date_from} onChange={(e) => setModal({ ...modal, date_from: maskDisp(e.target.value) })}
+                  placeholder="15.09.26 08:30" inputMode="numeric"
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>По дату и время</span>
-                <input type="datetime-local" value={toLocalInput(modal.date_to)} onChange={(e) => setModal({ ...modal, date_to: e.target.value })}
+                <span style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase', letterSpacing: '.05em' }}>По — ДД.ММ.ГГ ЧЧ:ММ</span>
+                <input value={modal.date_to} onChange={(e) => setModal({ ...modal, date_to: maskDisp(e.target.value) })}
+                  placeholder="16.09.26 17:45" inputMode="numeric"
                   style={{ background: '#0A1628', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '5px 8px', fontSize: 12 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
