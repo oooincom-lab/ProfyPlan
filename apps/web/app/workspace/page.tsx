@@ -215,6 +215,7 @@ export default function AppShell() {
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('free');
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [ganttData, setGanttData] = useState<any>(null);
+  const [projCapacity, setProjCapacity] = useState<any>(null);
   const [ganttLoading, setGanttLoading] = useState(false);
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
@@ -1675,6 +1676,10 @@ export default function AppShell() {
       const body = p?.start_date ? { start_date: p.start_date } : {};
       const r = await apiF<any>(`/projects/${p.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify(body) });
       setGanttData(r);
+      try {
+        const rep = await apiF<any>(`/reports/lost-hours?project_id=${p.id}`);
+        setProjCapacity(rep);
+      } catch { setProjCapacity(null); }
     } catch (e: any) { setMsg('Ошибка загрузки Ганта: ' + (e.message || String(e))); }
     setGanttLoading(false);
   };
@@ -2838,6 +2843,54 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               })()}
               {ganttLoading && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Загрузка данных CPM...</div>}
               {!ganttLoading && !ganttData && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Нет данных. Запустите CPM-расчёт для проекта.</div>}
+              {(() => {
+                const fdt = (s?: string) => {
+                  if (!s) return '—';
+                  return s.length > 10 ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)} ${s.slice(11, 16)}` : s;
+                };
+                if (ganttLoading || !projCapacity || !(projCapacity.totals?.events > 0)) return null;
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600, marginBottom: 6 }}>
+                      ⚡ События мощности проекта и потери
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                      <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px', minWidth: 300 }}>
+                        <div style={{ fontSize: 11, color: '#8FA3BD', marginBottom: 6 }}>
+                          Итого: потери <b style={{ color: '#FCA5A5' }}>{projCapacity.totals?.lost_text}</b> · выработка <b style={{ color: '#86EFAC' }}>{projCapacity.totals?.extra_text}</b> · событий {projCapacity.totals?.events}
+                        </div>
+                        <table className="tbl" style={{ fontSize: 11.5 }}>
+                          <thead><tr><th>Причина</th><th>Потери</th><th>Выработка</th><th>Соб.</th></tr></thead>
+                          <tbody>
+                            {(projCapacity.by_reason || []).map((x: any) => (
+                              <tr key={x.reason} title={(x.resources || []).join(', ')}>
+                                <td>{x.reason}{(x.types_ru || []).length ? <span style={{ color: '#5A7090' }}> · {x.types_ru.join('/')}</span> : null}</td>
+                                <td className="t-mono" style={{ color: x.lost_hours ? '#FCA5A5' : '#5A7090' }}>{x.lost_hours ? x.lost_text : '—'}</td>
+                                <td className="t-mono" style={{ color: x.extra_hours ? '#86EFAC' : '#5A7090' }}>{x.extra_hours ? x.extra_text : '—'}</td>
+                                <td className="t-mono" style={{ color: '#8FA3BD' }}>{x.events}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px', flex: 1, minWidth: 320, maxHeight: 240, overflow: 'auto' }}>
+                        <div style={{ fontSize: 11, color: '#8FA3BD', marginBottom: 6 }}>Журнал событий</div>
+                        {(projCapacity.events || []).map((e: any) => (
+                          <div key={e.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11.5, padding: '2px 0', color: '#CBD5E1' }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: e.event_type === 'boost' ? '#22C55E' : (e.event_type === 'reduced' ? '#F59E0B' : '#EF4444'), flexShrink: 0 }} />
+                            <span style={{ color: '#8FA3BD', flexShrink: 0 }}>{fdt(e.date_from)} – {fdt(e.date_to)}</span>
+                            <span style={{ color: '#E8EEF5', flexShrink: 0 }}>{e.resource_name || '—'}</span>
+                            <span style={{ color: '#5A7090', flexShrink: 0 }}>{e.event_type_ru}{e.capacity_multiplier != null ? ' ×' + e.capacity_multiplier : ''}</span>
+                            <span style={{ color: '#7C93B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.reason}</span>
+                            {e.lost_hours ? <span style={{ color: '#FCA5A5', flexShrink: 0 }}>−{e.lost_text}</span> : null}
+                            {e.extra_hours ? <span style={{ color: '#86EFAC', flexShrink: 0 }}>+{e.extra_text}</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {!ganttLoading && ganttData && (ganttData.warnings || []).length > 0 && (
                 <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {(ganttData.warnings || []).map((wn: any, i: number) => (
