@@ -7,6 +7,7 @@ import type { WinRec, LayState, OrderTab } from './useWindows';
 import DirectoryTable from '@/components/DirectoryTable';
 import ReferenceField from '@/components/ReferenceField';
 import WorkScheduleManager from '@/components/WorkScheduleManager';
+import CapacityEvents from '@/components/CapacityEvents';
 import ProductionCalendarManager from '@/components/ProductionCalendarManager';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
@@ -1278,6 +1279,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                             </div>
                           );
                         })()}
+                        <CapacityEvents resourceId={it.resource_id} projectId={o.project_id || null} editing={!!w.editing} />
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
                           <button type="button" title="Открыть окно календаря ресурса (график, версии, исключения)"
                             onClick={() => onDirCalendar?.(it.resource_id, it.resource_name || 'Ресурс')}
