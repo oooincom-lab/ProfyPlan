@@ -101,7 +101,7 @@ async def create_global_resource(
         tenant_id=tenant_id,
         project_id=None,
         schedule_id=UUID(body.schedule_id) if body.schedule_id else None,
-        **body.model_dump(exclude={"parent_id", "schedule_id"}),
+        **body.model_dump(exclude={"parent_id", "schedule_id", "department_name", "schedule_name", "usage_count"}),
         parent_id=UUID(body.parent_id) if body.parent_id else None,
     )
     db.add(resource)
@@ -148,6 +148,8 @@ async def update_global_resource(
         raise HTTPException(status_code=404, detail="Resource not found")
 
     data = body.model_dump(exclude_unset=True)
+    for _k in ("department_name", "schedule_name", "usage_count"):
+        data.pop(_k, None)
     if "schedule_id" in data:
         data["schedule_id"] = UUID(data["schedule_id"]) if data["schedule_id"] else None
     if "parent_id" in data:
