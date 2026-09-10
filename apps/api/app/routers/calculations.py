@@ -36,6 +36,9 @@ from app.services.scheduling import (
 calculator_router = APIRouter(prefix="/v1/projects/{project_id}/calculate", tags=["calculations"])
 
 
+# Начало рабочего дня (час) — для сопоставления периодов событий с рабочими днями
+WORKDAY_START_HOUR = 8
+
 # Порог предупреждения muri: форсаж дольше N рабочих дней — риск перегрузки
 FORSAZH_MAX_WORKDAYS = 5
 
@@ -89,6 +92,57 @@ def _capacity_factor(events, w0: datetime, w1: datetime):
             "reason": ev.reason,
         })
     return max(m, 0.0), used
+
+def _op_day_factor(events, day_windows):
+    """Множитель мощности операции по перекрытию событий с её рабочими днями.
+
+    day_windows: список (начало_рабочего_дня, конец_рабочего_дня) — по одному на
+    каждый рабочий день операции. Доля покрытия дня — пересечение с окном дня.
+    """
+    n = len(day_windows)
+    if n <= 0:
+        return 1.0, []
+    m = 1.0
+    used = []
+    for (w0, w1) in day_windows:
+        wlen = (w1 - w0).total_seconds() / 60.0
+        if wlen <= 0:
+            continue
+        for ev in events:
+            mult = ev.capacity_multiplier
+            if mult is None:
+                continue
+            a_ = max(ev.date_from, w0)
+            b_ = min(ev.date_to, w1)
+            if b_ <= a_:
+                continue
+            share = ((b_ - a_).total_seconds() / 60.0) / wlen / n
+            m += share * (float(mult) - 1.0)
+            used.append({
+                "event_id": str(ev.id),
+                "event_type": ev.event_type,
+                "capacity_multiplier": float(mult),
+                "share": round(share * n, 4),
+                "reason": ev.reason,
+            })
+    return max(m, 0.0), used
+
+
+async def _op_day_windows(node, hpd, resolver, anchor):
+    """Рабочие дни операции как интервалы календарного времени."""
+    dur = float(node.total_duration)
+    es = float(node.early_start)
+    start_idx = int(math.floor(es))
+    n_days = max(int(math.ceil(dur - 1e-9)), 1) if dur > 0 else 1
+    extra = (es - start_idx) * hpd
+    wins = []
+    for k in range(min(n_days, 400)):
+        d = await working_day_index_to_date(resolver, anchor, start_idx + k)
+        w0 = datetime.combine(d, time(hour=WORKDAY_START_HOUR))
+        if k == 0:
+            w0 = w0 + timedelta(hours=extra)
+        wins.append((w0, w0 + timedelta(hours=hpd)))
+    return wins
 
 
 @calculator_router.post("/cpm")
@@ -463,12 +517,12 @@ async def run_schedule(
         evs = events_by_res.get(r.id) or []
         if not evs:
             continue
-        d = node_dates.get(str(op.id))
-        if not d:
+        node = result.nodes.get(str(op.id))
+        if not node:
             continue
-        w0 = datetime.combine(d["start"], time.min)
-        w1 = datetime.combine(d["finish"], time.max)
-        m, used = _capacity_factor(evs, w0, w1)
+        hpd_op = float(hpd_by_id.get(str(op.id), 8.0)) or 8.0
+        wins = await _op_day_windows(node, hpd_op, resolver, anchor)
+        m, used = _op_day_factor(evs, wins)
         if not used or abs(m - 1.0) < 1e-9:
             continue
         factors[str(op.id)] = m
