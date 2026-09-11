@@ -39,3 +39,9 @@ redisdata/
 # Secrets
 *.pem
 *.key
+
+# локальные окружения и установленные библиотеки
+apps/web/.env.local
+apps/web/.env
+apps/api/.env
+apps/api/.libs/
