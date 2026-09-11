@@ -25,6 +25,7 @@ export default function CCMV2Dashboard() {
   const [loginPass, setLoginPass] = useState('demo123');
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [resourceUsage, setResourceUsage] = useState<any[]>([]);
+  const [overload, setOverload] = useState<any>(null);
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -40,6 +41,17 @@ export default function CCMV2Dashboard() {
     })
       .then(r => r.ok ? r.json() : [])
       .then((d: any) => setResourceUsage(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [authed]);
+
+  useEffect(() => {
+    if (!authed) return;
+    const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+    fetch('https://profyplan.ru/api/v1/ccm/resource-overload', {
+      headers: { ...(t ? { Authorization: '***' + t } : {}) },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => setOverload(d))
       .catch(() => {});
   }, [authed]);
 
@@ -258,6 +270,38 @@ export default function CCMV2Dashboard() {
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.operation_count}</td>
                   <td style={{ padding: '4px 8px' }}>
                     {r.is_shared ? <span style={{ color: '#FCD34D', fontWeight: 700 }}>⚠ общий</span> : <span style={{ color: '#5A7090' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {overload && (overload.resources || []).some((r: any) => r.is_shared) && (
+        <div style={{ padding: '10px 20px', background: '#0A1628', borderBottom: '1px solid #1E3252', maxHeight: 200, overflow: 'auto' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD', marginBottom: 6 }}>
+            ⚠ Межпроектные конфликты общих ресурсов — {overload?.totals?.conflicted || 0} из {overload?.totals?.shared || 0} общих
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ color: '#5A7090', textAlign: 'left' }}>
+                <th style={{ padding: '4px 8px' }}>Ресурс</th>
+                <th style={{ padding: '4px 8px' }}>Проекты</th>
+                <th style={{ padding: '4px 8px' }}>Загрузка</th>
+                <th style={{ padding: '4px 8px' }}>Пересечение</th>
+                <th style={{ padding: '4px 8px' }}>Конфликты</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(overload.resources || []).filter((r: any) => r.is_shared).map((r: any) => (
+                <tr key={r.id} style={{ borderTop: '1px solid #1E3252', color: r.has_conflict ? '#FCD34D' : '#E8EEF5' }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{(r.assignments || []).map((a: any) => a.project_name).join(', ') || '—'}</td>
+                  <td style={{ padding: '4px 8px' }}>{r.total_text}</td>
+                  <td style={{ padding: '4px 8px', color: r.has_conflict ? '#FCD34D' : '#5A7090' }}>{r.overlap_days ? r.overlap_days + ' дн' : '—'}</td>
+                  <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>
+                    {(r.conflicts || []).slice(0, 2).map((c: any) => c.a + ' × ' + c.b + ' (' + c.days + ' дн)').join('; ') || '—'}
                   </td>
                 </tr>
               ))}
