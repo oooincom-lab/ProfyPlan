@@ -11,6 +11,11 @@ import type { BOMNode } from '@/lib/api';
 import ExcelImportWizard from '@/components/ExcelImportWizard';
 import GanttChart from '@/components/CpmGanttChart';
 
+const API_ORIGIN =
+  typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000'
+    : 'https://profyplan.ru';
+
 // ── Типы ──
 interface Op {
   id: string; num: number | string; name: string;
@@ -722,7 +727,7 @@ export default function CPMPage(){
   const loadGanttData = useCallback(async (pid: string) => {
     try {
       const T = localStorage.getItem('token') || '';
-      const res = await fetch(`https://profyplan.ru/api/v1/bom/projects/${pid}/export/mrp`, {
+      const res = await fetch(`${API_ORIGIN}/api/v1/bom/projects/${pid}/export/mrp`, {
         headers: { Authorization: `Bearer ${T}` },
       });
       if (!res.ok) return;

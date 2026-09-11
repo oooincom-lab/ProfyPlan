@@ -8,7 +8,15 @@ import type {
   OrderGroup, OrderPool,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+function resolveApiBase(): string {
+  const env = process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined') {
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:8000';
+  }
+  return env || 'https://profyplan.ru/api';
+}
+const API_BASE = resolveApiBase();
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;

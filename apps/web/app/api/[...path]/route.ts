@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Апстрим: локально — локальный API, в продакшене — боевой.
+const UPSTREAM =
+  process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8000' : 'https://profyplan.ru';
+
+
 export async function GET(request: NextRequest) {
   const path = request.nextUrl.pathname.replace('/api', '');
   const search = request.nextUrl.search;
-  const url = `https://profyplan.ru/api${path}${search}`;
+  const url = `${UPSTREAM}/api${path}${search}`;
 
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {
@@ -22,7 +27,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const path = request.nextUrl.pathname.replace('/api', '');
   const search = request.nextUrl.search;
-  const url = `https://profyplan.ru/api${path}${search}`;
+  const url = `${UPSTREAM}/api${path}${search}`;
 
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {
@@ -49,7 +54,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const path = request.nextUrl.pathname.replace('/api', '');
   const search = request.nextUrl.search;
-  const url = `https://profyplan.ru/api${path}${search}`;
+  const url = `${UPSTREAM}/api${path}${search}`;
 
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {
@@ -76,7 +81,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const path = request.nextUrl.pathname.replace('/api', '');
   const search = request.nextUrl.search;
-  const url = `https://profyplan.ru/api${path}${search}`;
+  const url = `${UPSTREAM}/api${path}${search}`;
 
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {

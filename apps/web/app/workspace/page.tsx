@@ -1,5 +1,14 @@
 'use client';
 
+// Демо-вход: значения по умолчанию — боевые; локально переопределяются окружением
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || 'planner@demo.ru';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'demo123';
+
+const API_ORIGIN =
+  typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000'
+    : 'https://profyplan.ru';
+
 import { useState, useCallback, Fragment, useRef, useEffect } from 'react';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
@@ -23,7 +32,7 @@ import WindowsLayer from '@/components/windows/WindowsLayer';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 
-const API = 'https://profyplan.ru/api/v1';
+const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
 
 const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number; render?: (val: any, row: any) => React.ReactNode; ref?: string }[] }> = {
@@ -130,7 +139,7 @@ export default function AppShell() {
   const [msg, setMsg] = useState('');
   const [authError, setAuthError] = useState(false);
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
-  const [loginForm, setLoginForm] = useState({ email: 'planner@demo.ru', password: 'demo123' });
+  const [loginForm, setLoginForm] = useState({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
   const [view, setView] = useState<View>('dashboard');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -472,14 +481,14 @@ export default function AppShell() {
   const openDirEditWindow = (entity: string, row: any) => {
     if (entity === 'resources') { win.openResEdit(row); return; }
     const dirEndpoints = (entity === 'departments' || entity === 'organizations')
-      ? { item: (id: string) => `https://profyplan.ru/api/v1/${entity}/${id}`, method: 'PATCH' as const }
+      ? { item: (id: string) => `${API_ORIGIN}/api/v1/${entity}/${id}`, method: 'PATCH' as const }
       : undefined;
     win.openDirEditWin(entity, row, DIR_COLUMNS[entity]?.columns || [], dirEndpoints);
   };
 
   const handleDirEditSave = async (entity: string, id: string, form: Record<string, string>, endpoints?: any): Promise<boolean> => {
     try {
-      const url = endpoints?.item ? endpoints.item(id) : `https://profyplan.ru/api/v1/${entity}/${id}`;
+      const url = endpoints?.item ? endpoints.item(id) : `${API_ORIGIN}/api/v1/${entity}/${id}`;
       await apiF(url, { method: endpoints?.method || 'PUT', body: JSON.stringify(form) });
       setDirRefreshKey(k => k + 1);
       loadDepartmentsAll();
@@ -493,7 +502,7 @@ export default function AppShell() {
     if (!cfg) return;
     if (panelMode === 'window') {
       const dirEndpoints = (entity === 'departments' || entity === 'organizations')
-        ? { item: (id: string) => `https://profyplan.ru/api/v1/${entity}/${id}`, method: 'PATCH' as const }
+        ? { item: (id: string) => `${API_ORIGIN}/api/v1/${entity}/${id}`, method: 'PATCH' as const }
         : undefined;
       win.openDirWin(entity, cfg.title, cfg.columns, undefined,
         entity === 'resources' ? (row: any) => win.openResEdit(row) : undefined,
@@ -513,14 +522,14 @@ export default function AppShell() {
   const openDirAddWindow = (entity: string) => {
     const cfg = DIR_COLUMNS[entity];
     const dirEndpoints = (entity === 'departments' || entity === 'organizations')
-      ? { item: (id: string) => `https://profyplan.ru/api/v1/${entity}/${id}`, method: 'PATCH' as const, list: `https://profyplan.ru/api/v1/${entity}/` }
+      ? { item: (id: string) => `${API_ORIGIN}/api/v1/${entity}/${id}`, method: 'PATCH' as const, list: `${API_ORIGIN}/api/v1/${entity}/` }
       : undefined;
     win.openDirAddWin(entity, 'Добавить — ' + (cfg?.title || entity), cfg?.columns || [], dirEndpoints);
   };
 
   const handleDirAddSave = async (entity: string, form: Record<string, string>, endpoints?: any): Promise<boolean> => {
     try {
-      const url = endpoints?.list || `https://profyplan.ru/api/v1/${entity}/`;
+      const url = endpoints?.list || `${API_ORIGIN}/api/v1/${entity}/`;
       await apiF(url, { method: 'POST', body: JSON.stringify(form) });
       setDirRefreshKey(k => k + 1);
       loadDepartmentsAll();
@@ -976,16 +985,16 @@ export default function AppShell() {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
     const extraEndpoints = entity === 'operations'
-      ? { list: 'https://profyplan.ru/api/v1/catalog-operations/', create: 'https://profyplan.ru/api/v1/catalog-operations/', item: (id: string) => `https://profyplan.ru/api/v1/catalog-operations/${id}`, method: 'PATCH' as const }
+      ? { list: `${API_ORIGIN}/api/v1/catalog-operations/`, create: `${API_ORIGIN}/api/v1/catalog-operations/`, item: (id: string) => `${API_ORIGIN}/api/v1/catalog-operations/${id}`, method: 'PATCH' as const }
       : entity === 'stages' && selectedProject
       ? {
-          list: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
-          create: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
-          item: (id: string) => `https://profyplan.ru/api/v1/project-stages/${id}`,
+          list: `${API_ORIGIN}/api/v1/projects/${selectedProject.id}/stages/`,
+          create: `${API_ORIGIN}/api/v1/projects/${selectedProject.id}/stages/`,
+          item: (id: string) => `${API_ORIGIN}/api/v1/project-stages/${id}`,
           method: 'PATCH' as const,
         }
       : entity === 'departments'
-      ? { item: (id: string) => `https://profyplan.ru/api/v1/departments/${id}`, method: 'PATCH' as const }
+      ? { item: (id: string) => `${API_ORIGIN}/api/v1/departments/${id}`, method: 'PATCH' as const }
       : undefined;
     const wid = win.openDirWin(entity, cfg.title + ' — выбор', cfg.columns,
       (row: any) => { onPick(row); win.closeWin(wid); },
@@ -1575,7 +1584,7 @@ export default function AppShell() {
     setLoading(true);
     setAuthError(false);
     try {
-      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'planner@demo.ru', password: 'demo123' }) });
+      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD }) });
       if (!r.ok) throw new Error('LOGIN_FAILED');
       const data = await r.json();
       localStorage.setItem('profyplan_token', data.access_token);
@@ -2276,7 +2285,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             <div style={{ display: 'grid', gap: 10 }}>
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: '#8FA3BD', fontSize: 12 }}>Клиент</span>
-                                <DirectoryPicker entity="counterparties" apiBase="https://profyplan.ru/api" value={editForm.client_id || null} onChange={(v) => setEditForm(f => ({ ...f, client_id: v }))} placeholder="Выбрать контрагента..." onManage={() => openDirectory('counterparties')} />
+                                <DirectoryPicker entity="counterparties" apiBase={API_ORIGIN + '/api'} value={editForm.client_id || null} onChange={(v) => setEditForm(f => ({ ...f, client_id: v }))} placeholder="Выбрать контрагента..." onManage={() => openDirectory('counterparties')} />
                               </label>
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: '#8FA3BD', fontSize: 12 }}>Кол-во</span>
@@ -2284,7 +2293,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               </label>
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: '#8FA3BD', fontSize: 12 }}>Ед. изм.</span>
-                                <DirectoryPicker entity="units" apiBase="https://profyplan.ru/api" value={editForm.unit || null} onChange={(v) => setEditForm(f => ({ ...f, unit: v }))} displayField="symbol_ru" valueField="symbol_int" subField="symbol_int" placeholder="Выбрать единицу..." onManage={() => openDirectory('units')} />
+                                <DirectoryPicker entity="units" apiBase={API_ORIGIN + '/api'} value={editForm.unit || null} onChange={(v) => setEditForm(f => ({ ...f, unit: v }))} displayField="symbol_ru" valueField="symbol_int" subField="symbol_int" placeholder="Выбрать единицу..." onManage={() => openDirectory('units')} />
                               </label>
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритет</span>
@@ -3601,7 +3610,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               </div>
               <DirectoryTable
                 entity="nomenclature"
-                apiBase="https://profyplan.ru/api"
+                apiBase={API_ORIGIN + '/api'}
                 synonyms={NOMENCLATURE_SYNONYMS}
                 columns={[
                   { key: 'name', label: 'Название', width: 240 },
@@ -3622,7 +3631,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               </div>
               <DirectoryTable
                 entity="units"
-                apiBase="https://profyplan.ru/api"
+                apiBase={API_ORIGIN + '/api'}
                 synonyms={UNIT_SYNONYMS}
                 columns={[
                   { key: 'code', label: 'ОКЕИ', width: 80 },
@@ -3642,7 +3651,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               </div>
               <DirectoryTable
                 entity="counterparties"
-                apiBase="https://profyplan.ru/api"
+                apiBase={API_ORIGIN + '/api'}
                 columns={DIR_COLUMNS.counterparties.columns}
               />
             </div>
@@ -3842,9 +3851,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {
                         endpoints: {
-                          list: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
-                          create: `https://profyplan.ru/api/v1/projects/${selectedProject.id}/stages/`,
-                          item: (id: string) => `https://profyplan.ru/api/v1/project-stages/${id}`,
+                          list: `${API_ORIGIN}/api/v1/projects/${selectedProject.id}/stages/`,
+                          create: `${API_ORIGIN}/api/v1/projects/${selectedProject.id}/stages/`,
+                          item: (id: string) => `${API_ORIGIN}/api/v1/project-stages/${id}`,
                           method: 'PATCH' as const,
                         },
                       })}>Этапы</button>
@@ -3904,7 +3913,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   {directoryModal === 'nomenclature' && (
                     <DirectoryTable
                       entity="nomenclature"
-                      apiBase="https://profyplan.ru/api"
+                      apiBase={API_ORIGIN + '/api'}
                       synonyms={NOMENCLATURE_SYNONYMS}
                       columns={[
                         { key: 'name', label: 'Название', width: 240 },
@@ -3919,7 +3928,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   {directoryModal === 'units' && (
                     <DirectoryTable
                       entity="units"
-                      apiBase="https://profyplan.ru/api"
+                      apiBase={API_ORIGIN + '/api'}
                       synonyms={UNIT_SYNONYMS}
                       columns={[
                         { key: 'code', label: 'ОКЕИ', width: 80 },
@@ -3933,14 +3942,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   {directoryModal === 'counterparties' && (
                     <DirectoryTable
                       entity="counterparties"
-                      apiBase="https://profyplan.ru/api"
+                      apiBase={API_ORIGIN + '/api'}
                       columns={DIR_COLUMNS.counterparties.columns}
                     />
                   )}
                   {directoryModal === 'resources' && (
                     <DirectoryTable
                       entity="resources"
-                      apiBase="https://profyplan.ru/api"
+                      apiBase={API_ORIGIN + '/api'}
                       columns={DIR_COLUMNS.resources.columns}
                       onManageCalendar={(row: any) => win.openCalWin(row.id, row.name)}
                     />
@@ -3948,17 +3957,17 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   {directoryModal === 'departments' && (
                     <DirectoryTable
                       entity="departments"
-                      apiBase="https://profyplan.ru/api"
+                      apiBase={API_ORIGIN + '/api'}
                       columns={DIR_COLUMNS.departments.columns}
-                      endpoints={{ item: (id: string) => `https://profyplan.ru/api/v1/departments/${id}`, method: 'PATCH' as const }}
+                      endpoints={{ item: (id: string) => `${API_ORIGIN}/api/v1/departments/${id}`, method: 'PATCH' as const }}
                     />
                   )}
                   {directoryModal === 'organizations' && (
                     <DirectoryTable
                       entity="organizations"
-                      apiBase="https://profyplan.ru/api"
+                      apiBase={API_ORIGIN + '/api'}
                       columns={DIR_COLUMNS.organizations.columns}
-                      endpoints={{ item: (id: string) => `https://profyplan.ru/api/v1/organizations/${id}`, method: 'PATCH' as const }}
+                      endpoints={{ item: (id: string) => `${API_ORIGIN}/api/v1/organizations/${id}`, method: 'PATCH' as const }}
                     />
                   )}
                 </div>
@@ -4084,7 +4093,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         title={dirManager.title}
         entity={dirManager.entity}
         columns={dirManager.columns}
-        apiBase="https://profyplan.ru/api"
+        apiBase={API_ORIGIN + '/api'}
         variant={dirManager.variant || 'modal'}
         onManageCalendar={dirManager.entity === 'resources' ? (row: any) => win.openCalWin(row.id, row.name) : undefined}
         debug={debugMode}
@@ -4269,7 +4278,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         return (
           <AppModal title="Добавить операцию в маршрут" code="op-add" debug={debugMode} onClose={() => { setAppModal(null); setModalName(''); setModalResId(null); setModalOpId(null); setModalOpName(null); setModalOpDur(null); }} accent="#22D3EE">
             <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
-            <ReferenceField entity="operations" pathOverride="https://profyplan.ru/api/v1/catalog-operations/" value={modalOpId} onChange={v => setModalOpId(v)} onOpenBrowser={openDirForPick} onPickItem={row => { setModalOpId(String(row.id)); setModalOpName(row.name); setModalOpDur(Number(row.default_duration_hours) || 1); }} placeholder="Выбрать операцию…" />
+            <ReferenceField entity="operations" pathOverride={API_ORIGIN + '/api/v1/catalog-operations/'} value={modalOpId} onChange={v => setModalOpId(v)} onOpenBrowser={openDirForPick} onPickItem={row => { setModalOpId(String(row.id)); setModalOpName(row.name); setModalOpDur(Number(row.default_duration_hours) || 1); }} placeholder="Выбрать операцию…" />
             <div style={{ fontSize: 11.5, color: '#8FA3BD', margin: '10px 0 6px' }}>Ресурс * <span style={{ color: '#5A7090' }}>(обязательно — операция без ресурса не участвует в расчёте мощности):</span></div>
             <ReferenceField entity="resources" value={modalResId} onChange={v => setModalResId(v)} onOpenBrowser={openDirForPick} placeholder="Выбрать ресурс…" />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>

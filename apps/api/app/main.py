@@ -32,6 +32,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Совместимость локального запуска: клиент может обращаться по пути с префиксом /api
+    # (на проде этот префикс срезает nginx) — срезаем его, если он пришёл напрямую.
+    @app.middleware("http")
+    async def _strip_api_prefix(request, call_next):
+        path = request.scope.get("path") or ""
+        if path.startswith("/api/"):
+            request.scope["path"] = path[4:]
+        return await call_next(request)
+
     from app.routers import auth, projects, resources, global_resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check, project_stages, catalog_operations, departments, order_resources, schedule_assignments, calendar_exceptions, organizations, resource_events, reports, department_quotas, reports_loading, reports_departments
     from app.routers.suppliers import sc_router
     app.include_router(auth.router)

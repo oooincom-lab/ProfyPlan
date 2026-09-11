@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react';
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'https://profyplan.ru/api') + '/v1';
+function resolveApiBase(): string {
+  const env = process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined') {
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:8000';
+  }
+  return env || 'https://profyplan.ru/api';
+}
+const API = resolveApiBase() + '/v1';
 
 type Ev = {
   id?: string;
