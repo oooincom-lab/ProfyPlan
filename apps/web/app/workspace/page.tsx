@@ -31,6 +31,7 @@ import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
+import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -3870,6 +3871,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <button className="btn btn-secondary btn-sm" onClick={() => navTo('projects')}>← К проектам</button>
               </div>
             </>
+          )}
+
+          {/* ═══ Планирование и расчёт: настройки с наследованием (шаг 1.1) ═══ */}
+          {view === 'settings' && !selectedProject && (
+            <PlanningSettingsPanel projectId={null} groupId={null} />
           )}
 
           {/* ═══ DIRECTORY MODAL ═══ */}
