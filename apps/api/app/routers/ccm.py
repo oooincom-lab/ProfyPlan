@@ -1384,17 +1384,8 @@ async def sync_to_google_sheets(
     }
 
 
-@ccm_router.get("/resource-overload")
-async def resource_overload(
-    tenant_id: str = Depends(get_current_tenant_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Межпроектная перегрузка общих ресурсов.
-
-    По каждому глобальному ресурсу: в каких проектах используется, период и часы
-    загрузки (с учётом доли мощности проекта и квоты подразделения), а также
-    пересечения периодов между проектами — кандидаты на конфликт.
-    """
+async def _overload_rows(db: AsyncSession, tenant_id) -> list:
+    """Расчёт межпроектной перегрузки общих ресурсов (список ресурсов)."""
     from collections import defaultdict
     from sqlalchemy import func
     from app.models.resource import Resource
@@ -1530,6 +1521,21 @@ async def resource_overload(
         })
 
     out.sort(key=lambda x: (-(x["overlap_days"] or 0), -x["project_count"], -x["total_hours"]))
+    return out
+
+
+@ccm_router.get("/resource-overload")
+async def resource_overload(
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Межпроектная перегрузка общих ресурсов.
+
+    По каждому глобальному ресурсу: в каких проектах используется, период и часы
+    загрузки (с учётом доли мощности проекта и квоты подразделения), а также
+    пересечения периодов между проектами — кандидаты на конфликт.
+    """
+    out = await _overload_rows(db, tenant_id)
     shared = sum(1 for x in out if x["is_shared"])
     conflicted = sum(1 for x in out if x["has_conflict"])
     return {
@@ -1551,147 +1557,93 @@ async def overload_suggestion(
 ):
     """Предложение сдвига проекта при межпроектной перегрузке общих ресурсов.
 
-    Ищет общий ресурс проекта, занятый другими проектами с пересекающимися
-    сроками, и предлагает дату старта, когда ресурс освободится, плюс
-    пересчитанный финиш проекта (без сохранения — применяется отдельно).
+    Использует ту же сводку, что и экран конфликтов: находит общие ресурсы,
+    которые проект делит с другими проектами в пересекающиеся периоды, и
+    предлагает дату старта, когда ресурс освободится, плюс пересчитанный финиш.
     """
-    from app.models.routing import Routing, RoutingOperation
-    from app.models.product_structure import ProductStructure
-
     proj = (await db.execute(
         select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
     )).scalar_one_or_none()
     if not proj:
         raise HTTPException(404, "Проект не найден")
 
-    my_start = proj.start_date
-    my_finish = getattr(proj, "due_date", None)
+    rows = await _overload_rows(db, tenant_id)
+    my_name = proj.name
+    my_conflicts = []
+    other_ends = []
+    res_names = set()
 
-    # Ресурсы проекта — через маршрутные операции его продуктов
-    rows = (await db.execute(
-        select(RoutingOperation.resource_type_id, ProductStructure.project_id)
-        .join(Routing, RoutingOperation.routing_id == Routing.id)
-        .join(ProductStructure, Routing.product_node_id == ProductStructure.id)
-        .where(Routing.tenant_id == tenant_id, RoutingOperation.resource_type_id.isnot(None))
-    )).all()
-    # Ключи ресурсов приводим к человекочитаемому виду: в маршрутах ресурс может
-    # храниться и идентификатором, и именем — сравниваем по имени.
-    _uuid_like = set()
-    for rid, _pid in rows:
-        if not rid:
+    for r in rows:
+        mine = [a for a in (r.get("assignments") or []) if a.get("project_id") == str(project_id)]
+        if not mine:
             continue
-        try:
-            UUID(str(rid))
-            _uuid_like.add(str(rid))
-        except Exception:
-            pass
-    _name_by_id: dict = {}
-    if _uuid_like:
-        _name_by_id = {
-            str(x.id): x.name
-            for x in (await db.execute(
-                select(Resource).where(Resource.id.in_([UUID(x) for x in _uuid_like]))
-            )).scalars().all()
-        }
-
-    def res_key(rid) -> str:
-        s_ = str(rid)
-        return _name_by_id.get(s_, s_)
-
-    my_res = set()
-    others: dict = {}
-    for rid, pid in rows:
-        if not rid:
+        if resource_id and str(r.get("id")) != str(resource_id):
             continue
-        k = res_key(rid)
-        if str(pid) == str(project_id):
-            my_res.add(k)
-        else:
-            others.setdefault(k, set()).add(str(pid))
-    if resource_id:
-        my_res = {res_key(resource_id)}
-
-    all_projects = {
-        str(x.id): x
-        for x in (await db.execute(select(Project).where(Project.tenant_id == tenant_id))).scalars().all()
-    }
-
-    conflicts = []
-    for rid in my_res:
-        for pid in others.get(rid, set()):
-            other = all_projects.get(pid)
-            if not other:
+        for c in (r.get("conflicts") or []):
+            if c.get("a") != my_name and c.get("b") != my_name:
                 continue
-            o_start = getattr(other, "start_date", None)
-            o_finish = getattr(other, "due_date", None)
-            if not o_finish:
-                continue
-            # пересечение сроков
-            if my_start and my_finish and o_start:
-                if not (my_finish < o_start or my_start > o_finish):
-                    conflicts.append({
-                        "resource_id": rid,
-                        "other_project_id": pid,
-                        "other_project_name": other.name,
-                        "other_finish": o_finish.isoformat(),
-                    })
-            elif not my_start and o_start:
-                conflicts.append({
-                    "resource_id": rid,
-                    "other_project_id": pid,
-                    "other_project_name": other.name,
-                    "other_finish": o_finish.isoformat(),
-                })
+            other_name = c.get("b") if c.get("a") == my_name else c.get("a")
+            my_conflicts.append({
+                "resource_id": r.get("id"),
+                "resource_name": r.get("name"),
+                "other_project_name": other_name,
+                "from": c.get("from"),
+                "to": c.get("to"),
+                "days": c.get("days"),
+                "severity": c.get("severity"),
+            })
+            res_names.add(r.get("name"))
+            for a in (r.get("assignments") or []):
+                if a.get("project_name") == other_name and a.get("finish"):
+                    other_ends.append(a["finish"])
 
-    if not conflicts:
+    if not my_conflicts:
         return {"project_id": str(project_id), "has_conflict": False, "conflicts": [], "suggestion": None}
 
-    # дата освобождения ресурса = максимум финишей чужих проектов
-    free_at = max(datetime.fromisoformat(c["other_finish"]) for c in conflicts)
-    suggested_start = (free_at + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
-
-    res_ids = {c["resource_id"] for c in conflicts}
-    res_names = {k: k for k in res_ids}
-
-    # пересчёт финиша при новом старте (без сохранения)
-    new_finish = None
-    try:
-        from app.routers.calculations import run_schedule, ScheduleRequest
-
-        sc = await run_schedule(project_id, ScheduleRequest(start_date=suggested_start), db, tenant_id)
-        new_finish = sc.get("project_finish_date")
-    except Exception:
-        new_finish = None
-
-    cur_start = my_start.isoformat() if my_start else None
-    shift_days = None
-    if my_start:
+    _ends = []
+    for x in other_ends:
         try:
-            shift_days = max((suggested_start.date() - my_start.date()).days, 0)
+            _ends.append(datetime.fromisoformat(x))
+        except Exception:
+            pass
+    free_at = max(_ends) if _ends else None
+    suggested_start = (free_at + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0) if free_at else None
+
+    new_finish = None
+    if suggested_start:
+        try:
+            from app.routers.calculations import run_schedule, ScheduleRequest
+
+            sc = await run_schedule(project_id, ScheduleRequest(start_date=suggested_start), db, tenant_id)
+            new_finish = sc.get("project_finish_date")
+        except Exception:
+            new_finish = None
+
+    shift_days = None
+    if suggested_start and proj.start_date:
+        try:
+            shift_days = max((suggested_start.date() - proj.start_date.date()).days, 0)
         except Exception:
             shift_days = None
 
     return {
         "project_id": str(project_id),
         "has_conflict": True,
-        "conflicts": [
-            {**c, "resource_name": res_names.get(c["resource_id"], c["resource_id"][:8])}
-            for c in conflicts
-        ],
+        "conflicts": my_conflicts,
         "suggestion": {
-            "resource_names": sorted({res_names.get(r, r[:8]) for r in res_ids}),
-            "current_start": cur_start,
-            "suggested_start": suggested_start.isoformat(),
+            "resource_names": sorted(res_names),
+            "current_start": proj.start_date.isoformat() if proj.start_date else None,
+            "current_finish": getattr(proj, "due_date", None).isoformat() if getattr(proj, "due_date", None) else None,
+            "free_at": free_at.isoformat() if free_at else None,
+            "suggested_start": suggested_start.isoformat() if suggested_start else None,
             "shift_days": shift_days,
-            "free_at": free_at.isoformat(),
             "new_finish": new_finish,
-            "message": "Ресурс%s занят%s до %s — предлагается старт %s (сдвиг %s дн.)" % (
-                ("ы " + ", ".join(sorted({res_names.get(r, r[:8]) for r in res_ids}))) if len(res_ids) > 1 else (" " + (res_names.get(next(iter(res_ids)), "") if res_ids else "")),
-                "" if not conflicts else " другими проектами",
-                free_at.date().isoformat(),
-                suggested_start.date().isoformat(),
+            "message": ("Ресурс(ы) %s заняты другими проектами до %s — предлагается старт %s (сдвиг %s дн.)" % (
+                ", ".join(sorted(res_names)) if res_names else "—",
+                free_at.date().isoformat() if free_at else "?",
+                suggested_start.date().isoformat() if suggested_start else "?",
                 shift_days if shift_days is not None else "?",
-            ),
+            )),
         },
     }
 
