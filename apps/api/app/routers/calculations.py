@@ -179,10 +179,27 @@ async def run_cpm(
             if ev.project_id is None or str(ev.project_id) == str(project_id):
                 ev_map_cpm[ev.resource_id].append(ev)
 
+    # Доля мощности ресурса в проекте (регистр ProjectResource)
+    share_cpm: dict = {}
+    if res_ids_cpm:
+        pr_rows_cpm = await db.execute(
+            select(ProjectResource).where(
+                ProjectResource.project_id == project_id,
+                ProjectResource.resource_id.in_(res_ids_cpm),
+            )
+        )
+        for prc in pr_rows_cpm.scalars().all():
+            try:
+                _shc = float(prc.capacity_share) if prc.capacity_share is not None else 1.0
+            except Exception:
+                _shc = 1.0
+            if abs(_shc - 1.0) > 1e-9:
+                share_cpm[prc.resource_id] = _shc
+
     warnings_cpm: list = []
     factors_cpm: dict = {}
     ev_used_cpm: dict = {}
-    if ev_map_cpm:
+    if ev_map_cpm or share_cpm:
         anchor_cpm = project.start_date.date() if project.start_date else date.today()
         res_cpm = CalendarResolver(db, tenant_id, project.country_code or "RU")
         for op in operations:
@@ -212,11 +229,19 @@ async def run_cpm(
                     break
             m_final_cpm, used_all_cpm = 1.0, []
             blocked_cpm = None
-            if lead_cpm and ev_map_cpm.get(lead_cpm.id):
-                m1, u1 = day_factor(ev_map_cpm[lead_cpm.id], wins_cpm)
-                if u1 and abs(m1 - 1.0) > 1e-9:
-                    m_final_cpm, used_all_cpm = m1, list(u1)
-                    if m1 <= 0:
+            share_lead_cpm = 1.0
+            if lead_cpm:
+                share_lead_cpm = float(share_cpm.get(lead_cpm.id, 1.0) or 0.0)
+                if ev_map_cpm.get(lead_cpm.id):
+                    m1, u1 = day_factor(ev_map_cpm[lead_cpm.id], wins_cpm)
+                    m_final_cpm = m1 * share_lead_cpm
+                    if u1:
+                        used_all_cpm = list(u1)
+                    if m1 <= 0 or share_lead_cpm <= 0:
+                        blocked_cpm = lead_cpm
+                else:
+                    m_final_cpm = share_lead_cpm
+                    if share_lead_cpm <= 0:
                         blocked_cpm = lead_cpm
             for or_ in ors_cpm:
                 r2 = res_map_cpm.get(or_.resource_id)
@@ -225,14 +250,17 @@ async def run_cpm(
                 if not ev_map_cpm.get(r2.id):
                     continue
                 m2, u2 = day_factor(ev_map_cpm[r2.id], wins_cpm)
-                if not u2:
+                share2_cpm = float(share_cpm.get(r2.id, 1.0) or 0.0)
+                m2_total = m2 * share2_cpm
+                if not u2 and abs(share2_cpm - 1.0) < 1e-9:
                     continue
-                if m2 < 1.0 - 1e-9 and m2 < m_final_cpm:
-                    m_final_cpm = m2
+                if (m2_total < 1.0 - 1e-9 or share2_cpm <= 0) and m2_total < m_final_cpm:
+                    m_final_cpm = m2_total
+                    if u2:
+                        used_all_cpm = used_all_cpm + list(u2)
+                elif u2:
                     used_all_cpm = used_all_cpm + list(u2)
-                elif m2 < 1.0 - 1e-9:
-                    used_all_cpm = used_all_cpm + list(u2)
-                if m2 <= 0 and blocked_cpm is None:
+                if (m2 <= 0 or share2_cpm <= 0) and blocked_cpm is None:
                     blocked_cpm = r2
             if not used_all_cpm or abs(m_final_cpm - 1.0) < 1e-9:
                 continue
@@ -355,6 +383,7 @@ async def run_schedule(
 
     # Переопределение графика через регистр ProjectResource (override на проект)
     override_sched: dict = {}
+    share_by_res: dict = {}
     if res_ids:
         pr_rows = await db.execute(
             select(ProjectResource).where(
@@ -365,6 +394,12 @@ async def run_schedule(
         for pr in pr_rows.scalars().all():
             if pr.schedule_id:
                 override_sched[pr.resource_id] = pr.schedule_id
+            try:
+                _sh = float(pr.capacity_share) if pr.capacity_share is not None else 1.0
+            except Exception:
+                _sh = 1.0
+            if abs(_sh - 1.0) > 1e-9:
+                share_by_res[pr.resource_id] = _sh
 
     # Каскад календарей (v2.16): ресурс → подразделение → проект → default
     dept_sched: dict = {}
@@ -594,14 +629,21 @@ async def run_schedule(
         lead = lead_resource(op)
         m_final, used_all = 1.0, []
         blocked_res = None
+        share_lead = 1.0
         if lead:
+            share_lead = float(share_by_res.get(lead.id, 1.0) or 0.0)
             evs = events_by_res.get(lead.id) or []
             if evs:
                 m_lead, used_lead = day_factor(evs, wins)
-                if used_lead and abs(m_lead - 1.0) > 1e-9:
-                    m_final, used_all = m_lead, list(used_lead)
-                    if m_lead <= 0:
-                        blocked_res = lead
+                m_final = m_lead * share_lead
+                if used_lead:
+                    used_all = list(used_lead)
+                if m_lead <= 0 or share_lead <= 0:
+                    blocked_res = lead
+            else:
+                m_final = share_lead
+                if share_lead <= 0:
+                    blocked_res = lead
         for or_ in op_resources.get(op.id, []):
             r2 = resources.get(or_.resource_id)
             if not r2 or (lead and r2.id == lead.id):
@@ -610,15 +652,18 @@ async def run_schedule(
             if not evs2:
                 continue
             m2, used2 = day_factor(evs2, wins)
-            if not used2:
+            share2 = float(share_by_res.get(r2.id, 1.0) or 0.0)
+            m2_total = m2 * share2
+            if not used2 and abs(share2 - 1.0) < 1e-9:
                 continue
-            if m2 < 1.0 - 1e-9:
-                if m2 < m_final or m_final >= 1.0:
-                    if m2 < m_final:
-                        m_final, used_all = m2, list(used_all) + list(used2)
-                    else:
+            if m2_total < 1.0 - 1e-9 or share2 <= 0:
+                if m2_total < m_final:
+                    m_final = m2_total
+                    if used2:
                         used_all = used_all + list(used2)
-                if m2 <= 0:
+                elif used2:
+                    used_all = used_all + list(used2)
+                if m2 <= 0 or share2 <= 0:
                     blocked_res = r2
         if not used_all or abs(m_final - 1.0) < 1e-9:
             continue
