@@ -23,6 +23,7 @@ from app.models.calendar_exception import CalendarException
 from app.models.organization import Organization  # noqa: F401
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot  # noqa: F401
 from app.models.resource_event import ResourceEvent  # noqa: F401
+from app.models.resource_department_quota import ResourceDepartmentQuota  # noqa: F401
 from app.models.production_calendar import ProductionCalendar, ProductionCalendarDay  # noqa: F401
 from app.models.plan_version import (
     PlanBaseline,

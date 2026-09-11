@@ -22,6 +22,7 @@ from app.models.department import Department
 from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
 from app.models.resource_event import ResourceEvent
+from app.models.resource_department_quota import ResourceDepartmentQuota
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
 from app.services.capacity import (
     DEFAULT_DAY_START,
@@ -179,6 +180,29 @@ async def run_cpm(
             if ev.project_id is None or str(ev.project_id) == str(project_id):
                 ev_map_cpm[ev.resource_id].append(ev)
 
+    # Квоты ресурсов по подразделениям (CPM)
+    quota_map_cpm: dict = {}
+    _dept_ids_cpm = {r.department_id for r in res_map_cpm.values() if getattr(r, "department_id", None)}
+    if _dept_ids_cpm and res_ids_cpm:
+        _q_rows_cpm = await db.execute(
+            select(ResourceDepartmentQuota).where(
+                ResourceDepartmentQuota.tenant_id == tenant_id,
+                ResourceDepartmentQuota.department_id.in_(_dept_ids_cpm),
+                ResourceDepartmentQuota.resource_id.in_(res_ids_cpm),
+                ResourceDepartmentQuota.is_active.is_(True),
+            )
+        )
+        for _q in _q_rows_cpm.scalars().all():
+            try:
+                quota_map_cpm[(_q.department_id, _q.resource_id)] = float(_q.quota_share)
+            except Exception:
+                pass
+
+    def quota_of_cpm(r) -> float:
+        if r is None or not getattr(r, "department_id", None):
+            return 1.0
+        return float(quota_map_cpm.get((r.department_id, r.id), 1.0))
+
     # Доля мощности ресурса в проекте (регистр ProjectResource)
     share_cpm: dict = {}
     if res_ids_cpm:
@@ -231,7 +255,7 @@ async def run_cpm(
             blocked_cpm = None
             share_lead_cpm = 1.0
             if lead_cpm:
-                share_lead_cpm = float(share_cpm.get(lead_cpm.id, 1.0) or 0.0)
+                share_lead_cpm = float(share_cpm.get(lead_cpm.id, 1.0) or 0.0) * quota_of_cpm(lead_cpm)
                 if ev_map_cpm.get(lead_cpm.id):
                     m1, u1 = day_factor(ev_map_cpm[lead_cpm.id], wins_cpm)
                     m_final_cpm = m1 * share_lead_cpm
@@ -250,7 +274,7 @@ async def run_cpm(
                 if not ev_map_cpm.get(r2.id):
                     continue
                 m2, u2 = day_factor(ev_map_cpm[r2.id], wins_cpm)
-                share2_cpm = float(share_cpm.get(r2.id, 1.0) or 0.0)
+                share2_cpm = float(share_cpm.get(r2.id, 1.0) or 0.0) * quota_of_cpm(r2)
                 m2_total = m2 * share2_cpm
                 if not u2 and abs(share2_cpm - 1.0) < 1e-9:
                     continue
@@ -410,6 +434,29 @@ async def run_schedule(
         dept_sched = {d.id: d.schedule_id for d in dept_rows.scalars().all() if d.schedule_id}
     if project.schedule_id:
         project_sched_id = project.schedule_id
+
+    # Квоты ресурсов по подразделениям: (подразделение, ресурс) → доля мощности
+    quota_map: dict = {}
+    _dept_ids_res = {r.department_id for r in resources.values() if r.department_id}
+    if _dept_ids_res and res_ids:
+        _q_rows = await db.execute(
+            select(ResourceDepartmentQuota).where(
+                ResourceDepartmentQuota.tenant_id == tenant_id,
+                ResourceDepartmentQuota.department_id.in_(_dept_ids_res),
+                ResourceDepartmentQuota.resource_id.in_(res_ids),
+                ResourceDepartmentQuota.is_active.is_(True),
+            )
+        )
+        for _q in _q_rows.scalars().all():
+            try:
+                quota_map[(_q.department_id, _q.resource_id)] = float(_q.quota_share)
+            except Exception:
+                pass
+
+    def quota_of(r) -> float:
+        if r is None or not getattr(r, "department_id", None):
+            return 1.0
+        return float(quota_map.get((r.department_id, r.id), 1.0))
 
     sched_ids = {r.schedule_id for r in resources.values() if r.schedule_id}
     sched_ids.update(override_sched.values())
@@ -631,7 +678,7 @@ async def run_schedule(
         blocked_res = None
         share_lead = 1.0
         if lead:
-            share_lead = float(share_by_res.get(lead.id, 1.0) or 0.0)
+            share_lead = float(share_by_res.get(lead.id, 1.0) or 0.0) * quota_of(lead)
             evs = events_by_res.get(lead.id) or []
             if evs:
                 m_lead, used_lead = day_factor(evs, wins)
@@ -652,7 +699,7 @@ async def run_schedule(
             if not evs2:
                 continue
             m2, used2 = day_factor(evs2, wins)
-            share2 = float(share_by_res.get(r2.id, 1.0) or 0.0)
+            share2 = float(share_by_res.get(r2.id, 1.0) or 0.0) * quota_of(r2)
             m2_total = m2 * share2
             if not used2 and abs(share2 - 1.0) < 1e-9:
                 continue
