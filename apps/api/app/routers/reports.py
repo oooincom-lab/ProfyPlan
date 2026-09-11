@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
+from app.models.department import Department
 from app.models.project import Project
 from app.models.resource import Resource
 from app.models.resource_event import ResourceEvent
@@ -96,6 +97,18 @@ async def lost_hours_report(
     resolver = CalendarResolver(db, tenant_id, country)
 
     by_reason: dict = defaultdict(lambda: {"lost": 0.0, "extra": 0.0, "events": 0, "types": set(), "resources": set()})
+    by_dept: dict = defaultdict(lambda: {"lost": 0.0, "extra": 0.0, "events": 0, "reasons": defaultdict(float), "resources": set()})
+
+    # Подразделения ресурсов (для разреза по подразделениям)
+    _dept_ids = {r.department_id for r in resources.values() if getattr(r, "department_id", None)}
+    dept_names: dict = {}
+    if _dept_ids:
+        dept_names = {
+            d.id: d.name
+            for d in (await db.execute(
+                select(Department).where(Department.id.in_(_dept_ids), Department.tenant_id == tenant_id)
+            )).scalars().all()
+        }
     by_res: dict = defaultdict(lambda: {"lost": 0.0, "extra": 0.0, "events": 0, "reasons": defaultdict(float)})
     rows = []
 
@@ -113,6 +126,15 @@ async def lost_hours_report(
         reason = (ev.reason or "—").strip()
         rname = r.name if r else ""
         m = float(ev.capacity_multiplier) if ev.capacity_multiplier is not None else None
+
+        _dept_key = (dept_names.get(getattr(r, "department_id", None)) if r else None) or "Без подразделения"
+        by_dept[_dept_key]["lost"] += sp["lost_hours"]
+        by_dept[_dept_key]["extra"] += sp["extra_hours"]
+        by_dept[_dept_key]["events"] += 1
+        if rname:
+            by_dept[_dept_key]["resources"].add(rname)
+        if sp["lost_hours"] > 0:
+            by_dept[_dept_key]["reasons"][reason] += sp["lost_hours"]
 
         by_reason[reason]["lost"] += sp["lost_hours"]
         by_reason[reason]["extra"] += sp["extra_hours"]
@@ -186,6 +208,23 @@ async def lost_hours_report(
     total_lost = sum(x["lost_hours"] for x in rows)
     total_extra = sum(x["extra_hours"] for x in rows)
 
+    departments_out = []
+    for dname, v in by_dept.items():
+        departments_out.append({
+            "department_name": dname,
+            "lost_hours": round(v["lost"], 2),
+            "lost_text": format_duration(v["lost"] * 60, 8.0),
+            "extra_hours": round(v["extra"], 2),
+            "extra_text": format_duration(v["extra"] * 60, 8.0),
+            "events": v["events"],
+            "resources": sorted(v["resources"]),
+            "by_reason": [
+                {"reason": k2, "lost_hours": round(v2, 2), "lost_text": format_duration(v2 * 60, 8.0)}
+                for k2, v2 in sorted(v["reasons"].items(), key=lambda x: -x[1])
+            ],
+        })
+    departments_out.sort(key=lambda x: -x["lost_hours"])
+
     rows.sort(key=lambda x: (-x["lost_hours"], x["date_from"]))
     return {
         "project_id": str(project_id) if project_id else None,
@@ -200,5 +239,6 @@ async def lost_hours_report(
         },
         "by_reason": reasons_out,
         "by_resource": resources_out,
+        "by_department": departments_out,
         "events": rows,
     }

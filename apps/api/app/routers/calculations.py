@@ -257,7 +257,7 @@ async def run_cpm(
             if lead_cpm:
                 share_lead_cpm = float(share_cpm.get(lead_cpm.id, 1.0) or 0.0) * quota_of_cpm(lead_cpm)
                 if ev_map_cpm.get(lead_cpm.id):
-                    m1, u1 = day_factor(ev_map_cpm[lead_cpm.id], wins_cpm)
+                    m1, u1 = day_factor(ev_map_cpm[lead_cpm.id], wins_cpm, abs_base=(float(lead_cpm.capacity_per_unit) if lead_cpm and getattr(lead_cpm, "capacity_per_unit", None) else None))
                     m_final_cpm = m1 * share_lead_cpm
                     if u1:
                         used_all_cpm = list(u1)
@@ -273,7 +273,7 @@ async def run_cpm(
                     continue
                 if not ev_map_cpm.get(r2.id):
                     continue
-                m2, u2 = day_factor(ev_map_cpm[r2.id], wins_cpm)
+                m2, u2 = day_factor(ev_map_cpm[r2.id], wins_cpm, abs_base=(float(r2.capacity_per_unit) if getattr(r2, "capacity_per_unit", None) else None))
                 share2_cpm = float(share_cpm.get(r2.id, 1.0) or 0.0) * quota_of_cpm(r2)
                 m2_total = m2 * share2_cpm
                 if not u2 and abs(share2_cpm - 1.0) < 1e-9:
@@ -681,7 +681,7 @@ async def run_schedule(
             share_lead = float(share_by_res.get(lead.id, 1.0) or 0.0) * quota_of(lead)
             evs = events_by_res.get(lead.id) or []
             if evs:
-                m_lead, used_lead = day_factor(evs, wins)
+                m_lead, used_lead = day_factor(evs, wins, abs_base=(float(lead.capacity_per_unit) if lead and getattr(lead, "capacity_per_unit", None) else None))
                 m_final = m_lead * share_lead
                 if used_lead:
                     used_all = list(used_lead)
@@ -698,7 +698,7 @@ async def run_schedule(
             evs2 = events_by_res.get(r2.id) or []
             if not evs2:
                 continue
-            m2, used2 = day_factor(evs2, wins)
+            m2, used2 = day_factor(evs2, wins, abs_base=(float(r2.capacity_per_unit) if getattr(r2, "capacity_per_unit", None) else None))
             share2 = float(share_by_res.get(r2.id, 1.0) or 0.0) * quota_of(r2)
             m2_total = m2 * share2
             if not used2 and abs(share2 - 1.0) < 1e-9:

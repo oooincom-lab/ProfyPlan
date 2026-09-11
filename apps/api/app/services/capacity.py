@@ -59,10 +59,12 @@ def schedule_window(slots) -> tuple:
     return ds, win
 
 
-def day_factor(events, day_windows: list) -> tuple:
+def day_factor(events, day_windows: list, abs_base: float | None = None) -> tuple:
     """Множитель мощности по перекрытию событий с рабочими днями операции.
 
     day_windows: список (начало_рабочего_дня, конец_рабочего_дня).
+    abs_base: базовая мощность ресурса (capacity_per_unit) — нужна, если у события
+    задана абсолютная мощность (capacity_absolute) вместо коэффициента.
     Возвращает (m_eff, использованные события). multiplier=0 обнуляет мощность
     на своей доле; неперекрытые доли считаются нормой (×1.0).
     """
@@ -78,7 +80,12 @@ def day_factor(events, day_windows: list) -> tuple:
         for ev in events:
             mult = ev.capacity_multiplier
             if mult is None:
-                continue
+                # абсолютная мощность: отношение к базовой мощности ресурса
+                cap_abs = getattr(ev, "capacity_absolute", None)
+                if abs_base and cap_abs is not None and float(abs_base) > 0:
+                    mult = float(cap_abs) / float(abs_base)
+                else:
+                    continue
             a_ = max(ev.date_from, w0)
             b_ = min(ev.date_to, w1)
             if b_ <= a_:
@@ -89,6 +96,8 @@ def day_factor(events, day_windows: list) -> tuple:
                 "event_id": str(ev.id),
                 "event_type": ev.event_type,
                 "capacity_multiplier": float(mult),
+                "capacity_absolute": (float(ev.capacity_absolute) if getattr(ev, "capacity_absolute", None) is not None else None),
+                "is_absolute": ev.capacity_multiplier is None and getattr(ev, "capacity_absolute", None) is not None,
                 "share": round(share * n, 4),
                 "reason": ev.reason,
             })

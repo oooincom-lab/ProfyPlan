@@ -1697,6 +1697,116 @@ async def overload_suggestion(
     }
 
 
+@ccm_router.post("/multi-leveling")
+async def multi_leveling(
+    project_ids: list[UUID],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Межпроектное выравнивание: предложение сдвигов по нескольким проектам.
+
+    Проекты упорядочиваются по приоритету (высокий → низкий), затем по дате
+    старта; конфликтующие по общим ресурсам проекты сдвигаются так, чтобы
+    ресурсы не использовались одновременно. Результат — предложение
+    (применение отдельным вызовом PUT /v1/projects/{id}).
+    """
+    if not project_ids:
+        raise HTTPException(400, "Укажите хотя бы один проект")
+
+    projs = {
+        str(x.id): x
+        for x in (await db.execute(
+            select(Project).where(Project.id.in_(project_ids), Project.tenant_id == tenant_id)
+        )).scalars().all()
+    }
+    if not projs:
+        raise HTTPException(404, "Проекты не найдены")
+
+    rows = await _overload_rows(db, tenant_id)
+
+    # занятость проектов по ресурсам (для оценки окончания)
+    finish_by_proj: dict = {}
+    for r in rows:
+        for a in (r.get("assignments") or []):
+            pid = a.get("project_id")
+            if pid in projs and a.get("finish"):
+                try:
+                    f = datetime.fromisoformat(a["finish"])
+                except Exception:
+                    continue
+                if pid not in finish_by_proj or f > finish_by_proj[pid]:
+                    finish_by_proj[pid] = f
+
+    # конфликты только между выбранными проектами
+    conflicts = []
+    for r in rows:
+        for c in (r.get("conflicts") or []):
+            a_id, b_id = c.get("a_id"), c.get("b_id")
+            if a_id in projs and b_id in projs:
+                conflicts.append({"resource": r.get("name"), "a_id": a_id, "b_id": b_id,
+                                  "a": c.get("a"), "b": c.get("b"), "days": c.get("days")})
+
+    rank = {"low": 0, "normal": 1, "high": 2}
+    order = sorted(
+        projs.values(),
+        key=lambda x: (-rank.get((getattr(x, "priority", None) or "normal"), 1),
+                       getattr(x, "start_date", None) or datetime.min),
+    )
+
+    placed: dict = {}
+    plan = []
+    for i, p in enumerate(order):
+        pid = str(p.id)
+        start = getattr(p, "start_date", None)
+        finish = finish_by_proj.get(pid)
+        shift_days = 0
+        moved = False
+        if start:
+            # занятость ресурсов уже размещёнными проектами, с которыми есть конфликт
+            ends = []
+            for c in conflicts:
+                other = None
+                if c["a_id"] == pid and c["b_id"] in placed:
+                    other = c["b_id"]
+                elif c["b_id"] == pid and c["a_id"] in placed:
+                    other = c["a_id"]
+                if other and placed[other].get("finish"):
+                    ends.append(placed[other]["finish"])
+            if ends:
+                free_at = max(ends)
+                if free_at >= start:
+                    new_start = (free_at + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+                    shift_days = max((new_start.date() - start.date()).days, 0)
+                    if shift_days > 0:
+                        duration = (finish - start) if (finish and finish > start) else timedelta(days=1)
+                        start = new_start
+                        finish = start + duration
+                        moved = True
+        placed[pid] = {"start": start, "finish": finish, "rank": rank.get((getattr(p, "priority", None) or "normal"), 1)}
+        plan.append({
+            "project_id": pid,
+            "project_name": p.name,
+            "priority": (getattr(p, "priority", None) or "normal"),
+            "current_start": getattr(p, "start_date", None).isoformat() if getattr(p, "start_date", None) else None,
+            "suggested_start": start.isoformat() if start else None,
+            "suggested_finish": finish.isoformat() if finish else None,
+            "shift_days": shift_days,
+            "moved": moved,
+        })
+
+    return {
+        "project_ids": [str(x) for x in project_ids],
+        "order": [str(p.id) for p in order],
+        "plan": plan,
+        "conflicts": conflicts,
+        "summary": {
+            "projects": len(plan),
+            "moved": sum(1 for x in plan if x["moved"]),
+            "conflicts": len(conflicts),
+        },
+    }
+
+
 @ccm_router.get("/resource-usage")
 async def resource_usage(
     tenant_id: str = Depends(get_current_tenant_id),
