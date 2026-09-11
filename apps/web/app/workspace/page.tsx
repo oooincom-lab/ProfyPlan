@@ -33,6 +33,7 @@ import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
 import ProjectWidgets from '@/components/ProjectWidgets';
+import PortfolioWidgets from '@/components/PortfolioWidgets';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -2801,6 +2802,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] «В работе»" />}<div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress || '—'}</div><div className="kpi-sub">активных заказов</div></div>
                 <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical || '—'}</div><div className="kpi-sub">High + Critical</div></div>
               </div>
+              <PortfolioWidgets projects={projects} onOpen={(p: any) => loadProjectDashboard(p)} />
               <div className="panel">
                 <div className="panel-hdr"><span className="panel-title">Последние проекты</span></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
