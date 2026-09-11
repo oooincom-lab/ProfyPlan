@@ -1403,6 +1403,7 @@ async def resource_overload(
     from app.models.project import Project
     from app.models.project_resource import ProjectResource
     from app.models.resource_department_quota import ResourceDepartmentQuota
+    from app.services.capacity import format_duration
 
     global_rows = (await db.execute(
         select(Resource).where(Resource.tenant_id == tenant_id, Resource.project_id.is_(None))
