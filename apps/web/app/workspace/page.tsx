@@ -185,6 +185,8 @@ export default function AppShell() {
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [selOrderId, setSelOrderId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
+  const [planCalc, setPlanCalc] = useState<any>(null);
+  const [planLoading, setPlanLoading] = useState(false);
   const [panelEditing, setPanelEditing] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[]; variant: 'modal' | 'panel' } | null>(null);
@@ -1106,6 +1108,20 @@ export default function AppShell() {
       setBomTimeline(r?.nodes || []);
     } catch (e: any) { setMsg('Ошибка расчёта: ' + (e.message || String(e))); }
     setBomTimelineLoading(false);
+  };
+
+  // ── План заказа: сводка расчёта (CPM + календарь) — шаг 6 итоговой рекомендации ──
+  const runPlanCalc = async () => {
+    if (!selectedProject) { setMsg('Сначала выберите проект'); return; }
+    setPlanLoading(true);
+    try {
+      const body = selectedProject.start_date ? { start_date: selectedProject.start_date } : {};
+      const r = await apiF<any>(`/projects/${selectedProject.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify(body) });
+      setPlanCalc(r);
+    } catch (e: any) {
+      setMsg('Ошибка расчёта: ' + (e.message || String(e)));
+    }
+    setPlanLoading(false);
   };
 
   // Черновик таймлайна: операции из маршрутов заказа, разложенные последовательно,
@@ -2408,8 +2424,72 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             ) : <div style={{ color: '#5A7090' }}>У заказа нет задействованных ресурсов.</div>;
                           })()}
                           {o && panelTab === 'plan' && (
-                            <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
-                              План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button type="button" onClick={runPlanCalc} disabled={planLoading}
+                                  style={{ background: planLoading ? '#162844' : 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: planLoading ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                                  {planLoading ? 'Расчёт…' : '▶ Рассчитать план'}
+                                </button>
+                                <button type="button" onClick={() => selectedProject && loadProjectGantt(selectedProject)}
+                                  style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  📊 Открыть диаграмму
+                                </button>
+                                <span style={{ fontSize: 11, color: '#5A7090' }}>{selectedProject ? 'проект: ' + selectedProject.name : ''}</span>
+                              </div>
+
+                              {!planCalc && !planLoading && (
+                                <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
+                                  Нажмите «Рассчитать план» — система посчитает календарный CPM по проекту: срок, критический путь, длительности операций и предупреждения (простой, перегрузка, мощность).
+                                </div>
+                              )}
+
+                              {planCalc && (
+                                <>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                                      <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Финиш проекта</div>
+                                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{planCalc.project_finish_date ? String(planCalc.project_finish_date).split('-').reverse().join('.') : '—'}</div>
+                                    </div>
+                                    <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                                      <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Длительность</div>
+                                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{planCalc.total_duration_days != null ? planCalc.total_duration_days + ' дн' : '—'}</div>
+                                    </div>
+                                    <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                                      <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Критических операций</div>
+                                      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#F87171' }}>{(planCalc.critical_path || []).length}</div>
+                                    </div>
+                                    <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                                      <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Предупреждений</div>
+                                      <div style={{ fontSize: 13.5, fontWeight: 600, color: (planCalc.warnings || []).length ? '#FCD34D' : '#86EFAC' }}>{(planCalc.warnings || []).length}</div>
+                                    </div>
+                                  </div>
+
+                                  {(planCalc.warnings || []).length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                      {(planCalc.warnings || []).map((wn: any, wi: number) => (
+                                        <div key={'pw' + wi} style={{ fontSize: 11.5, color: wn.type === 'blocked' ? '#FCA5A5' : '#FCD34D', background: wn.type === 'blocked' ? 'rgba(239,68,68,.08)' : 'rgba(245,158,11,.08)', border: '1px solid ' + (wn.type === 'blocked' ? 'rgba(239,68,68,.35)' : 'rgba(245,158,11,.35)'), borderRadius: 7, padding: '5px 8px' }}>
+                                          {wn.type === 'blocked' ? '⛔ ' : '⚠ '}{wn.message}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <div>
+                                    <div style={{ fontSize: 11, color: '#5A7090', textTransform: 'uppercase', marginBottom: 5 }}>Критический путь</div>
+                                    {(planCalc.nodes || []).filter((n: any) => n.is_critical).slice(0, 8).map((n: any) => (
+                                      <div key={n.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11.5, padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.5)' }}>
+                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
+                                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
+                                        <span style={{ color: '#8FA3BD', flexShrink: 0 }}>{n.duration_text || (n.duration_days + ' дн')}</span>
+                                        <span style={{ color: '#5A7090', flexShrink: 0 }}>{n.finish_datetime ? String(n.finish_datetime).slice(11, 16) : ''}</span>
+                                      </div>
+                                    ))}
+                                    {!(planCalc.nodes || []).filter((n: any) => n.is_critical).length && (
+                                      <div style={{ fontSize: 11.5, color: '#5A7090' }}>Критических операций нет (в проекте может быть меньше двух операций).</div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
