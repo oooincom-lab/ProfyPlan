@@ -1574,18 +1574,42 @@ async def overload_suggestion(
         .join(ProductStructure, Routing.product_node_id == ProductStructure.id)
         .where(Routing.tenant_id == tenant_id, RoutingOperation.resource_type_id.isnot(None))
     )).all()
+    # Ключи ресурсов приводим к человекочитаемому виду: в маршрутах ресурс может
+    # храниться и идентификатором, и именем — сравниваем по имени.
+    _uuid_like = set()
+    for rid, _pid in rows:
+        if not rid:
+            continue
+        try:
+            UUID(str(rid))
+            _uuid_like.add(str(rid))
+        except Exception:
+            pass
+    _name_by_id: dict = {}
+    if _uuid_like:
+        _name_by_id = {
+            str(x.id): x.name
+            for x in (await db.execute(
+                select(Resource).where(Resource.id.in_([UUID(x) for x in _uuid_like]))
+            )).scalars().all()
+        }
+
+    def res_key(rid) -> str:
+        s_ = str(rid)
+        return _name_by_id.get(s_, s_)
+
     my_res = set()
     others: dict = {}
-    name_by_proj = {}
     for rid, pid in rows:
         if not rid:
             continue
+        k = res_key(rid)
         if str(pid) == str(project_id):
-            my_res.add(str(rid))
+            my_res.add(k)
         else:
-            others.setdefault(str(rid), set()).add(str(pid))
+            others.setdefault(k, set()).add(str(pid))
     if resource_id:
-        my_res = {str(resource_id)}
+        my_res = {res_key(resource_id)}
 
     all_projects = {
         str(x.id): x
@@ -1620,31 +1644,14 @@ async def overload_suggestion(
                 })
 
     if not conflicts:
-        return {
-            "project_id": str(project_id),
-            "has_conflict": False,
-            "conflicts": [],
-            "suggestion": None,
-            "_debug": {
-                "rows": len(rows),
-                "my_resources": sorted(my_res)[:5],
-                "other_projects_for_my_res": {k: sorted(v) for k, v in list(others.items())[:5]},
-                "my_start": str(my_start),
-                "my_finish": str(my_finish),
-            },
-        }
+        return {"project_id": str(project_id), "has_conflict": False, "conflicts": [], "suggestion": None}
 
     # дата освобождения ресурса = максимум финишей чужих проектов
     free_at = max(datetime.fromisoformat(c["other_finish"]) for c in conflicts)
     suggested_start = (free_at + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
 
     res_ids = {c["resource_id"] for c in conflicts}
-    res_names = {}
-    if res_ids:
-        res_names = {
-            str(x.id): x.name
-            for x in (await db.execute(select(Resource).where(Resource.id.in_([UUID(x) for x in res_ids])))).scalars().all()
-        }
+    res_names = {k: k for k in res_ids}
 
     # пересчёт финиша при новом старте (без сохранения)
     new_finish = None
