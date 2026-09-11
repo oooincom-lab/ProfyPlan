@@ -16,6 +16,7 @@ class ProjectCreate(BaseModel):
     default_method: str = Field(default="cpm", pattern="^(cpm|pert_cpm|cpm_ccm|pert_ccm)$")
     country_code: str = Field(default="RU", min_length=2, max_length=2)
     start_date: Optional[datetime] = None
+    priority: str = Field(default="normal", pattern="^(low|normal|high)$")
 
 
 class ProjectUpdate(BaseModel):
@@ -26,6 +27,7 @@ class ProjectUpdate(BaseModel):
     default_method: Optional[str] = Field(default=None, pattern="^(cpm|pert_cpm|cpm_ccm|pert_ccm)$")
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     start_date: Optional[datetime] = None
+    priority: Optional[str] = Field(default=None, pattern="^(low|normal|high)$")
     schedule_id: Optional[UUID] = None
     use_shared_resources: Optional[bool] = None
 
@@ -44,6 +46,7 @@ class ProjectOut(BaseModel):
     schedule_id: Optional[UUID] = None
     use_shared_resources: Optional[bool] = None
     start_date: Optional[datetime] = None
+    priority: Optional[str] = None
     due_date: Optional[datetime] = None
     created_by: Optional[UUID] = None
     created_at: datetime

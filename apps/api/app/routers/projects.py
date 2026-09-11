@@ -64,6 +64,7 @@ async def create_project(
         default_method=body.default_method,
         country_code=body.country_code,
         start_date=body.start_date,
+        priority=getattr(body, 'priority', None) or 'normal',
         created_by=user.id,
     )
     db.add(project)

@@ -104,6 +104,31 @@ export default function CCMV2Dashboard() {
     setSugBusy(false);
   }, [suggestion]);
 
+  const applyShiftOther = useCallback(async () => {
+    const tgt = suggestion?.priority?.target_project;
+    const days = (suggestion?.plan && suggestion.plan[0]?.overlap_days) || 0;
+    if (!tgt?.project_id || !days) return;
+    const pr = projects.find((x: any) => x.id === tgt.project_id);
+    const base = pr?.start_date ? new Date(pr.start_date) : new Date();
+    const nd = new Date(base.getTime() + days * 86400000);
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      await fetch(`https://profyplan.ru/api/v1/projects/${tgt.project_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        body: JSON.stringify({ start_date: nd.toISOString() }),
+      });
+      setSuggestion({ ...suggestion, applied: true, appliedOther: true });
+      const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch('https://profyplan.ru/api/v1/ccm/resource-overload', {
+        headers: { ...(t2 ? { Authorization: '***' + t2 } : {}) },
+      });
+      if (r.ok) setOverload(await r.json());
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  }, [suggestion, projects]);
+
   const runMerge = useCallback(async () => {
     if (selectedIds.length === 0) {
       setError('Выберите хотя бы один проект');
@@ -354,11 +379,22 @@ export default function CCMV2Dashboard() {
                 <>
                   <span>💡 {suggestion.suggestion?.message}</span>
                   {suggestion.suggestion?.new_finish ? <span>· новый финиш: {String(suggestion.suggestion.new_finish).slice(0, 10)}</span> : null}
+                  {(suggestion.plan || []).length > 0 && (
+                    <div style={{ width: '100%', fontSize: 11.5, color: '#8FA3BD' }}>
+                      План: {(suggestion.plan || []).map((x: any) => `${x.resource_name} (освободится ${x.free_at ? String(x.free_at).slice(0, 10) : '?'}, с ${x.other_projects.join('/')}, перекрытие ${x.overlap_days} дн)`).join('; ')}
+                    </div>
+                  )}
+                  {suggestion.priority?.recommendation === 'shift_other' && suggestion.priority?.target_project && !suggestion.applied ? (
+                    <button onClick={applyShiftOther} disabled={sugBusy}
+                      style={{ background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Ваш проект важнее — сдвинуть «{suggestion.priority.target_project.project_name}»
+                    </button>
+                  ) : null}
                   {!suggestion.applied && (
                     <button onClick={applyShift} disabled={sugBusy}
-                      style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Применить сдвиг</button>
+                      style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Применить сдвиг мне</button>
                   )}
-                  {suggestion.applied && <span style={{ color: '#86EFAC' }}>сдвиг применён</span>}
+                  {suggestion.applied && <span style={{ color: '#86EFAC' }}>{suggestion.appliedOther ? 'сдвинут другой проект' : 'сдвиг применён'}</span>}
                   <button onClick={() => setSuggestion(null)}
                     style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Скрыть</button>
                 </>

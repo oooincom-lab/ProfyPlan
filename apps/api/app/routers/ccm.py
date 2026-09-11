@@ -1585,9 +1585,11 @@ async def overload_suggestion(
             if c.get("a") != my_name and c.get("b") != my_name:
                 continue
             other_name = c.get("b") if c.get("a") == my_name else c.get("a")
+            other_id = c.get("b_id") if c.get("a") == my_name else c.get("a_id")
             my_conflicts.append({
                 "resource_id": r.get("id"),
                 "resource_name": r.get("name"),
+                "other_project_id": str(other_id) if other_id else None,
                 "other_project_name": other_name,
                 "from": c.get("from"),
                 "to": c.get("to"),
@@ -1628,10 +1630,55 @@ async def overload_suggestion(
         except Exception:
             shift_days = None
 
+    # План по ресурсам: когда освободится и кого сдвигать
+    by_res: dict = {}
+    for c in my_conflicts:
+        k = c.get("resource_name") or "—"
+        e = by_res.setdefault(k, {"resource_name": k, "free_at": None, "others": set(), "max_days": 0})
+        e["others"].add(c.get("other_project_name"))
+        if c.get("to"):
+            e["free_at"] = c["to"] if not e["free_at"] else max(e["free_at"], c["to"])
+        e["max_days"] = max(e["max_days"], int(c.get("days") or 0))
+    plan = [
+        {
+            "resource_name": v["resource_name"],
+            "free_at": v["free_at"],
+            "other_projects": sorted(v["others"]),
+            "overlap_days": v["max_days"],
+        }
+        for v in sorted(by_res.values(), key=lambda x: -x["max_days"])
+    ]
+
+    # Приоритеты: если мой проект важнее — предлагаем двигать чужой
+    rank = {"low": 0, "normal": 1, "high": 2}
+    prio_map = {
+        str(x.id): (getattr(x, "priority", None) or "normal")
+        for x in (await db.execute(select(Project).where(Project.tenant_id == tenant_id))).scalars().all()
+    }
+    my_rank = rank.get(prio_map.get(str(project_id), "normal"), 1)
+    other_ranks = [rank.get(prio_map.get(c["other_project_id"], "normal"), 1) for c in my_conflicts if c.get("other_project_id")]
+    max_other = max(other_ranks) if other_ranks else 1
+    recommendation = "shift_other" if my_rank > max_other else "shift_self"
+    target = None
+    if recommendation == "shift_other":
+        cand = sorted(
+            [c for c in my_conflicts if c.get("other_project_id")],
+            key=lambda c: rank.get(prio_map.get(c["other_project_id"], "normal"), 1),
+        )
+        if cand:
+            target = {"project_id": cand[0]["other_project_id"], "project_name": cand[0]["other_project_name"]}
+
     return {
         "project_id": str(project_id),
         "has_conflict": True,
         "conflicts": my_conflicts,
+        "plan": plan,
+        "priority": {
+            "mine": prio_map.get(str(project_id), "normal"),
+            "others": sorted({prio_map.get(c["other_project_id"], "normal") for c in my_conflicts if c.get("other_project_id")}),
+            "recommendation": recommendation,
+            "target_project": target,
+        },
         "suggestion": {
             "resource_names": sorted(res_names),
             "current_start": proj.start_date.isoformat() if proj.start_date else None,
