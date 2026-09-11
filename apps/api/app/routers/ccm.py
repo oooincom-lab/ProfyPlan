@@ -1620,7 +1620,19 @@ async def overload_suggestion(
                 })
 
     if not conflicts:
-        return {"project_id": str(project_id), "has_conflict": False, "conflicts": [], "suggestion": None}
+        return {
+            "project_id": str(project_id),
+            "has_conflict": False,
+            "conflicts": [],
+            "suggestion": None,
+            "_debug": {
+                "rows": len(rows),
+                "my_resources": sorted(my_res)[:5],
+                "other_projects_for_my_res": {k: sorted(v) for k, v in list(others.items())[:5]},
+                "my_start": str(my_start),
+                "my_finish": str(my_finish),
+            },
+        }
 
     # дата освобождения ресурса = максимум финишей чужих проектов
     free_at = max(datetime.fromisoformat(c["other_finish"]) for c in conflicts)
