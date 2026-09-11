@@ -1384,6 +1384,163 @@ async def sync_to_google_sheets(
     }
 
 
+@ccm_router.get("/resource-overload")
+async def resource_overload(
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Межпроектная перегрузка общих ресурсов.
+
+    По каждому глобальному ресурсу: в каких проектах используется, период и часы
+    загрузки (с учётом доли мощности проекта и квоты подразделения), а также
+    пересечения периодов между проектами — кандидаты на конфликт.
+    """
+    from collections import defaultdict
+    from sqlalchemy import func
+    from app.models.resource import Resource
+    from app.models.routing import Routing, RoutingOperation
+    from app.models.product_structure import ProductStructure
+    from app.models.project import Project
+    from app.models.project_resource import ProjectResource
+    from app.models.resource_department_quota import ResourceDepartmentQuota
+
+    global_rows = (await db.execute(
+        select(Resource).where(Resource.tenant_id == tenant_id, Resource.project_id.is_(None))
+    )).scalars().all()
+    globals_map = {str(r.id): r for r in global_rows}
+
+    child_rows = (await db.execute(
+        select(Resource).where(Resource.tenant_id == tenant_id, Resource.parent_id.isnot(None))
+    )).scalars().all()
+    parent_of = {str(r.id): str(r.parent_id) for r in child_rows}
+
+    projects = {
+        str(x.id): x
+        for x in (await db.execute(select(Project).where(Project.tenant_id == tenant_id))).scalars().all()
+    }
+
+    share_map: dict = {}
+    for pr in (await db.execute(select(ProjectResource).where(ProjectResource.tenant_id == tenant_id))).scalars().all():
+        try:
+            v = float(pr.capacity_share) if pr.capacity_share is not None else 1.0
+        except Exception:
+            v = 1.0
+        share_map[(str(pr.project_id), str(pr.resource_id))] = v
+
+    quota_map: dict = {}
+    for q in (await db.execute(
+        select(ResourceDepartmentQuota).where(
+            ResourceDepartmentQuota.tenant_id == tenant_id, ResourceDepartmentQuota.is_active.is_(True)
+        )
+    )).scalars().all():
+        try:
+            quota_map[(str(q.department_id), str(q.resource_id))] = float(q.quota_share)
+        except Exception:
+            pass
+
+    rows = (await db.execute(
+        select(
+            RoutingOperation.resource_type_id,
+            ProductStructure.project_id,
+            func.sum(RoutingOperation.duration_hours),
+        )
+        .join(Routing, RoutingOperation.routing_id == Routing.id)
+        .join(ProductStructure, Routing.product_node_id == ProductStructure.id)
+        .where(RoutingOperation.resource_type_id.isnot(None), Routing.tenant_id == tenant_id)
+        .group_by(RoutingOperation.resource_type_id, ProductStructure.project_id)
+    )).all()
+
+    usage: dict = defaultdict(lambda: defaultdict(float))
+    for rid, pid, hours in rows:
+        if not rid or not pid:
+            continue
+        gid = parent_of.get(str(rid), str(rid))
+        if gid in globals_map:
+            usage[gid][str(pid)] += float(hours or 0)
+
+    out = []
+    for gid, per_project in usage.items():
+        r = globals_map.get(gid)
+        if not r:
+            continue
+        dept_id = str(r.department_id) if getattr(r, "department_id", None) else None
+        assignments = []
+        for pid, hours in per_project.items():
+            proj = projects.get(pid)
+            share = share_map.get((pid, str(gid)), 1.0) or 0.0
+            quota = quota_map.get((dept_id, str(gid)), 1.0) if dept_id else 1.0
+            m_cap = share * quota
+            eff_days = (hours / (8.0 * m_cap)) if m_cap > 0 else 0.0
+            start = getattr(proj, "start_date", None) if proj else None
+            finish = getattr(proj, "due_date", None) if proj else None
+            if start and not finish:
+                finish = start + timedelta(days=max(eff_days, 0.0) * 1.4)
+            assignments.append({
+                "project_id": pid,
+                "project_name": (proj.name if proj else pid[:8]),
+                "hours": round(hours, 2),
+                "hours_text": format_duration(hours * 60, 8.0),
+                "capacity_share": round(share, 4),
+                "quota_share": round(quota, 4),
+                "effective_days": round(eff_days, 2),
+                "start": start.isoformat() if start else None,
+                "finish": finish.isoformat() if finish else None,
+            })
+        assignments.sort(key=lambda x: x["start"] or "")
+
+        conflicts = []
+        for i in range(len(assignments)):
+            for j in range(i + 1, len(assignments)):
+                a, b = assignments[i], assignments[j]
+                if not a["start"] or not a["finish"] or not b["start"] or not b["finish"]:
+                    continue
+                a0 = datetime.fromisoformat(a["start"]) if "T" in a["start"] else datetime.fromisoformat(a["start"] + "T00:00")
+                a1 = datetime.fromisoformat(a["finish"]) if "T" in a["finish"] else datetime.fromisoformat(a["finish"] + "T00:00")
+                b0 = datetime.fromisoformat(b["start"]) if "T" in b["start"] else datetime.fromisoformat(b["start"] + "T00:00")
+                b1 = datetime.fromisoformat(b["finish"]) if "T" in b["finish"] else datetime.fromisoformat(b["finish"] + "T00:00")
+                o0 = max(a0, b0)
+                o1 = min(a1, b1)
+                days = (o1 - o0).days
+                if days > 0:
+                    conflicts.append({
+                        "a": a["project_name"],
+                        "b": b["project_name"],
+                        "from": o0.date().isoformat(),
+                        "to": o1.date().isoformat(),
+                        "days": days,
+                        "severity": "high" if days >= 14 else ("medium" if days >= 5 else "low"),
+                    })
+        conflicts.sort(key=lambda x: -x["days"])
+        max_days = conflicts[0]["days"] if conflicts else 0
+        total_hours = sum(x["hours"] for x in assignments)
+        out.append({
+            "id": gid,
+            "name": r.name,
+            "type": r.resource_type,
+            "project_count": len(assignments),
+            "is_shared": len(assignments) > 1,
+            "total_hours": round(total_hours, 2),
+            "total_text": format_duration(total_hours * 60, 8.0),
+            "assignments": assignments,
+            "conflicts": conflicts,
+            "has_conflict": bool(conflicts),
+            "overlap_days": max_days,
+            "severity": ("high" if max_days >= 14 else ("medium" if max_days >= 5 else ("low" if max_days > 0 else "none"))),
+        })
+
+    out.sort(key=lambda x: (-(x["overlap_days"] or 0), -x["project_count"], -x["total_hours"]))
+    shared = sum(1 for x in out if x["is_shared"])
+    conflicted = sum(1 for x in out if x["has_conflict"])
+    return {
+        "resources": out,
+        "totals": {
+            "shared": shared,
+            "conflicted": conflicted,
+            "conflicts": sum(len(x["conflicts"]) for x in out),
+        },
+    }
+
+
 @ccm_router.get("/resource-usage")
 async def resource_usage(
     tenant_id: str = Depends(get_current_tenant_id),
