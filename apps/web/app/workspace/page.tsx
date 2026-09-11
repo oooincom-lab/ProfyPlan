@@ -213,6 +213,8 @@ export default function AppShell() {
   const [orderSortKey, setOrderSortKey] = useState<string | null>(null);
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('asc');
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('free');
+  const [orderTreeSections, setOrderTreeSections] = useState(true); // дерево секциями: Группы / Пулы / Свободные
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [ganttData, setGanttData] = useState<any>(null);
   const [projCapacity, setProjCapacity] = useState<any>(null);
@@ -1866,6 +1868,93 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             };
             filtered.forEach((o: any) => { if (!o.parent_order_id || !idSet.has(o.parent_order_id)) walkTree(o, 0); });
             filtered.forEach((o: any) => { if (!visitedIds.has(o.id)) walkTree(o, 0); });
+
+            // ── Шаги 1–2 (итоговая рекомендация): единое дерево секциями ──
+            // «Заказы» — единственный дом дерева: Группы / Пулы / Свободные — корневые ветки,
+            // внутри каждой — заказы с их иерархией. Секции сворачиваемые, с счётчиками.
+            const sectionOf = (o: any): string => {
+              if (o.group_id) return 'g:' + o.group_id;
+              if (o.pool_id) return 'p:' + o.pool_id;
+              return 'free';
+            };
+            const sections: { key: string; icon: string; title: string; orders: any[] }[] = [];
+            const secMap = new Map<string, any[]>();
+            if (orderShowAll || orderTypeFilter === 'all' || orderTypeFilter === 'free' || !orderShowAll) {
+              // секция «Свободные» показывается всегда (это и есть дефолтный режим)
+            }
+            if (orderShowAll) {
+              projGroups.forEach((g: any) => sections.push({ key: 'g:' + g.id, icon: '📁', title: g.name, orders: [] }));
+              projPools.forEach((pl: any) => sections.push({ key: 'p:' + pl.id, icon: '📦', title: pl.name, orders: [] }));
+            }
+            sections.push({ key: 'free', icon: '🗂', title: 'Свободные (не в группе)', orders: [] });
+            const secIndex = new Map(sections.map((x, i) => [x.key, i]));
+            const orphanRows: any[] = []; // заказы, чья группа/пул не найдена (например, удалена)
+            treeRows.forEach((r: any) => {
+              const k = sectionOf(r.o);
+              const idx = secIndex.get(k);
+              if (idx === undefined) { orphanRows.push(r); return; }
+              sections[idx].orders.push(r);
+            });
+            // сортировка секций: группы, пулы, свободные (уже в порядке push; свободные — последняя, переносим)
+            const freeIdx = sections.findIndex(x => x.key === 'free');
+            if (freeIdx > 0) { const [f] = sections.splice(freeIdx, 1); sections.push(f); }
+            const allSections = [...sections, { key: 'orphan', icon: '❓', title: 'Без группы (потерянные)', orders: orphanRows }];
+            const visibleSections = allSections.filter(sec => sec.orders.length > 0 || sec.key === 'free');
+                        const renderTreeRow = (r: any) => {
+                          const { o, depth, hasChildren, collapsed } = r;
+                          const ti = getTypeInfo(o);
+                          const bomOpen = expandedBomOrder === o.id;
+                          const isFree = !o.parent_order_id;
+                          return (
+                            <Fragment key={o.id}>
+                            <tr id={'ord-' + o.id} draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : (isFree ? 'rgba(245,158,11,.05)' : undefined) }}>
+                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 96, minWidth: 96, maxWidth: 96, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
+                                <span style={{ display: 'inline-block', width: 22, textAlign: 'center' }}>
+                                  {hasChildren ? (
+                                    <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 16, padding: 0, margin: 0, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
+                                  ) : null}
+                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+                                  title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 16, padding: '2px 6px', transition: 'color .15s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+                                >{bomOpen ? '▾' : '▸'}</button>
+                              </td>
+                              <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
+                              {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
+                              <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
+                              <td className="t-mono">{o.ext_id || '—'}</td>
+                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{isFree && depth === 0 && <span title="Свободный заказ (без родителя)" style={{ display: 'inline-block', background: 'rgba(245,158,11,.14)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>своб.</span>}{o.specification_name || o.ext_id || '—'}</td>
+                              <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
+                              <td className="t-mono">{o.quantity} {o.unit}</td>
+                              <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
+                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
+                              <td className="t-mono">{o.start_date || '—'}</td>
+                              <td className="t-mono">{o.due_date || '—'}</td>
+                              <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
+                              <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
+                            </tr>
+                            {bomOpen && (
+                              <tr>
+                                <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
+                                  <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>{treeMode === 'bom' ? 'BOM' : treeMode === 'routes' ? 'Маршруты' : 'Состав + Маршруты'} · {o.specification_name || o.ext_id || '—'}</span>
+                                      {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
+                                      <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
+                                      <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                    </div>
+                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} layerMode onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+
+                            </Fragment>
+                          );
+                        };
             const sortArrow = (key: string) => orderSortKey === key ? (orderSortDir === 'asc' ? ' ▼' : ' ▲') : '';
             const doSort = (key: string) => {
               if (orderSortKey === key) {
@@ -2049,60 +2138,29 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </td>
                           </tr>
                         )}
-                        {treeRows.map(({ o, depth, hasChildren, collapsed }: any) => {
-                          const ti = getTypeInfo(o);
-                          const bomOpen = expandedBomOrder === o.id;
-                          const isFree = !o.parent_order_id;
-                          return (
-                            <Fragment key={o.id}>
-                            <tr id={'ord-' + o.id} draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={{ cursor: 'grab', background: o.pool_id ? 'rgba(139,92,246,.06)' : (isFree ? 'rgba(245,158,11,.05)' : undefined) }}>
-                              <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 96, minWidth: 96, maxWidth: 96, overflow: 'visible', boxShadow: depth > 0 ? 'inset 2px 0 0 ' + (depth === 1 ? '#8B5CF6' : '#06B6D4') : undefined }}>
-                                <span style={{ display: 'inline-block', width: 22, textAlign: 'center' }}>
-                                  {hasChildren ? (
-                                    <button onClick={(e) => { e.stopPropagation(); toggleOrderCollapse(o.id); }} title={collapsed ? 'Развернуть поддерево' : 'Свернуть поддерево'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#60A5FA', fontSize: 16, padding: 0, margin: 0, verticalAlign: 'middle', lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</button>
-                                  ) : null}
-                                </span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
-                                  title={bomOpen ? 'Свернуть BOM' : 'Показать BOM'}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 16, padding: '2px 6px', transition: 'color .15s' }}
-                                  onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
-                                  onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
-                                >{bomOpen ? '▾' : '▸'}</button>
-                              </td>
-                              <td className="t-mono" style={{ fontSize: 14 }}>{ti.icon}</td>
-                              {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
-                              <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
-                              <td className="t-mono">{o.ext_id || '—'}</td>
-                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{isFree && depth === 0 && <span title="Свободный заказ (без родителя)" style={{ display: 'inline-block', background: 'rgba(245,158,11,.14)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>своб.</span>}{o.specification_name || o.ext_id || '—'}</td>
-                              <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
-                              <td className="t-mono">{o.quantity} {o.unit}</td>
-                              <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
-                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
-                              <td className="t-mono">{o.start_date || '—'}</td>
-                              <td className="t-mono">{o.due_date || '—'}</td>
-                              <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
-                              <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }} title="Удалить заказ">🗑</button></td>
-                            </tr>
-                            {bomOpen && (
-                              <tr>
-                                <td colSpan={orderShowAll ? 14 : 13} style={{ background: '#0F1E36', padding: 0 }}>
-                                  <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>{treeMode === 'bom' ? 'BOM' : treeMode === 'routes' ? 'Маршруты' : 'Состав + Маршруты'} · {o.specification_name || o.ext_id || '—'}</span>
-                                      {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
-                                      <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
-                                      <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
-                                    </div>
-                                    <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} layerMode onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
-                                  </div>
+                        {(() => {
+                          // Шаги 1–2: вывод секциями (Группы / Пулы / Свободные)
+                          if (!orderTreeSections) return null;
+                          const toggleSec = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+                          return visibleSections.map(sec => (
+                            <Fragment key={'sec-' + sec.key}>
+                              <tr style={{ background: '#0d1c33' }}>
+                                <td colSpan={12} style={{ padding: '5px 8px', borderBottom: '1px solid #1E3252', cursor: 'pointer', userSelect: 'none' }}
+                                  onClick={() => toggleSec(sec.key)}>
+                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: sec.key === 'free' ? '#93C5FD' : '#E8EEF5' }}>
+                                    {collapsedSections[sec.key] ? '▶' : '▼'} {sec.icon} {sec.title}
+                                  </span>
+                                  <span style={{ marginLeft: 8, fontSize: 10.5, color: '#5A7090' }}>{sec.orders.length}</span>
+                                  {sec.key === 'free' && sec.orders.length > 0 && (
+                                    <span style={{ marginLeft: 10, fontSize: 10, color: '#5A7090' }}>перетащите заказ в группу или пул</span>
+                                  )}
                                 </td>
                               </tr>
-                            )}
-
+                              {!collapsedSections[sec.key] && sec.orders.map((r: any) => renderTreeRow(r))}
                             </Fragment>
-                          );
-                        })}
+                          ));
+                        })()}
+                                                {!orderTreeSections && treeRows.map((r: any) => renderTreeRow(r))}
                         {filtered.length === 0 && !showNewOrder && <tr><td colSpan={orderShowAll ? 14 : 13} style={{ textAlign: 'center', padding: 24, color: '#5A7090' }}>Заказов нет</td></tr>}
                       </tbody>
                     </table>
