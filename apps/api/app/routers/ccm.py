@@ -1411,7 +1411,34 @@ async def resource_usage(
     )).scalars().all()
     parent_of = {str(r.id): str(r.parent_id) for r in child_rows}
 
-    usage = defaultdict(lambda: {"hours": 0.0, "ops": 0, "projects": set()})
+    usage = defaultdict(lambda: {"hours": 0.0, "hours_cap": 0.0, "ops": 0, "projects": set()})
+
+    # Доли мощности по проектам и квоты подразделений
+    from app.models.project_resource import ProjectResource as _PR
+    from app.models.resource_department_quota import ResourceDepartmentQuota as _RDQ
+
+    share_map: dict = {}
+    for _pr in (await db.execute(
+        select(_PR).where(_PR.tenant_id == tenant_id)
+    )).scalars().all():
+        try:
+            _v = float(_pr.capacity_share) if _pr.capacity_share is not None else 1.0
+        except Exception:
+            _v = 1.0
+        if abs(_v - 1.0) > 1e-9:
+            share_map[(str(_pr.project_id), str(_pr.resource_id))] = _v
+
+    quota_map_ru: dict = {}
+    for _q in (await db.execute(
+        select(_RDQ).where(_RDQ.tenant_id == tenant_id, _RDQ.is_active.is_(True))
+    )).scalars().all():
+        try:
+            quota_map_ru[(str(_q.department_id), str(_q.resource_id))] = float(_q.quota_share)
+        except Exception:
+            pass
+
+    dept_of_res = {str(r.id): (str(r.department_id) if r.department_id else None) for r in global_rows}
+    child_dept = {str(r.id): (str(r.department_id) if r.department_id else None) for r in child_rows}
     rows = (await db.execute(
         select(
             RoutingOperation.resource_type_id,
@@ -1430,7 +1457,13 @@ async def resource_usage(
         gid = parent_of.get(str(rid), str(rid))
         if gid in globals_map:
             u = usage[gid]
-            u["hours"] += float(hours or 0)
+            base_h = float(hours or 0)
+            u["hours"] += base_h
+            # эффективные часы с учётом доли мощности проекта и квоты подразделения
+            m_cap = share_map.get((str(pid), str(rid)), 1.0) * (
+                quota_map_ru.get((dept_of_res.get(gid) or dept_of_res.get(str(rid)) or child_dept.get(str(rid)), str(rid)), 1.0)
+            )
+            u["hours_cap"] += (base_h / m_cap) if m_cap > 0 else 0.0
             u["ops"] += int(cnt or 0)
             u["projects"].add(str(pid))
 
@@ -1499,12 +1532,15 @@ async def resource_usage(
             "project_count": len(projects),
             "total_hours": round(u["hours"], 2) if u else 0,
             "total_text": format_duration((u["hours"] if u else 0) * 60, 8.0),
+            "capacity_hours": round(u["hours_cap"], 2) if u else 0,
+            "capacity_text": format_duration((u["hours_cap"] if u else 0) * 60, 8.0),
+            "capacity_factor": round((u["hours_cap"] / u["hours"]), 4) if (u and u["hours"]) else 1.0,
             "operation_count": u["ops"] if u else 0,
             "is_shared": len(projects) > 1,
             "scope": getattr(r, "scope", None) or "shared",
             # События мощности: эффективные часы и потери
-            "hours_effective": round(((u["hours"] if u else 0) + cap[gid]["lost"] - cap[gid]["extra"]), 2),
-            "effective_text": format_duration((((u["hours"] if u else 0) + cap[gid]["lost"] - cap[gid]["extra"])) * 60, 8.0),
+            "hours_effective": round(((u["hours_cap"] if u else 0) + cap[gid]["lost"] - cap[gid]["extra"]), 2),
+            "effective_text": format_duration((((u["hours_cap"] if u else 0) + cap[gid]["lost"] - cap[gid]["extra"])) * 60, 8.0),
             "lost_hours": round(cap[gid]["lost"], 2),
             "lost_text": format_duration(cap[gid]["lost"] * 60, 8.0),
             "extra_hours": round(cap[gid]["extra"], 2),
