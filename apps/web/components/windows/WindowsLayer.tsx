@@ -8,6 +8,7 @@ import DirectoryTable from '@/components/DirectoryTable';
 import ReferenceField from '@/components/ReferenceField';
 import WorkScheduleManager from '@/components/WorkScheduleManager';
 import CapacityEvents from '@/components/CapacityEvents';
+import DepartmentQuotas from '@/components/DepartmentQuotas';
 import ProductionCalendarManager from '@/components/ProductionCalendarManager';
 import DirectoryPicker from '@/components/DirectoryPicker';
 import BomTree from '@/components/bomtree';
@@ -547,6 +548,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       />
                     </div>
                   )}
+                  {w.data?.entity === 'departments' && w.data?.rowId && (
+                    <DepartmentQuotas departmentId={String(w.data.rowId)} onOpenDirPick={onOpenDirPick} />
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
                     <button onClick={async () => { const ok = await onDirAddSave?.(w.data.entity, rowsForm, w.data.endpoints); if (ok !== false) onClose(w.id); }}
@@ -615,6 +619,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         style={{ flex: 1, minWidth: 160 }}
                       />
                     </div>
+                  )}
+                  {w.data?.entity === 'departments' && w.data?.rowId && (
+                    <DepartmentQuotas departmentId={String(w.data.rowId)} onOpenDirPick={onOpenDirPick} />
                   )}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <button onClick={() => onClose(w.id)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
