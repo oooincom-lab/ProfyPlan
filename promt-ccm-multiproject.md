@@ -969,6 +969,11 @@ POST {erp_webhook_url}
 - `POST /v1/department-quotas` — создать/обновить квоту (`department_id`, `resource_id`, `quota_share`), 201.
 - `PUT|DELETE /v1/department-quotas/{id}` — изменить / удалить.
 
+### 12.16 Resource Overload — межпроектные конфликты общих ресурсов (реализовано ✅) — НОВОЕ
+- `GET /v1/ccm/resource-overload` — по каждому глобальному (общему) ресурсу: использование по проектам (часы с учётом доли мощности проекта и квоты подразделения → эффективные дни, период проекта), попарные пересечения периодов с уровнем серьёзности (≥14 дней — high, ≥5 — medium, >0 — low).
+- Возвращает: `resources[]` (id, name, project_count, is_shared, total_hours/total_text, assignments[], conflicts[], has_conflict, overlap_days, severity) и `totals` (shared, conflicted, conflicts).
+- Интерфейс: секция «Межпроектные конфликты общих ресурсов» в CCM-дашборде (ресурс, проекты, загрузка, пересечение, конфликты).
+
 ## 13. Фронтенд-компоненты
 
 ### 13.1 NetworkGraphV2 (реализовано)
