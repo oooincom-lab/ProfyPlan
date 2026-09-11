@@ -223,7 +223,7 @@ async def run_cpm(
     warnings_cpm: list = []
     factors_cpm: dict = {}
     ev_used_cpm: dict = {}
-    if ev_map_cpm or share_cpm:
+    if ev_map_cpm or share_cpm or quota_map_cpm:
         anchor_cpm = project.start_date.date() if project.start_date else date.today()
         res_cpm = CalendarResolver(db, tenant_id, project.country_code or "RU")
         for op in operations:
