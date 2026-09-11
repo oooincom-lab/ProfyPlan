@@ -262,7 +262,7 @@ async def run_cpm(
                     used_all_cpm = used_all_cpm + list(u2)
                 if (m2 <= 0 or share2_cpm <= 0) and blocked_cpm is None:
                     blocked_cpm = r2
-            if not used_all_cpm or abs(m_final_cpm - 1.0) < 1e-9:
+            if abs(m_final_cpm - 1.0) < 1e-9:
                 continue
             factors_cpm[str(op.id)] = m_final_cpm
             ev_used_cpm[str(op.id)] = used_all_cpm
@@ -665,7 +665,7 @@ async def run_schedule(
                     used_all = used_all + list(used2)
                 if m2 <= 0 or share2 <= 0:
                     blocked_res = r2
-        if not used_all or abs(m_final - 1.0) < 1e-9:
+        if abs(m_final - 1.0) < 1e-9:
             continue
         factors[str(op.id)] = m_final
         ev_used[str(op.id)] = used_all
