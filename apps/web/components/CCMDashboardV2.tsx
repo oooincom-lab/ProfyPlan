@@ -129,6 +129,27 @@ export default function CCMV2Dashboard() {
     setSugBusy(false);
   }, [suggestion, projects]);
 
+  const setMyPriority = useCallback(async (pid: string, pr: string) => {
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      await fetch(`https://profyplan.ru/api/v1/projects/${pid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        body: JSON.stringify({ priority: pr }),
+      });
+      // перезапросить предложение с новым приоритетом
+      const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r2 = await fetch(`https://profyplan.ru/api/v1/ccm/projects/${pid}/overload-suggestion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: '***' + t2 } : {}) },
+        body: '{}',
+      });
+      setSuggestion(await r2.json());
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  }, []);
+
   const runMerge = useCallback(async () => {
     if (selectedIds.length === 0) {
       setError('Выберите хотя бы один проект');
@@ -394,6 +415,14 @@ export default function CCMV2Dashboard() {
                     <button onClick={applyShift} disabled={sugBusy}
                       style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Применить сдвиг мне</button>
                   )}
+                  <span style={{ color: '#5A7090', fontSize: 11.5 }}>мой приоритет:</span>
+                  <select value={(suggestion.priority?.mine || 'normal')} disabled={sugBusy}
+                    onChange={(e) => setMyPriority(String(suggestion.project_id), e.target.value)}
+                    style={{ background: '#0F1E36', border: '1px solid #1E3252', color: '#E8EEF5', borderRadius: 6, padding: '3px 6px', fontSize: 11.5 }}>
+                    <option value="low">низкий</option>
+                    <option value="normal">обычный</option>
+                    <option value="high">высокий</option>
+                  </select>
                   {suggestion.applied && <span style={{ color: '#86EFAC' }}>{suggestion.appliedOther ? 'сдвинут другой проект' : 'сдвиг применён'}</span>}
                   <button onClick={() => setSuggestion(null)}
                     style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Скрыть</button>
