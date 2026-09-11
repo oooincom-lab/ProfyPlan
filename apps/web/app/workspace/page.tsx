@@ -32,6 +32,7 @@ import WindowsLayer from '@/components/windows/WindowsLayer';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
+import ProjectWidgets from '@/components/ProjectWidgets';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -2880,6 +2881,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
                 <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Пулов»" />}<div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
               </div>
+
+              <ProjectWidgets projectId={selectedProject?.id || null} />
 
               {projGroups.length > 0 && projGroups.map((g: any) => {
                 const gOrds = grpOrders(g.id);
