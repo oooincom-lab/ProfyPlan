@@ -2946,7 +2946,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             <td className="t-mono">{fmt(n.late_finish_date)}</td>
                             <td className="t-mono" style={{ color: tf === 0 ? '#10B981' : '#F59E0B' }}>{tf === 0 ? '0 (КП)' : Number(tf).toFixed(1)}</td>
                             <td>
-                              <div style={{ position: 'relative', height: 22, background: '#0A1628', borderRadius: 4 }}>
+                              <div style={{ position: 'relative', height: 26, background: '#0A1628', borderRadius: 4 }}>
                                 <div style={{
                                   position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`,
                                   height: '100%', borderRadius: 4,
@@ -2959,6 +2959,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                     {n.name?.length > 28 ? n.name.slice(0, 26) + '…' : n.name}
                                   </span>
                                 </div>
+                                {n.capacity_multiplier != null && Number(n.capacity_multiplier) !== 1 ? (
+                                  <div title={'Мощность: ×' + n.capacity_multiplier + ' (доля проекта / квота подразделения / событие)'}
+                                    style={{ position: 'absolute', left: `${leftPct}%`, bottom: 1, width: `${Math.max(widthPct * Math.min(1, Number(n.capacity_multiplier)), 1)}%`, height: 3, borderRadius: 2, background: Number(n.capacity_multiplier) > 1 ? '#22C55E' : '#F59E0B' }} />
+                                ) : null}
                               </div>
                             </td>
                           </tr>
