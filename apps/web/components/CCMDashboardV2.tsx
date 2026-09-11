@@ -229,6 +229,7 @@ export default function CCMV2Dashboard() {
                 <th style={{ padding: '4px 8px' }}>Мощность</th>
                 <th style={{ padding: '4px 8px' }}>Проекты</th>
                 <th style={{ padding: '4px 8px' }}>План</th>
+                <th style={{ padding: '4px 8px' }}>Мощность</th>
                 <th style={{ padding: '4px 8px' }}>С событиями</th>
                 <th style={{ padding: '4px 8px' }}>Потери</th>
                 <th style={{ padding: '4px 8px' }}>Выработка</th>
@@ -244,6 +245,10 @@ export default function CCMV2Dashboard() {
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.capacity_per_unit || '—'} {r.capacity_unit || ''}</td>
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{r.projects.join(', ') || '—'}</td>
                   <td style={{ padding: '4px 8px' }} title={'Событий: ' + (r.events_count || 0)}>{r.total_text || (r.total_hours + ' ч')}</td>
+                  <td style={{ padding: '4px 8px', color: (r.capacity_factor && r.capacity_factor !== 1 ? '#FCD34D' : '#8FA3BD') }}
+                    title={'Коэффициент мощности: ×' + (r.capacity_factor ?? 1)}>
+                    {r.capacity_text || '—'}{r.capacity_factor && r.capacity_factor !== 1 ? ' (×' + r.capacity_factor + ')' : ''}
+                  </td>
                   <td style={{ padding: '4px 8px', color: '#93C5FD' }}>{r.effective_text || '—'}</td>
                   <td style={{ padding: '4px 8px', color: (r.lost_hours ? '#FCA5A5' : '#5A7090') }}
                     title={(r.lost_by_reason || []).map((x: any) => x.reason + ': ' + x.text).join('; ')}>
