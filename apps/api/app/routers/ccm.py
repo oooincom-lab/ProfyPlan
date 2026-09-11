@@ -1542,6 +1542,141 @@ async def resource_overload(
     }
 
 
+@ccm_router.post("/projects/{project_id}/overload-suggestion")
+async def overload_suggestion(
+    project_id: UUID,
+    resource_id: Optional[UUID] = None,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Предложение сдвига проекта при межпроектной перегрузке общих ресурсов.
+
+    Ищет общий ресурс проекта, занятый другими проектами с пересекающимися
+    сроками, и предлагает дату старта, когда ресурс освободится, плюс
+    пересчитанный финиш проекта (без сохранения — применяется отдельно).
+    """
+    from app.models.routing import Routing, RoutingOperation
+    from app.models.product_structure import ProductStructure
+
+    proj = (await db.execute(
+        select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+    )).scalar_one_or_none()
+    if not proj:
+        raise HTTPException(404, "Проект не найден")
+
+    my_start = proj.start_date
+    my_finish = getattr(proj, "due_date", None)
+
+    # Ресурсы проекта — через маршрутные операции его продуктов
+    rows = (await db.execute(
+        select(RoutingOperation.resource_type_id, ProductStructure.project_id)
+        .join(Routing, RoutingOperation.routing_id == Routing.id)
+        .join(ProductStructure, Routing.product_node_id == ProductStructure.id)
+        .where(Routing.tenant_id == tenant_id, RoutingOperation.resource_type_id.isnot(None))
+    )).all()
+    my_res = set()
+    others: dict = {}
+    name_by_proj = {}
+    for rid, pid in rows:
+        if not rid:
+            continue
+        if str(pid) == str(project_id):
+            my_res.add(str(rid))
+        else:
+            others.setdefault(str(rid), set()).add(str(pid))
+    if resource_id:
+        my_res = {str(resource_id)}
+
+    all_projects = {
+        str(x.id): x
+        for x in (await db.execute(select(Project).where(Project.tenant_id == tenant_id))).scalars().all()
+    }
+
+    conflicts = []
+    for rid in my_res:
+        for pid in others.get(rid, set()):
+            other = all_projects.get(pid)
+            if not other:
+                continue
+            o_start = getattr(other, "start_date", None)
+            o_finish = getattr(other, "due_date", None)
+            if not o_finish:
+                continue
+            # пересечение сроков
+            if my_start and my_finish and o_start:
+                if not (my_finish < o_start or my_start > o_finish):
+                    conflicts.append({
+                        "resource_id": rid,
+                        "other_project_id": pid,
+                        "other_project_name": other.name,
+                        "other_finish": o_finish.isoformat(),
+                    })
+            elif not my_start and o_start:
+                conflicts.append({
+                    "resource_id": rid,
+                    "other_project_id": pid,
+                    "other_project_name": other.name,
+                    "other_finish": o_finish.isoformat(),
+                })
+
+    if not conflicts:
+        return {"project_id": str(project_id), "has_conflict": False, "conflicts": [], "suggestion": None}
+
+    # дата освобождения ресурса = максимум финишей чужих проектов
+    free_at = max(datetime.fromisoformat(c["other_finish"]) for c in conflicts)
+    suggested_start = (free_at + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+
+    res_ids = {c["resource_id"] for c in conflicts}
+    res_names = {}
+    if res_ids:
+        res_names = {
+            str(x.id): x.name
+            for x in (await db.execute(select(Resource).where(Resource.id.in_([UUID(x) for x in res_ids])))).scalars().all()
+        }
+
+    # пересчёт финиша при новом старте (без сохранения)
+    new_finish = None
+    try:
+        from app.routers.calculations import run_schedule, ScheduleRequest
+
+        sc = await run_schedule(project_id, ScheduleRequest(start_date=suggested_start), db, tenant_id)
+        new_finish = sc.get("project_finish_date")
+    except Exception:
+        new_finish = None
+
+    cur_start = my_start.isoformat() if my_start else None
+    shift_days = None
+    if my_start:
+        try:
+            shift_days = max((suggested_start.date() - my_start.date()).days, 0)
+        except Exception:
+            shift_days = None
+
+    return {
+        "project_id": str(project_id),
+        "has_conflict": True,
+        "conflicts": [
+            {**c, "resource_name": res_names.get(c["resource_id"], c["resource_id"][:8])}
+            for c in conflicts
+        ],
+        "suggestion": {
+            "resource_names": sorted({res_names.get(r, r[:8]) for r in res_ids}),
+            "current_start": cur_start,
+            "suggested_start": suggested_start.isoformat(),
+            "shift_days": shift_days,
+            "free_at": free_at.isoformat(),
+            "new_finish": new_finish,
+            "message": "Ресурс%s занят%s до %s — предлагается старт %s (сдвиг %s дн.)" % (
+                ("ы " + ", ".join(sorted({res_names.get(r, r[:8]) for r in res_ids}))) if len(res_ids) > 1 else (" " + (res_names.get(next(iter(res_ids)), "") if res_ids else "")),
+                "" if not conflicts else " другими проектами",
+                free_at.date().isoformat(),
+                suggested_start.date().isoformat(),
+                shift_days if shift_days is not None else "?",
+            ),
+        },
+    }
+
+
 @ccm_router.get("/resource-usage")
 async def resource_usage(
     tenant_id: str = Depends(get_current_tenant_id),
