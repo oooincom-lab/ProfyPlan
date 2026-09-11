@@ -3,8 +3,9 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import ResourceForm, { typeLabel, capUnitLabel } from './ResourceForm';
 import DebugBadge from './DebugBadge';
+import { API_V1 } from '@/lib/api';
 
-const API = 'https://profyplan.ru/api/v1';
+const API = API_V1;
 
 type Resource = {
   id: string;

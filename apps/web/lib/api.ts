@@ -16,7 +16,9 @@ function resolveApiBase(): string {
   }
   return env || 'https://profyplan.ru/api';
 }
-const API_BASE = resolveApiBase();
+export const API_ORIGIN = resolveApiBase();
+export const API_V1 = API_ORIGIN + '/v1';
+const API_BASE = API_ORIGIN;
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;

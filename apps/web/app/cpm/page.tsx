@@ -6,6 +6,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+
+// Демо-вход: значения по умолчанию — боевые; локально переопределяются окружением
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || 'planner@demo.ru';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'demo123';
 import { getProjects, runCPM, login, logout, getBOMTree, explodeAndSaveBOM, uploadBOM } from '@/lib/api';
 import type { BOMNode } from '@/lib/api';
 import ExcelImportWizard from '@/components/ExcelImportWizard';
@@ -679,7 +683,7 @@ export default function CPMPage(){
   var loadProject=useCallback(async (pid:string)=>{
     setSelectedId(pid);setLoading(true);setError(null);
     try{
-      await login('planner@demo.ru','demo123');
+      await login(DEMO_EMAIL, DEMO_PASSWORD);
       var cpm=await runCPM(pid);
       console.log('[CPM] API response:',cpm);
       var nodes=cpm.nodes||[];

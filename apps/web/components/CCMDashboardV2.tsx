@@ -4,6 +4,10 @@
  */
 'use client';
 
+// Демо-вход: значения по умолчанию — боевые; локально переопределяются окружением
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || 'planner@demo.ru';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'demo123';
+
 function resolveApiBase(): string {
   const env = process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== 'undefined') {
@@ -31,8 +35,8 @@ export default function CCMV2Dashboard() {
   const [showBaseline, setShowBaseline] = useState(false);
   const [baselineNodes, setBaselineNodes] = useState<any>(null);
   const [authed, setAuthed] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('planner@demo.ru');
-  const [loginPass, setLoginPass] = useState('demo123');
+  const [loginEmail, setLoginEmail] = useState(DEMO_EMAIL);
+  const [loginPass, setLoginPass] = useState(DEMO_PASSWORD);
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [resourceUsage, setResourceUsage] = useState<any[]>([]);
   const [overload, setOverload] = useState<any>(null);

@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { API_ORIGIN } from '@/lib/api';
 
 type Props = {
   entity: string;
@@ -40,7 +41,7 @@ type Props = {
 
 export default function ReferenceField({
   entity, value, onChange, onOpenBrowser, onPickItem, onEditItem, pathOverride,
-  apiBase = 'https://profyplan.ru/api',
+  apiBase = API_ORIGIN,
   displayField = 'name',
   displayValue,
   placeholder = 'Выбрать…',

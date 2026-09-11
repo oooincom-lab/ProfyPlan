@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import OrderTree, { TreeChevron } from './OrderTree';
 import DebugBadge from './DebugBadge';
+import { API_V1 } from '@/lib/api';
 
 interface Order {
   id: string;
@@ -66,7 +67,7 @@ function statusLabel(status?: string) {
 async function moveOrders(orderIds: string[], groupId: string | null) {
   const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : '';
   for (const oid of orderIds) {
-    const r = await fetch('https://profyplan.ru/api/v1/production-orders/' + oid + '/move', {
+    const r = await fetch(API_V1 + '/production-orders/' + oid + '/move', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
       body: JSON.stringify({ group_id: groupId }),
@@ -81,7 +82,7 @@ async function moveOrders(orderIds: string[], groupId: string | null) {
 async function movePools(poolIds: string[], groupId: string | null) {
   const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : '';
   for (const pid of poolIds) {
-    const r = await fetch('https://profyplan.ru/api/v1/order-pools/' + pid + '/move', {
+    const r = await fetch(API_V1 + '/order-pools/' + pid + '/move', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
       body: JSON.stringify({ group_id: groupId }),

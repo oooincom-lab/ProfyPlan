@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import DebugBadge from './DebugBadge';
+import { API_V1 } from '@/lib/api';
 
 interface DeleteCheckResult {
   entity: { type: string; id: string; name: string; label: string };
@@ -34,7 +35,7 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const h: Record<string, string> = { 'Content-Type': 'application/json' };
       if (tok) h['Authorization'] = `Bearer ${tok}`;
-      const r = await fetch('https://profyplan.ru/api/v1/safe-delete/' + entityType + '/' + entityId, {
+      const r = await fetch(API_V1 + '/safe-delete/' + entityType + '/' + entityId, {
         method: 'DELETE',
         headers: h,
       });

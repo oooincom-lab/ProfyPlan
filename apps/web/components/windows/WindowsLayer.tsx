@@ -15,6 +15,7 @@ import BomTree from '@/components/bomtree';
 import ResourceForm from '@/components/ResourceForm';
 import DebugBadge from '@/components/DebugBadge';
 import AppModal from '@/components/AppModal';
+import { API_ORIGIN, API_V1 } from '@/lib/api';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -652,7 +653,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
                 <ReferenceField
                   entity="operations"
-                  pathOverride="https://profyplan.ru/api/v1/catalog-operations/"
+                  pathOverride={API_V1 + '/catalog-operations/'}
                   value={f.opId || null}
                   onChange={(v) => setOpAddForm(prev => ({ ...prev, [w.id]: { ...f, opId: v, opName: null, opDur: null } }))}
                   onOpenBrowser={onOpenDirPick}
@@ -780,7 +781,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   entity={w.data?.entity || ''}
                   refreshKey={dirRefreshKey}
                   columns={w.data?.columns || []}
-                  apiBase="https://profyplan.ru/api"
+                  apiBase={API_ORIGIN}
                   onSelect={w.data?.onSelect}
                   onEditWindow={w.data?.onEditWindow}
                   onAddWindow={w.data?.onAddWindow}
@@ -874,7 +875,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 <div style={{ display: 'grid', gap: 10 }}>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Клиент</span>
-                    <DirectoryPicker entity="counterparties" apiBase="https://profyplan.ru/api" value={w.form.client_id || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, client_id: v } } : x))} placeholder="Выбрать контрагента..." onManage={() => onOpenDirectory('counterparties')} />
+                    <DirectoryPicker entity="counterparties" apiBase={API_ORIGIN} value={w.form.client_id || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, client_id: v } } : x))} placeholder="Выбрать контрагента..." onManage={() => onOpenDirectory('counterparties')} />
                   </label>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Кол-во</span>
@@ -882,7 +883,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </label>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Ед. изм.</span>
-                    <DirectoryPicker entity="units" apiBase="https://profyplan.ru/api" value={w.form.unit || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, unit: v } } : x))} displayField="symbol_ru" valueField="symbol_int" subField="symbol_int" placeholder="Выбрать единицу..." onManage={() => onOpenDirectory('units')} />
+                    <DirectoryPicker entity="units" apiBase={API_ORIGIN} value={w.form.unit || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, unit: v } } : x))} displayField="symbol_ru" valueField="symbol_int" subField="symbol_int" placeholder="Выбрать единицу..." onManage={() => onOpenDirectory('units')} />
                   </label>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритет</span>
@@ -994,7 +995,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                 {w.editing ? (
                                   <ReferenceField
                                     entity="operations"
-                                    pathOverride="https://profyplan.ru/api/v1/catalog-operations/"
+                                    pathOverride={API_V1 + '/catalog-operations/'}
                                     value={op.catalog_operation_id || null}
                                     displayValue={op.catalog_operation_id ? op.name : undefined}
                                     onChange={(v) => { if (!v) onRoutingOpUpdate?.(op.id, { catalog_operation_id: null }); }}
@@ -1051,7 +1052,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                                       <span style={{ flexShrink: 0, width: 108 }}>Этап:</span>
                                       <ReferenceField
                                         entity="stages"
-                                        pathOverride={'https://profyplan.ru/api/v1/projects/' + (o.project_id || '') + '/stages/'}
+                                        pathOverride={API_V1 + '/projects/' + (o.project_id || '') + '/stages/'}
                                         value={op.stage_name || null}
                                         displayValue={op.stage_name || undefined}
                                         onChange={() => {}}
