@@ -4,6 +4,8 @@
  */
 'use client';
 
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'https://profyplan.ru/api') + '/v1';
+
 import { useState, useEffect, useCallback } from 'react';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
 import { login, isAuthenticated, getProjects, mergeProjects, resourceLeveling, createBaseline } from '@/lib/api';
@@ -38,7 +40,7 @@ export default function CCMV2Dashboard() {
   useEffect(() => {
     if (!authed) return;
     const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-    fetch('https://profyplan.ru/api/v1/ccm/resource-usage', {
+    fetch(API_BASE + '/ccm/resource-usage', {
       headers: { ...(t ? { Authorization: 'Bearer ' + t } : {}) },
     })
       .then(r => r.ok ? r.json() : [])
@@ -49,7 +51,7 @@ export default function CCMV2Dashboard() {
   useEffect(() => {
     if (!authed) return;
     const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-    fetch('https://profyplan.ru/api/v1/ccm/resource-overload', {
+    fetch(API_BASE + '/ccm/resource-overload', {
       headers: { ...(t ? { Authorization: '***' + t } : {}) },
     })
       .then(r => r.ok ? r.json() : null)
@@ -73,7 +75,7 @@ export default function CCMV2Dashboard() {
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch(`https://profyplan.ru/api/v1/ccm/projects/${pid}/overload-suggestion`, {
+      const r = await fetch(`${API_BASE}/ccm/projects/${pid}/overload-suggestion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
         body: '{}',
@@ -89,14 +91,14 @@ export default function CCMV2Dashboard() {
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      await fetch(`https://profyplan.ru/api/v1/projects/${suggestion.project_id}`, {
+      await fetch(`${API_BASE}/projects/${suggestion.project_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
         body: JSON.stringify({ start_date: sg.suggested_start }),
       });
       setSuggestion({ ...suggestion, applied: true });
       const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch('https://profyplan.ru/api/v1/ccm/resource-overload', {
+      const r = await fetch(API_BASE + '/ccm/resource-overload', {
         headers: { ...(t2 ? { Authorization: '***' + t2 } : {}) },
       });
       if (r.ok) setOverload(await r.json());
@@ -114,14 +116,14 @@ export default function CCMV2Dashboard() {
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      await fetch(`https://profyplan.ru/api/v1/projects/${tgt.project_id}`, {
+      await fetch(`${API_BASE}/projects/${tgt.project_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
         body: JSON.stringify({ start_date: nd.toISOString() }),
       });
       setSuggestion({ ...suggestion, applied: true, appliedOther: true });
       const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch('https://profyplan.ru/api/v1/ccm/resource-overload', {
+      const r = await fetch(API_BASE + '/ccm/resource-overload', {
         headers: { ...(t2 ? { Authorization: '***' + t2 } : {}) },
       });
       if (r.ok) setOverload(await r.json());
@@ -133,14 +135,14 @@ export default function CCMV2Dashboard() {
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      await fetch(`https://profyplan.ru/api/v1/projects/${pid}`, {
+      await fetch(`${API_BASE}/projects/${pid}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
         body: JSON.stringify({ priority: pr }),
       });
       // перезапросить предложение с новым приоритетом
       const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r2 = await fetch(`https://profyplan.ru/api/v1/ccm/projects/${pid}/overload-suggestion`, {
+      const r2 = await fetch(`${API_BASE}/ccm/projects/${pid}/overload-suggestion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: '***' + t2 } : {}) },
         body: '{}',

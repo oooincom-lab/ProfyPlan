@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import ReferenceField from '@/components/ReferenceField';
 
-const API = 'https://profyplan.ru/api/v1';
+const API = (process.env.NEXT_PUBLIC_API_URL || 'https://profyplan.ru/api') + '/v1';
 
 type Q = {
   id: string;

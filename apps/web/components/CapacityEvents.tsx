@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-const API = 'https://profyplan.ru/api/v1';
+const API = (process.env.NEXT_PUBLIC_API_URL || 'https://profyplan.ru/api') + '/v1';
 
 type Ev = {
   id?: string;
