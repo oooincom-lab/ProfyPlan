@@ -216,6 +216,7 @@ export default function AppShell() {
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [ganttData, setGanttData] = useState<any>(null);
   const [projCapacity, setProjCapacity] = useState<any>(null);
+  const [projLoading, setProjLoading] = useState<any>(null);
   const [ganttLoading, setGanttLoading] = useState(false);
 
   const [newOrder, setNewOrder] = useState({ specification_name: '', quantity: '1', unit: 'pcs', priority: 'normal', client: '' });
@@ -1680,6 +1681,10 @@ export default function AppShell() {
         const rep = await apiF<any>(`/reports/lost-hours?project_id=${p.id}`);
         setProjCapacity(rep);
       } catch { setProjCapacity(null); }
+      try {
+        const rl = await apiF<any>(`/reports/resource-loading?project_id=${p.id}&weeks=8`);
+        setProjLoading(rl);
+      } catch { setProjLoading(null); }
     } catch (e: any) { setMsg('Ошибка загрузки Ганта: ' + (e.message || String(e))); }
     setGanttLoading(false);
   };
@@ -2891,6 +2896,30 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   </div>
                 );
               })()}
+              {!ganttLoading && projLoading && (projLoading.weeks || []).some((w: any) => w.demand_hours > 0) && (
+                <div style={{ marginBottom: 12, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600, marginBottom: 6 }}>
+                    📈 Загрузка по неделям · итого {projLoading.totals?.demand_text} · пик {projLoading.totals?.peak_percent}%
+                  </div>
+                  <table className="tbl" style={{ fontSize: 11.5 }}>
+                    <thead><tr><th>Неделя</th><th>Спрос</th><th>Загрузка</th><th>График</th></tr></thead>
+                    <tbody>
+                      {(projLoading.weeks || []).filter((w: any) => w.demand_hours > 0).map((w: any) => (
+                        <tr key={w.week_start}>
+                          <td className="t-mono">{w.week_start.slice(8, 10)}.{w.week_start.slice(5, 7)} – {w.week_end.slice(8, 10)}.{w.week_end.slice(5, 7)}</td>
+                          <td className="t-mono">{w.demand_text}</td>
+                          <td className="t-mono" style={{ color: w.load_percent > 100 ? '#F87171' : (w.load_percent > 80 ? '#FCD34D' : '#86EFAC') }}>{w.load_percent}%</td>
+                          <td>
+                            <div style={{ position: 'relative', height: 12, background: '#0F1E36', borderRadius: 3, minWidth: 120 }}>
+                              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(w.load_percent, 100)}%`, borderRadius: 3, background: w.load_percent > 100 ? '#EF4444' : (w.load_percent > 80 ? '#F59E0B' : '#22C55E') }} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               {!ganttLoading && ganttData && (ganttData.warnings || []).length > 0 && (
                 <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {(ganttData.warnings || []).map((wn: any, i: number) => (
