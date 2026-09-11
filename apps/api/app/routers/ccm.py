@@ -1496,7 +1496,9 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
                 if days > 0:
                     conflicts.append({
                         "a": a["project_name"],
+                        "a_id": a["project_id"],
                         "b": b["project_name"],
+                        "b_id": b["project_id"],
                         "from": o0.date().isoformat(),
                         "to": o1.date().isoformat(),
                         "days": days,

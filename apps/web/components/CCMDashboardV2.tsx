@@ -26,6 +26,8 @@ export default function CCMV2Dashboard() {
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [resourceUsage, setResourceUsage] = useState<any[]>([]);
   const [overload, setOverload] = useState<any>(null);
+  const [suggestion, setSuggestion] = useState<any>(null);
+  const [sugBusy, setSugBusy] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -66,6 +68,41 @@ export default function CCMV2Dashboard() {
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
+
+  const suggestShift = useCallback(async (pid: string) => {
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(`https://profyplan.ru/api/v1/ccm/projects/${pid}/overload-suggestion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        body: '{}',
+      });
+      setSuggestion(await r.json());
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  }, []);
+
+  const applyShift = useCallback(async () => {
+    const sg = suggestion?.suggestion;
+    if (!sg?.suggested_start || !suggestion?.project_id) return;
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      await fetch(`https://profyplan.ru/api/v1/projects/${suggestion.project_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        body: JSON.stringify({ start_date: sg.suggested_start }),
+      });
+      setSuggestion({ ...suggestion, applied: true });
+      const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch('https://profyplan.ru/api/v1/ccm/resource-overload', {
+        headers: { ...(t2 ? { Authorization: '***' + t2 } : {}) },
+      });
+      if (r.ok) setOverload(await r.json());
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  }, [suggestion]);
 
   const runMerge = useCallback(async () => {
     if (selectedIds.length === 0) {
@@ -302,11 +339,34 @@ export default function CCMV2Dashboard() {
                   <td style={{ padding: '4px 8px', color: r.has_conflict ? '#FCD34D' : '#5A7090' }}>{r.overlap_days ? r.overlap_days + ' дн' : '—'}</td>
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>
                     {(r.conflicts || []).slice(0, 2).map((c: any) => c.a + ' × ' + c.b + ' (' + c.days + ' дн)').join('; ') || '—'}
+                    {r.has_conflict && (r.conflicts || [])[0] && (
+                      <button onClick={() => suggestShift(String((r.conflicts || [])[0].a_id))} disabled={sugBusy}
+                        style={{ marginLeft: 8, background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Предложить сдвиг</button>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {suggestion && (
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: suggestion.has_conflict ? '#FCD34D' : '#8FA3BD', flexWrap: 'wrap' }}>
+              {suggestion.has_conflict ? (
+                <>
+                  <span>💡 {suggestion.suggestion?.message}</span>
+                  {suggestion.suggestion?.new_finish ? <span>· новый финиш: {String(suggestion.suggestion.new_finish).slice(0, 10)}</span> : null}
+                  {!suggestion.applied && (
+                    <button onClick={applyShift} disabled={sugBusy}
+                      style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Применить сдвиг</button>
+                  )}
+                  {suggestion.applied && <span style={{ color: '#86EFAC' }}>сдвиг применён</span>}
+                  <button onClick={() => setSuggestion(null)}
+                    style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Скрыть</button>
+                </>
+              ) : (
+                <span>Для этого проекта конфликтов по общим ресурсам нет.</span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
