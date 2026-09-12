@@ -136,5 +136,14 @@ async def delete_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # События мощности проекта удаляются вместе с ним: иначе внешний ключ обнуляет
+    # привязку и событие становится общим для всех проектов (12.09.2026)
+    from sqlalchemy import delete as _sa_delete
+    from app.models.resource_event import ResourceEvent as _RE
+    await db.execute(_sa_delete(_RE).where(
+        _RE.tenant_id == tenant_id,
+        _RE.project_id == project_id,
+    ))
+
     await db.delete(project)
     await db.commit()

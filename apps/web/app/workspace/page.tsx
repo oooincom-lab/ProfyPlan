@@ -36,6 +36,7 @@ import ProjectWidgets from '@/components/ProjectWidgets';
 import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
+import CCMDashboardV2 from '@/components/CCMDashboardV2';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -4003,7 +4004,12 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             </div>
           )}
 
-          {/* ═══ REPORTS / CCM ═══ */}
+          {/* ═══ CCM ═══ */}
+          {view === 'ccm' && (
+            <CCMDashboardV2 />
+          )}
+
+          {/* ═══ REPORTS ═══ */}
           {view === 'reports' && (
             <ReportsPanel projects={projects} />
           )}

@@ -87,11 +87,40 @@ async def resource_loading(
             b["hours"] += dur_h * share
             b["ops"] += 1
 
+    # ── Доступное время недели: сумма по ресурсам, задействованным в операциях проекта ──
+    # (мощность ресурса × доля проекта × часы рабочего дня × 5 рабочих дней).
+    from app.models.operation import Operation as _Op, OperationResource as _OpRes
+    from app.models.project_resource import ProjectResource as _PR
+    from app.models.resource import Resource as _Res
+
+    shares: dict[str, float] = {}
+    for _pr in (await db.execute(select(_PR).where(_PR.project_id == project_id))).scalars().all():
+        shares[str(_pr.resource_id)] = float(_pr.capacity_share if _pr.capacity_share is not None else 1.0)
+
+    _involved = (await db.execute(
+        select(_OpRes.resource_id).join(_Op, _Op.id == _OpRes.operation_id).where(
+            _Op.project_id == project_id,
+            _Op.tenant_id == tenant_id,
+        )
+    )).scalars().all()
+    _res_ids = {str(x) for x in _involved if x}
+
+    _default_hpd = float(getattr(proj, "hours_per_day", None) or 8.0) or 8.0
+    avail_week = 0.0
+    for _rid in _res_ids:
+        _r = await db.get(_Res, UUID(_rid))
+        if not _r:
+            continue
+        _cap = float(_r.capacity_per_unit or 1.0) or 1.0
+        _share = shares.get(_rid, 1.0)
+        avail_week += _cap * _share * _default_hpd * 5.0
+    if avail_week <= 0:
+        avail_week = 5.0 * _default_hpd
+
     out = []
     total_demand = 0.0
     for b in buckets:
-        # доступное время недели: 5 рабочих дней × часы дня проекта (по умолчанию 8)
-        avail = 5 * 8.0
+        avail = avail_week
         load = (b["hours"] / avail * 100.0) if avail > 0 else 0.0
         total_demand += b["hours"]
         out.append({

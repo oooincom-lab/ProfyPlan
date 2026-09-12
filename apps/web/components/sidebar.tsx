@@ -216,7 +216,7 @@ export default function Sidebar(props: SidebarProps) {
             <span className="s-fi" onClick={() => navTo('production-calendars')}>📅 Производственные календари</span>
           </span>
         </button>
-        <a href="/ccm-v2" className="s-rail-item" style={{ textDecoration: 'none' }}><span className="s-tip">CCM</span>📈</a>
+        <button className="s-rail-item" style={{ textDecoration: 'none' }} title="CCM" onClick={() => navTo('ccm')}><span className="s-tip">CCM</span>📈</button>
         <button className={'s-rail-item' + (view === 'reports' ? ' active' : '')} onClick={() => navTo('reports')}><span className="s-tip">Отчёты</span>📋</button>
         <div className="s-rail-bottom">
           <button className={'s-rail-item' + (view === 'settings' ? ' active' : '')} onClick={() => navTo('settings')}><span className="s-tip">Настройки</span>⚙️</button>
@@ -631,7 +631,7 @@ export default function Sidebar(props: SidebarProps) {
 
       {/* Аналитика */}
       <div className="s-sec" style={{ justifyContent: 'flex-start' }}>Аналитика</div>
-      <a href="/ccm-v2" className="s-item" style={{ textDecoration: 'none' }}>📈 CCM{debug && <DebugBadge debug={debug} text="[nav:ccm]" />}</a>
+      <button className={`s-item ${view === 'ccm' ? 'active' : ''}`} onClick={() => navTo('ccm')}>📈 CCM{debug && <DebugBadge debug={debug} text="[nav:ccm]" />}</button>
       <button className={`s-item ${view === 'reports' ? 'active' : ''}`} onClick={() => navTo('reports')}>
         📋 Отчёты{debug && <DebugBadge debug={debug} text="[nav:reports]" />}
       </button>
