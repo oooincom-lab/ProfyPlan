@@ -895,7 +895,28 @@ async def run_schedule(
             result = calculate_cpm(ops_dicts_pin, deps_dicts, constraints=pin_constraints)
             nodes, project_finish, node_dates = await build_nodes(result)
         except ValueError:
-            pass
+            # ограничения по отдельности: пропускаем те, что конфликтуют с технологическим порядком
+            _applied: dict = {}
+            _dropped = 0
+            _ok = False
+            for _oid, _con in pin_constraints.items():
+                _trial = {**_applied, _oid: _con}
+                try:
+                    _r = calculate_cpm(ops_dicts_pin, deps_dicts, constraints=_trial)
+                except ValueError:
+                    _dropped += 1
+                    continue
+                _applied = _trial
+                result = _r
+                _ok = True
+            if _ok:
+                nodes, project_finish, node_dates = await build_nodes(result)
+            if _dropped:
+                warnings.append({
+                    "type": "constraints_skipped",
+                    "message": ("%d ограничений (закрепления/потоки) пропущено — они конфликтуют "
+                                "с технологическим порядком операций" % _dropped),
+                })
 
     # Отметка закреплённых операций и проверка нарушений
     for n in nodes:
