@@ -1713,7 +1713,7 @@ export default function AppShell() {
     const proj = p || selectedProject;
     setSelectedProject(proj); setView('network'); setNetLoading(true); setNetData(null);
     try {
-      const r = await apiF<any>('/ccm/merge', { method: 'POST', body: JSON.stringify({ project_ids: [proj.id] }) });
+      const r = await apiF<any>('/projects/' + proj.id + '/calculate/cpm', { method: 'POST', body: JSON.stringify({}) });
       setNetData(r);
     } catch (e: any) {
       setMsg('Ошибка сети CPM: ' + (e?.message || String(e)));
