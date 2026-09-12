@@ -151,7 +151,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
                     }} />
                   );
                 })}
-                {options.showPins && (pins || []).filter((p: any) => (resIds?.[r.res] ? p.resource_id === resIds[r.res] : (p.resource_name || '') === r.res)).map((p: any, i: number) => {
+                {options.showPins && (pins || []).filter((p: any) => (resMap[p.operation_id] === r.res) || (resIds?.[r.res] ? p.resource_id === resIds[r.res] : false)).map((p: any, i: number) => {
                   const t = parse(p.pin_at);
                   if (!Number.isFinite(t)) return null;
                   return <span key={'p' + i} title={`закрепление: ${p.pin_type}${p.is_hard ? ' (жёсткое)' : ''}`} style={{
