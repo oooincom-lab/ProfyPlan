@@ -2732,6 +2732,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     'ccm': 'CCM · Портфель',
     'tools': 'Инструменты',
     'network': 'Сеть CPM',
+    'scale': 'Шкала куста',
     'reports': 'Отчёты',
     'settings': 'Настройки',
     'new-project': 'Новый проект',
