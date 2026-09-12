@@ -32,6 +32,7 @@ const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString(
 export default function GroupScale({ project, groupName, nodes, resMap, pins, events, ghost, options, onToggle, onOpenGantt, onBack }: Props) {
   const rows = useMemo(() => {
     const list = (nodes || []).filter((n: any) => Number.isFinite(parse(n.start_datetime)));
+    if (!list.length) return { rows: [], min: 0, span: MS_DAY, count: 0 };
     const min = Math.min(...list.map((n: any) => parse(n.start_datetime)));
     const max = Math.max(...list.map((n: any) => parse(n.finish_datetime || n.start_datetime)));
     const span = Math.max(max - min, MS_DAY);
@@ -61,7 +62,11 @@ export default function GroupScale({ project, groupName, nodes, resMap, pins, ev
     return m;
   }, [ghost]);
   const weeks: number[] = [];
-  for (let t = rows.min; t <= rows.min + rows.span; t += 7 * MS_DAY) weeks.push(t);
+  if (rows.count > 0 && Number.isFinite(rows.min) && Number.isFinite(rows.span) && rows.span > 0) {
+    const step = rows.span > 120 * MS_DAY ? 30 * MS_DAY : 7 * MS_DAY;
+    let guard = 0;
+    for (let t = rows.min; t <= rows.min + rows.span && guard < 60; t += step, guard++) weeks.push(t);
+  }
 
   return (
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>

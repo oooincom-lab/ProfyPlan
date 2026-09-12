@@ -1730,12 +1730,12 @@ export default function AppShell() {
     if (!proj) return;
     setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу куста…');
     try {
-      const [sch, map, pins, evs] = await Promise.all([
-        apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }),
-        apiF<any[]>(`/projects/${proj.id}/operations/resources-map`),
-        apiF<any[]>(`/projects/${proj.id}/pins`).catch(() => []),
-        apiF<any>(`/resource-events/?project_id=${proj.id}`).catch(() => ({ items: [] })),
-      ]);
+      // каждый запрос отдельно: падение одного не оставит шкалу пустой
+      let sch: any = null, map: any = [], pins: any = [], evs: any = { items: [] };
+      try { sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }); } catch (e: any) { setMsg('Расчёт не удался: ' + (e?.message || e)); }
+      try { map = await apiF<any[]>(`/projects/${proj.id}/operations/resources-map`); } catch { map = []; }
+      try { pins = await apiF<any[]>(`/projects/${proj.id}/pins`); } catch { pins = []; }
+      try { evs = await apiF<any>(`/resource-events/?project_id=${proj.id}`); } catch { evs = { items: [] }; }
       const resMap: Record<string, string> = {};
       (map || []).forEach((r: any) => { if (r.resource_name) resMap[r.operation_id] = r.resource_name; });
       const evList = Array.isArray(evs) ? evs : (evs?.items || []);
