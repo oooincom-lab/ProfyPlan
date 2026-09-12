@@ -37,6 +37,8 @@ import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
+import ToolsPanel from '@/components/toolspanel';
+import NetworkGraphV2 from '@/components/NetworkGraphV2';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -137,7 +139,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -147,6 +149,8 @@ export default function AppShell() {
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
   const [view, setView] = useState<View>('dashboard');
+  const [netData, setNetData] = useState<any>(null);
+  const [netLoading, setNetLoading] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1703,6 +1707,20 @@ export default function AppShell() {
     if (['directories','nomenclature','units','resources','work-schedules','production-calendars','departments','organizations','settings'].includes(v)) win.minimizeAll();
   };
 
+  // ── Сеть CPM (вид рабочего поля) ──
+  const loadProjectNetwork = async (p: any) => {
+    if (!p && !selectedProject) return;
+    const proj = p || selectedProject;
+    setSelectedProject(proj); setView('network'); setNetLoading(true); setNetData(null);
+    try {
+      const r = await apiF<any>('/ccm/merge', { method: 'POST', body: JSON.stringify({ project_ids: [proj.id] }) });
+      setNetData(r);
+    } catch (e: any) {
+      setMsg('Ошибка сети CPM: ' + (e?.message || String(e)));
+    }
+    setNetLoading(false);
+  };
+
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
     setSelectedProject(p); setView('project-gantt');
@@ -2686,7 +2704,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     'departments': 'Подразделения',
     'organizations': 'Организации',
     'production-calendars': 'Производственные календари',
-    'ccm': 'CCM',
+    'ccm': 'CCM · Портфель',
+    'tools': 'Инструменты',
+    'network': 'Сеть CPM',
     'reports': 'Отчёты',
     'settings': 'Настройки',
     'new-project': 'Новый проект',
@@ -2941,7 +2961,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   </label>
                   {ganttData?.project_finish_date && <span style={{ fontSize: 11, color: '#8FA3BD' }}>→ финиш <span style={{ color: '#10B981', fontWeight: 600 }}>{ganttData.project_finish_date.slice(8, 10)}.{ganttData.project_finish_date.slice(5, 7)}.{ganttData.project_finish_date.slice(0, 4)}</span></span>}
                   {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{ganttData.total_duration_days} раб. дн.</span>}
-                  <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">🔄 Обновить</button>
+                  <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
+              <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">🕸 Сеть CPM</button>
                   <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
                 </div>
               </div>
@@ -4001,6 +4022,28 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 </div>
                 <WorkScheduleManager debug={debugMode} mode="edit" schedule={wschedEditModal === 'new' ? null : wschedEditModal} onSaved={() => { setWschedEditModal(null); setSchedRefresh(x => x + 1); }} onClose={() => setWschedEditModal(null)} />
               </div>
+            </div>
+          )}
+
+          {/* ═══ ИНСТРУМЕНТЫ ═══ */}
+          {view === 'tools' && (
+            <ToolsPanel projects={projects} selectedProject={selectedProject} onOpenNetwork={loadProjectNetwork} />
+          )}
+
+          {/* ═══ СЕТЬ CPM (вид рабочего поля) ═══ */}
+          {view === 'network' && (
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 16, fontWeight: 700 }}>Сеть CPM</span>
+                <span style={{ fontSize: 12.5, color: '#8FA3BD' }}>{selectedProject?.name || 'проект не выбран'}</span>
+                <span style={{ flex: 1 }} />
+                <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
+                <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">📊 К Ганту</button>
+                <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
+              </div>
+              {netLoading && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Загрузка сети…</div>}
+              {!netLoading && !netData && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>}
+              {!netLoading && netData && <NetworkGraphV2 cpmResult={netData} levelResult={null} showBaseline={false} />}
             </div>
           )}
 

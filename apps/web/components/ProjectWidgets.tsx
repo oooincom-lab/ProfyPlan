@@ -79,7 +79,7 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
         <span style={{ fontSize: 13, fontWeight: 700, color: '#93C5FD' }}>📊 Сводка расчёта проекта</span>
         <button type="button" onClick={refresh} disabled={loading}
           style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit', opacity: loading ? .6 : 1 }}>
-          {loading ? 'Расчёт…' : '▶ Пересчитать'}
+          {loading ? 'Расчёт…' : '▶ Рассчитать проект'}
         </button>
         {err && <span style={{ fontSize: 11.5, color: '#FCA5A5' }}>ошибка: {err}</span>}
         {loading && !sched && <span style={{ fontSize: 11.5, color: '#5A7090' }}>считаем…</span>}

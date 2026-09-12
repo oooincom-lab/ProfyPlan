@@ -9,7 +9,7 @@ type View =
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
-  | 'reports' | 'settings' | 'new-project';
+  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network';
 
 interface SidebarProps {
   view: View;
@@ -629,9 +629,13 @@ export default function Sidebar(props: SidebarProps) {
         </>
       )}
 
+      {/* Инструменты */}
+      <div className="s-sec" style={{ justifyContent: 'flex-start' }}>Инструменты</div>
+      <button className={`s-item ${view === 'tools' ? 'active' : ''}`} onClick={() => navTo('tools')}>🛠 Инструменты{debug && <DebugBadge debug={debug} text="[nav:tools]" />}</button>
+
       {/* Аналитика */}
       <div className="s-sec" style={{ justifyContent: 'flex-start' }}>Аналитика</div>
-      <button className={`s-item ${view === 'ccm' ? 'active' : ''}`} onClick={() => navTo('ccm')}>📈 CCM{debug && <DebugBadge debug={debug} text="[nav:ccm]" />}</button>
+      <button className={`s-item ${view === 'ccm' ? 'active' : ''}`} onClick={() => navTo('ccm')}>📈 CCM · Портфель{debug && <DebugBadge debug={debug} text="[nav:ccm]" />}</button>
       <button className={`s-item ${view === 'reports' ? 'active' : ''}`} onClick={() => navTo('reports')}>
         📋 Отчёты{debug && <DebugBadge debug={debug} text="[nav:reports]" />}
       </button>
