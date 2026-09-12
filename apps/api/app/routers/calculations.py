@@ -944,6 +944,15 @@ async def run_schedule(
 
     pin_warnings: list = []
     if pin_constraints:
+        try:
+            import logging as _lg
+            _dbg = {k: v for k, v in list(pin_constraints.items())[:6]}
+            _lg.getLogger("uvicorn.error").warning(
+                "CONSTRAINTS-DBG: всего=%d, потоков=%d, пример=%s",
+                len(pin_constraints), len(flow_list), _dbg,
+            )
+        except Exception:
+            pass
         ops_dicts_pin = []
         for od in ops_dicts:
             m = factors.get(od["id"], 1.0)
