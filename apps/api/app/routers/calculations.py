@@ -842,6 +842,7 @@ async def run_schedule(
         _takt = float(_f.takt_days or 0)
         _shifted = 0
         _conflicts = 0
+        _cons_list: list = []
         for _a, _b in zip(_ids, _ids[1:]):
             _es_a, _ef_a = _flow_days(_a)
             _need = _ef_a + _gap
@@ -855,6 +856,12 @@ async def run_schedule(
             _prev = _c.get("min_start")
             _c["min_start"] = _need if _prev is None else max(float(_prev), _need)
             _es_b = _flow_days(_b)[0]
+            _cons_list.append({
+                "operation_id": _b,
+                "required_days": round(float(_need), 2),
+                "was_days": round(float(_es_b), 2),
+                "bites": bool(_need > _es_b + 1e-6),
+            })
             if _need > _es_b + 1e-6:
                 _shifted += 1
         flow_list.append({
@@ -866,6 +873,7 @@ async def run_schedule(
             "priority": _f.priority,
             "shifted_operations": _shifted,
             "order_conflicts": _conflicts,
+            "constraints": _cons_list,
         })
         if _shifted:
             flow_warnings.append({
