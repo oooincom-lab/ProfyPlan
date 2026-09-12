@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type CSSProperties } from 'react';
 import ResourceForm, { typeLabel, capUnitLabel } from './ResourceForm';
+import ResourceDashboard from './ResourceDashboard';
 import DebugBadge from './DebugBadge';
 import { API_V1 } from '@/lib/api';
 
@@ -50,6 +51,7 @@ export default function ResourceManager({ projects, windowMode = false, debug = 
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+    const [dashTarget, setDashTarget] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -233,6 +235,7 @@ export default function ResourceManager({ projects, windowMode = false, debug = 
                       {schedName(r.schedule_id) || <span style={{ color: '#5A7090' }}>—</span>}
                     </td>
                     <td style={{ padding: '4px 6px', display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                      <button onClick={() => setDashTarget({ id: r.id, name: r.name })} style={{ background: 'none', border: 'none', color: '#93C5FD', cursor: 'pointer', opacity: 0.85, fontSize: 13 }} title="Дашборд ресурса: часы, мощность, проекты, конфликты, потери">📊</button>
                       <button onClick={() => openEdit(r)} style={{ background: 'none', border: 'none', color: '#5A7090', cursor: 'pointer', fontSize: 13 }} title="Редактировать">✎</button>
                       <button onClick={() => del(r)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.7, fontSize: 13 }} title="Удалить">🗑</button>
                     </td>
@@ -328,6 +331,8 @@ export default function ResourceManager({ projects, windowMode = false, debug = 
           )
         )}
       </div>
+
+      <ResourceDashboard resource={dashTarget} onClose={() => setDashTarget(null)} />
     </div>
   );
 }

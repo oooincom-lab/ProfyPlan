@@ -34,6 +34,7 @@ import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
 import ProjectWidgets from '@/components/ProjectWidgets';
 import PortfolioWidgets from '@/components/PortfolioWidgets';
+import ResourceDashboard from '@/components/ResourceDashboard';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -198,6 +199,7 @@ export default function AppShell() {
   const [selOrderId, setSelOrderId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<'order' | 'bom' | 'route' | 'res' | 'plan'>('order');
   const [planCalc, setPlanCalc] = useState<any>(null);
+  const [resDash, setResDash] = useState<{ id: string; name: string } | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [panelEditing, setPanelEditing] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -3962,6 +3964,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       entity="resources"
                       apiBase={API_ORIGIN + '/api'}
                       columns={DIR_COLUMNS.resources.columns}
+                      onRowDashboard={(row: any) => setResDash({ id: String(row.id), name: String(row.name || '') })}
                       onManageCalendar={(row: any) => win.openCalWin(row.id, row.name)}
                     />
                   )}
@@ -4545,6 +4548,8 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         </div>
       </div>
     )}
+
+      <ResourceDashboard resource={resDash} onClose={() => setResDash(null)} />
     </div>
   );
 }
@@ -4744,6 +4749,7 @@ function NewProjectWizard({ onBack, onCreated, onOpenNewOrder, wizOrder, onWizOr
           </button>
         )}
       </div>
+
     </div>
   );
 }

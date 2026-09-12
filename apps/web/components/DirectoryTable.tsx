@@ -29,6 +29,8 @@ type Props = {
   synonyms?: Record<string, string[]>;
   /** Счётчик — при изменении список перезагружается (после удаления извне) */
   refreshKey?: number;
+  /** Дополнительное действие строки (например, «дашборд ресурса») */
+  onRowDashboard?: (row: any) => void;
   /** id строки, которую нужно выделить/прокрутить при открытии (окно выбора справочника) */
   highlightId?: string | null;
   /** Переопределение URL (проектные справочники: этапы и т.п.). Если задан — используется вместо /v1/{entity}/... */
@@ -40,7 +42,7 @@ type Props = {
   };
 };
 
-export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, onAddWindow, compact, synonyms, refreshKey = 0, endpoints, highlightId = null }: Props) {
+export default function DirectoryTable({ entity, columns, apiBase, onSelect, onManageEdit, onManageDelete, onManageCalendar, onEditWindow, onAddWindow, onRowDashboard, compact, synonyms, refreshKey = 0, endpoints, highlightId = null }: Props) {
   // ── User preferences (localStorage) ──
   const prefKey = `profyplan_prefs_${entity}`;
   const loadPrefs = () => {
@@ -489,6 +491,9 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                     </>
                   ) : (
                     <>
+                      {onRowDashboard && (
+                        <button onClick={() => onRowDashboard(row)} style={{ background: 'none', border: 'none', color: '#93C5FD', cursor: 'pointer', opacity: 0.85, fontSize: 12 }} title="Дашборд: часы, мощность, проекты, конфликты, потери">📊</button>
+                      )}
                       <button onClick={() => { if (onEditWindow) onEditWindow(row); else if (onManageEdit) onManageEdit(row); else { setEditingId(row.id); setEditVals({}); } }} style={{ background: 'none', border: 'none', color: onEditWindow ? '#60A5FA' : '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
                       <button onClick={() => { if (onManageDelete) onManageDelete(row); else deleteRow(row.id, row.name || row.specification_name || ''); }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
                     </>
