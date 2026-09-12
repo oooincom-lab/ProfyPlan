@@ -64,7 +64,12 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
     const move = (ev: MouseEvent) => {
       const op = (nodes || []).find((x: any) => x.id === drag.id);
       if (!op) return;
-      const deltaMs = ((ev.clientX - drag.x0) / Math.max(drag.laneW, 1)) * rows.span;
+      // пролёт по времени считаем локально, чтобы не зависеть от объявленного ниже rows
+      const ns = (nodes || []).filter((n: any) => Number.isFinite(parse(n.start_datetime)));
+      const minT = ns.length ? Math.min(...ns.map((n: any) => parse(n.start_datetime))) : 0;
+      const maxT = ns.length ? Math.max(...ns.map((n: any) => parse(n.finish_datetime || n.start_datetime))) : MS_DAY;
+      const spanMs = Math.max(maxT - minT, MS_DAY);
+      const deltaMs = ((ev.clientX - drag.x0) / Math.max(drag.laneW, 1)) * spanMs;
       const target = parse(op.start_datetime) + deltaMs;
       let best: any = null;
       (anchors[drag.res] || []).forEach((c: any) => {
@@ -92,7 +97,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-  }, [drag, anchors, nodes, rows.span, onPin]);
+  }, [drag, anchors, nodes, onPin]);
 
   const openSel = (n: any) => {
     setSel(n);
