@@ -106,6 +106,44 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
     setHard(true);
   };
 
+  // Варианты закрепления для выбранной операции (шаг 2.7): опоры — соседи по ресурсу, события мощности, текущий план
+  const variants = useMemo(() => {
+    if (!sel) return [];
+    const res = resMap[sel.id] || 'Без ресурса';
+    const rowOps = (nodes || []).filter((n: any) => (resMap[n.id] || 'Без ресурса') === res && n.id !== sel.id);
+    const myStart = parse(sel.start_datetime);
+    const out: { label: string; at: number; note: string; bad?: boolean }[] = [];
+    const prevFinish = rowOps.map((n: any) => parse(n.finish_datetime || n.start_datetime)).filter((t: number) => Number.isFinite(t) && t <= myStart);
+    if (prevFinish.length) {
+      const t = Math.max(...prevFinish);
+      out.push({ label: 'После предыдущей операции на этом ресурсе', at: t, note: 'сдвиг ' + (Math.round((t - myStart) / MS_DAY)) + ' дн от плана' });
+    }
+    const nextStarts = rowOps.map((n: any) => parse(n.start_datetime)).filter((t: number) => Number.isFinite(t) && t > myStart);
+    if (nextStarts.length) {
+      const t = Math.min(...nextStarts);
+      out.push({ label: 'К началу следующей операции', at: t, note: 'сдвиг ' + (Math.round((t - myStart) / MS_DAY)) + ' дн от плана' });
+    }
+    (events || []).filter((e: any) => (resIds?.[res] ? e.resource_id === resIds[res] : true)).forEach((e: any) => {
+      const b = parse(e.date_to);
+      if (Number.isFinite(b) && b > myStart) {
+        out.push({
+          label: 'После события: ' + String(e.reason || e.event_type).slice(0, 34), at: b,
+          note: 'сдвиг ' + (Math.round((b - myStart) / MS_DAY)) + ' дн · событие «' + e.event_type + '»',
+          bad: e.event_type === 'breakdown',
+        });
+      }
+    });
+    if (Number.isFinite(myStart)) out.push({ label: 'Оставить как в плане', at: myStart, note: 'без сдвига', });
+    // внутри окна простоя — помечаем отдельно
+    return out.slice(0, 4).map((v) => {
+      const inside = (events || []).some((e: any) => {
+        const a = parse(e.date_from), b = parse(e.date_to);
+        return Number.isFinite(a) && Number.isFinite(b) && v.at >= a && v.at <= b && (e.event_type === 'breakdown' || e.event_type === 'reduced');
+      });
+      return { ...v, bad: v.bad || inside };
+    });
+  }, [sel, nodes, resMap, resIds, events]);
+
   const rows = useMemo(() => {
     const list = (nodes || []).filter((n: any) => Number.isFinite(parse(n.start_datetime)));
     if (!list.length) return { rows: [], min: 0, span: MS_DAY, count: 0 };
@@ -271,6 +309,20 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
             ресурс: {resMap[sel.id] || '—'} | план: {fmt(parse(sel.start_datetime))} → {fmt(parse(sel.finish_datetime || sel.start_datetime))}
             {pinsByOp?.[sel.id] ? ' | закреплено' : ''}
           </div>
+          {(variants.length > 0) && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: '#8FA3BD', marginBottom: 4 }}>Варианты закрепления (авто-подбор):</div>
+              {variants.map((v, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+                  <button disabled={!!busy} onClick={() => onPin && sel && onPin(sel.id, 'start_not_earlier', new Date(v.at).toISOString().slice(0, 16), hard, 'вариант: ' + v.label)}
+                    style={{ background: v.bad ? '#332A10' : '#12304F', border: '1px solid ' + (v.bad ? '#6B5518' : '#2B5B92'), color: v.bad ? '#FBBF24' : '#DBEAFE', borderRadius: 8, padding: '4px 9px', fontSize: 11.5, cursor: 'pointer', textAlign: 'left' }}>
+                    {fmt(v.at)} · {v.label}
+                  </button>
+                  <span style={{ fontSize: 10.5, color: v.bad ? '#F87171' : '#5A7090' }}>{v.note}{v.bad ? ' · внутри простоя' : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <label style={{ display: 'block', fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Дата и время закрепления</label>
           <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)}
             style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 8, color: '#E8EEF5', padding: '5px 8px', fontSize: 12.5, marginBottom: 8 }} />
