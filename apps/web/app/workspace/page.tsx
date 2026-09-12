@@ -37,7 +37,7 @@ import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
-import ToolsPanel from '@/components/toolspanel';
+import ToolsPanel from '@/components/ToolsPanel';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
 
 const API = API_ORIGIN + '/api/v1';
