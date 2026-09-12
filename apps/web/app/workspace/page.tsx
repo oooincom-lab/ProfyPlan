@@ -4032,7 +4032,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 
           {/* ═══ СЕТЬ CPM (вид рабочего поля) ═══ */}
           {view === 'network' && (
-            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, height: 'calc(100vh - 96px)' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 16, fontWeight: 700 }}>Сеть CPM</span>
                 <span style={{ fontSize: 12.5, color: '#8FA3BD' }}>{selectedProject?.name || 'проект не выбран'}</span>
@@ -4041,9 +4041,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">📊 К Ганту</button>
                 <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
               </div>
-              {netLoading && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Загрузка сети…</div>}
-              {!netLoading && !netData && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>}
-              {!netLoading && netData && <NetworkGraphV2 cpmResult={netData} levelResult={null} showBaseline={false} />}
+              <div style={{ flex: 1, minHeight: 420, position: 'relative', overflow: 'hidden' }}>
+                {netLoading && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Загрузка сети…</div>}
+                {!netLoading && !netData && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>}
+                {!netLoading && netData && <NetworkGraphV2 cpmResult={netData} levelResult={null} showBaseline={false} />}
+              </div>
             </div>
           )}
 
