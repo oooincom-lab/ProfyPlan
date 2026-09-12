@@ -154,6 +154,7 @@ export default function AppShell() {
   const [netLoading, setNetLoading] = useState(false);
   const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, resIds: {}, pins: [], events: [] });
   const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
+  const [scaleBusy, setScaleBusy] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1748,6 +1749,41 @@ export default function AppShell() {
     } catch (e: any) {
       setMsg('Ошибка шкалы куста: ' + (e?.message || String(e)));
     }
+  };
+
+  // ── Закрепления из шкалы куста (шаг 2.5) ──
+  const scalePin = async (operationId: string, pinType: string, pinAt: string, isHard: boolean, note?: string) => {
+    const proj = selectedProject;
+    if (!proj) return;
+    setScaleBusy(true);
+    try {
+      await apiF<any>('/pins', { method: 'POST', body: JSON.stringify({ operation_id: operationId, pin_type: pinType, pin_at: pinAt, is_hard: isHard, note }) });
+      const prev = scaleData.nodes || [];
+      const sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) });
+      const pins = await apiF<any[]>(`/projects/${proj.id}/pins`).catch(() => []);
+      setScaleData((s: any) => ({ ...s, nodes: sch?.nodes || [], pins: pins || [], prev }));
+      setMsg('Закрепление поставлено — серые полосы показывают положение до изменения');
+    } catch (e: any) {
+      setMsg('Не удалось поставить закрепление: ' + (e?.message || String(e)));
+    }
+    setScaleBusy(false);
+  };
+
+  const scaleUnpin = async (pinId: string) => {
+    const proj = selectedProject;
+    if (!proj || !pinId) return;
+    setScaleBusy(true);
+    try {
+      await apiF<any>(`/pins/${pinId}`, { method: 'DELETE' });
+      const prev = scaleData.nodes || [];
+      const sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) });
+      const pins = await apiF<any[]>(`/projects/${proj.id}/pins`).catch(() => []);
+      setScaleData((s: any) => ({ ...s, nodes: sch?.nodes || [], pins: pins || [], prev }));
+      setMsg('Закрепление снято');
+    } catch (e: any) {
+      setMsg('Не удалось снять закрепление: ' + (e?.message || String(e)));
+    }
+    setScaleBusy(false);
   };
 
   // ── Gantt ──
@@ -4066,7 +4102,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               resIds={scaleData.resIds}
               pins={scaleData.pins}
               events={scaleData.events}
-              ghost={[]}
+              ghost={scaleData.prev || []}
+              pinsByOp={(scaleData.pins || []).reduce((m: any, p: any) => { m[p.operation_id] = p; return m; }, {})}
+              onPin={scalePin}
+              onUnpin={scaleUnpin}
+              busy={scaleBusy}
               options={scaleOpts}
               onToggle={(k) => setScaleOpts((s) => ({ ...s, [k]: !s[k] }))}
               onOpenGantt={() => loadProjectGantt(selectedProject)}

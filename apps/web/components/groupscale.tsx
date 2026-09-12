@@ -5,7 +5,7 @@
  * события мощности — полосами на строке ресурса, «призрак» прежнего положения — полупрозрачными полосами.
  * Сверху — хлебные крошки контекста и переключатели (шаг 8.3).
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 type Props = {
   project: any;
@@ -20,6 +20,10 @@ type Props = {
   onToggle: (key: 'showPins' | 'showEvents' | 'showFlow') => void;
   onOpenGantt?: () => void;
   onBack?: () => void;
+  pinsByOp?: Record<string, any>;
+  onPin?: (operationId: string, pinType: string, pinAt: string, isHard: boolean, note?: string) => void;
+  onUnpin?: (pinId: string) => void;
+  busy?: boolean;
 };
 
 const MS_DAY = 86400000;
@@ -30,7 +34,17 @@ const parse = (v: any): number => {
 };
 const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—');
 
-export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack }: Props) {
+export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy }: Props) {
+  const [sel, setSel] = useState<any>(null);
+  const [hard, setHard] = useState(true);
+  const [when, setWhen] = useState<string>('');
+
+  const openSel = (n: any) => {
+    setSel(n);
+    setWhen((n.start_datetime || '').slice(0, 16).replace(' ', 'T'));
+    setHard(true);
+  };
+
   const rows = useMemo(() => {
     const list = (nodes || []).filter((n: any) => Number.isFinite(parse(n.start_datetime)));
     if (!list.length) return { rows: [], min: 0, span: MS_DAY, count: 0 };
@@ -148,7 +162,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
                       background: n.is_critical ? '#EF4444' : '#3B82F6',
                       outline: n.is_pinned && options.showPins ? '1.5px solid #22D3EE' : 'none',
                       cursor: 'pointer',
-                    }} />
+                    }} onClick={() => openSel(n)} />
                   );
                 })}
                 {options.showPins && (pins || []).filter((p: any) => (resMap[p.operation_id] === r.res) || (resIds?.[r.res] ? p.resource_id === resIds[r.res] : false)).map((p: any, i: number) => {
@@ -161,6 +175,46 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {sel && (
+        <div style={{
+          position: 'fixed', right: 18, bottom: 18, width: 360, zIndex: 40,
+          background: '#101F38', border: '1px solid #2B5B92', borderRadius: 12, padding: 12, boxShadow: '0 12px 30px rgba(0,0,0,.45)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{sel.name}</div>
+          <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>
+            ресурс: {resMap[sel.id] || '—'} | план: {fmt(parse(sel.start_datetime))} → {fmt(parse(sel.finish_datetime || sel.start_datetime))}
+            {pinsByOp?.[sel.id] ? ' | закреплено' : ''}
+          </div>
+          <label style={{ display: 'block', fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Дата и время закрепления</label>
+          <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)}
+            style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 8, color: '#E8EEF5', padding: '5px 8px', fontSize: 12.5, marginBottom: 8 }} />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: '#C9D7EA', marginBottom: 8 }}>
+            <input type="checkbox" checked={hard} onChange={() => setHard(!hard)} /> жёсткое (план не сдвигает операцию из этой даты)
+          </label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {([['start_not_earlier', '⏳ Начать не раньше'], ['finish_not_later', '⏱ Закончить не позже'], ['capacity_window', '🪟 Окно мощности']] as const).map(([t, label]) => (
+              <button key={t} disabled={!!busy} onClick={() => onPin && sel && onPin(sel.id, t, when, hard, 'закрепление из шкалы куста')}
+                style={{ background: '#12304F', border: '1px solid #2B5B92', color: '#DBEAFE', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}>
+                {label}
+              </button>
+            ))}
+            {pinsByOp?.[sel.id] && (
+              <button disabled={!!busy} onClick={() => onUnpin && onUnpin(pinsByOp[sel.id].id)}
+                style={{ background: '#331717', border: '1px solid #6D2A2A', color: '#FCA5A5', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}>
+                ✕ Снять закрепление
+              </button>
+            )}
+            <button onClick={() => setSel(null)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}>
+              Закрыть
+            </button>
+          </div>
+          {busy && <div style={{ fontSize: 11.5, color: '#FBBF24', marginTop: 8 }}>Пересчитываю план…</div>}
+          {ghost && ghost.length > 0 && (
+            <div style={{ fontSize: 11, color: '#8FA3BD', marginTop: 8 }}>Серые полосы — положение до последнего изменения (для сравнения «до/после»).</div>
+          )}
         </div>
       )}
 
