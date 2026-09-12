@@ -656,6 +656,10 @@ async def _import_resources(
                 result.resources_created += 1
             else:
                 result.resources_linked += 1
+                # Существующему ресурсу дописываем подразделение, если оно ещё не задано
+                # (иначе отчёт по подразделениям уводит всё в «Без подразделения»)
+                if dept_id and not res.department_id:
+                    res.department_id = dept_id
             res_map[name] = res.id
         except Exception as e:
             result.errors.append(ImportValidationError(
