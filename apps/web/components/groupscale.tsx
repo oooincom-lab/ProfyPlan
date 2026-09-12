@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 
 type Props = {
   project: any;
-  groupName?: string;
+  groupName?: string | null;
   nodes: any[];
   resMap: Record<string, string>;
   pins: any[];
