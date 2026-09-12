@@ -39,6 +39,7 @@ import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
 import ToolsPanel from '@/components/ToolsPanel';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
+import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -139,7 +140,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -151,6 +152,8 @@ export default function AppShell() {
   const [view, setView] = useState<View>('dashboard');
   const [netData, setNetData] = useState<any>(null);
   const [netLoading, setNetLoading] = useState(false);
+  const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, pins: [], events: [] });
+  const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1721,6 +1724,28 @@ export default function AppShell() {
     setNetLoading(false);
   };
 
+  // ── Шкала куста по ресурсам (шаг 2.3) ──
+  const loadProjectScale = async (p: any) => {
+    const proj = p || selectedProject;
+    if (!proj) return;
+    setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу куста…');
+    try {
+      const [sch, map, pins, evs] = await Promise.all([
+        apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }),
+        apiF<any[]>(`/projects/${proj.id}/operations/resources-map`),
+        apiF<any[]>(`/projects/${proj.id}/pins`).catch(() => []),
+        apiF<any>(`/resource-events/?project_id=${proj.id}`).catch(() => ({ items: [] })),
+      ]);
+      const resMap: Record<string, string> = {};
+      (map || []).forEach((r: any) => { if (r.resource_name) resMap[r.operation_id] = r.resource_name; });
+      const evList = Array.isArray(evs) ? evs : (evs?.items || []);
+      setScaleData({ nodes: sch?.nodes || [], resMap, pins: pins || [], events: evList });
+      setMsg('');
+    } catch (e: any) {
+      setMsg('Ошибка шкалы куста: ' + (e?.message || String(e)));
+    }
+  };
+
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
     setSelectedProject(p); setView('project-gantt');
@@ -2963,6 +2988,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{ganttData.total_duration_days} раб. дн.</span>}
                   <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
               <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">🕸 Сеть CPM</button>
+              <button onClick={() => loadProjectScale(selectedProject)} className="btn btn-secondary btn-sm">📐 Шкала куста</button>
                   <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
                 </div>
               </div>
@@ -4023,6 +4049,23 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 <WorkScheduleManager debug={debugMode} mode="edit" schedule={wschedEditModal === 'new' ? null : wschedEditModal} onSaved={() => { setWschedEditModal(null); setSchedRefresh(x => x + 1); }} onClose={() => setWschedEditModal(null)} />
               </div>
             </div>
+          )}
+
+          {/* ═══ ШКАЛА КУСТА (шаг 2.3 + 8.3) ═══ */}
+          {view === 'scale' && (
+            <GroupScale
+              project={selectedProject}
+              groupName={null}
+              nodes={scaleData.nodes}
+              resMap={scaleData.resMap}
+              pins={scaleData.pins}
+              events={scaleData.events}
+              ghost={[]}
+              options={scaleOpts}
+              onToggle={(k) => setScaleOpts((s) => ({ ...s, [k]: !s[k] }))}
+              onOpenGantt={() => loadProjectGantt(selectedProject)}
+              onBack={() => loadProjectDashboard(selectedProject)}
+            />
           )}
 
           {/* ═══ ИНСТРУМЕНТЫ ═══ */}

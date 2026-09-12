@@ -9,7 +9,7 @@ type View =
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
-  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network';
+  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale';
 
 interface SidebarProps {
   view: View;

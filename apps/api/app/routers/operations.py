@@ -42,6 +42,40 @@ async def list_operations(
     items = []; [items.append(OperationOut(id=str(o.id), project_id=str(o.project_id), name=o.name, duration_base=o.duration_base, duration_unit=o.duration_unit, setup_time=o.setup_time, teardown_time=o.teardown_time, to_optimistic=o.to_optimistic, tm_likely=o.tm_likely, tp_pessimistic=o.tp_pessimistic, position=o.position, is_critical=o.is_critical)) for o in result.scalars().all()]; return items
 
 
+@router.get("/resources-map")
+async def resources_map(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Все ресурсы операций проекта одним запросом.
+
+    Нужно шкале куста (строки — ресурсы) и инспектору выделенного объекта:
+    один вызов вместо запроса на каждую операцию.
+    """
+    from app.models.resource import Resource as _Res
+
+    rows = (await db.execute(
+        select(OperationResource, _Res.name)
+        .join(Operation, Operation.id == OperationResource.operation_id)
+        .outerjoin(_Res, _Res.id == OperationResource.resource_id)
+        .where(
+            Operation.project_id == project_id,
+            Operation.tenant_id == tenant_id,
+        )
+    )).all()
+    return [
+        {
+            "operation_id": str(orow.operation_id),
+            "resource_id": str(orow.resource_id) if orow.resource_id else None,
+            "resource_name": rname,
+            "role": orow.role,
+            "efficiency_factor": float(orow.efficiency_factor or 1),
+        }
+        for orow, rname in rows
+    ]
+
+
 @router.post("", response_model=OperationOut, status_code=status.HTTP_201_CREATED)
 async def create_operation(
     project_id: UUID,
