@@ -35,6 +35,7 @@ import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
 import ProjectWidgets from '@/components/ProjectWidgets';
 import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
+import ReportsPanel from '@/components/ReportsPanel';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
@@ -4004,10 +4005,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 
           {/* ═══ REPORTS / CCM ═══ */}
           {view === 'reports' && (
-            <div className="panel">
-              <div className="panel-hdr"><span className="panel-title">Отчёты</span></div>
-              <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>📋 Раздел в разработке</div>
-            </div>
+            <ReportsPanel projects={projects} />
           )}
         </div>
       </div>
