@@ -889,10 +889,13 @@ async def run_explosion(
 
             return
 
-        # Узел make без routing_id
+        # Узел make без routing_id — сам операций не даёт, но его дети могут
         result.warnings.append(
             f"Узел '{node.nomenclature_name}' ({node_path}): тип 'make' без маршрута"
         )
+        for child in children_map.get(str(node.id), []):
+            await _traverse(child, node_path)
+        return
 
     # Обходим все корневые узлы
     for root in root_nodes:

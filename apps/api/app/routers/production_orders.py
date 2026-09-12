@@ -1230,7 +1230,7 @@ def _order_to_out(o: ProductionOrder) -> ProductionOrderOut:
 # ── POST /{id}/expand ──────────────────────────────────────────
 
 from app.services.bom_explosion import ExplodedOperation, ExplodedDependency
-from app.models.operation import Operation, OperationDependency
+from app.models.operation import Operation, OperationDependency, OperationResource
 
 
 @router.post("/{order_id}/expand")
@@ -1338,7 +1338,6 @@ async def expand_order(
             id=uuid4(),
             tenant_id=tenant_id,
             project_id=order.project_id,
-            resource_id=_rid,
             name=eop.name,
             duration_base=eop.duration_base,
             duration_unit=eop.duration_unit,
@@ -1355,6 +1354,17 @@ async def expand_order(
         db.add(op)
         await db.flush()
         op_map[eop.temp_id] = op.id
+
+        # Ресурс операции (12.09.2026): маршрутный ресурс переносится в связь операция-ресурс
+        if _rid:
+            db.add(OperationResource(
+                id=uuid4(),
+                operation_id=op.id,
+                resource_id=_rid,
+                role="primary",
+                efficiency_factor=Decimal("1"),
+                capacity_demand=Decimal("1"),
+            ))
 
     # Сохраняем зависимости
     for dep in result.dependencies:
