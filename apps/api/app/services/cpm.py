@@ -54,13 +54,18 @@ class CPMResult:
 def calculate_cpm(
     operations: list[dict],
     dependencies: list[dict],
+    constraints: dict | None = None,
 ) -> CPMResult:
     """
     Расчёт критического пути.
-    
+
     operations: [{id, name, duration_base, setup_time, teardown_time}, ...]
     dependencies: [{predecessor_id, successor_id, dependency_type, lag_time}, ...]
-    
+    constraints: {operation_id: {"min_start": число|None, "max_finish": число|None}} —
+        закрепления операций (шаг 2.2): «начать не раньше» задаёт нижнюю границу старта,
+        «закончить к / не позже» — верхнюю границу финиша. Закреплённая операция
+        перестаёт «сдвигаться» под влиянием предшественников ниже/позже этих границ.
+
     Возвращает: CPMResult с узлами, критическим путём и общей длительностью.
     """
     # 1. Строим узлы
@@ -106,6 +111,10 @@ def calculate_cpm(
             es_candidate = _forward_shift(pred, dep)
             node.early_start = max(node.early_start, es_candidate)
 
+        _c = (constraints or {}).get(nid)
+        if _c and _c.get("min_start") is not None:
+            node.early_start = max(node.early_start, Decimal(str(_c["min_start"])))
+
         node.early_finish = node.early_start + node.total_duration
 
     # 4. Определяем длительность проекта
@@ -123,6 +132,10 @@ def calculate_cpm(
             succ = nodes[str(dep.successor_id)]
             lf_candidate = _backward_shift(succ, dep)
             node.late_finish = min(node.late_finish, lf_candidate)
+
+        _c2 = (constraints or {}).get(nid)
+        if _c2 and _c2.get("max_finish") is not None:
+            node.late_finish = min(node.late_finish, Decimal(str(_c2["max_finish"])))
 
         node.late_start = node.late_finish - node.total_duration
 

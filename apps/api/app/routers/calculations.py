@@ -742,6 +742,124 @@ async def run_schedule(
         except ValueError:
             pass
 
+    # ── Закрепления операций (пины, шаг 2.2): статические ограничения ──
+    # Закреплённая операция не сдвигается ниже/позже заданной границы:
+    # «начать не раньше»/«окно доступности» задают нижнюю границу старта,
+    # «закончить к»/«закончить не позже» — верхнюю границу финиша.
+    from app.models.operation_pin import OperationPin
+    pin_rows = (await db.execute(
+        select(OperationPin).where(
+            OperationPin.tenant_id == tenant_id, OperationPin.project_id == project_id
+        )
+    )).scalars().all()
+
+    pin_constraints: dict = {}
+    pin_list: list = []
+    for _p in pin_rows:
+        # дата закрепления может попасть на нерабочий день — переносим на ближайший рабочий
+        _d = _p.pin_at.date()
+        _guard = 0
+        try:
+            while _guard < 90 and not await resolver.is_working(_d):
+                _d = _d + timedelta(days=1)
+                _guard += 1
+        except Exception:
+            pass
+        try:
+            _idx = await date_to_working_day_index(resolver, anchor, _d)
+        except Exception:
+            continue
+        _ds_h, _win_h = win_by_id.get(str(_p.operation_id)) or (DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS)
+        _win_h = float(_win_h) or 8.0
+        _hour = _p.pin_at.hour + _p.pin_at.minute / 60.0
+        _frac = max((_hour - float(_ds_h)) / _win_h, 0.0)   # доля рабочего дня от начала смены
+        _pos = float(_idx) + _frac
+        _c = pin_constraints.setdefault(str(_p.operation_id), {})
+        if _p.pin_type in ("start_not_earlier", "capacity_window"):
+            _c["min_start"] = max(_c.get("min_start", 0.0), _pos)
+        else:  # finish_at | finish_not_later
+            _c["max_finish"] = min(_c.get("max_finish", 1e9), _pos)
+        pin_list.append({
+            "operation_id": str(_p.operation_id),
+            "pin_type": _p.pin_type,
+            "pin_at": _p.pin_at.isoformat(),
+            "is_hard": _p.is_hard,
+            "position_days": round(_pos, 3),
+        })
+
+    pin_warnings: list = []
+    if pin_constraints:
+        ops_dicts_pin = []
+        for od in ops_dicts:
+            m = factors.get(od["id"], 1.0)
+            dur = od["duration_base"]
+            if m > 0 and abs(m - 1.0) > 1e-9:
+                dur = dur / m
+            ops_dicts_pin.append({**od, "duration_base": dur})
+        try:
+            result = calculate_cpm(ops_dicts_pin, deps_dicts, constraints=pin_constraints)
+            nodes, project_finish, node_dates = await build_nodes(result)
+        except ValueError:
+            pass
+
+    # Отметка закреплённых операций и проверка нарушений
+    for n in nodes:
+        _c = pin_constraints.get(n["id"])
+        n["is_pinned"] = bool(_c)
+        if _c:
+            if _c.get("min_start") is not None:
+                n["pin_min_start"] = round(float(_c["min_start"]), 3)
+            if _c.get("max_finish") is not None:
+                n["pin_max_finish"] = round(float(_c["max_finish"]), 3)
+
+    _finish_types = ("finish_at", "finish_not_later")
+    for _pl in pin_list:
+        if _pl["pin_type"] not in _finish_types:
+            continue
+        _c = pin_constraints.get(_pl["operation_id"]) or {}
+        _n = next((x for x in nodes if x["id"] == _pl["operation_id"]), None)
+        if not _n:
+            continue
+        if _c.get("max_finish") is not None:
+            _ef = float(_n.get("early_finish_day", 0.0))
+            if _ef > float(_c["max_finish"]) + 1e-6:
+                _delta = round((_ef - float(_c["max_finish"])) * float(hpd_by_id.get(_pl["operation_id"], 8.0) or 8.0), 1)
+                pin_warnings.append({
+                    "type": "pin_violation",
+                    "operation_id": _pl["operation_id"],
+                    "operation_name": _n.get("name"),
+                    "pin_type": _pl["pin_type"],
+                    "is_hard": _pl["is_hard"],
+                    "message": ("Закрепление «%s» для «%s» нарушено на %.1f ч — операция не успевает к сроку"
+                                % (_pl["pin_type"], _n.get("name"), _delta)),
+                })
+
+    warnings.extend(pin_warnings)
+
+    # Индикатор «свобода плана»: доля незакреплённых операций
+    _total_ops = len(nodes)
+    _pinned_ops = sum(1 for n in nodes if n.get("is_pinned"))
+    _freedom = round(100.0 * (_total_ops - _pinned_ops) / _total_ops, 1) if _total_ops else 100.0
+    _threshold = 20.0
+    try:
+        from app.services.planning_settings import resolve_settings
+        _st = await resolve_settings(db, tenant_id, project_id)
+        _threshold = float((_st["values"].get("plan.freedom_threshold_percent") or {}).get("value") or 20)
+    except Exception:
+        pass
+    if _total_ops and _freedom < _threshold:
+        warnings.append({
+            "type": "low_freedom",
+            "message": ("Свобода плана %.1f%% (порог %.0f%%): почти все операции закреплены, автоматическая оптимизация почти не влияет"
+                        % (_freedom, _threshold)),
+        })
+    plan_freedom = {
+        "total_operations": _total_ops,
+        "pinned_operations": _pinned_ops,
+        "freedom_percent": _freedom,
+        "threshold_percent": _threshold,
+    }
+
     for n in nodes:
         m = factors.get(n["id"])
         n["capacity_multiplier"] = round(float(m), 4) if m else 1.0
@@ -780,4 +898,6 @@ async def run_schedule(
         "node_count": len(nodes),
         "warnings": warnings,
         "capacity_applied": bool(factors),
+        "pins": pin_list,
+        "plan_freedom": plan_freedom,
     }
