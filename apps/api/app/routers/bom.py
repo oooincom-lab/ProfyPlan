@@ -733,6 +733,44 @@ async def explode_and_save_bom(
     )
 
 
+def _prune_cycle_edges(dependencies: list) -> tuple[list, int]:
+    """Убирает связи, замыкающие цикл (и самосвязи), сохраняя порядок остальных.
+
+    Нужно как страховка: при развёртке сложных импортированных структур
+    иерархические связи могут дать обратное направление и замкнуться —
+    тогда весь расчёт CPM падает с ошибкой «Обнаружен цикл».
+    """
+    kept: list = []
+    adjacency: dict[str, list[str]] = {}
+    dropped = 0
+
+    def _reaches(start: str, target: str) -> bool:
+        seen = {start}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            if cur == target:
+                return True
+            for nxt in adjacency.get(cur, []):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    stack.append(nxt)
+        return False
+
+    for dep in dependencies:
+        pred = str(dep.predecessor_temp_id)
+        succ = str(dep.successor_temp_id)
+        if pred == succ:
+            dropped += 1
+            continue
+        if _reaches(succ, pred):
+            dropped += 1
+            continue
+        kept.append(dep)
+        adjacency.setdefault(pred, []).append(succ)
+    return kept, dropped
+
+
 async def run_explosion(
     db: AsyncSession,
     tenant_id: UUID,
@@ -913,6 +951,13 @@ async def run_explosion(
 
     # Связываем операции закупки с потребляющими (FS от закупки к первому потребителю)
     _link_procurement_to_production(result, node_op_map, all_nodes, children_map)
+
+    # Страховка от циклов: убираем связи, замыкающие контур (12.09.2026)
+    result.dependencies, _dropped = _prune_cycle_edges(result.dependencies)
+    if _dropped:
+        result.warnings.append(
+            f"Удалено {_dropped} связей, замыкавших цикл — они делали расчёт плана невозможным."
+        )
 
     return result
 
