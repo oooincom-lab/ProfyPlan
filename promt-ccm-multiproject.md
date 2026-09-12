@@ -1486,6 +1486,29 @@ Multi-select проектов, merge, resource-leveling, Baseline.
 - `DELETE /v1/planning-settings?scope=&scope_id=` — сброс уровня.
 - Миграция `0030_planning_settings` (таблица `planning_settings`, JSONB, уникальность по tenant+scope+scope_id).
 
+### 17.15 Закрепления операций, потоки и журнал сдвигов (шаг 2.1, 12.09.2026) — реализованы данные и API
+**Таблицы (миграция 0031):**
+- **`operation_pins`** — закрепления операций («маркеры»): операция, ресурс (может быть не задан), группа, **тип ограничения** (`start_not_earlier` — начать не раньше, `finish_at` — закончить к дате, `finish_not_later` — закончить не позже, `capacity_window` — окно доступности мощности), дата-время, признак **жёсткости** (жёсткое/мягкое), примечание.
+- **`group_flows`** — потоки (участки) группы: название, **минимальный разрыв** между фронтами, **шаг потока** (ритм, может быть не задан — тогда вычисляется), приоритет потока при конфликте за общий ресурс, активность.
+- **`group_flow_operations`** — привязка операций к потоку.
+- **`group_shift_logs`** — журнал действий: `pin` / `unpin` / `shift` / `promote` / `flow`, полезная нагрузка (что и на сколько сдвинуто, «до/после»), автор, примечание. Нужен для отката, аудита и воспроизводимости итеративного планирования.
+
+**API:**
+- `GET /v1/projects/{project_id}/pins` — закрепления проекта (с названиями операции и ресурса).
+- `POST /v1/pins`, `PUT /v1/pins/{id}`, `DELETE /v1/pins/{id}` — создать (201), изменить, снять; каждое действие пишет запись в журнал.
+- `GET /v1/groups/{group_id}/flows`, `POST /v1/flows`, `PUT|DELETE /v1/flows/{id}` — потоки группы.
+- `POST /v1/flows/{flow_id}/operations?operation_id=…`, `DELETE /v1/flows/{flow_id}/operations/{operation_id}` — привязка и отвязка операций.
+- `GET /v1/projects/{project_id}/shift-log?limit=` — журнал действий по проекту.
+
+**Правило:** закрепление делает операцию статической для расчёта (CPM её не двигает) — это реализуется на шаге 2.2.
+
+### 12.22 Pins / Flows / Shift Log — закрепления, потоки, журнал (реализовано ✅) — НОВОЕ
+- `GET /v1/projects/{project_id}/pins` — список закреплений (фильтр `group_id`).
+- `POST /v1/pins` (201), `PUT /v1/pins/{id}`, `DELETE /v1/pins/{id}` (204) — CRUD закреплений; все действия журналируются.
+- `GET /v1/groups/{group_id}/flows`, `POST /v1/flows` (201), `PUT /v1/flows/{id}`, `DELETE /v1/flows/{id}` — потоки (участки).
+- `POST /v1/flows/{flow_id}/operations?operation_id=…` (201), `DELETE /v1/flows/{flow_id}/operations/{operation_id}` (204).
+- `GET /v1/projects/{project_id}/shift-log?limit=` — журнал сдвигов и закреплений.
+
 ## 18. Мультитенантность: общая база + tenant_id, аудит изоляции (решено 2026-08-21, вечер)
 
 ### 18.1 Решение по масштабированию
