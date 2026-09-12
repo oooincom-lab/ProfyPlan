@@ -327,6 +327,25 @@ footer {
   .hero { padding: 50px 16px 40px; }
   .tools-grid { grid-template-columns: 1fr; }
 }
+
+  /* Состояние и планы */
+  .state-wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 8px 24px 0; }
+  .state-h { font-size: 20px; font-weight: 700; margin: 28px 0 6px; letter-spacing: -0.01em; }
+  .state-sub { font-size: 13.5px; color: var(--fg-3); margin-bottom: 16px; }
+  .state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .state-card { background: linear-gradient(135deg, rgba(59,130,246,0.06), rgba(15,30,54,0.9)); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .state-card h4 { margin: 0 0 6px; font-size: 14px; font-weight: 700; color: var(--fg); }
+  .state-card p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.55; color: var(--fg-3); }
+  .road { display: grid; gap: 10px; margin-top: 4px; }
+  .road-item { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: center; background: rgba(10,22,40,0.7); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; }
+  .road-when { font-size: 12px; color: var(--fg-3); }
+  .road-what { font-size: 13px; color: var(--fg-2); line-height: 1.5; }
+  @media (max-width: 720px) { .road-item { grid-template-columns: 1fr; gap: 6px; } }
+  .log { border-left: 2px solid var(--border); margin: 6px 0 0 6px; padding-left: 16px; }
+  .log-item { position: relative; padding: 0 0 14px; }
+  .log-item::before { content: ''; position: absolute; left: -22px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .log-date { font-size: 12px; color: var(--accent-3); font-weight: 600; }
+  .log-text { font-size: 12.5px; color: var(--fg-3); line-height: 1.55; }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -456,6 +475,98 @@ footer {
     <span class="status status-soon">Скоро</span>
   </div>
 
+</div>
+
+<div class="state-wrap">
+  <div class="state-h">Состояние и планы</div>
+  <div class="state-sub">Честная картина: что уже работает в закрытом тестировании, что делаем сейчас и что впереди.</div>
+
+  <div class="state-grid">
+    <div class="state-card">
+      <h4>План и критический путь</h4>
+      <p>Расчёт по календарю и графику работы, критический путь, ранние и поздние сроки, резервы по операциям.</p>
+      <span class="status status-done">Работает</span>
+    </div>
+    <div class="state-card">
+      <h4>События мощности</h4>
+      <p>Форсаж, ограничение, простой и плановое обслуживание ресурса: учитываются в сроках и в отчёте потерь.</p>
+      <span class="status status-done">Работает</span>
+    </div>
+    <div class="state-card">
+      <h4>Доли мощности и квоты</h4>
+      <p>Сколько ресурса доступно проекту и подразделению: влияние на срок, узкие места и загрузку.</p>
+      <span class="status status-done">Работает</span>
+    </div>
+    <div class="state-card">
+      <h4>Кусты и пулы заказов</h4>
+      <p>Объединение заказов, которые делят общие ресурсы, в один куст; планирование куста как единицы.</p>
+      <span class="status status-done">Работает</span>
+    </div>
+    <div class="state-card">
+      <h4>Закрепления и потоки</h4>
+      <p>Фиксация решений планировщика: закрепления операций по датам и потоки с ритмом и разрывом между фронтами.</p>
+      <span class="status status-done">Работает</span>
+    </div>
+    <div class="state-card">
+      <h4>Отчёты по загрузке</h4>
+      <p>Потери часов по причинам, загрузка по неделям, загрузка подразделений с пределом мощности.</p>
+      <span class="status status-done">Работает</span>
+    </div>
+    <div class="state-card">
+      <h4>Межпроектное выравнивание</h4>
+      <p>Поиск конфликтов по общим ресурсам между проектами и предложения сдвига с учётом приоритетов.</p>
+      <span class="status status-alpha">Альфа</span>
+    </div>
+    <div class="state-card">
+      <h4>Вероятностные оценки</h4>
+      <p>PERT и Монте-Карло: доверительный интервал срока вместо одной даты.</p>
+      <span class="status status-alpha">Альфа</span>
+    </div>
+  </div>
+
+  <div class="state-h" style="font-size:17px">Что делаем сейчас</div>
+  <div class="road">
+    <div class="road-item">
+      <span class="road-when">Ближайший шаг</span>
+      <span class="road-what">Маркеры и закрепления в интерфейсе: шкала куста по ресурсам, магнит для точной постановки, фиксация решений прямо на диаграмме.</span>
+      <span class="status status-alpha">В работе</span>
+    </div>
+    <div class="road-item">
+      <span class="road-when">Затем</span>
+      <span class="road-what">Единое рабочее поле: одна кнопка расчёта, сетевой график внутри рабочего стола, разделение аналитики и раздел инструментов.</span>
+      <span class="status status-soon">Следующее</span>
+    </div>
+    <div class="road-item">
+      <span class="road-when">Далее</span>
+      <span class="road-what">Сценарии «что если», версии плана и журнал изменений: проверка решений до их применения.</span>
+      <span class="status status-soon">В планах</span>
+    </div>
+    <div class="road-item">
+      <span class="road-when">Потом</span>
+      <span class="road-what">Справка внутри продукта: объяснение расчётных величин с примерами и подсказки по текущему объекту.</span>
+      <span class="status status-soon">В планах</span>
+    </div>
+  </div>
+
+  <div class="state-h" style="font-size:17px">Журнал обновлений</div>
+  <div class="log">
+    <div class="log-item">
+      <div class="log-date">12 сентября 2026</div>
+      <div class="log-text">События мощности в расчётах и отчётах, доли мощности и квоты подразделений, кусты и пулы заказов, закрепления операций и потоки, загрузка по неделям и подразделениям.</div>
+    </div>
+    <div class="log-item">
+      <div class="log-date">10 сентября 2026</div>
+      <div class="log-text">Учёт простоев и форсажа в сроках операций, журнал событий на диаграмме Ганта, отчёт о потерянных часах по причинам.</div>
+    </div>
+    <div class="log-item">
+      <div class="log-date">2 сентября 2026</div>
+      <div class="log-text">Справочники и состав изделий, технологические маршруты и ресурсы, массовый импорт данных из таблиц.</div>
+    </div>
+    <div class="log-item">
+      <div class="log-date">21 августа 2026</div>
+      <div class="log-text">Многопользовательский режим: раздельные данные компаний и изоляция доступа.</div>
+    </div>
+  </div>
 </div>
 
 <section class="cta-section">
