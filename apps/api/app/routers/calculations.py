@@ -987,6 +987,21 @@ async def run_schedule(
                                 "с технологическим порядком операций" % _dropped),
                 })
 
+    # ── замер (временный): что дал проход с ограничениями и что попало в итоговые узлы ──
+    try:
+        import logging as _lg3
+        _log3 = _lg3.getLogger("uvicorn.error")
+        for _oid in list(pin_constraints.keys())[:8]:
+            _nd = getattr(result, "nodes", {}).get(_oid)
+            _log3.warning("AFTER-CONSTR: %s es=%s ef=%s", _oid[:8],
+                          getattr(_nd, "early_start", None), getattr(_nd, "early_finish", None))
+        for _n in (nodes or [])[:200]:
+            if _n["id"] in pin_constraints:
+                _log3.warning("FINAL-NODE: %s start=%s ef_day=%s", _n["id"][:8],
+                              str(_n.get("start_datetime"))[:16], _n.get("early_finish_day"))
+    except Exception:
+        pass
+
     # Отметка закреплённых операций и проверка нарушений
     for n in nodes:
         _c = pin_constraints.get(n["id"])
