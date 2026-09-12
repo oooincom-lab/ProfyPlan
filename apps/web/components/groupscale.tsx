@@ -12,6 +12,7 @@ type Props = {
   groupName?: string | null;
   nodes: any[];
   resMap: Record<string, string>;
+  resIds?: Record<string, string>;
   pins: any[];
   events: any[];
   ghost?: any[];
@@ -29,7 +30,7 @@ const parse = (v: any): number => {
 };
 const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—');
 
-export default function GroupScale({ project, groupName, nodes, resMap, pins, events, ghost, options, onToggle, onOpenGantt, onBack }: Props) {
+export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack }: Props) {
   const rows = useMemo(() => {
     const list = (nodes || []).filter((n: any) => Number.isFinite(parse(n.start_datetime)));
     if (!list.length) return { rows: [], min: 0, span: MS_DAY, count: 0 };
@@ -117,7 +118,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, pins, ev
                 {weeks.map((t, i) => (
                   <span key={i} style={{ position: 'absolute', left: pos(t) + '%', top: 0, bottom: 0, width: 1, background: '#14263F' }} />
                 ))}
-                {options.showEvents && (events || []).filter((e: any) => (e.resource_name || '') === r.res).map((e: any, i: number) => {
+                {options.showEvents && (events || []).filter((e: any) => (resIds?.[r.res] ? e.resource_id === resIds[r.res] : (e.resource_name || '') === r.res)).map((e: any, i: number) => {
                   const a = parse(e.date_from), b = parse(e.date_to);
                   if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
                   const bad = e.event_type === 'breakdown' || e.event_type === 'reduced';
@@ -150,7 +151,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, pins, ev
                     }} />
                   );
                 })}
-                {options.showPins && (pins || []).filter((p: any) => (p.resource_name || '') === r.res).map((p: any, i: number) => {
+                {options.showPins && (pins || []).filter((p: any) => (resIds?.[r.res] ? p.resource_id === resIds[r.res] : (p.resource_name || '') === r.res)).map((p: any, i: number) => {
                   const t = parse(p.pin_at);
                   if (!Number.isFinite(t)) return null;
                   return <span key={'p' + i} title={`закрепление: ${p.pin_type}${p.is_hard ? ' (жёсткое)' : ''}`} style={{

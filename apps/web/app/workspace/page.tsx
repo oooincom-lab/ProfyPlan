@@ -152,7 +152,7 @@ export default function AppShell() {
   const [view, setView] = useState<View>('dashboard');
   const [netData, setNetData] = useState<any>(null);
   const [netLoading, setNetLoading] = useState(false);
-  const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, pins: [], events: [] });
+  const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, resIds: {}, pins: [], events: [] });
   const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -1737,9 +1737,13 @@ export default function AppShell() {
       try { pins = await apiF<any[]>(`/projects/${proj.id}/pins`); } catch { pins = []; }
       try { evs = await apiF<any>(`/resource-events/?project_id=${proj.id}`); } catch { evs = { items: [] }; }
       const resMap: Record<string, string> = {};
-      (map || []).forEach((r: any) => { if (r.resource_name) resMap[r.operation_id] = r.resource_name; });
+      const resIds: Record<string, string> = {};
+      (map || []).forEach((r: any) => {
+        if (r.resource_name) resMap[r.operation_id] = r.resource_name;
+        if (r.resource_name && r.resource_id) resIds[r.resource_name] = r.resource_id;
+      });
       const evList = Array.isArray(evs) ? evs : (evs?.items || []);
-      setScaleData({ nodes: sch?.nodes || [], resMap, pins: pins || [], events: evList });
+      setScaleData({ nodes: sch?.nodes || [], resMap, resIds, pins: pins || [], events: evList });
       setMsg('');
     } catch (e: any) {
       setMsg('Ошибка шкалы куста: ' + (e?.message || String(e)));
@@ -4059,6 +4063,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               groupName={null}
               nodes={scaleData.nodes}
               resMap={scaleData.resMap}
+              resIds={scaleData.resIds}
               pins={scaleData.pins}
               events={scaleData.events}
               ghost={[]}
