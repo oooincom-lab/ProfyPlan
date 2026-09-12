@@ -882,6 +882,11 @@ async def run_explosion(
                     ancestor_path = ".".join(parts[:i+1])
                     last_op_in_path[ancestor_path] = last_op
 
+            # Разворачиваем дочерние узлы (исправление 12.09.2026: раньше обход
+            # останавливался на первом узле с маршрутом и дети не обрабатывались)
+            for child in children_map.get(str(node.id), []):
+                await _traverse(child, node_path)
+
             return
 
         # Узел make без routing_id

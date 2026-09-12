@@ -118,6 +118,7 @@ class ExcelImportResult(BaseModel):
     nomenclature_created: int = 0
     nomenclature_linked: int = 0
     resources_created: int = 0
+    resources_linked: int = 0
     missing_bom_nodes: List[str] = []
     errors: List[ImportValidationError] = []
     warnings: List[str] = []

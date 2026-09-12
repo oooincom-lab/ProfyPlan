@@ -261,9 +261,14 @@ async def import_excel(
 
     # Предупреждение: нет ресурсов
     if result.resources_created == 0:
-        result.warnings.append(
-            "Ресурсы не указаны (вкладка «4-Ресурсы» пуста или отсутствует) — загрузка выполнена, но расчёт ресурсов и критической цепи будет ограничен. Ресурсы можно ввести вручную в справочнике."
-        )
+        if result.resources_linked:
+            result.warnings.append(
+                f"Новые ресурсы не создавались: {result.resources_linked} из «4-Ресурсы» уже есть в каталоге предприятия и переиспользованы."
+            )
+        else:
+            result.warnings.append(
+                "Ресурсы не указаны (вкладка «4-Ресурсы» пуста или отсутствует) — загрузка выполнена, но расчёт ресурсов и критической цепи будет ограничен. Ресурсы можно ввести вручную в справочнике."
+            )
 
     # Проверка наличия маршрутов для make-узлов (сборка/полуфабрикат)
     if project_id:
@@ -649,6 +654,8 @@ async def _import_resources(
                 )
                 db.add(res)
                 result.resources_created += 1
+            else:
+                result.resources_linked += 1
             res_map[name] = res.id
         except Exception as e:
             result.errors.append(ImportValidationError(
@@ -1229,6 +1236,7 @@ from app.models.operation import Operation, OperationDependency
 @router.post("/{order_id}/expand")
 async def expand_order(
     order_id: str,
+    replace: bool = False,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1244,6 +1252,36 @@ async def expand_order(
 
     if not order.project_id:
         raise HTTPException(400, "У заказа не указан проект (project_id). Сначала импортируйте Excel и укажите project_id.")
+
+    # Идемпотентность (12.09.2026): повторная развёртка не должна плодить дубли операций
+    _auto_types = ("production", "procurement")
+    _proj_ops = select(Operation.id).where(
+        Operation.tenant_id == tenant_id,
+        Operation.project_id == order.project_id,
+        Operation.operation_type.in_(_auto_types),
+    )
+    _existing = (await db.execute(
+        select(func.count()).select_from(Operation).where(
+            Operation.tenant_id == tenant_id,
+            Operation.project_id == order.project_id,
+            Operation.operation_type.in_(_auto_types),
+        )
+    )).scalar() or 0
+    if _existing and not replace:
+        return {
+            "order_id": str(order.id),
+            "status": order.status,
+            "operations_created": 0,
+            "dependencies_created": 0,
+            "materials_required": 0,
+            "warnings": [f"Операции проекта уже развёрнуты ({_existing} шт.) — повторная развёртка пропущена. "
+                         f"Для пересборки вызовите с replace=true."],
+        }
+    if _existing and replace:
+        await db.execute(delete(OperationDependency).where(OperationDependency.predecessor_id.in_(_proj_ops)))
+        await db.execute(delete(OperationDependency).where(OperationDependency.successor_id.in_(_proj_ops)))
+        await db.execute(delete(Operation).where(Operation.id.in_(_proj_ops)))
+        await db.flush()
 
     # Запускаем развёртку через реальный движок
     from app.routers.bom import run_explosion
@@ -1263,12 +1301,44 @@ async def expand_order(
             logging.warning(f"BOM expand warning: {w}")
 
     # Сохраняем операции
+    # Резолвер ресурса: в маршруте ресурс хранится как ID или как название (12.09.2026)
+    _res_cache: dict[str, Optional[UUID]] = {}
+
+    async def _resolve_resource(tag: Optional[str]):
+        if not tag:
+            return None
+        key = str(tag).strip()
+        if not key:
+            return None
+        if key in _res_cache:
+            return _res_cache[key]
+        rid = None
+        try:
+            rid = UUID(key)
+        except Exception:
+            rid = None
+        if rid is not None:
+            r = await db.get(Resource, rid)
+            if r:
+                _res_cache[key] = r.id
+                return r.id
+        r = (await db.execute(
+            select(Resource).where(
+                Resource.tenant_id == tenant_id,
+                func.lower(Resource.name) == key.lower(),
+            ).order_by(Resource.created_at.asc().nullslast())
+        )).scalars().first()
+        _res_cache[key] = r.id if r else None
+        return _res_cache[key]
+
     op_map = {}  # temp_id → Operation.id
     for eop in result.operations:
+        _rid = await _resolve_resource(eop.resource_type_id)
         op = Operation(
             id=uuid4(),
             tenant_id=tenant_id,
             project_id=order.project_id,
+            resource_id=_rid,
             name=eop.name,
             duration_base=eop.duration_base,
             duration_unit=eop.duration_unit,
