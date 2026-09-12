@@ -787,6 +787,70 @@ async def run_schedule(
             "position_days": round(_pos, 3),
         })
 
+    # ── Потоки (шаг 2.8): непрерывность ресурса, ритм и разрыв между фронтами ──
+    # Операции потока упорядочиваются по плановому старту, и каждой следующей задаётся
+    # нижняя граница старта: не раньше финиша предыдущей плюс разрыв, и не раньше ритма.
+    from app.models.group_flow import GroupFlow, GroupFlowOperation
+    from app.models.order_group import OrderGroup as _OG
+
+    _cpm_nodes = getattr(result, "nodes", {}) or {}
+
+    def _flow_days(_nid):
+        _nd = _cpm_nodes.get(_nid) if isinstance(_cpm_nodes, dict) else None
+        if not _nd:
+            return None
+        try:
+            return (float(_nd.early_start), float(_nd.early_finish))
+        except Exception:
+            return None
+
+    flow_rows = (await db.execute(
+        select(GroupFlow).join(_OG, _OG.id == GroupFlow.group_id).where(
+            _OG.project_id == project_id, GroupFlow.is_active.is_(True)
+        )
+    )).scalars().all()
+    flow_list: list = []
+    flow_warnings: list = []
+    for _f in flow_rows:
+        _op_ids = (await db.execute(
+            select(GroupFlowOperation.operation_id).where(GroupFlowOperation.flow_id == _f.id)
+        )).scalars().all()
+        _ids = [str(x) for x in _op_ids if _flow_days(str(x))]
+        if len(_ids) < 2:
+            continue
+        _ids.sort(key=lambda i: _flow_days(i)[0])
+        _gap = float(_f.min_gap_days or 0)
+        _takt = float(_f.takt_days or 0)
+        _shifted = 0
+        for _a, _b in zip(_ids, _ids[1:]):
+            _es_a, _ef_a = _flow_days(_a)
+            _need = _ef_a + _gap
+            if _takt > 0:
+                _need = max(_need, _es_a + _takt)
+            _c = pin_constraints.setdefault(_b, {})
+            _prev = _c.get("min_start")
+            _c["min_start"] = _need if _prev is None else max(float(_prev), _need)
+            _es_b = _flow_days(_b)[0]
+            if _need > _es_b + 1e-6:
+                _shifted += 1
+        flow_list.append({
+            "flow_id": str(_f.id),
+            "name": _f.name,
+            "operations": len(_ids),
+            "min_gap_days": _gap,
+            "takt_days": _takt or None,
+            "priority": _f.priority,
+            "shifted_operations": _shifted,
+        })
+        if _shifted:
+            flow_warnings.append({
+                "type": "flow_shift",
+                "message": ("Поток «%s»: %d операций сдвинуты — непрерывность ресурса важнее раннего старта"
+                            % (_f.name, _shifted)),
+            })
+    if flow_list:
+        warnings.extend(flow_warnings)
+
     pin_warnings: list = []
     if pin_constraints:
         ops_dicts_pin = []
@@ -899,5 +963,6 @@ async def run_schedule(
         "warnings": warnings,
         "capacity_applied": bool(factors),
         "pins": pin_list,
+        "flows": flow_list,
         "plan_freedom": plan_freedom,
     }
