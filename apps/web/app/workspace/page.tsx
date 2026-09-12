@@ -1744,7 +1744,7 @@ export default function AppShell() {
         if (r.resource_name && r.resource_id) resIds[r.resource_name] = r.resource_id;
       });
       const evList = Array.isArray(evs) ? evs : (evs?.items || []);
-      setScaleData({ nodes: sch?.nodes || [], resMap, resIds, pins: pins || [], events: evList });
+      setScaleData({ nodes: sch?.nodes || [], resMap, resIds, pins: pins || [], events: evList, freedom: sch?.plan_freedom || null });
       setMsg('');
     } catch (e: any) {
       setMsg('Ошибка шкалы куста: ' + (e?.message || String(e)));
@@ -1761,7 +1761,7 @@ export default function AppShell() {
       const prev = scaleData.nodes || [];
       const sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) });
       const pins = await apiF<any[]>(`/projects/${proj.id}/pins`).catch(() => []);
-      setScaleData((s: any) => ({ ...s, nodes: sch?.nodes || [], pins: pins || [], prev }));
+      setScaleData((s: any) => ({ ...s, nodes: sch?.nodes || [], pins: pins || [], prev, freedom: sch?.plan_freedom || null }));
       setMsg('Закрепление поставлено — серые полосы показывают положение до изменения');
     } catch (e: any) {
       setMsg('Не удалось поставить закрепление: ' + (e?.message || String(e)));
@@ -1778,7 +1778,7 @@ export default function AppShell() {
       const prev = scaleData.nodes || [];
       const sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) });
       const pins = await apiF<any[]>(`/projects/${proj.id}/pins`).catch(() => []);
-      setScaleData((s: any) => ({ ...s, nodes: sch?.nodes || [], pins: pins || [], prev }));
+      setScaleData((s: any) => ({ ...s, nodes: sch?.nodes || [], pins: pins || [], prev, freedom: sch?.plan_freedom || null }));
       setMsg('Закрепление снято');
     } catch (e: any) {
       setMsg('Не удалось снять закрепление: ' + (e?.message || String(e)));
@@ -4107,6 +4107,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               onPin={scalePin}
               onUnpin={scaleUnpin}
               busy={scaleBusy}
+              freedom={scaleData.freedom}
               options={scaleOpts}
               onToggle={(k) => setScaleOpts((s) => ({ ...s, [k]: !s[k] }))}
               onOpenGantt={() => loadProjectGantt(selectedProject)}

@@ -24,6 +24,7 @@ type Props = {
   onPin?: (operationId: string, pinType: string, pinAt: string, isHard: boolean, note?: string) => void;
   onUnpin?: (pinId: string) => void;
   busy?: boolean;
+  freedom?: { total_operations?: number; pinned_operations?: number; freedom_percent?: number; threshold_percent?: number } | null;
 };
 
 const MS_DAY = 86400000;
@@ -34,7 +35,7 @@ const parse = (v: any): number => {
 };
 const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—');
 
-export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy }: Props) {
+export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom }: Props) {
   const [sel, setSel] = useState<any>(null);
   const [hard, setHard] = useState(true);
   const [when, setWhen] = useState<string>('');
@@ -151,6 +152,21 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
         <span style={{ color: '#33456B' }}>›</span>
         <b style={{ color: '#E8EEF5' }}>Куст: {groupName || 'все заказы проекта'}</b>
         <span style={{ flex: 1 }} />
+        {freedom && Number.isFinite(freedom.freedom_percent as number) && (
+          <span title={`Закреплено ${freedom.pinned_operations || 0} из ${freedom.total_operations || 0} операций. Порог предупреждения — ${freedom.threshold_percent || 20}%.`} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            border: '1px solid ' + (((freedom.freedom_percent as number) < (freedom.threshold_percent || 20)) ? '#6B5518' : '#1F5F4B'),
+            background: ((freedom.freedom_percent as number) < (freedom.threshold_percent || 20)) ? '#332A10' : '#123326',
+            color: ((freedom.freedom_percent as number) < (freedom.threshold_percent || 20)) ? '#FBBF24' : '#34D399',
+            borderRadius: 999, padding: '3px 10px', fontSize: 11.5,
+          }}>
+            свобода плана {freedom.freedom_percent}%
+            <span style={{ width: 54, height: 6, background: '#0A1628', borderRadius: 3, overflow: 'hidden', display: 'inline-block' }}>
+              <span style={{ display: 'block', height: '100%', width: Math.max(2, Math.min(100, freedom.freedom_percent as number)) + '%', background: 'currentColor' }} />
+            </span>
+            <span style={{ color: '#8FA3BD' }}>закреплено {freedom.pinned_operations || 0} из {freedom.total_operations || 0}</span>
+          </span>
+        )}
         {([['showPins', 'маркеры'], ['showEvents', 'события мощности'], ['showFlow', 'поток']] as const).map(([key, label]) => (
           <label key={key} style={{
             display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer',
