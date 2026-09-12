@@ -811,6 +811,37 @@ async def run_schedule(
     )).scalars().all()
     flow_list: list = []
     flow_warnings: list = []
+    # позиции операций в календаре — считаем так же, как закрепления (индекс рабочего дня от якоря)
+    _fin_map: dict = {}
+    _start_map: dict = {}
+    for _n in (nodes or []):
+        try:
+            _fin_map[_n["id"]] = datetime.fromisoformat(str(_n.get("finish_datetime") or _n.get("start_datetime")))
+            _start_map[_n["id"]] = datetime.fromisoformat(str(_n.get("start_datetime")))
+        except Exception:
+            continue
+
+    async def _cal_pos(_op_id: str, _add_days: float):
+        """Индекс рабочего дня (как у закреплений) для даты старта с учётом сдвига в днях."""
+        _base = _start_map.get(_op_id)
+        if not _base:
+            return None
+        _d = _base + timedelta(days=int(round(_add_days)))
+        _g = 0
+        try:
+            while _g < 90 and not await resolver.is_working(_d.date()):
+                _d = _d + timedelta(days=1)
+                _g += 1
+        except Exception:
+            pass
+        try:
+            _idx = await date_to_working_day_index(resolver, anchor, _d.date())
+        except Exception:
+            return None
+        _ds_h, _win_h = win_by_id.get(_op_id) or (DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS)
+        _win_h = float(_win_h) or 8.0
+        _frac = max((_d.hour + _d.minute / 60.0 - float(_ds_h)) / _win_h, 0.0)
+        return float(_idx) + _frac
     # достижимость по технологическим связям — чтобы поток не разворачивал порядок и не создавал цикл
     _adj: dict = {}
     for _d in (deps_dicts or []):
@@ -834,35 +865,56 @@ async def run_schedule(
         _op_ids = (await db.execute(
             select(GroupFlowOperation.operation_id).where(GroupFlowOperation.flow_id == _f.id)
         )).scalars().all()
-        _ids = [str(x) for x in _op_ids if _flow_days(str(x))]
+        _ids = [str(x) for x in _op_ids if _start_map.get(str(x))]
         if len(_ids) < 2:
             continue
-        _ids.sort(key=lambda i: _flow_days(i)[0])
+        _ids.sort(key=lambda i: _start_map[i])
         _gap = float(_f.min_gap_days or 0)
         _takt = float(_f.takt_days or 0)
         _shifted = 0
         _conflicts = 0
         _cons_list: list = []
         for _a, _b in zip(_ids, _ids[1:]):
-            _es_a, _ef_a = _flow_days(_a)
-            _need = _ef_a + _gap
-            if _takt > 0:
-                _need = max(_need, _es_a + _takt)
-            # если технология уже требует обратный порядок — поток не применяем, иначе получим цикл
+            _fin_a = _fin_map.get(_a)
+            if not _fin_a:
+                continue
+            _by_gap = None
+            try:
+                _d = _fin_a + timedelta(days=int(round(_gap)))
+                _g = 0
+                while _g < 90 and not await resolver.is_working(_d.date()):
+                    _d = _d + timedelta(days=1)
+                    _g += 1
+                _idx = await date_to_working_day_index(resolver, anchor, _d.date())
+                _ds_h, _win_h = win_by_id.get(_b) or (DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS)
+                _win_h = float(_win_h) or 8.0
+                _frac = max((_d.hour + _d.minute / 60.0 - float(_ds_h)) / _win_h, 0.0)
+                _by_gap = float(_idx) + _frac
+            except Exception:
+                _by_gap = None
+            _by_takt = await _cal_pos(_a, _takt) if _takt > 0 else None
+            _vals = [v for v in (_by_gap, _by_takt) if v is not None]
+            if not _vals:
+                continue
+            _need = max(_vals)
             if _reaches(_b, _a):
                 _conflicts += 1
                 continue
             _c = pin_constraints.setdefault(_b, {})
             _prev = _c.get("min_start")
             _c["min_start"] = _need if _prev is None else max(float(_prev), _need)
-            _es_b = _flow_days(_b)[0]
+            _was = None
+            try:
+                _was = await _cal_pos(_b, 0.0)
+            except Exception:
+                _was = None
             _cons_list.append({
                 "operation_id": _b,
                 "required_days": round(float(_need), 2),
-                "was_days": round(float(_es_b), 2),
-                "bites": bool(_need > _es_b + 1e-6),
+                "was_days": round(float(_was), 2) if _was is not None else None,
+                "bites": bool(_was is not None and _need > float(_was) + 1e-6),
             })
-            if _need > _es_b + 1e-6:
+            if _was is not None and _need > float(_was) + 1e-6:
                 _shifted += 1
         flow_list.append({
             "flow_id": str(_f.id),
