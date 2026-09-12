@@ -811,6 +811,25 @@ async def run_schedule(
     )).scalars().all()
     flow_list: list = []
     flow_warnings: list = []
+    # достижимость по технологическим связям — чтобы поток не разворачивал порядок и не создавал цикл
+    _adj: dict = {}
+    for _d in (deps_dicts or []):
+        _adj.setdefault(str(_d.get("predecessor_id")), []).append(str(_d.get("successor_id")))
+
+    def _reaches(_from, _to, _limit=5000):
+        _seen = {_from}
+        _stack = [_from]
+        _n = 0
+        while _stack and _n < _limit:
+            _cur = _stack.pop()
+            _n += 1
+            if _cur == _to:
+                return True
+            for _nx in _adj.get(_cur, []):
+                if _nx not in _seen:
+                    _seen.add(_nx)
+                    _stack.append(_nx)
+        return False
     for _f in flow_rows:
         _op_ids = (await db.execute(
             select(GroupFlowOperation.operation_id).where(GroupFlowOperation.flow_id == _f.id)
@@ -822,11 +841,16 @@ async def run_schedule(
         _gap = float(_f.min_gap_days or 0)
         _takt = float(_f.takt_days or 0)
         _shifted = 0
+        _conflicts = 0
         for _a, _b in zip(_ids, _ids[1:]):
             _es_a, _ef_a = _flow_days(_a)
             _need = _ef_a + _gap
             if _takt > 0:
                 _need = max(_need, _es_a + _takt)
+            # если технология уже требует обратный порядок — поток не применяем, иначе получим цикл
+            if _reaches(_b, _a):
+                _conflicts += 1
+                continue
             _c = pin_constraints.setdefault(_b, {})
             _prev = _c.get("min_start")
             _c["min_start"] = _need if _prev is None else max(float(_prev), _need)
@@ -841,12 +865,19 @@ async def run_schedule(
             "takt_days": _takt or None,
             "priority": _f.priority,
             "shifted_operations": _shifted,
+            "order_conflicts": _conflicts,
         })
         if _shifted:
             flow_warnings.append({
                 "type": "flow_shift",
                 "message": ("Поток «%s»: %d операций сдвинуты — непрерывность ресурса важнее раннего старта"
                             % (_f.name, _shifted)),
+            })
+        if _conflicts:
+            flow_warnings.append({
+                "type": "flow_conflict",
+                "message": ("Поток «%s»: %d пар пропущены — технологический порядок требует обратного, "
+                            "поток туда не навязываем" % (_f.name, _conflicts)),
             })
     if flow_list:
         warnings.extend(flow_warnings)
