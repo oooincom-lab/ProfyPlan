@@ -97,7 +97,8 @@ export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, 
       levelResult.operations.forEach(op => { if (op.resource_name) resSet.add(op.resource_name); });
     }
     const resList = Array.from(resSet);
-    resources.current = resList.length > 0 ? resList : ['Ресурсы'];
+    const resRows = resList.length > 0 ? resList : ['Ресурсы'];
+    resources.current = resRows;
 
     const resIndex = new Map<string, number>();
     const nodeList: NodePos[] = [];
@@ -105,16 +106,18 @@ export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, 
     if (levelResult) {
       levelResult.operations.forEach(op => { if (op.resource_name) nodeResMap.set(op.operation_id, op.resource_name); });
     }
-    const defaultRes = resList[0] || '';
+    const defaultRes = resRows[0] || '';
 
     cpmNodes.forEach((n, i) => {
       const res = nodeResMap.get(n.id) || defaultRes;
       if (!resIndex.has(res)) resIndex.set(res, resIndex.size);
       const ae = actualsMap[n.id];
+      // номер дорожки ресурса: без защиты деление по модулю на пустой список давало NaN и канва теряла высоту
+      const rowIdx = resIndex.has(res) ? (resIndex.get(res) as number) : (i % resRows.length);
       nodeList.push({
         id: n.id,
         x: LEFT_MARGIN + n.early_start * PX_PER_HOUR,
-        y: 60 + (resIndex.get(res) || i % resList.length) * RESOURCE_ROW_H,
+        y: 60 + (Number.isFinite(rowIdx) ? rowIdx : 0) * RESOURCE_ROW_H,
         name: n.name,
         projectIndex: i % projectCount,
         earlyStart: n.early_start,
@@ -152,8 +155,8 @@ export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, 
 
     const maxX = Math.max(...nodes.current.map(n => n.x + NODE_R * 2), 600);
     const maxY = Math.max(...nodes.current.map(n => n.y + NODE_R * 2), 400);
-    const fullW = Math.max(1000, (maxX + 100) * scale);
-    const fullH = Math.max(600, (maxY + 80) * scale);
+    const fullW = Math.max(1000, (Number.isFinite(maxX) ? maxX + 100 : 1100) * scale);
+    const fullH = Math.max(600, (Number.isFinite(maxY) ? maxY + 80 : 520) * scale);
 
     canvas.width = fullW; canvas.height = fullH;
     canvas.style.width = `${fullW}px`; canvas.style.height = `${fullH}px`;
