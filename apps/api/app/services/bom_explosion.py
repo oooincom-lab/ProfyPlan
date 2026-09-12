@@ -106,6 +106,14 @@ async def explode_bom_to_operations(
 
     root_nodes = children_map.get("__root__", [])
 
+    # Порядковый номер узла среди «братьев» — путь развёртки строим по дереву
+    # (поле path в импортированном составе не уникально и замыкало связи в цикл)
+    _sibling_index: dict[str, int] = {}
+    for _key, _kids in children_map.items():
+        _kids_sorted = sorted(_kids, key=lambda n: (n.sort_order or 0, str(n.id)))
+        for _i, _kid in enumerate(_kids_sorted, 1):
+            _sibling_index[str(_kid.id)] = _i
+
     # Состояние обхода
     node_op_map: dict[str, list[str]] = {}  # node_id → [temp_op_id]
     last_op_in_path: dict[str, str] = {}  # parent_path → last_op_temp_id
@@ -116,6 +124,9 @@ async def explode_bom_to_operations(
         return f"{prefix}_{_counter[0]:04d}"
 
     async def _traverse(node: ProductStructure, node_path: str):
+        _idx = _sibling_index.get(str(node.id), node.sort_order or 1)
+        node_path = f"{node_path}.{_idx}" if node_path else str(_idx)
+
         if node.is_phantom:
             for child in children_map.get(str(node.id), []):
                 await _traverse(child, node_path)
@@ -209,7 +220,7 @@ async def explode_bom_to_operations(
         )
 
     for root in root_nodes:
-        await _traverse(root, "1")
+        await _traverse(root, "")
 
     # Связываем закупки с производством
     _link_procurement(result, node_op_map, all_nodes, children_map)

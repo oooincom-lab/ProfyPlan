@@ -772,6 +772,15 @@ async def run_explosion(
     # Находим корневые узлы
     root_nodes = children_map.get("__root__", [])
 
+    # Порядковый номер узла среди «братьев» — из него строим путь развёртки.
+    # (Исправление 12.09.2026: поле path в импортированном составе не уникально,
+    # из-за этого связи «последняя операция узла → первая операция потомка» замыкались в цикл.)
+    _sibling_index: dict[str, int] = {}
+    for _key, _kids in children_map.items():
+        _kids_sorted = sorted(_kids, key=lambda n: (n.sort_order or 0, str(n.id)))
+        for _i, _kid in enumerate(_kids_sorted, 1):
+            _sibling_index[str(_kid.id)] = _i
+
     # Отслеживаем созданные узлы для построения зависимостей
     node_op_map: dict[str, list[str]] = {}  # node_id → [temp_op_id]
     last_op_in_path: dict[str, str] = {}  # parent_path → last_op_temp_id
@@ -782,7 +791,8 @@ async def run_explosion(
         return f"{prefix}_{op_counter[0]:04d}"
 
     async def _traverse(node: ProductStructure, parent_path: str):
-        node_path = node.path or f"{parent_path}.{node.sort_order or 1}"
+        _idx = _sibling_index.get(str(node.id), node.sort_order or 1)
+        node_path = f"{parent_path}.{_idx}" if parent_path else str(_idx)
 
         if node.is_phantom:
             # Пропускаем фантомный узел, разворачиваем детей
@@ -899,7 +909,7 @@ async def run_explosion(
 
     # Обходим все корневые узлы
     for root in root_nodes:
-        await _traverse(root, "1")
+        await _traverse(root, "")
 
     # Связываем операции закупки с потребляющими (FS от закупки к первому потребителю)
     _link_procurement_to_production(result, node_op_map, all_nodes, children_map)
