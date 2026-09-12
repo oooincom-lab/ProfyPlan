@@ -5,7 +5,7 @@
  * события мощности — полосами на строке ресурса, «призрак» прежнего положения — полупрозрачными полосами.
  * Сверху — хлебные крошки контекста и переключатели (шаг 8.3).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type Props = {
   project: any;
@@ -38,6 +38,61 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
   const [sel, setSel] = useState<any>(null);
   const [hard, setHard] = useState(true);
   const [when, setWhen] = useState<string>('');
+  const [drag, setDrag] = useState<any>(null);
+
+  const MAGNET_RADIUS_MS = 86400000; // радиус магнита — 1 день (единица настройки magnet.radius_value)
+
+  // Якоря магнита: для каждого ресурса — даты начал и окончаний соседних операций
+  const anchors = useMemo(() => {
+    const m: Record<string, { t: number; label: string }[]> = {};
+    (nodes || []).forEach((n: any) => {
+      const res = resMap[n.id] || 'Без ресурса';
+      const a = parse(n.start_datetime), b = parse(n.finish_datetime || n.start_datetime);
+      if (Number.isFinite(b)) (m[res] = m[res] || []).push({ t: b, label: 'конец: ' + String(n.name).slice(0, 30) });
+      if (Number.isFinite(a)) (m[res] = m[res] || []).push({ t: a, label: 'начало: ' + String(n.name).slice(0, 30) });
+    });
+    return m;
+  }, [nodes, resMap]);
+
+  const startDrag = (e: any, n: any, res: string) => {
+    const lane = e.currentTarget.parentElement.getBoundingClientRect();
+    setDrag({ id: n.id, res, laneW: lane.width, x0: e.clientX, dt: 0, label: '', anchor: false, moved: false });
+  };
+
+  useEffect(() => {
+    if (!drag) return;
+    const move = (ev: MouseEvent) => {
+      const op = (nodes || []).find((x: any) => x.id === drag.id);
+      if (!op) return;
+      const deltaMs = ((ev.clientX - drag.x0) / Math.max(drag.laneW, 1)) * rows.span;
+      const target = parse(op.start_datetime) + deltaMs;
+      let best: any = null;
+      (anchors[drag.res] || []).forEach((c: any) => {
+        const d = Math.abs(c.t - target);
+        if (d <= MAGNET_RADIUS_MS && (!best || d < best.d)) best = { t: c.t, label: c.label, d };
+      });
+      const anchorHit = !!best;
+      if (!best) {
+        const day = 86400000;
+        const t = Math.round(target / day) * day;
+        best = { t, label: 'сетка дней', d: Math.abs(t - target) };
+      }
+      setDrag((s: any) => ({ ...s, dt: best.t, label: best.label, anchor: anchorHit, moved: Math.abs(ev.clientX - drag.x0) > 4 }));
+    };
+    const up = () => {
+      const d = drag.dt;
+      const moved = !!drag.moved;
+      setDrag(null);
+      // закрепление ставим только при реальном перетаскивании, обычный клик лишь открывает панель
+      if (moved && d && onPin) {
+        const iso = new Date(d).toISOString().slice(0, 16);
+        onPin(drag.id, 'start_not_earlier', iso, true, 'перетаскивание на шкале куста: ' + (drag.label || 'день'));
+      }
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+  }, [drag, anchors, nodes, rows.span, onPin]);
 
   const openSel = (n: any) => {
     setSel(n);
@@ -154,6 +209,13 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
                     background: 'rgba(148,163,184,.35)', borderRadius: 3,
                   }} />;
                 })}
+                {drag && drag.res === r.res && drag.dt > 0 && (
+                  <span style={{ position: 'absolute', left: pos(drag.dt) + '%', top: 0, bottom: 0, width: 2, background: '#FBBF24' }}>
+                    <span style={{ position: 'absolute', top: -16, left: 4, whiteSpace: 'nowrap', fontSize: 10.5, color: '#FBBF24' }}>
+                      {fmt(drag.dt)}{drag.anchor ? ' · ' + drag.label : ''}
+                    </span>
+                  </span>
+                )}
                 {r.ops.map((n: any) => {
                   const a = parse(n.start_datetime), b = parse(n.finish_datetime || n.start_datetime);
                   return (
@@ -161,8 +223,8 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
                       position: 'absolute', left: pos(a) + '%', width: width(a, b) + '%', top: 6, height: 12, borderRadius: 4,
                       background: n.is_critical ? '#EF4444' : '#3B82F6',
                       outline: n.is_pinned && options.showPins ? '1.5px solid #22D3EE' : 'none',
-                      cursor: 'pointer',
-                    }} onClick={() => openSel(n)} />
+                      cursor: drag ? 'grabbing' : 'grab',
+                    }} onClick={() => openSel(n)} onMouseDown={(e) => startDrag(e, n, r.res)} />
                   );
                 })}
                 {options.showPins && (pins || []).filter((p: any) => (resMap[p.operation_id] === r.res) || (resIds?.[r.res] ? p.resource_id === resIds[r.res] : false)).map((p: any, i: number) => {
@@ -224,6 +286,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#C4B5FD', borderRadius: 3, marginRight: 6 }} />общий ресурс куста</span>
         <span><span style={{ display: 'inline-block', width: 2, height: 10, background: '#22D3EE', marginRight: 6 }} />маркер закрепления</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(248,113,113,.25)', border: '1px solid #F87171', borderRadius: 3, marginRight: 6 }} />ограничение / простой</span>
+        <span style={{ color: '#FBBF24' }}>↔ тяните полосу: магнит ловит конец соседней операции, начало следующей или сетку дней (радиус 1 день), на отпускании ставится закрепление</span>
       </div>
     </div>
   );
