@@ -160,7 +160,7 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
   );
 }
 
-function fmtDate(s?: string | null) {
+function fmtDateShort(s?: string | null) {
   if (!s) return '—';
   const d = String(s).slice(0, 10).split('-');
   return d.length === 3 ? `${d[2]}.${d[1]}.${d[0]}` : String(s);
