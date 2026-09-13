@@ -24,6 +24,10 @@ type Props = {
   onPin?: (operationId: string, pinType: string, pinAt: string, isHard: boolean, note?: string) => void;
   onUnpin?: (pinId: string) => void;
   busy?: boolean;
+  powerFactor?: number;
+  whatIfInfo?: string;
+  onWhatIf?: (v: number) => void;
+  onWhatIfReset?: () => void;
   freedom?: { total_operations?: number; pinned_operations?: number; freedom_percent?: number; threshold_percent?: number } | null;
 };
 
@@ -35,7 +39,7 @@ const parse = (v: any): number => {
 };
 const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—');
 
-export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom }: Props) {
+export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom, powerFactor, whatIfInfo, onWhatIf, onWhatIfReset }: Props) {
   const [sel, setSel] = useState<any>(null);
   const [hard, setHard] = useState(true);
   const [when, setWhen] = useState<string>('');
@@ -99,6 +103,8 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
     window.addEventListener('mouseup', up);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
   }, [drag, anchors, nodes, onPin]);
+
+  const [whatIf, setWhatIf] = useState<number>(powerFactor ?? 1.0);
 
   const openSel = (n: any) => {
     setSel(n);
@@ -352,6 +358,24 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
           )}
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, borderTop: '1px solid #14263F', paddingTop: 8 }}>
+        <span style={{ color: '#8FA3BD' }}>Что если — мощность ресурсов:</span>
+        <input type="range" min={0.5} max={1.5} step={0.1} value={whatIf}
+          onChange={(e) => setWhatIf(parseFloat(e.target.value))}
+          style={{ width: 180 }} />
+        <b style={{ color: '#DBEAFE', minWidth: 46 }}>×{whatIf.toFixed(1)}</b>
+        <button onClick={() => onWhatIf && onWhatIf(whatIf)} disabled={!!busy}
+          style={{ background: '#12304F', border: '1px solid #2B5B92', color: '#DBEAFE', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+          Прикинуть
+        </button>
+        <button onClick={() => { setWhatIf(1.0); onWhatIfReset && onWhatIfReset(); }} disabled={!!busy}
+          style={{ background: 'transparent', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+          Сбросить
+        </button>
+        {whatIfInfo && <span style={{ color: '#FBBF24' }}>{whatIfInfo}</span>}
+        <span style={{ color: '#5A7090' }}>расчёт по сценарию не сохраняется в план</span>
+      </div>
 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: '#8FA3BD' }}>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#EF4444', borderRadius: 3, marginRight: 6 }} />критические</span>

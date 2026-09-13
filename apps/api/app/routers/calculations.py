@@ -351,6 +351,9 @@ async def run_cpm(
 
 class ScheduleRequest(BaseModel):
     start_date: Optional[datetime] = None
+    # «Что если» по мощности (шаг 2.9): множитель мощности всех ресурсов; 1.0 — обычный расчёт.
+    # Не сохраняется — только прикидка сценария.
+    power_factor: float = 1.0
 
 
 @calculator_router.post("/schedule")
@@ -365,6 +368,7 @@ async def run_schedule(
     производственного календаря страны и графиков работы ресурсов.
 
     body.start_date (опц.) — точка отсчёта; иначе project.start_date, иначе сегодня.
+    body.power_factor (опц.) — «что если» по мощности: множитель для всех ресурсов.
     """
     proj = await db.execute(
         select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
@@ -372,6 +376,11 @@ async def run_schedule(
     project = proj.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Проект не найден")
+
+    # множитель «что если»: меняет только расчёт, в данные не пишется
+    _power_factor = float(getattr(body, "power_factor", 1.0) or 1.0)
+    if _power_factor <= 0:
+        _power_factor = 1.0
 
     ops_result = await db.execute(
         select(Operation).where(
@@ -727,6 +736,12 @@ async def run_schedule(
                 "message": "Операция «%s» попадает в простой ресурса «%s» (мощность 0) — срок невыполним" % (op.name, (br.name if br else "")),
             })
 
+    # применяем множитель сценария «что если» ко всем операциям (в том числе без событий)
+    if abs(_power_factor - 1.0) > 1e-9:
+        for _od in ops_dicts:
+            _b = float(factors.get(_od["id"], 1.0) or 1.0)
+            factors[_od["id"]] = (_b * _power_factor) if _b > 0 else _b
+
     # Второй проход: пересчёт длительностей с учётом эффективной мощности
     if any(m > 0 for m in factors.values()):
         ops_dicts2 = []
@@ -1080,5 +1095,6 @@ async def run_schedule(
         "capacity_applied": bool(factors),
         "pins": pin_list,
         "flows": flow_list,
+        "what_if": {"power_factor": _power_factor},
         "plan_freedom": plan_freedom,
     }

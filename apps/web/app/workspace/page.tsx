@@ -155,6 +155,9 @@ export default function AppShell() {
   const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, resIds: {}, pins: [], events: [] });
   const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
   const [scaleBusy, setScaleBusy] = useState(false);
+  const [scalePower, setScalePower] = useState(1.0);
+  const [scaleBaseFinish, setScaleBaseFinish] = useState<string | null>(null);
+  const [scaleInfo, setScaleInfo] = useState('');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1726,14 +1729,14 @@ export default function AppShell() {
   };
 
   // ── Шкала куста по ресурсам (шаг 2.3) ──
-  const loadProjectScale = async (p: any) => {
+  const loadProjectScale = async (p: any, power: number = 1.0) => {
     const proj = p || selectedProject;
     if (!proj) return;
     setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу куста…');
     try {
       // каждый запрос отдельно: падение одного не оставит шкалу пустой
       let sch: any = null, map: any = [], pins: any = [], evs: any = { items: [] };
-      try { sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }); } catch (e: any) { setMsg('Расчёт не удался: ' + (e?.message || e)); }
+      try { sch = await apiF<any>(`/projects/${proj.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify({ power_factor: power }) }); } catch (e: any) { setMsg('Расчёт не удался: ' + (e?.message || e)); }
       try { map = await apiF<any[]>(`/projects/${proj.id}/operations/resources-map`); } catch { map = []; }
       try { pins = await apiF<any[]>(`/projects/${proj.id}/pins`); } catch { pins = []; }
       try { evs = await apiF<any>(`/resource-events/?project_id=${proj.id}`); } catch { evs = { items: [] }; }
@@ -1745,6 +1748,9 @@ export default function AppShell() {
       });
       const evList = Array.isArray(evs) ? evs : (evs?.items || []);
       setScaleData({ nodes: sch?.nodes || [], resMap, resIds, pins: pins || [], events: evList, freedom: sch?.plan_freedom || null });
+      if (Math.abs(power - 1.0) > 1e-9) setScaleInfo(`Сценарий ×${power.toFixed(1)}: финиш ${sch?.project_finish_date || '—'} (обычный план: ${scaleBaseFinish || '—'})`);
+      else { setScaleBaseFinish(sch?.project_finish_date || null); setScaleInfo(''); }
+      setScalePower(power);
       setMsg('');
     } catch (e: any) {
       setMsg('Ошибка шкалы куста: ' + (e?.message || String(e)));
@@ -4108,6 +4114,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               onUnpin={scaleUnpin}
               busy={scaleBusy}
               freedom={scaleData.freedom}
+              powerFactor={scalePower}
+              whatIfInfo={scaleInfo}
+              onWhatIf={(v: number) => loadProjectScale(selectedProject, v)}
+              onWhatIfReset={() => loadProjectScale(selectedProject, 1.0)}
               options={scaleOpts}
               onToggle={(k) => setScaleOpts((s) => ({ ...s, [k]: !s[k] }))}
               onOpenGantt={() => loadProjectGantt(selectedProject)}
