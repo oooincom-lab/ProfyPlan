@@ -28,6 +28,9 @@ type Props = {
   whatIfInfo?: string;
   onWhatIf?: (v: number) => void;
   onWhatIfReset?: () => void;
+  versions?: any[];
+  versionInfo?: string;
+  onSaveVersion?: () => void;
   freedom?: { total_operations?: number; pinned_operations?: number; freedom_percent?: number; threshold_percent?: number } | null;
 };
 
@@ -39,7 +42,7 @@ const parse = (v: any): number => {
 };
 const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—');
 
-export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom, powerFactor, whatIfInfo, onWhatIf, onWhatIfReset }: Props) {
+export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom, powerFactor, whatIfInfo, onWhatIf, onWhatIfReset, versions, versionInfo, onSaveVersion }: Props) {
   const [sel, setSel] = useState<any>(null);
   const [hard, setHard] = useState(true);
   const [when, setWhen] = useState<string>('');
@@ -310,10 +313,15 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
           position: 'fixed', right: 18, bottom: 18, width: 360, zIndex: 40,
           background: '#101F38', border: '1px solid #2B5B92', borderRadius: 12, padding: 12, boxShadow: '0 12px 30px rgba(0,0,0,.45)',
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{sel.name}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Инспектор операции</div>
+          <div style={{ fontSize: 12, color: '#C9D7EA', marginBottom: 4 }}>{sel.name}</div>
           <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>
             ресурс: {resMap[sel.id] || '—'} | план: {fmt(parse(sel.start_datetime))} → {fmt(parse(sel.finish_datetime || sel.start_datetime))}
-            {pinsByOp?.[sel.id] ? ' | закреплено' : ''}
+            | длительность: {sel.duration_text || '—'}
+            <br />
+            критичность: {sel.is_critical ? 'критическая (задержка сдвигает проект)' : 'есть резерв'}
+            {sel.total_float !== undefined && sel.total_float !== null ? ` | резерв: ${sel.total_float} дн` : ''}
+            {sel.is_pinned ? ' | ⚡ закреплено' : ''}
           </div>
           {(variants.length > 0) && (
             <div style={{ marginBottom: 8 }}>
@@ -358,6 +366,24 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
           )}
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, borderTop: '1px solid #14263F', paddingTop: 8 }}>
+        <span style={{ color: '#8FA3BD' }}>Версии плана:</span>
+        <select defaultValue="" style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 8, color: '#E8EEF5', padding: '3px 8px', fontSize: 12 }}>
+          <option value="">выберите версию ({(versions || []).length})</option>
+          {(versions || []).map((v: any) => (
+            <option key={v.id} value={v.id}>
+              v{v.version} · {v.name} · {String(v.created_at).slice(0, 10)}{v.is_active ? ' · активная' : ''}
+            </option>
+          ))}
+        </select>
+        <button onClick={() => onSaveVersion && onSaveVersion()} disabled={!!busy}
+          style={{ background: '#12304F', border: '1px solid #2B5B92', color: '#DBEAFE', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+          💾 Сохранить версию
+        </button>
+        {versionInfo && <span style={{ color: '#FBBF24' }}>{versionInfo}</span>}
+        <span style={{ color: '#5A7090' }}>сравнение версий и применение сценариев — следующим шагом</span>
+      </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, borderTop: '1px solid #14263F', paddingTop: 8 }}>
         <span style={{ color: '#8FA3BD' }}>Что если — мощность ресурсов:</span>

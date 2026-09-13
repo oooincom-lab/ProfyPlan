@@ -158,6 +158,8 @@ export default function AppShell() {
   const [scalePower, setScalePower] = useState(1.0);
   const [scaleBaseFinish, setScaleBaseFinish] = useState<string | null>(null);
   const [scaleInfo, setScaleInfo] = useState('');
+  const [scaleVersions, setScaleVersions] = useState<any[]>([]);
+  const [scaleVersionInfo, setScaleVersionInfo] = useState('');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1733,6 +1735,7 @@ export default function AppShell() {
     const proj = p || selectedProject;
     if (!proj) return;
     setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу куста…');
+    loadVersions(proj);
     try {
       // каждый запрос отдельно: падение одного не оставит шкалу пустой
       let sch: any = null, map: any = [], pins: any = [], evs: any = { items: [] };
@@ -1788,6 +1791,33 @@ export default function AppShell() {
       setMsg('Закрепление снято');
     } catch (e: any) {
       setMsg('Не удалось снять закрепление: ' + (e?.message || String(e)));
+    }
+    setScaleBusy(false);
+  };
+
+  // ── Версии плана (шаг 8.5) ──
+  const loadVersions = async (p: any) => {
+    const proj = p || selectedProject;
+    if (!proj) return;
+    try {
+      const v = await apiF<any>(`/ccm/projects/${proj.id}/baselines`);
+      setScaleVersions(v?.baselines || []);
+    } catch {
+      setScaleVersions([]);
+    }
+  };
+
+  const saveVersion = async () => {
+    const proj = selectedProject;
+    if (!proj) return;
+    setScaleBusy(true);
+    try {
+      const nm = 'Версия ' + new Date().toLocaleString('ru-RU');
+      await apiF<any>(`/ccm/projects/${proj.id}/baseline?name=` + encodeURIComponent(nm), { method: 'POST' });
+      await loadVersions(proj);
+      setScaleVersionInfo('Версия сохранена: ' + nm);
+    } catch (e: any) {
+      setScaleVersionInfo('Не удалось сохранить версию: ' + (e?.message || String(e)));
     }
     setScaleBusy(false);
   };
@@ -4118,6 +4148,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               whatIfInfo={scaleInfo}
               onWhatIf={(v: number) => loadProjectScale(selectedProject, v)}
               onWhatIfReset={() => loadProjectScale(selectedProject, 1.0)}
+              versions={scaleVersions}
+              versionInfo={scaleVersionInfo}
+              onSaveVersion={saveVersion}
               options={scaleOpts}
               onToggle={(k) => setScaleOpts((s) => ({ ...s, [k]: !s[k] }))}
               onOpenGantt={() => loadProjectGantt(selectedProject)}
