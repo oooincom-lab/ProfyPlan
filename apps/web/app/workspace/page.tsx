@@ -38,7 +38,7 @@ import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
 import ToolsPanel from '@/components/ToolsPanel';
-import CpmNetworkGraph from '@/components/CpmNetworkGraph';
+import NetworkGraphV2 from '@/components/NetworkGraphV2';
 import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
@@ -4177,7 +4177,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               <div style={{ flex: 1, minHeight: 420, position: 'relative', overflow: 'hidden' }}>
                 {netLoading && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Загрузка сети…</div>}
                 {!netLoading && !netData && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>}
-                {!netLoading && netData && <CpmNetworkGraph cpmResult={netData} />}
+                {!netLoading && netData && <NetworkGraphV2 cpmResult={netData} levelResult={null} showBaseline={false} />}
               </div>
             </div>
           )}
