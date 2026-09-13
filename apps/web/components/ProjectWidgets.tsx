@@ -15,7 +15,7 @@ const API = resolveApiBase() + '/v1';
 const fmtDate = (s?: string | null) => {
   if (!s) return '—';
   const d = String(s).slice(0, 10).split('-');
-  return d.length === 3 ? `${d[2]}.${d[1]}.${d[0].slice(2)}` : String(s);
+  return d.length === 3 ? `${d[2]}.${d[1]}.${d[0]}` : String(s);
 };
 
 /** Виджеты проекта: KPI расчёта, загрузка по неделям, события мощности и потери, риск PERT. */
@@ -104,14 +104,14 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
         <div className={kpi} title="Разброс срока по PERT: чем больше σ, тем выше неопределённость оценок операций">
           <div className="kpi-label">Риск PERT</div>
           <div className="kpi-val" style={{ fontSize: 20, color: (sigma ?? 0) > 0 ? '#FCD34D' : '#8FA3BD' }}>σ {sigma ?? '—'}</div>
-          <div className="kpi-sub">{pert?.confidence_68 && typeof pert.confidence_68.low === 'number' ? `± ${Number(pert.confidence_68.high - pert.confidence_68.low).toFixed(1).replace('.', ',')} дн` : pert?.confidence_68 ? `68%: ${fmtDateShort(pert.confidence_68.low)}–${fmtDateShort(pert.confidence_68.high)}` : '—'}</div>
+          <div className="kpi-sub">{pert?.confidence_68 && typeof pert.confidence_68.low === 'number' ? ((pert.confidence_68.high - pert.confidence_68.low) > 0 ? `± ${Number(pert.confidence_68.high - pert.confidence_68.low).toFixed(1).replace('.', ',')} дн` : 'нет PERT-оценок') : pert?.confidence_68 ? `68%: ${fmtDateShort(pert.confidence_68.low)}–${fmtDateShort(pert.confidence_68.high)}` : '—'}</div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
         <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: '10px 12px' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD', marginBottom: 8 }}>
-            📈 Загрузка по неделям {peak ? <span style={{ color: peak > 100 ? '#F87171' : peak > 80 ? '#FCD34D' : '#86EFAC' }}>· пик {peak}%</span> : null}
+            📈 Загрузка по неделям {peak ? <span style={{ color: peak > 100 ? '#F87171' : peak > 80 ? '#FCD34D' : '#86EFAC' }}>· пик {String(peak).replace(".", ",")}%</span> : null}
           </div>
           {weeks.length === 0 && <div style={{ fontSize: 12, color: '#5A7090' }}>Нет данных о загрузке — нужен расчёт проекта с операциями.</div>}
           {weeks.map((w: any) => (
@@ -122,7 +122,7 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
               <div style={{ position: 'relative', flex: 1, height: 12, background: '#0F1E36', borderRadius: 3, minWidth: 90 }}>
                 <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(w.load_percent, 100)}%`, borderRadius: 3, background: w.load_percent > 100 ? '#EF4444' : w.load_percent > 80 ? '#F59E0B' : '#22C55E' }} />
               </div>
-              <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD', width: 44, textAlign: 'right', flexShrink: 0 }}>{w.load_percent}%</span>
+              <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD', width: 44, textAlign: 'right', flexShrink: 0 }}>{String(w.load_percent).replace(".", ",")}%</span>
             </div>
           ))}
         </div>
