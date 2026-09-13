@@ -9,22 +9,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup SSH
+      - name: Prepare SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keygen -l -f ~/.ssh/deploy_key || true
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Sync server to this commit and rebuild
+      - name: Check connection
+        env:
+          SSH_HOST_S: ${{ secrets.SSH_HOST }}
+          SSH_USER_S: ${{ secrets.SSH_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o BatchMode=yes \
+            "$SSH_USER_S@$SSH_HOST_S" 'echo connected: $(hostname)'
+
+      - name: Sync and rebuild
+        env:
+          SSH_HOST_S: ${{ secrets.SSH_HOST }}
+          SSH_USER_S: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o BatchMode=yes "$SSH_USER_S@$SSH_HOST_S" '
             set -e
-            cd /opt/profyplan &&
-            git fetch origin master &&
-            git reset --hard origin/master &&
-            docker compose build api web &&
-            docker compose up -d api web &&
-            sleep 8 &&
+            cd /opt/profyplan
+            git fetch origin master
+            git reset --hard origin/master
+            docker compose build api web
+            docker compose up -d api web
+            sleep 8
             curl -s -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:80/workspace
           '
