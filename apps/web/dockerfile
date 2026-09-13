@@ -9,7 +9,10 @@ RUN npm ci
 FROM deps AS builder
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY .env.local .
+# Настройка API задаётся параметром сборки: файла .env.local в репозитории нет,
+# из-за этого сборка образа падала и выкладка не доезжала до сервера
+ARG NEXT_PUBLIC_API_URL=https://profyplan.ru/api
+RUN printf 'NEXT_PUBLIC_API_URL=%s\n' "$NEXT_PUBLIC_API_URL" > .env.local
 RUN npm run build
 
 FROM base AS runner
