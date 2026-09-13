@@ -89,7 +89,7 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
         <div className={kpi} title="Дата окончания проекта по календарному расчёту с учётом графиков работы, событий мощности, долей и квот">
           <div className="kpi-label">Финиш проекта</div>
           <div className="kpi-val" style={{ fontSize: 20 }}>{fmtDate(finish)}</div>
-          <div className="kpi-sub">{days != null ? days + ' дн' : 'нет расчёта'}</div>
+          <div className="kpi-sub">{days != null ? Number(days).toFixed(1).replace('.', ',') + ' дн' : 'нет расчёта'}</div>
         </div>
         <div className={kpi} title="Операции на критическом пути: их задержка сдвигает весь проект">
           <div className="kpi-label">Критический путь</div>
@@ -160,8 +160,8 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
   );
 }
 
-function fmtDateShort(s?: string | null) {
+function fmtDate(s?: string | null) {
   if (!s) return '—';
   const d = String(s).slice(0, 10).split('-');
-  return d.length === 3 ? `${d[2]}.${d[1]}` : String(s);
+  return d.length === 3 ? `${d[2]}.${d[1]}.${d[0]}` : String(s);
 }

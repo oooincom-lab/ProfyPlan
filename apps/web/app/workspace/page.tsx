@@ -3180,7 +3180,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               {!ganttLoading && projLoading && (projLoading.weeks || []).some((w: any) => w.demand_hours > 0) && (
                 <div style={{ marginBottom: 12, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
                   <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#5A7090', fontWeight: 600, marginBottom: 6 }}>
-                    📈 Загрузка по неделям · итого {projLoading.totals?.demand_text} · пик {projLoading.totals?.peak_percent}%
+                    📈 Загрузка по неделям · итого {projLoading.totals?.demand_text} · пик {String(projLoading.totals?.peak_percent ?? "").replace(".", ",")}%
                   </div>
                   <table className="tbl" style={{ fontSize: 11.5 }}>
                     <thead><tr><th>Неделя</th><th>Спрос</th><th>Загрузка</th><th>График</th></tr></thead>
@@ -3189,7 +3189,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                         <tr key={w.week_start}>
                           <td className="t-mono">{w.week_start.slice(8, 10)}.{w.week_start.slice(5, 7)} – {w.week_end.slice(8, 10)}.{w.week_end.slice(5, 7)}</td>
                           <td className="t-mono">{w.demand_text}</td>
-                          <td className="t-mono" style={{ color: w.load_percent > 100 ? '#F87171' : (w.load_percent > 80 ? '#FCD34D' : '#86EFAC') }}>{w.load_percent}%</td>
+                          <td className="t-mono" style={{ color: w.load_percent > 100 ? '#F87171' : (w.load_percent > 80 ? '#FCD34D' : '#86EFAC') }}>{String(w.load_percent).replace(".", ",")}%</td>
                           <td>
                             <div style={{ position: 'relative', height: 12, background: '#0F1E36', borderRadius: 3, minWidth: 120 }}>
                               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(w.load_percent, 100)}%`, borderRadius: 3, background: w.load_percent > 100 ? '#EF4444' : (w.load_percent > 80 ? '#F59E0B' : '#22C55E') }} />
