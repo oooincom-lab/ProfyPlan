@@ -511,6 +511,7 @@ async def run_schedule(
     hpd_by_id: dict = {}
     win_by_id: dict = {}
     ops_dicts = []
+    order_by_op: dict = {}   # Н3: чтобы узел знал свой заказ (для «общий ресурс» на шкале)
     for op in operations:
         hpd = op_hours_per_day(op)
         hpd_by_id[str(op.id)] = float(hpd)
@@ -528,6 +529,7 @@ async def run_schedule(
             "setup_time": 0.0,
             "teardown_time": 0.0,
         })
+        order_by_op[str(op.id)] = str(op.order_id) if getattr(op, "order_id", None) else None
 
     deps_dicts = []
     for dep in dependencies:
@@ -996,6 +998,13 @@ async def run_schedule(
                     "message": ("%d ограничений (закрепления/потоки) пропущено — они конфликтуют "
                                 "с технологическим порядком операций" % _dropped),
                 })
+
+    # Н3: узел получает идентификатор своего заказа — без этого «общий ресурс» на шкале
+    # не отличим от «ресурс одного заказа» (клиент подставлял имя узла и помечал общими все строки)
+    for _n in (nodes or []):
+        _oid = order_by_op.get(str(_n.get("id")))
+        if _oid:
+            _n["order_id"] = _oid
 
     # Отметка закреплённых операций и проверка нарушений
     for n in nodes:
