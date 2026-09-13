@@ -9,8 +9,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -18,11 +16,13 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Pull and rebuild
+      - name: Sync server to this commit and rebuild
         run: |
           ssh -i ~/.ssh/deploy_key "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
+            set -e
             cd /opt/profyplan &&
-            git pull --ff-only &&
+            git fetch origin master &&
+            git reset --hard origin/master &&
             docker compose build api web &&
             docker compose up -d api web &&
             sleep 8 &&
