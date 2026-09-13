@@ -816,14 +816,15 @@ async def run_schedule(
     _start_map: dict = {}
     for _n in (nodes or []):
         try:
-            _fin_map[_n["id"]] = datetime.fromisoformat(str(_n.get("finish_datetime") or _n.get("start_datetime")))
-            _start_map[_n["id"]] = datetime.fromisoformat(str(_n.get("start_datetime")))
+            _key = str(_n["id"]).lower()
+            _fin_map[_key] = datetime.fromisoformat(str(_n.get("finish_datetime") or _n.get("start_datetime")))
+            _start_map[_key] = datetime.fromisoformat(str(_n.get("start_datetime")))
         except Exception:
             continue
 
     async def _cal_pos(_op_id: str, _add_days: float):
         """Индекс рабочего дня (как у закреплений) для даты старта с учётом сдвига в днях."""
-        _base = _start_map.get(_op_id)
+        _base = _start_map.get(str(_op_id).lower())
         if not _base:
             return None
         _d = _base + timedelta(days=int(round(_add_days)))
@@ -865,17 +866,20 @@ async def run_schedule(
         _op_ids = (await db.execute(
             select(GroupFlowOperation.operation_id).where(GroupFlowOperation.flow_id == _f.id)
         )).scalars().all()
-        _ids = [str(x) for x in _op_ids if _start_map.get(str(x))]
-        if len(_ids) < 2:
+        # ключи в нижнем регистре для сопоставления, но в ограничения пишем исходные идентификаторы
+        _orig = {str(x).lower(): str(x) for x in _op_ids}
+        _keys = [k for k in _orig.keys() if _start_map.get(k)]
+        if len(_keys) < 2:
             continue
-        _ids.sort(key=lambda i: _start_map[i])
+        _keys.sort(key=lambda k: _start_map[k])   # порядок цепи — по плановому старту
         _gap = float(_f.min_gap_days or 0)
         _takt = float(_f.takt_days or 0)
         _shifted = 0
         _conflicts = 0
         _cons_list: list = []
-        for _a, _b in zip(_ids, _ids[1:]):
-            _fin_a = _fin_map.get(_a)
+        for _ka, _kb in zip(_keys, _keys[1:]):
+            _a, _b = _orig[_ka], _orig[_kb]
+            _fin_a = _fin_map.get(_ka)
             if not _fin_a:
                 continue
             _by_gap = None
@@ -919,7 +923,7 @@ async def run_schedule(
         flow_list.append({
             "flow_id": str(_f.id),
             "name": _f.name,
-            "operations": len(_ids),
+            "operations": len(_keys),
             "min_gap_days": _gap,
             "takt_days": _takt or None,
             "priority": _f.priority,
