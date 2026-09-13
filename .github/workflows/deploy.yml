@@ -37,7 +37,7 @@ jobs:
             git fetch origin master
             git reset --hard origin/master
             docker compose build api web
-            docker compose up -d api web
+            docker compose up -d --force-recreate api web
             sleep 8
             curl -s -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:80/workspace
           '
