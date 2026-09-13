@@ -104,7 +104,7 @@ export default function ProjectWidgets({ projectId }: { projectId?: string | nul
         <div className={kpi} title="Разброс срока по PERT: чем больше σ, тем выше неопределённость оценок операций">
           <div className="kpi-label">Риск PERT</div>
           <div className="kpi-val" style={{ fontSize: 20, color: (sigma ?? 0) > 0 ? '#FCD34D' : '#8FA3BD' }}>σ {sigma ?? '—'}</div>
-          <div className="kpi-sub">{pert?.confidence_68 ? `68%: ${fmtDateShort(pert.confidence_68.low)}–${fmtDateShort(pert.confidence_68.high)}` : '—'}</div>
+          <div className="kpi-sub">{pert?.confidence_68 && typeof pert.confidence_68.low === 'number' ? `± ${Number(pert.confidence_68.high - pert.confidence_68.low).toFixed(1).replace('.', ',')} дн` : pert?.confidence_68 ? `68%: ${fmtDateShort(pert.confidence_68.low)}–${fmtDateShort(pert.confidence_68.high)}` : '—'}</div>
         </div>
       </div>
 

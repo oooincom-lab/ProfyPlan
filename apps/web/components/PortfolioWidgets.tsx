@@ -126,7 +126,7 @@ export default function PortfolioWidgets({
             const hasConflict = conflicted.some((r: any) => (r.assignments || []).some((a: any) => a.project_id === b.id));
             return (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span onClick={() => onOpen && onOpen(b.project)} title={b.name + (b.days ? ` · ${b.days} дн` : '')}
+                <span onClick={() => onOpen && onOpen(b.project)} title={b.name + (b.days ? ` · ${Number(b.days).toFixed(1).replace(".", ",")} дн` : '')}
                   style={{ fontSize: 11.5, color: '#CBD5E1', width: 150, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: onOpen ? 'pointer' : 'default' }}>
                   {b.finish ? '🟢' : '⚪'} {b.name}
                 </span>

@@ -2587,7 +2587,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                     </div>
                                     <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
                                       <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Длительность</div>
-                                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{planCalc.total_duration_days != null ? planCalc.total_duration_days + ' дн' : '—'}</div>
+                                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{planCalc.total_duration_days != null ? Number(planCalc.total_duration_days).toFixed(1).replace('.', ',') + ' дн' : '—'}</div>
                                     </div>
                                     <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
                                       <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Критических операций</div>
@@ -3062,7 +3062,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     <input type="date" value={(ganttData?.anchor || selectedProject?.start_date || '').slice(0, 10)} onChange={e => setProjectStartDate(e.target.value)} style={{ marginLeft: 6, background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E8EEF5', padding: '3px 6px', fontSize: 12 }} />
                   </label>
                   {ganttData?.project_finish_date && <span style={{ fontSize: 11, color: '#8FA3BD' }}>→ финиш <span style={{ color: '#10B981', fontWeight: 600 }}>{ganttData.project_finish_date.slice(8, 10)}.{ganttData.project_finish_date.slice(5, 7)}.{ganttData.project_finish_date.slice(0, 4)}</span></span>}
-                  {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{ganttData.total_duration_days} раб. дн.</span>}
+                  {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{Number(ganttData.total_duration_days).toFixed(1).replace(".", ",")} раб. дн.</span>}
                   <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
               <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">🕸 Сеть CPM</button>
               <button onClick={() => loadProjectScale(selectedProject)} className="btn btn-secondary btn-sm">📐 Шкала куста</button>

@@ -50,6 +50,26 @@ calculator_router = APIRouter(prefix="/v1/projects/{project_id}/calculate", tags
 # Логика эффективной мощности — в app/services/capacity.py (единая для всех расчётов)
 
 
+def _hours_text(hours) -> str:
+    """Д6: срок в днях и часах вместо «899.8 ч»."""
+    if hours is None:
+        return "—"
+    if hours >= 24:
+        d = int(hours // 24)
+        h = round(hours - d * 24, 1)
+        return ("%d дн" % d) + (" %s ч" % str(h).replace(".", ",") if h else "")
+    return str(round(hours, 1)).replace(".", ",") + " ч"
+
+
+def _shift_plural(n: int) -> str:
+    """Д5: «1 операция сдвинута» вместо «1 операций сдвинуты»."""
+    if n % 10 == 1 and n % 100 != 11:
+        return "%d операция сдвинута" % n
+    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        return "%d операции сдвинуты" % n
+    return "%d операций сдвинуты" % n
+
+
 @calculator_router.post("/cpm")
 async def run_cpm(
     project_id: UUID,
@@ -951,8 +971,8 @@ async def run_schedule(
         if _shifted:
             flow_warnings.append({
                 "type": "flow_shift",
-                "message": ("Поток «%s»: %d операций сдвинуты — непрерывность ресурса важнее раннего старта"
-                            % (_f.name, _shifted)),
+                "message": ("Поток «%s»: %s — непрерывность ресурса важнее раннего старта"
+                            % (_f.name, _shift_plural(_shifted))),
             })
         if _conflicts:
             flow_warnings.append({
@@ -1034,8 +1054,8 @@ async def run_schedule(
                     "operation_name": _n.get("name"),
                     "pin_type": _pl["pin_type"],
                     "is_hard": _pl["is_hard"],
-                    "message": ("Закрепление «%s» для «%s» нарушено на %.1f ч — операция не успевает к сроку"
-                                % (_pl["pin_type"], _n.get("name"), _delta)),
+                    "message": ("Закрепление «%s» для «%s» нарушено на %s — операция не успевает к сроку"
+                                % (_pl["pin_type"], _n.get("name"), _hours_text(_delta))),
                 })
 
     warnings.extend(pin_warnings)
@@ -1085,7 +1105,7 @@ async def run_schedule(
                     "resource_name": (r.name if r else ""),
                     "event_id": str(ev.id),
                     "days": days,
-                    "message": "Форсаж «%s» длится %d раб. дн. (больше %d) — риск перегрузки (muri)" % ((r.name if r else ""), days, FORSAZH_MAX_WORKDAYS),
+                    "message": "Форсаж «%s» длится %d раб. дн. (больше %d) — риск перегрузки исполнителя: длительный форсаж" % ((r.name if r else ""), days, FORSAZH_MAX_WORKDAYS),
                 })
 
     return {
