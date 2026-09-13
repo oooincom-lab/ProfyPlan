@@ -871,7 +871,7 @@ async def run_schedule(
         _keys = [k for k in _orig.keys() if _start_map.get(k)]
         if len(_keys) < 2:
             continue
-        _keys.sort(key=lambda k: _start_map[k])   # порядок цепи — по плановому старту
+        # порядок цепи — как прикрепил планировщик (порядок привязки операций к потоку)
         _gap = float(_f.min_gap_days or 0)
         _takt = float(_f.takt_days or 0)
         _shifted = 0
