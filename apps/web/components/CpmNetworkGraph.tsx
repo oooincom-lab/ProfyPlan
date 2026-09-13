@@ -37,9 +37,8 @@ export default function CpmNetworkGraph({ cpmResult, projectName, onSelect }: Cp
                       String(e.to ?? e.target ?? e.successor_id ?? e.successor)] as [string, string])
     .filter((x: [string, string]) => x[0] !== 'undefined' && x[1] !== 'undefined');
   useEffect(() => { /* выбранная операция — наружу */ }, []);
-export default function CPMPage(){
   // State
-  const [graphStubs.projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string|null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string|null>(null);
@@ -555,7 +554,7 @@ export default function CPMPage(){
   const loadGanttData = useCallback(async (pid: string) => {
     try {
       const T = localStorage.getItem('token') || '';
-      const res = await fetch(`${API_ORIGIN}/api/v1/bom/graphStubs.projects/${pid}/export/mrp`, {
+      const res = await fetch(`${API_ORIGIN}/api/v1/bom/projects/${pid}/export/mrp`, {
         headers: { Authorization: `Bearer ${T}` },
       });
       if (!res.ok) return;
@@ -623,7 +622,7 @@ export default function CPMPage(){
               style={{padding:'4px 8px',fontSize:11,background:'var(--bg-3)',color:'var(--fg)',border:'1px solid var(--border)',borderRadius:4,fontFamily:'inherit',maxWidth:220}}
               disabled={loading}>
               <option value="">тАФ ╨Ф╨╡╨╝╨╛ (PCB-1421) тАФ</option>
-              {graphStubs.projects.map((pp:any)=>(
+              {projects.map((pp:any)=>(
                 <option key={pp.id} value={pp.id}>{pp.name||'╨Я╤А╨╛╨╡╨║╤В '+pp.id}</option>
               ))}
             </select>
@@ -668,7 +667,7 @@ export default function CPMPage(){
               maxHeight:'calc(100vh - 100px)',overflowY:'auto',
             }}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-                <span style={{fontSize:11,fontWeight:700,color:'var(--fg)'}}>ЁЯУж BOM: {graphStubs.projects.find((p:any)=>p.id===selectedId)?.name||'╨Я╤А╨╛╨╡╨║╤В'}</span>
+                <span style={{fontSize:11,fontWeight:700,color:'var(--fg)'}}>ЁЯУж BOM: {projects.find((p:any)=>p.id===selectedId)?.name||'╨Я╤А╨╛╨╡╨║╤В'}</span>
                 <button onClick={()=>setBomPanel(false)} style={{background:'none',border:'none',color:'var(--fg-4)',cursor:'pointer',fontSize:14}}>тЬХ</button>
               </div>
 
@@ -734,7 +733,7 @@ export default function CPMPage(){
             operations={ganttOps}
             dependencies={ganttDeps}
             projectStart={PROJECT_START}
-            title={graphStubs.projects.find((p:any)=>p.id===selectedId)?.name || '╨Ф╨╕╨░╨│╤А╨░╨╝╨╝╨░ ╨У╨░╨╜╤В╨░'}
+            title={projects.find((p:any)=>p.id===selectedId)?.name || '╨Ф╨╕╨░╨│╤А╨░╨╝╨╝╨░ ╨У╨░╨╜╤В╨░'}
           />
         </div>
       ) : (
