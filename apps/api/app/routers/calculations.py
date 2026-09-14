@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -101,6 +101,17 @@ async def run_cpm(
     )
     operations = ops_result.scalars().all()
     if len(operations) < 2:
+        _total = (await db.execute(
+            select(func.count()).select_from(Operation).where(
+                Operation.project_id == project_id,
+                Operation.tenant_id == tenant_id,
+            )
+        )).scalar() or 0
+        if _total >= 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Все операции проекта в заказах-черновиках. Черновики исключаются из расчёта — переведите заказ в «В работе».",
+            )
         raise HTTPException(
             status_code=400,
             detail="Для расчёта CPM необходимо минимум 2 операции",
