@@ -38,6 +38,10 @@ jobs:
             git reset --hard origin/master
             docker compose build api web
             docker compose up -d --force-recreate api web
-            sleep 8
+            sleep 10
+            # миграции базы — обязательный шаг, иначе новый код падает на новой схеме
+            docker compose exec -T api alembic upgrade head
+            docker compose exec -T api alembic current
+            sleep 5
             curl -s -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:80/workspace
           '
