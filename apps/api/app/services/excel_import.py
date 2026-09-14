@@ -14,6 +14,9 @@ from app.models.operation import Operation, OperationDependency, OperationResour
 from app.models.project import Project
 from app.models.resource import Resource
 from app.models.production_order import ProductionOrder
+from app.models.catalog_operation import CatalogOperation
+from sqlalchemy import select
+from difflib import SequenceMatcher
 
 
 # ── mapping enums: Russian → DB value ──────────────────────────────────
@@ -107,10 +110,50 @@ class ImportResult:
         self.created: dict = {}
         self.warnings: list[str] = []
         self.errors: list[str] = []
+        self.catalog_matched = 0
+        self.catalog_created = 0
 
     @property
     def ok(self) -> bool:
         return len(self.errors) == 0
+
+
+
+
+def _norm_name(value: str) -> str:
+    """Нормализация названия для сопоставления со справочником."""
+    import re as _re
+    v = (value or "").strip()
+    import re as _re
+    v = _re.sub(r"[×x]\s*[0-9]+([.,][0-9]+)?\s*$", "", v)   # срезаем коэффициент вида ×0.45
+    if "·" in v:
+        v = v.split("·")[-1]                                   # берём часть после этапа
+    v = v.strip()
+    v = v.lower().replace("ё", "е")
+    for ch in ("«", "»", '"', "'", "(", ")", "[", "]"):
+        v = v.replace(ch, "")
+    for ch in ("–", "—", "−"):
+        v = v.replace(ch, "-")
+    return " ".join(v.split())
+
+
+async def _catalog_lookup(db: AsyncSession, tenant_id, name: str, cache: dict):
+    """Поиск операции в справочнике: точное совпадение названия, затем нечёткое (≥ 0.9)."""
+    if not cache.get("items"):
+        rows = (await db.execute(
+            select(CatalogOperation).where(CatalogOperation.tenant_id == tenant_id)
+        )).scalars().all()
+        cache["items"] = list(rows)
+        cache["by_norm"] = {_norm_name(r.name): r for r in rows}
+    key = _norm_name(name)
+    if key in cache["by_norm"]:
+        return cache["by_norm"][key], 1.0
+    best, best_r = None, 0.0
+    for item in cache["items"]:
+        r = SequenceMatcher(None, key, _norm_name(item.name)).ratio()
+        if r > best_r:
+            best, best_r = item, r
+    return (best, best_r) if best_r >= 0.9 else (None, best_r)
 
 
 async def import_excel(
@@ -118,8 +161,10 @@ async def import_excel(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
     db: AsyncSession,
+    create_missing_catalog: bool = True,
 ) -> ImportResult:
     result = ImportResult()
+    _cat_cache: dict = {}   # кэш справочника на время импорта
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
 
     # ── 1. Настройки ────────────────────────────────────────────────
@@ -256,14 +301,29 @@ async def import_excel(
         yrate = _cell_decimal(row, 10) or Decimal("1.0")
 
         res_id = await _get_or_create_resource(res_name) if res_name else None
+        # сопоставление со справочником операций: привязка и подстановка нормы
+        cat, ratio = await _catalog_lookup(db, tenant_id, name, _cat_cache)
+        if cat is not None:
+            result.catalog_matched += 1
+        elif create_missing_catalog and name:
+            cat = CatalogOperation(
+                id=uuid4(), tenant_id=tenant_id, name=name,
+                default_duration_hours=dur, norm_typical=dur,
+            )
+            db.add(cat)
+            await db.flush()
+            _cat_cache.setdefault("items", []).append(cat)
+            _cat_cache.setdefault("by_norm", {})[_norm_name(name)] = cat
+            result.catalog_created += 1
         op = Operation(
             tenant_id=tenant_id,
             project_id=project.id,
             name=name,
-            duration_base=dur,
+            duration_base=(dur if dur is not None else (cat.norm_typical if cat else Decimal("1"))),
             duration_unit="hour",
             yield_rate=yrate,
             operation_type="production",
+            catalog_operation_id=(cat.id if cat is not None else None),
         )
         db.add(op)
         await db.flush()
@@ -306,4 +366,6 @@ async def import_excel(
     result.created["orders"] = [oid for oid, _ in orders_created]
     result.created["operations"] = len(ops_data)
     result.created["resources"] = len(res_map)
+    result.created["Справочник: привязано"] = result.catalog_matched
+    result.created["Справочник: создано"] = result.catalog_created
     return result

@@ -138,7 +138,7 @@ export default function PortfolioWidgets({
                   )}
                   {!b.finish && <div style={{ position: 'absolute', left: 6, top: 2, fontSize: 10, color: '#5A7090' }}>нет операций для расчёта</div>}
                 </div>
-                <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD', width: 52, textAlign: 'right', flexShrink: 0 }}>{b.days != null ? b.days + ' дн' : '—'}</span>
+                <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD', width: 52, textAlign: 'right', flexShrink: 0 }}>{b.days != null ? Number(b.days).toFixed(1).replace('.', ',') + ' дн' : '—'}</span>
                 {b.warnings > 0 && <span style={{ fontSize: 11, color: '#FCD34D', flexShrink: 0 }} title={`${b.warnings} предупреждений расчёта`}>⚠{b.warnings}</span>}
               </div>
             );

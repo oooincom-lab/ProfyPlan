@@ -45,3 +45,6 @@ apps/web/.env.local
 apps/web/.env
 apps/api/.env
 apps/api/.libs/
+
+# локальный стенд — не деплоится
+docker-compose.override.yml

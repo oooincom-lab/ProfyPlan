@@ -10,6 +10,9 @@ const API_ORIGIN =
     : 'https://profyplan.ru';
 
 import { useState, useCallback, Fragment, useRef, useEffect } from 'react';
+import CatalogOps from '@/components/CatalogOps';
+import GraphStylePicker from '@/components/GraphStylePicker';
+import { getPalette, type ThemeName } from '@/lib/graph-styles';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
 import { NOMENCLATURE_SYNONYMS, UNIT_SYNONYMS } from '@/components/DataImport';
@@ -38,13 +41,28 @@ import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
 import ToolsPanel from '@/components/ToolsPanel';
-import NetworkGraphV2 from '@/components/NetworkGraphV2';
+import CpmGraph from '@/components/CpmGraph';
 import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
 const C = (s: string) => s;
 
 const DIR_COLUMNS: Record<string, { title: string; columns: { key: string; label: string; width?: number; render?: (val: any, row: any) => React.ReactNode; ref?: string }[] }> = {
+  'catalog-operations': {
+    title: '⚙️ Операции',
+    columns: [
+      { key: 'code', label: 'Код', width: 90 },
+      { key: 'name', label: 'Название', width: 260 },
+      { key: 'op_type', label: 'Тип', width: 110, render: (v: any) => ({ work: 'работа', wait: 'ожидание', milestone: 'веха' } as any)[v] || 'работа' },
+      { key: 'norm_typical', label: 'Норма', width: 80 },
+      { key: 'norm_min', label: 'Мин', width: 70 },
+      { key: 'norm_max', label: 'Макс', width: 70 },
+      { key: 'unit', label: 'Ед.', width: 80, render: (v: any) => ({ hour: 'ч', shift: 'смена', day: 'день' } as any)[v] || 'ч' },
+      { key: 'tags', label: 'Теги', width: 140 },
+      { key: 'updated_by', label: 'Изменил', width: 130 },
+      { key: 'is_active', label: 'Состояние', width: 110, render: (v: any) => (v === false ? 'архив' : 'активна') },
+    ],
+  },
   counterparties: {
     title: '👥 Контрагенты',
     columns: [
@@ -140,10 +158,20 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
+
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [paletteId, setPaletteId] = useState<string>('rose-abyss');
+  const [themeName, setThemeName] = useState<ThemeName>('dark');
+  useEffect(() => {
+    const th: ThemeName = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    setThemeName(th);
+    const saved = localStorage.getItem('graph_palette_' + th);
+    if (saved) setPaletteId(saved);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [authError, setAuthError] = useState(false);
@@ -290,7 +318,11 @@ export default function AppShell() {
     const v = localStorage.getItem('profyplan_order_chain_control');
     return (v === 'warning' || v === 'control') ? v : 'off';
   });
-  const [chainDialog, setChainDialog] = useState<null | {
+  const [autoCompleteOrders, setAutoCompleteOrders] = useState<boolean>(() => {
+if (typeof window === 'undefined') return true;
+return localStorage.getItem('autoCompleteOrders') !== 'off';
+});
+const [chainDialog, setChainDialog] = useState<null | {
     order: any;
     selectedIds: string[];
     targetGroupId: string | null;
@@ -1144,7 +1176,8 @@ export default function AppShell() {
     if (!selectedProject) { setMsg('Сначала выберите проект'); return; }
     setPlanLoading(true);
     try {
-      const body = selectedProject.start_date ? { start_date: selectedProject.start_date } : {};
+      const body: any = { auto_complete: autoCompleteOrders };
+if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       const r = await apiF<any>(`/projects/${selectedProject.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify(body) });
       setPlanCalc(r);
     } catch (e: any) {
@@ -1830,6 +1863,9 @@ export default function AppShell() {
       const body = p?.start_date ? { start_date: p.start_date } : {};
       const r = await apiF<any>(`/projects/${p.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify(body) });
       setGanttData(r);
+      setMsg('Проект рассчитан: финиш ' + (r?.project_finish_date || '—') +
+        ' · операций ' + ((r?.nodes || []).length) +
+        ((r?.warnings || []).length ? ' · предупреждений ' + (r.warnings || []).length : ''));
       try {
         const rep = await apiF<any>(`/reports/lost-hours?project_id=${p.id}`);
         setProjCapacity(rep);
@@ -2081,7 +2117,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
-                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : 'Завершён'}</span></td>
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <select value={o.status || 'planned'} title="Статус заказа" onChange={(e) => changeOrderStatus(o, e.target.value)}
+                                  style={{ background: o.status === 'draft' ? 'rgba(148,163,184,.08)' : o.status === 'completed' ? 'rgba(74,222,128,.1)' : 'rgba(96,165,250,.1)', border: '1px solid ' + (o.status === 'draft' ? '#334155' : o.status === 'completed' ? '#166534' : '#1E3A5F'), borderRadius: 6, color: o.status === 'draft' ? '#94A3B8' : o.status === 'completed' ? '#4ADE80' : '#60A5FA', fontSize: 11.5, padding: '2px 5px', cursor: 'pointer', fontWeight: 600 }}>
+                                  <option value="draft">Черновик</option>
+                                  <option value="planned">В работе</option>
+                                  <option value="completed">Завершён</option>
+                                </select>
+                              </td>
                               <td className="t-mono">{o.start_date || '—'}</td>
                               <td className="t-mono">{o.due_date || '—'}</td>
                               <td className="t-mono" title={o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : undefined}>{o.created_at ? new Date(o.created_at).toLocaleDateString('ru-RU') : '—'}</td>
@@ -2782,8 +2825,27 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 
   const totalQty = orders.reduce((s: number, o: any) => s + parseFloat(o.quantity || '0'), 0);
   const dynCount = orders.filter(isDyn).length;
-  const inProgress = orders.filter((o: any) => o.status === 'in_progress').length;
+  const inProgress = orders.filter((o: any) => o.status === 'planned' || o.status === 'in_progress').length;
   const critical = orders.filter((o: any) => o.priority === 'high' || o.priority === 'critical').length;
+
+const shortStatusRu = (v?: string) => (v === 'draft' ? 'Черн.' : (v === 'planned' || v === 'in_progress') ? 'В работе' : v === 'completed' ? 'Завершён' : (v || '—'));
+const fullStatusRu = (v?: string) => (v === 'draft' ? 'Черновик' : (v === 'planned' || v === 'in_progress') ? 'В работе' : v === 'completed' ? 'Завершён' : (v || '—'));
+const changeOrderStatus = async (o: any, status: string) => {
+  const kids: any[] = [];
+  const walk = (pid: string) => { (orders || []).filter((x: any) => x.parent_order_id === pid).forEach((k: any) => { kids.push(k); walk(k.id); }); };
+  walk(o.id);
+  let targets: string[] = [o.id];
+  if (kids.length) {
+    const ok = window.confirm('У заказа «' + (o.specification_name || o.ext_id || '') + '» есть подчинённые (' + kids.length + '). Перевести в новый статус и их?');
+    if (!ok) return;
+    targets = targets.concat(kids.map((k) => k.id));
+  }
+  for (const id of targets) {
+    try { await apiF('/production-orders/' + id, { method: 'PUT', body: JSON.stringify({ status }) }); } catch {}
+  }
+  setOrders((prev: any[]) => (prev || []).map((x: any) => (targets.includes(x.id) ? { ...x, status } : x)));
+};
+
 
   // ── Title ──
   const titles: Record<View, string> = {
@@ -2797,6 +2859,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 
     'archive': 'Архив проектов',
     'directories': 'Справочники',
+    'catalog-operations': 'Операции',
     'nomenclature': 'Номенклатура',
     'units': 'Единицы измерения',
     'counterparties': 'Контрагенты',
@@ -2825,7 +2888,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
       <Sidebar
-        view={view}
+        view={view as any}
         navTo={navTo}
         projects={projects}
         selectedProject={selectedProject}
@@ -2853,6 +2916,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
         onOpenGroup={openGroupEditor}
         onOpenPool={openPoolEditor}
         setDirectoryModal={setDirectoryModal}
+        openDirectory={openDirectory}
         setSelectedProject={setSelectedProject}
         setView={setView}
         collapsed={effCollapsed}
@@ -2913,7 +2977,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               </>
             )}
             <button className="btn btn-primary btn-sm" onClick={() => navTo('new-project')}>+ Новый проект</button>
-            <button onClick={onRefresh} className="btn btn-secondary btn-sm" title="Обновить данные" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></button>
+        <GraphStylePicker open={styleOpen} theme={themeName} value={paletteId} onClose={() => setStyleOpen(false)} onApply={(id: string) => { setPaletteId(id); try { localStorage.setItem('graph_palette_' + themeName, id); } catch {} }} />
+        {/* ЗАКАЗЫ-РАСЧЁТ: расчёт из разделов заказов, групп и пулов */}
+        {(view === 'project-orders' || view === 'project-groups' || view === 'project-pools') && (
+          <button className="btn btn-secondary btn-sm" title="Рассчитать проект"
+            style={{ position: 'fixed', right: 26, bottom: 26, zIndex: 1500, boxShadow: '0 4px 14px rgba(0,0,0,.35)' }}
+            onClick={() => selectedProject && loadProjectGantt(selectedProject)}>▶ Рассчитать проект</button>
+        )}
+        <button onClick={onRefresh} className="btn btn-secondary btn-sm" title="Обновить данные" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></button>
           </div>
         </div>
 
@@ -3028,7 +3099,12 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             <td className="t-mono">{o.ext_id || '—'}</td><td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
                             <td>{o.client || '—'}</td><td className="t-mono">{o.quantity} {o.unit}</td>
                             <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Выс.' : 'Обыч.'}</span></td>
-                            <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status}</span></td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                            <select value={o.status || 'planned'} title="Статус заказа" onChange={(e) => changeOrderStatus(o, e.target.value)}
+                              style={{ background: o.status === 'draft' ? 'rgba(148,163,184,.08)' : o.status === 'completed' ? 'rgba(74,222,128,.1)' : 'rgba(96,165,250,.1)', border: '1px solid ' + (o.status === 'draft' ? '#334155' : o.status === 'completed' ? '#166534' : '#1E3A5F'), borderRadius: 6, color: o.status === 'draft' ? '#94A3B8' : o.status === 'completed' ? '#4ADE80' : '#60A5FA', fontSize: 11.5, padding: '2px 5px', cursor: 'pointer', fontWeight: 600 }}>
+                              <option value="draft">Черновик</option><option value="planned">В работе</option><option value="completed">Завершён</option>
+                            </select>
+                          </td>
                             <td className="t-mono">{o.start_date || '—'}</td><td className="t-mono">{o.due_date || '—'}</td>
                             <td><button onClick={() => deleteOrder(o.id, o.specification_name || ('#' + o.id.slice(0,8)))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: '2px 4px' }}>🗑</button></td>
                           </tr>
@@ -3513,7 +3589,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           <td className="t-name" style={{ color: '#A78BFA' }}>{o.specification_name || o.ext_id || '—'}</td>
                           <td style={{ color: '#A78BFA' }}>{o.client || '—'}</td>
                           <td className="t-mono">{o.quantity} {o.unit}</td>
-                          <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
+                          <td><span className={`badge ${o.status}`}>{shortStatusRu(o.status)}</span></td>
                         </tr>
                         {bomOpen && (
                           <tr>
@@ -3629,7 +3705,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                   <td><span style={{ fontSize: 14, opacity: 0.5 }}>📋</span></td>
                                   <td className="t-name" style={{ paddingLeft: 20, color: '#A78BFA' }}>{o.specification_name || o.ext_id || '—'}</td>
                                   <td className="t-mono">{o.quantity} {o.unit}</td>
-                                  <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
+                                  <td><span className={`badge ${o.status}`}>{shortStatusRu(o.status)}</span></td>
                                 </tr>
                                 {bomOpen && (
                                   <tr>
@@ -3669,7 +3745,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               <td><span style={{ fontSize: 14 }}>📋</span></td>
                               <td className="t-name" style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.specification_name || o.ext_id || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
-                              <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черн.' : o.status === 'planned' ? 'План' : 'Раб.'}</span></td>
+                              <td><span className={`badge ${o.status}`}>{shortStatusRu(o.status)}</span></td>
                             </tr>
                             {bomOpen && (
                               <tr>
@@ -3722,6 +3798,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
                 { id: 'production-calendars', icon: '📅', title: 'Производственные календари', desc: 'Рабочие и праздничные дни по странам' },
                 { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
+                { id: 'catalog-operations', icon: '⚙️', title: 'Операции', desc: 'Типовые операции, нормы времени, коды и артикулы' },
               ].map(d => (
                 <div key={d.id} className="dir-card" onClick={() => {
                         if (d.id === 'work-schedules') { if (panelMode === 'window') win.openManagerWin('wsched', '🕒 Графики работы'); else navTo('work-schedules' as View); return; }
@@ -3733,6 +3810,13 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   <div className="dc-count">{d.desc}</div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ═══ СПРАВОЧНИК ОПЕРАЦИЙ ═══ */}
+          {view === 'catalog-operations' && (
+            <div className="panel" style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 20 }}>
+              <CatalogOps panelMode={panelMode} />
             </div>
           )}
 
@@ -3844,6 +3928,32 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                     💡 Связанные заказы — это те, что связаны через поле «Код заказа» в BOM или «Код заказа родителя». При переносе куста связанные заказы отвязываются от своих прежних групп/пулов, и расчёты по ним (включая расчёты пулов) аннулируются.
                   </div>
                 </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🎨 Стиль графиков</div>
+                  <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                    Палитра для графов CPM: рамка и заливка областей пулов, групп и кустов. Смысловые цвета
+                    не меняются — критические операции остаются красными, с резервом синими.
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ width: 18, height: 18, borderRadius: 4, background: getPalette(paletteId).fill, border: '2px solid ' + getPalette(paletteId).frame, display: 'inline-block' }} />
+                    <span style={{ fontSize: 13 }}>Текущий стиль: <b>{getPalette(paletteId).name}</b></span>
+                    <button className="btn btn-primary btn-sm" onClick={() => setStyleOpen(true)}>Открыть галерею стилей</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setPaletteId('rose-abyss'); try { localStorage.setItem('graph_palette_' + themeName, 'rose-abyss'); } catch {} }}>Сбросить</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>📦 Статусы заказов</div>
+                  <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
+                    При расчёте проекта заказ «В работе», чей расчётный финиш уже прошёл, автоматически переводится
+                    в «Завершён». Ручную смену статуса это не ограничивает.
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={autoCompleteOrders} onChange={(e) => { setAutoCompleteOrders(e.target.checked); try { localStorage.setItem('autoCompleteOrders', e.target.checked ? 'on' : 'off'); } catch {} }} />
+                    Автоматически завершать заказы по прошедшему финишу
+                  </label>
+                </div>
+
+
 
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🏭 Полуфабрикаты в цепочке</div>
@@ -4024,21 +4134,21 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 {/* Modal header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid #1E3252' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20 }}>{directoryModal === 'nomenclature' ? '📦' : directoryModal === 'units' ? '📏' : directoryModal === 'counterparties' ? '👥' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
+                    <span style={{ fontSize: 20 }}>{directoryModal === 'catalog-operations' ? '⚙️' : directoryModal === 'nomenclature' ? '📦' : directoryModal === 'units' ? '📏' : directoryModal === 'counterparties' ? '👥' : directoryModal === 'resources' ? '🔧' : directoryModal === 'departments' ? '🏢' : directoryModal === 'organizations' ? '🏭' : '📅'}</span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>
-                      {directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'units' ? 'Единицы измерения' : directoryModal === 'counterparties' ? 'Контрагенты' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
+                      {directoryModal === 'catalog-operations' ? 'Операции' : directoryModal === 'nomenclature' ? 'Номенклатура' : directoryModal === 'units' ? 'Единицы измерения' : directoryModal === 'counterparties' ? 'Контрагенты' : directoryModal === 'resources' ? 'Ресурсы' : directoryModal === 'departments' ? 'Подразделения' : directoryModal === 'organizations' ? 'Организации' : 'Календари'}
                     </span>
                     <DebugBadge debug={debugMode} text={`[dir:manager:${directoryModal}]`} copy={`[dir:manager:${directoryModal}] «${directoryModal}»`} />
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations'].map(tab => (
+                    {['catalog-operations', 'nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations'].map(tab => (
                       <button key={tab} onClick={() => setDirectoryModal(tab)} style={{
                         background: directoryModal === tab ? '#1E3252' : '#162844',
                         color: directoryModal === tab ? '#B0C4DE' : '#5A7090',
                         border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12,
                         cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.12s',
                       }}>
-                        {tab === 'nomenclature' ? 'Номенклатура' : tab === 'units' ? 'Ед. измерения' : tab === 'counterparties' ? 'Контрагенты' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
+                        {tab === 'catalog-operations' ? 'Операции' : tab === 'nomenclature' ? 'Номенклатура' : tab === 'units' ? 'Ед. измерения' : tab === 'counterparties' ? 'Контрагенты' : tab === 'resources' ? 'Ресурсы' : tab === 'departments' ? 'Подразделения' : tab === 'organizations' ? 'Организации' : 'Календари'}
                       </button>
                     ))}
                     <button onClick={() => setDirectoryModal(null)} style={{
@@ -4049,7 +4159,10 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 </div>
                 {/* Modal body */}
                 <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
-                  {directoryModal === 'nomenclature' && (
+                  {directoryModal === 'catalog-operations' && (
+              <CatalogOps panelMode={panelMode} />
+            )}
+            {directoryModal === 'nomenclature' && (
                     <DirectoryTable
                       entity="nomenclature"
                       apiBase={API_ORIGIN + '/api'}
@@ -4177,7 +4290,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
               <div style={{ flex: 1, minHeight: 420, position: 'relative', overflow: 'hidden' }}>
                 {netLoading && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Загрузка сети…</div>}
                 {!netLoading && !netData && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>}
-                {!netLoading && netData && <NetworkGraphV2 cpmResult={netData} levelResult={null} showBaseline={false} />}
+                {!netLoading && netData && <CpmGraph cpmResult={netData} height="calc(100vh - 190px)" paletteId={paletteId} />}
               </div>
             </div>
           )}
@@ -4931,7 +5044,6 @@ function NewProjectWizard({ onBack, onCreated, onOpenNewOrder, wizOrder, onWizOr
           </button>
         )}
       </div>
-
-    </div>
+</div>
   );
 }

@@ -422,3 +422,10 @@ export function moveOrder(orderId: string, target: 'group' | 'pool' | 'root', ta
     { method: 'POST', body: JSON.stringify({ target, id: targetId || null }) }
   );
 }
+
+// --- Связи операций проекта (для графа CPM) ---
+export function getProjectDependencies(projectId: string) {
+  return request<{ items: { from: string; to: string }[] }>(
+    `/v1/projects/${projectId}/operations/dependencies-map`,
+  );
+}

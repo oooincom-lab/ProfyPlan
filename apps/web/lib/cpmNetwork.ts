@@ -13,20 +13,20 @@
 
 
 // тФАтФА ╨в╨╕╨┐╤Л тФАтФА
-interface Op {
+export interface Op {
   id: string; num: number | string; name: string;
   dur: number; unit: string; es: number; ef: number;
   ls: number; lf: number; tf: number; crit: number;
 }
-type Mode = 'absolute' | 'relative';
-type Layout = Record<string, [number, number]>;
+export type Mode = 'absolute' | 'relative';
+export type Layout = Record<string, [number, number]>;
 
 // тФАтФА ╨Ъ╨╛╨╜╤Б╤В╨░╨╜╤В╤Л тФАтФА
 let NODE_R = 26, MIN_NODE_GAP = 60, REL_SCALE = 500;
-const PROJECT_START = new Date(2026, 6, 29);
+export const PROJECT_START = new Date(2026, 6, 29);
 
 // тФАтФА ╨Ф╨╡╨╝╨╛-╨┤╨░╨╜╨╜╤Л╨╡ (╤В╨╛╤З╤М-╨▓-╤В╨╛╤З╤М ╨╕╨╖ network_graph.html) тФАтФА
-const DEMO_OPS: Op[] = [
+export const DEMO_OPS: Op[] = [
   { id:"S", num:'S', name:"╨б╤В╨░╤А╤В", dur:0, unit:'d', es:0, ef:0, ls:0, lf:0, tf:0, crit:1 },
   { id:"1", num:1, name:"╨Я╨╛╨┤╨│╨╛╤В╨╛╨▓╨║╨░ ╨╕╨╜╤Б╤В╤А╤Г╨╝╨╡╨╜╤В╨░", dur:4, unit:'h', es:0, ef:0.1667, ls:0, lf:0.1667, tf:0, crit:1 },
   { id:"2", num:2, name:"╨Ч╨░╨║╤Г╨┐╨║╨░ ╨║╨╛╨╝╨┐╨╛╨╜╨╡╨╜╤В╨╛╨▓", dur:8, unit:'h', es:0.1667, ef:0.5, ls:0.1667, lf:0.5, tf:0, crit:1 },
@@ -41,24 +41,24 @@ const DEMO_OPS: Op[] = [
   { id:"F", num:'F', name:"╨д╨╕╨╜╨╕╤И", dur:0, unit:'d', es:1.7813, ef:1.7813, ls:1.7813, lf:1.7813, tf:0, crit:1 },
 ];
 
-const DEMO_DEPS: [string, string][] = [
+export const DEMO_DEPS: [string, string][] = [
   ["S","1"],["1","2"],["2","3"],["3","4"],["4","5"],["5","6"],
   ["6","7"],["7","9"],["9","10"],["10","F"],
   ["3","8"],["8","9"]
 ];
 
 // тФАтФА ╨Т╤Л╤Е╨╛╨┤╨╜╤Л╨╡ ╨╕ ╨┐╤А╨░╨╖╨┤╨╜╨╕╨║╨╕ 2026 тФАтФА
-const HOLIDAYS_2026 = new Set([
+export const HOLIDAYS_2026 = new Set([
   '2026-01-01','2026-01-02','2026-01-03','2026-01-04','2026-01-05','2026-01-06','2026-01-07','2026-01-08',
   '2026-02-23','2026-03-08','2026-05-01','2026-05-09','2026-06-12','2026-11-04'
 ]);
-function isWeekend(d:Date){return d.getDay()===0||d.getDay()===6;}
-function isHoliday(d:Date){var s=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);return HOLIDAYS_2026.has(s);}
+export function isWeekend(d:Date){return d.getDay()===0||d.getDay()===6;}
+export function isHoliday(d:Date){var s=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);return HOLIDAYS_2026.has(s);}
 
 // тФАтФА ╨Х╨┤╨╕╨╜╨╕╤Ж╤Л ╨╕╨╖╨╝╨╡╤А╨╡╨╜╨╕╤П тФАтФА
-const UNITS:Record<string,string>={s:'╤Б╨╡╨║',m:'╨╝╨╕╨╜',h:'╤З',d:'╨┤╨╜',w:'╨╜╨╡╨┤',mo:'╨╝╨╡╤Б',y:'╨│╨╛╨┤'};
-function toDays(dur:number,unit:string){if(unit==='h')return dur/24;if(unit==='m')return dur/1440;if(unit==='s')return dur/86400;return dur;}
-function fmtDur(dur:number,unit:string,dispUnit:string){
+export const UNITS:Record<string,string>={s:'╤Б╨╡╨║',m:'╨╝╨╕╨╜',h:'╤З',d:'╨┤╨╜',w:'╨╜╨╡╨┤',mo:'╨╝╨╡╤Б',y:'╨│╨╛╨┤'};
+export function toDays(dur:number,unit:string){if(unit==='h')return dur/24;if(unit==='m')return dur/1440;if(unit==='s')return dur/86400;return dur;}
+export function fmtDur(dur:number,unit:string,dispUnit:string){
   if(!unit)unit='d';if(dur<=0)return '-';
   var td=toDays(dur,unit);
   if(dispUnit==='m')return Math.ceil(td*1440)+' '+UNITS.m;
@@ -67,15 +67,15 @@ function fmtDur(dur:number,unit:string,dispUnit:string){
 }
 
 // тФАтФА ╨Т╤Б╨┐╨╛╨╝╨╛╨│╨░╤В╨╡╨╗╤М╨╜╤Л╨╡ тФАтФА
-function getNodeR(scale:number){
+export function getNodeR(scale:number){
   var r = NODE_R * (0.72 / Math.max(scale, 0.35));
   return Math.min(Math.max(r, 22), 40);
 }
-function addDays(d:Date,days:number){var r=new Date(d);r.setDate(r.getDate()+days);return r;}
-function fmt(d:Date){return (d.getDate()<10?'0':'')+d.getDate()+'.'+(d.getMonth()<9?'0':'')+(d.getMonth()+1);}
+export function addDays(d:Date,days:number){var r=new Date(d);r.setDate(r.getDate()+days);return r;}
+export function fmt(d:Date){return (d.getDate()<10?'0':'')+d.getDate()+'.'+(d.getMonth()<9?'0':'')+(d.getMonth()+1);}
 
 // тФАтФА Layout: BFS + force-directed (spreadLayersVertical) тФАтФА
-function spreadLayersVertical(layout:Layout, ops:Op[], deps:[string,string][], sprMode:number, om:Record<string,Op>){
+export function spreadLayersVertical(layout:Layout, ops:Op[], deps:[string,string][], sprMode:number, om:Record<string,Op>){
   var ROW_MIN_Y=100,ROW_MAX_Y=580;
   var waveAmp=[40,72,120][sprMode];
   var fanSpread=[0.4,0.8,1.4][sprMode];
@@ -172,7 +172,7 @@ function spreadLayersVertical(layout:Layout, ops:Op[], deps:[string,string][], s
   }
 }
 
-function buildAbsoluteLayout(ops:Op[],deps:[string,string][],sprMode:number){
+export function buildAbsoluteLayout(ops:Op[],deps:[string,string][],sprMode:number){
   var layers:Record<number,string[]>={};
   for(var i=0;i<ops.length;i++){var k=ops[i].es;if(!layers[k])layers[k]=[];layers[k].push(ops[i].id);}
   var layerOrder=Object.keys(layers).map(Number).sort(function(a,b){return a-b;});
@@ -187,7 +187,7 @@ function buildAbsoluteLayout(ops:Op[],deps:[string,string][],sprMode:number){
   return layout;
 }
 
-function buildRelativeLayout(ops:Op[],deps:[string,string][],sprMode:number){
+export function buildRelativeLayout(ops:Op[],deps:[string,string][],sprMode:number){
   var layout:Layout={},layers:Record<number,string[]>={};
   for(var i=0;i<ops.length;i++){var k=ops[i].es;if(!layers[k])layers[k]=[];layers[k].push(ops[i].id);}
   var layerOrder=Object.keys(layers).map(Number).sort(function(a,b){return a-b;});
@@ -206,6 +206,6 @@ function buildRelativeLayout(ops:Op[],deps:[string,string][],sprMode:number){
   return layout;
 }
 
-function cloneLayout(src:Layout):Layout{var o:Layout={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o;}
+export function cloneLayout(src:Layout):Layout{var o:Layout={};for(var k in src)o[k]=[src[k][0],src[k][1]];return o;}
 
 // тФАтФА ╨Ъ╨Ю╨Ь╨Я╨Ю╨Э╨Х╨Э╨в тФАтФА

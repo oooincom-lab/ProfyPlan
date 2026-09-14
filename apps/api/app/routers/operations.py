@@ -4,7 +4,7 @@ CRUD-роутер для операций и зависимостей.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -21,6 +21,28 @@ from app.schemas.operation import (
 )
 
 router = APIRouter(prefix="/v1/projects/{project_id}/operations", tags=["operations"])
+
+@router.get("/dependencies-map")
+async def project_dependencies_map(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant_id),
+):
+    """Связи операций проекта (предшественник → последователь) — для графа CPM."""
+    rows = (
+        await db.execute(
+            text(
+                "select od.predecessor_id, od.successor_id "
+                "from operation_dependencies od "
+                "join operations o on o.id = od.predecessor_id "
+                "where o.project_id = :p"
+            ),
+            {"p": str(project_id)},
+        )
+    ).all()
+    return {"items": [{"from": str(a), "to": str(b)} for a, b in rows]}
+
+
 
 
 # --- Operations CRUD ---

@@ -9,7 +9,7 @@ type View =
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
-  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale';
+  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations';
 
 interface SidebarProps {
   view: View;
@@ -40,6 +40,7 @@ interface SidebarProps {
   onOpenGroup: (g: any) => void;
   onOpenPool: (p: any) => void;
   setDirectoryModal: (m: string | null) => void;
+  openDirectory?: (entity: string) => void;
   setSelectedProject: (p: any) => void;
   setView: (v: View) => void;
   collapsed: boolean;
@@ -57,6 +58,7 @@ export default function Sidebar(props: SidebarProps) {
     setCtxMenu, setSidebarCtx, moveOrder,
     delGroup, delPool,
     setDirectoryModal, setSelectedProject, setView,
+    openDirectory,
     selectedPool, onSelectPool,
     selectedGroup, onSelectGroup,
     onOpenOrder, onOpenGroup, onOpenPool,
@@ -73,7 +75,7 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedProjPools, setExpandedProjPools] = useState<Set<string>>(new Set());
 
   // Auto-expand directories section when navigating to a directory view
-  const dirViews = ['directories', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'production-calendars', 'departments', 'organizations'];
+  const dirViews = ['directories', 'catalog-operations', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'production-calendars', 'departments', 'organizations'];
   useEffect(() => {
     if (dirViews.includes(view)) {
       setExpandedDirectories(true);
@@ -582,6 +584,13 @@ export default function Sidebar(props: SidebarProps) {
             onDoubleClick={() => setDirectoryModal('units')}
           >
             📏 Единицы измерения{debug && <DebugBadge debug={debug} text="[nav:units]" />}
+          </div>
+          <div
+            className={`s-sub ${view === 'catalog-operations' ? 'active' : ''}`}
+            style={view === 'catalog-operations' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
+            onClick={() => { if (openDirectory) openDirectory('catalog-operations'); else navTo('catalog-operations' as any); }}
+          >
+            ⚙️ Операции{debug && <DebugBadge debug={debug} text="[nav:operations]" />}
           </div>
           <div
             className={`s-sub ${view === 'resources' ? 'active' : ''}`}

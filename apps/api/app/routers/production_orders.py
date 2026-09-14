@@ -16,6 +16,8 @@ from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
+from app.models.catalog_operation import CatalogOperation
+from difflib import SequenceMatcher
 from app.models.nomenclature import Nomenclature
 from app.models.counterparty import Counterparty
 from app.models.department import Department
@@ -167,6 +169,55 @@ def _pick_sheet(wb, names):
 
 
 # ── POST /import ───────────────────────────────────────────────
+
+def _norm_cat_name(value: str) -> str:
+    """Нормализация названия для сопоставления со справочником операций."""
+    import re as _re
+    v = (value or "").strip()
+    import re as _re
+    v = _re.sub(r"[×x]\s*[0-9]+([.,][0-9]+)?\s*$", "", v)   # срезаем коэффициент вида ×0.45
+    if "·" in v:
+        v = v.split("·")[-1]                                   # берём часть после этапа
+    v = v.strip()
+    v = v.lower().replace("ё", "е")
+    for ch in ("«", "»", '"', "'", "(", ")", "[", "]"):
+        v = v.replace(ch, "")
+    for ch in ("–", "—", "−"):
+        v = v.replace(ch, "-")
+    return " ".join(v.split())
+
+
+async def _catalog_pick(db, tenant_id, name: str, cache: dict, create_missing: bool = True, norm=None):
+    """Находит операцию справочника по названию (точно, затем нечётко ≥ 0.9).
+
+    Если не нашлась и разрешено — создаёт новую запись справочника, чтобы
+    операции заказов всегда были связаны с нормой.
+    """
+    if not cache.get("items"):
+        rows = (await db.execute(
+            select(CatalogOperation).where(CatalogOperation.tenant_id == tenant_id)
+        )).scalars().all()
+        cache["items"] = list(rows)
+        cache["by_norm"] = {_norm_cat_name(r.name): r for r in rows}
+    key = _norm_cat_name(name)
+    hit = cache["by_norm"].get(key)
+    if hit is None:
+        best, best_r = None, 0.0
+        for item in cache["items"]:
+            r = SequenceMatcher(None, key, _norm_cat_name(item.name)).ratio()
+            if r > best_r:
+                best, best_r = item, r
+        hit = best if best_r >= 0.9 else None
+    if hit is None and create_missing and name:
+        hit = CatalogOperation(id=uuid4(), tenant_id=tenant_id, name=name,
+                               default_duration_hours=norm or 1, norm_typical=norm)
+        db.add(hit)
+        await db.flush()
+        cache["items"].append(hit)
+        cache["by_norm"][key] = hit
+    return hit
+
+
 
 @router.post("/import", response_model=ExcelImportResult)
 async def import_excel(
@@ -1335,13 +1386,18 @@ async def expand_order(
         _res_cache[key] = r.id if r else None
         return _res_cache[key]
 
+    _cat_cache: dict = {}   # кэш справочника операций на время развёртки
     op_map = {}  # temp_id → Operation.id
     for eop in result.operations:
         _rid = await _resolve_resource(eop.resource_type_id)
+        _cat = await _catalog_pick(db, tenant_id, eop.name, _cat_cache,
+                                   create_missing=True, norm=eop.duration_base)
         op = Operation(
             id=uuid4(),
             tenant_id=tenant_id,
             project_id=order.project_id,
+            order_id=order.id,
+            catalog_operation_id=(_cat.id if _cat is not None else None),
             name=eop.name,
             duration_base=eop.duration_base,
             duration_unit=eop.duration_unit,

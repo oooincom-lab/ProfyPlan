@@ -11,13 +11,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.operation import Operation, OperationDependency, OperationResource
 from app.models.project import Project
+from app.models.production_order import ProductionOrder
 from app.models.department import Department
 from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
@@ -90,9 +91,12 @@ async def run_cpm(
 
     # Загружаем операции
     ops_result = await db.execute(
-        select(Operation).where(
+        select(Operation)
+        .outerjoin(ProductionOrder, Operation.order_id == ProductionOrder.id)
+        .where(
             Operation.project_id == project_id,
             Operation.tenant_id == tenant_id,
+            or_(Operation.order_id.is_(None), ProductionOrder.status != "draft"),
         )
     )
     operations = ops_result.scalars().all()
@@ -143,9 +147,9 @@ async def run_cpm(
         select(OperationResource).where(OperationResource.operation_id.in_(op_ids_cpm))
     )
     op_res_cpm: dict = defaultdict(list)
-    for or_ in or_rows_cpm.scalars().all():
-        op_res_cpm[or_.operation_id].append(or_)
-    res_ids_cpm = {or_.resource_id for ors in op_res_cpm.values() for or_ in ors}
+    for opres in or_rows_cpm.scalars().all():
+        op_res_cpm[opres.operation_id].append(opres)
+    res_ids_cpm = {opres.resource_id for ors in op_res_cpm.values() for opres in ors}
     res_map_cpm: dict = {}
     if res_ids_cpm:
         rr_cpm = await db.execute(
@@ -170,8 +174,8 @@ async def run_cpm(
 
     def win_for_op_cpm(op: Operation):
         ors = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
-        for or_ in ors:
-            r0 = res_map_cpm.get(or_.resource_id)
+        for opres in ors:
+            r0 = res_map_cpm.get(opres.resource_id)
             if r0 and r0.schedule_id and slots_map_cpm.get(r0.schedule_id):
                 return schedule_window(slots_map_cpm[r0.schedule_id])
         return DEFAULT_DAY_START, DEFAULT_WINDOW_HOURS
@@ -179,8 +183,8 @@ async def run_cpm(
     def hpd_for_op_cpm(op: Operation) -> float:
         """Рабочих часов в день по графику ресурса (для перевода часов в дни)."""
         ors = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
-        for or_ in ors:
-            r0 = res_map_cpm.get(or_.resource_id)
+        for opres in ors:
+            r0 = res_map_cpm.get(opres.resource_id)
             if r0 and r0.schedule_id and slots_map_cpm.get(r0.schedule_id):
                 sched0 = schedules_cpm.get(r0.schedule_id)
                 if sched0:
@@ -267,9 +271,9 @@ async def run_cpm(
                 continue
             ors_cpm = sorted(op_res_cpm.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
             lead_cpm = None
-            for or_ in ors_cpm:
-                if res_map_cpm.get(or_.resource_id):
-                    lead_cpm = res_map_cpm[or_.resource_id]
+            for opres in ors_cpm:
+                if res_map_cpm.get(opres.resource_id):
+                    lead_cpm = res_map_cpm[opres.resource_id]
                     break
             m_final_cpm, used_all_cpm = 1.0, []
             blocked_cpm = None
@@ -287,8 +291,8 @@ async def run_cpm(
                     m_final_cpm = share_lead_cpm
                     if share_lead_cpm <= 0:
                         blocked_cpm = lead_cpm
-            for or_ in ors_cpm:
-                r2 = res_map_cpm.get(or_.resource_id)
+            for opres in ors_cpm:
+                r2 = res_map_cpm.get(opres.resource_id)
                 if not r2 or (lead_cpm and r2.id == lead_cpm.id):
                     continue
                 if not ev_map_cpm.get(r2.id):
@@ -356,6 +360,32 @@ async def run_cpm(
             "is_critical": node.is_critical,
         })
 
+    # Авто-«Завершён»: заказ «В работе», чей расчётный финиш уже прошёл, переводится в «Завершён».
+    if body is not None and getattr(body, "auto_complete", False):
+        finish_by_order: dict = {}
+        for _n in nodes:
+            _oid = _n.get("order_id")
+            _fin = _n.get("early_finish_date")
+            if _oid and _fin:
+                if isinstance(_fin, str):
+                    try:
+                        _fin = datetime.fromisoformat(_fin)
+                    except ValueError:
+                        continue
+                _cur = finish_by_order.get(_oid)
+                if _cur is None or _fin > _cur:
+                    finish_by_order[_oid] = _fin
+        _today = date.today()
+        _done = [str(_oid) for _oid, _fin in finish_by_order.items() if _fin.date() <= _today]
+        if _done:
+            await db.execute(
+                update(ProductionOrder).where(
+                    ProductionOrder.id.in_([UUID(x) for x in _done]),
+                    ProductionOrder.status == "planned",
+                ).values(status="completed")
+            )
+            await db.commit()
+
     return {
         "project_id": str(project_id),
         "method": "CPM",
@@ -374,6 +404,8 @@ class ScheduleRequest(BaseModel):
     # «Что если» по мощности (шаг 2.9): множитель мощности всех ресурсов; 1.0 — обычный расчёт.
     # Не сохраняется — только прикидка сценария.
     power_factor: float = 1.0
+    # Авто-перевод заказов в «Завершён», если расчётный финиш уже прошёл (по умолчанию включён интерфейсом).
+    auto_complete: bool = False
 
 
 @calculator_router.post("/schedule")
@@ -403,9 +435,12 @@ async def run_schedule(
         _power_factor = 1.0
 
     ops_result = await db.execute(
-        select(Operation).where(
+        select(Operation)
+        .outerjoin(ProductionOrder, Operation.order_id == ProductionOrder.id)
+        .where(
             Operation.project_id == project_id,
             Operation.tenant_id == tenant_id,
+            or_(Operation.order_id.is_(None), ProductionOrder.status != "draft"),
         )
     )
     operations = ops_result.scalars().all()
@@ -425,10 +460,10 @@ async def run_schedule(
         select(OperationResource).where(OperationResource.operation_id.in_(op_ids))
     )
     op_resources: dict = defaultdict(list)
-    for or_ in op_res_rows.scalars().all():
-        op_resources[or_.operation_id].append(or_)
+    for opres in op_res_rows.scalars().all():
+        op_resources[opres.operation_id].append(opres)
 
-    res_ids = {or_.resource_id for ors in op_resources.values() for or_ in ors}
+    res_ids = {opres.resource_id for ors in op_resources.values() for opres in ors}
     resources: dict = {}
     if res_ids:
         res_rows = await db.execute(select(Resource).where(Resource.id.in_(res_ids), Resource.tenant_id == tenant_id))
@@ -506,8 +541,8 @@ async def run_schedule(
     def op_sched_id(op: Operation):
         """График операции (по её ресурсам, с учётом переопределений на проект)."""
         ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
-        for or_ in ors:
-            r = resources.get(or_.resource_id)
+        for opres in ors:
+            r = resources.get(opres.resource_id)
             if r:
                 sched_id = override_sched.get(r.id) or r.schedule_id or dept_sched.get(r.department_id) or project_sched_id
                 if sched_id and sched_id in schedules:
@@ -670,8 +705,8 @@ async def run_schedule(
     def lead_resource(op: Operation):
         """Ведущий ресурс операции (primary, иначе первый) — его события влияют на длительность."""
         ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
-        for or_ in ors:
-            r = resources.get(or_.resource_id)
+        for opres in ors:
+            r = resources.get(opres.resource_id)
             if r:
                 return r
         return None
@@ -722,8 +757,8 @@ async def run_schedule(
                 m_final = share_lead
                 if share_lead <= 0:
                     blocked_res = lead
-        for or_ in op_resources.get(op.id, []):
-            r2 = resources.get(or_.resource_id)
+        for opres in op_resources.get(op.id, []):
+            r2 = resources.get(opres.resource_id)
             if not r2 or (lead and r2.id == lead.id):
                 continue
             evs2 = events_by_res.get(r2.id) or []
