@@ -456,6 +456,9 @@ async def run_schedule(
     )
     operations = ops_result.scalars().all()
     if len(operations) < 2:
+        _total_ops = (await db.execute(select(func.count()).select_from(Operation).where(Operation.project_id == project_id, Operation.tenant_id == tenant_id))).scalar() or 0
+        if _total_ops >= 2:
+            raise HTTPException(status_code=400, detail="Все операции проекта в заказах-черновиках. Черновики исключаются из расчёта — переведите заказ в «В работе».")
         raise HTTPException(status_code=400, detail="Для планирования необходимо минимум 2 операции")
 
     deps_result = await db.execute(
