@@ -176,7 +176,7 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrd
           }}>
           <div className="panel-hdr">
             <div>
-              <span className="panel-title">📦 Заказы в пуле</span>
+              <span className="panel-title">📦 Заказы в кластере</span>
               <span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{poolOrders.length}</span>
             </div>
             <span className="t-mono" style={{ fontSize: 11, color: selPool.size > 0 ? '#A78BFA' : '#5A7090' }}>
@@ -245,7 +245,7 @@ export default function PoolEditor({ pool, orders, onClose, onRefresh, onMoveOrd
             onMouseEnter={e => { if (freeOrders.length > 0) { e.currentTarget.style.background = 'rgba(139,92,246,.12)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,.5)'; } }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,.04)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,.25)'; }}>
             {arrowSVG('left2', freeOrders.length > 0 ? '#A78BFA' : '#5A7090')}
-            <span>Все в пул</span>
+            <span>Все в кластер</span>
           </button>
           <button onClick={clearPool}
             disabled={poolOrders.length === 0} style={btnStyle(72)}

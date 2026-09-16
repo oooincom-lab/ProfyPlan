@@ -3,7 +3,7 @@
  * Окно выбора стиля графиков.
  *
  * Открывается из настроек рабочего стола («Стиль графиков»). Показывает сцены
- * «простой заказ · группа с маркерами · пул» для каждой палитры, сгруппированные
+ * «простой заказ · группа с маркерами · кластер» для каждой палитры, сгруппированные
  * по плотности заливки. Выбранный вариант применяется к виду «Сеть CPM»:
  * компонент передаёт палитру в канву, а сам выбор сохраняется по теме
  * (тёмная/светлая) в браузере.
@@ -45,9 +45,9 @@ function Scene({ p, theme, size = 150 }: { p: GraphPalette; theme: ThemeName; si
       <rect x="12" y="146" width="176" height="86" rx="12" fill="none" stroke={cs.groupFrame} strokeDasharray="6 5" opacity="0.9" />
       <text x="20" y="140" fill={cs.groupFrame} fontSize="10.5" fontWeight="600">группа · маркеры ◆</text>
 
-      {/* пул */}
+      {/* кластер */}
       <rect x="212" y="88" width="176" height="152" rx="12" fill={p.fill} opacity={p.fillOpacity} stroke={p.frame} strokeDasharray="6 5" />
-      <text x="220" y="82" fill={p.frame} fontSize="10.5" fontWeight="600">пул · общий ресурс</text>
+      <text x="220" y="82" fill={p.frame} fontSize="10.5" fontWeight="600">кластер · общий ресурс</text>
 
       {/* связи */}
       <line x1="106" y1="73" x2="167" y2="101" stroke={cs.reserve} strokeWidth="1.6" markerEnd={`url(#${nid})`} />
@@ -69,7 +69,7 @@ function Scene({ p, theme, size = 150 }: { p: GraphPalette; theme: ThemeName; si
       <circle cx="82" cy="222" r="8" fill={cs.groupFrame} /><text x="82" y="226" fontSize="8" textAnchor="middle" fill={bg}>◆</text>
       <circle cx="148" cy="222" r="8" fill={cs.groupFrame} /><text x="148" y="226" fontSize="8" textAnchor="middle" fill={bg}>◆</text>
 
-      {/* узлы пула */}
+      {/* узлы кластера */}
       <circle cx="248" cy="110" r="22" fill={p.fill} opacity="0.95" stroke={p.frame} strokeWidth="2.4" />
       <text x="248" y="114" fill={cs.text} fontSize="10.5" textAnchor="middle">18</text>
       <circle cx="336" cy="110" r="22" fill={cs.criticalFill} opacity="0.95" stroke={cs.critical} strokeWidth="2.2" />
@@ -110,7 +110,7 @@ export default function GraphStylePicker({ open, theme, value, onClose, onApply 
         </div>
 
         <div style={{ fontSize: 12, color: '#8FA3BD', marginBottom: 12 }}>
-          Сцены одинаковые: простой заказ — голубой пунктир, группа с маркерами — фиолетовый с ◆, пул — пунктир в гамме варианта.
+          Сцены одинаковые: простой заказ — голубой пунктир, группа с маркерами — фиолетовый с ◆, кластер — пунктир в гамме варианта.
           Критические операции красные, с резервом — синие; эти смысловые цвета палитрой не меняются.
         </div>
 

@@ -1176,7 +1176,7 @@ async def get_order_cluster(
     2. order_id на BOM-узлах (какой заказ производит этот узел) — доп. связь.
 
     Каждый заказ включает: id, ext_id, specification_name, status, group_id, pool_id,
-    has_cpm (есть ли расчёт CPM), in_pool (входит ли в пул), relation (self/child/parent).
+    has_cpm (есть ли расчёт CPM), in_pool (входит ли в кластер), relation (self/child/parent).
     """
     from app.models.production_order import ProductionOrder
 

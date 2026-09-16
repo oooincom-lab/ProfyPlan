@@ -100,7 +100,7 @@ DEPENDENCY_MAP = {
     },
     "order_pool": {
         "model": OrderPool,
-        "label": "Пул заказов",
+        "label": "Кластер заказов",
         "name_field": "name",
         "cascade": [],
         "blocking": [],
@@ -186,7 +186,7 @@ DEPENDENCY_MAP = {
 
 CASCADE_LABELS = {
     "orders": "Заказы", "operations": "Операции", "resources": "Ресурсы",
-    "groups": "Группы", "pools": "Пулы", "bom_nodes": "Узлы BOM",
+    "groups": "Группы", "pools": "Кластеры", "bom_nodes": "Узлы BOM",
     "baselines": "Версии плана", "calendars": "Календари",
     "routing_ops": "Операции маршрута",
     "deps_as_pred": "Зависимости (предшественник)",
@@ -198,7 +198,7 @@ BLOCKING_LABELS = {
     "operation_resources": "Связи операций с ресурсами",
     "routing_operations": "Операции маршрутов",
     "nomenclature": "Единицы номенклатуры",
-    "orders": "Заказы", "pools": "Пулы", "bom_nodes": "Узлы BOM",
+    "orders": "Заказы", "pools": "Кластеры", "bom_nodes": "Узлы BOM",
     "actual_executions": "Фактическое выполнение",
     "inter_project_deps_source": "Межпроектные зависимости (источник)",
     "inter_project_deps_target": "Межпроектные зависимости (цель)",
@@ -324,7 +324,7 @@ async def delete_check(
             result["detach"].append({
                 "key": key, "label": BLOCKING_LABELS.get(key, key),
                 "count": count, "items": items,
-                "message": "Будут отвязаны (сброшен график работы), не удалены" if entity_type == "work_schedule" else "Будут освобождены из пула, не удалены",
+                "message": "Будут отвязаны (сброшен график работы), не удалены" if entity_type == "work_schedule" else "Будут освобождены из кластера, не удалены",
             })
 
     # Custom: nomenclature → product_structures by ext_id

@@ -1527,10 +1527,10 @@ async def move_order(
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Переместить заказ в группу/пул или убрать из них.
+    """Переместить заказ в группу/кластер или убрать из них.
     
     Передайте group_id или pool_id (не оба сразу).
-    Передайте оба null чтобы убрать заказ из группы/пула и вернуть в корень.
+    Передайте оба null чтобы убрать заказ из группы/кластера и вернуть в корень.
     """
     stmt = select(ProductionOrder).where(
         ProductionOrder.id == UUID(order_id),

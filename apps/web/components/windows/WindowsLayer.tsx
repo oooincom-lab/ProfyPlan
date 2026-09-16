@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { priorityLabel, priorityBadgeClass, ORDER_PRIORITY_OPTIONS } from '@/lib/priority';
 import { createPortal } from 'react-dom';
 import type { Dispatch, SetStateAction } from 'react';
 import type { WinRec, LayState, OrderTab } from './useWindows';
@@ -182,7 +183,7 @@ const TAB_LIST: { v: OrderTab; l: string }[] = [
 ];
 
 /**
- * Слой оконного режима: floating-окна заказов И окон-списков (заказы/группы/пулы),
+ * Слой оконного режима: floating-окна заказов И окон-списков (заказы/группы/кластеры),
  * подсветка Snap-зоны, панель раскладок (⛶) и панель задач. Чистая презентация —
  * вся логика живёт в useWindows() на стороне page.tsx.
  */
@@ -394,7 +395,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 4 }}>Приоритет</div>
                   <select value={f.priority || 'normal'} onChange={e => set('priority', e.target.value)}
                     style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 13, fontFamily: 'inherit' }}>
-                    <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                    {ORDER_PRIORITY_OPTIONS.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}
                   </select>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #1E3252' }}>
@@ -852,7 +853,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         <td className="t-name">{ord.specification_name || ord.ext_id || '—'}</td>
                         <td>{ord.client || '—'}</td>
                         <td className="t-mono">{ord.quantity} {ord.unit}</td>
-                        <td><span className={`badge ${ord.priority}`}>{ord.priority === 'high' ? 'Выс.' : ord.priority === 'critical' ? 'Крит.' : ord.priority === 'low' ? 'Низк.' : 'Обыч.'}</span></td>
+                        <td><span className={`badge ${priorityBadgeClass(ord.priority)}`}>{priorityLabel(ord.priority)}</span></td>
                         <td><span className={`badge ${ord.status}`}>{ord.status === 'draft' ? 'Черновик' : ord.status === 'planned' ? 'План' : ord.status === 'in_progress' ? 'В работе' : ord.status === 'completed' ? 'Завершён' : ord.status}</span></td>
                       </tr>
                     ))}
@@ -872,12 +873,12 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   <div key={p.id} onClick={() => onOpenPool(p)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderBottom: '1px dashed rgba(30,58,95,.5)', cursor: 'pointer', borderRadius: 6 }}>
                     <span style={{ flex: 1 }}>📦 {p.name}</span>
                   </div>
-                )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Пулов нет</div>
+                )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Кластеров нет</div>
               )}
 
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && !w.editing && (
                 <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                  {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', o!.priority || '—'], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
+                  {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', priorityLabel(o!.priority)], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
                     <div key={kv[0]} style={{ display: 'contents' }}>
                       <div style={{ color: '#5A7090' }}>{kv[0]}</div>
                       <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
@@ -902,7 +903,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритет</span>
                     <select value={w.form.priority || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, priority: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                      <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                      {ORDER_PRIORITY_OPTIONS.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}
                     </select>
                   </label>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>

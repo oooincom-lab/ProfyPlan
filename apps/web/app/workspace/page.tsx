@@ -35,6 +35,7 @@ import WindowsLayer from '@/components/windows/WindowsLayer';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
+import { priorityLabel, priorityBadgeClass, ORDER_PRIORITY_OPTIONS } from '@/lib/priority';
 import ProjectWidgets from '@/components/ProjectWidgets';
 import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
@@ -281,7 +282,7 @@ export default function AppShell() {
   const [orderSortKey, setOrderSortKey] = useState<string | null>(null);
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('asc');
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('free');
-  const [orderTreeSections, setOrderTreeSections] = useState(true); // дерево секциями: Группы / Пулы / Свободные
+  const [orderTreeSections, setOrderTreeSections] = useState(true); // дерево секциями: Группы / Кластеры / Свободные
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [ganttData, setGanttData] = useState<any>(null);
@@ -1696,7 +1697,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
         apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
       ]);
       setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
-      setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+      setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} кластеров`);
     } catch (e: any) { setMsg(String(e)); }
   };
 
@@ -1715,7 +1716,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
           apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
         ]);
         setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
-        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} кластеров`);
       } catch (e: any) { setMsg(String(e)); }
       setView('project-orders');
       setPendingList({ kind: 'orders', title: `Заказы — ${p.name}` });
@@ -1909,7 +1910,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
           apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
         ]);
         setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
-        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} кластеров`);
       } catch (e: any) { setMsg(String(e)); }
       setView('project-groups');
       setPendingList({ kind: 'groups', title: `Группы — ${p.name}` });
@@ -1934,7 +1935,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     const created = await apiF<any>(`/projects/${selectedProject.id}/groups`, { method: 'POST', body: JSON.stringify({ name: newGroupName.trim() }) });
     setNewGroupInput(false);
     setNewGroupName('');
-    // Сразу открываем «мастер» новой группы — редактор с заказами/пулами
+    // Сразу открываем «мастер» новой группы — редактор с заказами/кластерами
     const g = created && created.id ? created : null;
     const [o, gs, pl] = await Promise.all([
       apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`),
@@ -1965,10 +1966,10 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
           apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
         ]);
         setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
-        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} пулов`);
+        setMsg(`${o.length} заказов · ${g.items.length} групп · ${pl.items.length} кластеров`);
       } catch (e: any) { setMsg(String(e)); }
       setView('project-pools');
-      setPendingList({ kind: 'pools', title: `Пулы — ${p.name}` });
+      setPendingList({ kind: 'pools', title: `Кластеры — ${p.name}` });
       return;
     }
     setView('project-pools');
@@ -1979,7 +1980,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
         apiF<{ items: any[] }>(`/projects/${p.id}/pools`),
       ]);
       setOrders(o); setGroups(prev => ({ ...prev, [p.id]: g.items })); setPools(prev => ({ ...prev, [p.id]: pl.items }));
-      setMsg(`${pl.items.length} пулов`);
+      setMsg(`${pl.items.length} кластеров`);
     } catch (e: any) { setMsg(String(e)); }
   };
 
@@ -2002,14 +2003,14 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       <div className="kpi-card" data-module="dash:metric:dyn">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:dyn]" copy="[dash:metric:dyn] «Динамические»" />}<div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
       <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] «В работе»" />}<div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
       <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
-      <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Пулов»" />}<div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
+      <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Кластеров»" />}<div className="kpi-label">Групп / Кластеров</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} кластер.</div></div>
     </div>
   );
 
 const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             const getTypeInfo = (o: any) => {
               if (o.group_id) { const g = projGroups.find(gr => gr.id === o.group_id); return { icon: '📁', label: 'Группа', name: g?.name || '—', id: o.group_id }; }
-              if (o.pool_id) { const p = projPools.find(pl => pl.id === o.pool_id); return { icon: '📦', label: 'Пул', name: p?.name || '—', id: o.pool_id }; }
+              if (o.pool_id) { const p = projPools.find(pl => pl.id === o.pool_id); return { icon: '📦', label: 'Кластер', name: p?.name || '—', id: o.pool_id }; }
               return { icon: '—', label: 'Свободный', name: '—', id: null };
             };
             let filtered = orderShowAll ? [...orders] : orders.filter((o: any) => !o.group_id && !o.pool_id);
@@ -2066,7 +2067,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             filtered.forEach((o: any) => { if (!visitedIds.has(o.id)) walkTree(o, 0); });
 
             // ── Шаги 1–2 (итоговая рекомендация): единое дерево секциями ──
-            // «Заказы» — единственный дом дерева: Группы / Пулы / Свободные — корневые ветки,
+            // «Заказы» — единственный дом дерева: Группы / Кластеры / Свободные — корневые ветки,
             // внутри каждой — заказы с их иерархией. Секции сворачиваемые, с счётчиками.
             const sectionOf = (o: any): string => {
               if (o.group_id) return 'g:' + o.group_id;
@@ -2084,14 +2085,14 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             }
             sections.push({ key: 'free', icon: '🗂', title: 'Свободные (не в группе)', orders: [] });
             const secIndex = new Map(sections.map((x, i) => [x.key, i]));
-            const orphanRows: any[] = []; // заказы, чья группа/пул не найдена (например, удалена)
+            const orphanRows: any[] = []; // заказы, чья группа/кластер не найдена (например, удалена)
             treeRows.forEach((r: any) => {
               const k = sectionOf(r.o);
               const idx = secIndex.get(k);
               if (idx === undefined) { orphanRows.push(r); return; }
               sections[idx].orders.push(r);
             });
-            // сортировка секций: группы, пулы, свободные (уже в порядке push; свободные — последняя, переносим)
+            // сортировка секций: группы, кластеры, свободные (уже в порядке push; свободные — последняя, переносим)
             const freeIdx = sections.findIndex(x => x.key === 'free');
             if (freeIdx > 0) { const [f] = sections.splice(freeIdx, 1); sections.push(f); }
             const allSections = [...sections, { key: 'orphan', icon: '❓', title: 'Без группы (потерянные)', orders: orphanRows }];
@@ -2125,7 +2126,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{isFree && depth === 0 && <span title="Свободный заказ (без родителя)" style={{ display: 'inline-block', background: 'rgba(245,158,11,.14)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>своб.</span>}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
-                              <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Высокий' : o.priority === 'critical' ? 'Критич.' : o.priority === 'low' ? 'Низкий' : 'Обычный'}</span></td>
+                              <td><span className={`badge ${priorityBadgeClass(o.priority)}`}>{priorityLabel(o.priority)}</span></td>
                               <td onClick={(e) => e.stopPropagation()}>
                                 <select value={o.status || 'planned'} title="Статус заказа" onChange={(e) => changeOrderStatus(o, e.target.value)}
                                   style={{ background: o.status === 'draft' ? 'rgba(148,163,184,.08)' : o.status === 'completed' ? 'rgba(74,222,128,.1)' : 'rgba(96,165,250,.1)', border: '1px solid ' + (o.status === 'draft' ? '#334155' : o.status === 'completed' ? '#166534' : '#1E3A5F'), borderRadius: 6, color: o.status === 'draft' ? '#94A3B8' : o.status === 'completed' ? '#4ADE80' : '#60A5FA', fontSize: 11.5, padding: '2px 5px', cursor: 'pointer', fontWeight: 600 }}>
@@ -2206,7 +2207,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.background = 'rgba(59,130,246,.06)'; }}
                     onDragLeave={(e) => { e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; }}
                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transparent'; const oid = e.dataTransfer.getData('orderId'); if (oid) moveOrder(oid, null, null); }}>
-                    📍 Бросьте заказ сюда — убрать из группы/пула
+                    📍 Бросьте заказ сюда — убрать из группы/кластера
                   </div>
 
                   {/* Аномалии структуры BOM (список заказов) */}
@@ -2307,7 +2308,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                       <thead><tr>
                         <th style={{ width: 96 }}></th>
                         <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>Тип{sortArrow('_type')}</th>
-                        {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Пул{sortArrow('_typeName')}</th>}
+                        {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>Группа / Кластер{sortArrow('_typeName')}</th>}
                         <th className="t-graph">Граф</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('ext_id')}>ID{sortArrow('ext_id')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('specification_name')}>Продукт{sortArrow('specification_name')}</th>
@@ -2331,7 +2332,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             <td><input value={newOrder.specification_name} onChange={e => setNewOrder({ ...newOrder, specification_name: e.target.value })} placeholder="Продукт" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#E8EEF5', padding: '4px 8px', width: 130, fontSize: 12 }} onKeyDown={e => e.key === 'Enter' && createOrder()} autoFocus /></td>
                             <td><input value={newOrder.client} onChange={e => setNewOrder({ ...newOrder, client: e.target.value })} placeholder="Клиент" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 90, fontSize: 12 }} /></td>
                             <td><input value={newOrder.quantity} onChange={e => setNewOrder({ ...newOrder, quantity: e.target.value })} type="number" min="1" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 8px', width: 60, fontSize: 12 }} /></td>
-                            <td><select value={newOrder.priority} onChange={e => setNewOrder({ ...newOrder, priority: e.target.value })} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 4px', fontSize: 12 }}><option value="normal">Обычный</option><option value="high">Высокий</option><option value="critical">Критич.</option><option value="low">Низкий</option></select></td>
+                            <td><select value={newOrder.priority} onChange={e => setNewOrder({ ...newOrder, priority: e.target.value })} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 4, color: '#B0C4DE', padding: '4px 4px', fontSize: 12 }}>{ORDER_PRIORITY_OPTIONS.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}</select></td>
                             <td><span className="badge draft">Новый</span></td>
                             <td className="t-mono">—</td>
                             <td className="t-mono">—</td>
@@ -2342,7 +2343,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           </tr>
                         )}
                         {(() => {
-                          // Шаги 1–2: вывод секциями (Группы / Пулы / Свободные)
+                          // Шаги 1–2: вывод секциями (Группы / Кластеры / Свободные)
                           if (!orderTreeSections) return null;
                           const toggleSec = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
                           return visibleSections.map(sec => (
@@ -2355,7 +2356,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                   </span>
                                   <span style={{ marginLeft: 8, fontSize: 10.5, color: '#5A7090' }}>{sec.orders.length}</span>
                                   {sec.key === 'free' && sec.orders.length > 0 && (
-                                    <span style={{ marginLeft: 10, fontSize: 10, color: '#5A7090' }}>перетащите заказ в группу или пул</span>
+                                    <span style={{ marginLeft: 10, fontSize: 10, color: '#5A7090' }}>перетащите заказ в группу или кластер</span>
                                   )}
                                 </td>
                               </tr>
@@ -2451,7 +2452,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           {!o && !isModal && <div style={{ color: '#5A7090', fontSize: 12.5 }}>Кликните по заказу в списке, чтобы увидеть его карточку: состав, маршрут, ресурсы и план.</div>}
                           {o && panelTab === 'order' && !panelEditing && (
                             <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', o.priority || '—'], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
+                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', priorityLabel(o.priority)], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
                               <div key={k} style={{ display: 'contents' }}>
                                 <div style={{ color: '#5A7090' }}>{k}</div>
                                 <div style={{ color: '#E2E8F0' }}>{v}</div>
@@ -2476,7 +2477,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритет</span>
                                 <select value={editForm.priority || ''} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
-                                  <option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option>
+                                  {ORDER_PRIORITY_OPTIONS.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}
                                 </select>
                               </label>
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
@@ -2863,7 +2864,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'project-dashboard': selectedProject?.name || 'Проект',
     'project-orders': selectedProject ? `Заказы — ${selectedProject.name}` : 'Заказы',
     'project-gantt': selectedProject ? `Гант — ${selectedProject.name}` : 'Диаграмма Ганта',
-    'project-pools': selectedProject ? `Пулы — ${selectedProject.name}` : 'Пулы',
+    'project-pools': selectedProject ? `Кластеры — ${selectedProject.name}` : 'Кластеры',
     'project-groups': selectedProject ? `Группы — ${selectedProject.name}` : 'Группы',
 
     'archive': 'Архив проектов',
@@ -2981,13 +2982,13 @@ const changeOrderStatus = async (o: any, status: string) => {
             )}
             {view === 'project-pools' && panelMode === 'window' && !selectedPool && (
               <>
-                <button onClick={addPool} className="btn btn-primary btn-sm">+ Пул</button>
+                <button onClick={addPool} className="btn btn-primary btn-sm">+ Кластер</button>
               {newPoolInput && (<span style={{display:'inline-flex',gap:4,alignItems:'center',marginLeft:4}}><input value={newPoolName} onChange={e=>setNewPoolName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setNewPoolInput(false);else if(e.key==='Enter')addPool()}} placeholder="Название" autoFocus style={{background:'#0A1628',border:'1px solid #3B82F6',borderRadius:6,color:'#E8EEF5',padding:'4px 8px',fontSize:12,width:130,outline:'none'}} /><button onClick={addPool} className="btn btn-primary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✓</button><button onClick={()=>setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{padding:'4px 8px',fontSize:12}}>✕</button></span>)}
               </>
             )}
             <button className="btn btn-primary btn-sm" onClick={() => navTo('new-project')}>+ Новый проект</button>
         <GraphStylePicker open={styleOpen} theme={themeName} value={paletteId} onClose={() => setStyleOpen(false)} onApply={(id: string) => { setPaletteId(id); try { localStorage.setItem('graph_palette_' + themeName, id); } catch {} }} />
-        {/* ЗАКАЗЫ-РАСЧЁТ: расчёт из разделов заказов, групп и пулов */}
+        {/* ЗАКАЗЫ-РАСЧЁТ: расчёт из разделов заказов, групп и кластеров */}
         {(view === 'project-orders' || view === 'project-groups' || view === 'project-pools') && (
           <button className="btn btn-secondary btn-sm" title="Рассчитать проект"
             style={{ position: 'fixed', right: 26, bottom: 26, zIndex: 1500, boxShadow: '0 4px 14px rgba(0,0,0,.35)' }}
@@ -3087,7 +3088,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div className="kpi-card" data-module="dash:metric:dyn">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:dyn]" copy="[dash:metric:dyn] «Динамические»" />}<div className="kpi-label">Динамические</div><div className="kpi-val g">{dynCount}</div><div className="kpi-sub">⚡ CPM развёрнут</div></div>
                 <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] «В работе»" />}<div className="kpi-label">В работе</div><div className="kpi-val g">{inProgress}</div><div className="kpi-sub">{inProgress > 0 ? 'Активных' : 'Нет'}</div></div>
                 <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority] «Приоритетных»" />}<div className="kpi-label">Приоритетных</div><div className="kpi-val r">{critical}</div><div className="kpi-sub">High + Critical</div></div>
-                <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Пулов»" />}<div className="kpi-label">Групп / Пулов</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} пул.</div></div>
+                <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] «Групп / Кластеров»" />}<div className="kpi-label">Групп / Кластеров</div><div className="kpi-val">{projGroups.length + projPools.length}</div><div className="kpi-sub">{projGroups.length} гр. · {projPools.length} кластер.</div></div>
               </div>
 
               <ProjectWidgets projectId={selectedProject?.id || null} />
@@ -3107,7 +3108,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'}>{isDyn(o) ? '⚡' : '○'}</span></td>
                             <td className="t-mono">{o.ext_id || '—'}</td><td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
                             <td>{o.client || '—'}</td><td className="t-mono">{o.quantity} {o.unit}</td>
-                            <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Выс.' : 'Обыч.'}</span></td>
+                            <td><span className={`badge ${priorityBadgeClass(o.priority)}`}>{priorityLabel(o.priority)}</span></td>
                             <td onClick={(e) => e.stopPropagation()}>
                             <select value={o.status || 'planned'} title="Статус заказа" onChange={(e) => changeOrderStatus(o, e.target.value)}
                               style={{ background: o.status === 'draft' ? 'rgba(148,163,184,.08)' : o.status === 'completed' ? 'rgba(74,222,128,.1)' : 'rgba(96,165,250,.1)', border: '1px solid ' + (o.status === 'draft' ? '#334155' : o.status === 'completed' ? '#166534' : '#1E3A5F'), borderRadius: 6, color: o.status === 'draft' ? '#94A3B8' : o.status === 'completed' ? '#4ADE80' : '#60A5FA', fontSize: 11.5, padding: '2px 5px', cursor: 'pointer', fontWeight: 600 }}>
@@ -3408,7 +3409,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                         <div>
                           <span style={{ fontWeight: 600, fontSize: 15 }}>📁 {g.name}</span>
                           <span className="t-mono" style={{ marginLeft: 10, fontSize: 12 }}>{grOrders.length} заказов</span>
-                          {grPools.length > 0 && <span className="t-mono" style={{ marginLeft: 8, fontSize: 12, color: '#A78BFA' }}>{grPools.length} пулов</span>}
+                          {grPools.length > 0 && <span className="t-mono" style={{ marginLeft: 8, fontSize: 12, color: '#A78BFA' }}>{grPools.length} кластеров</span>}
                         </div>
                         <button onClick={(e) => { e.stopPropagation(); delGroup(g.id, g.name); }} className="btn btn-danger btn-sm">🗑 Удалить группу</button>
                       </div>
@@ -3426,10 +3427,10 @@ const changeOrderStatus = async (o: any, status: string) => {
                                 <tr key={'gp-' + p.id} style={{ background: 'rgba(139,92,246,.04)' }}>
                                   <td><span style={{ fontSize: 14 }}>📦</span></td>
                                   <td className="t-name" style={{ color: '#A78BFA', fontWeight: 600 }}>{p.name}</td>
-                                  <td style={{ color: '#8B5CF6', fontSize: 11 }}>Пул</td>
+                                  <td style={{ color: '#8B5CF6', fontSize: 11 }}>Кластер</td>
                                   <td className="t-mono" style={{ color: '#A78BFA' }}>{pOrders.length}</td>
                                   <td></td>
-                                  <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Пул</span></td>
+                                  <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Кластер</span></td>
                                   <td></td>
                                 </tr>
                               );
@@ -3441,7 +3442,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                 <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
                                 <td>{o.client || '—'}</td>
                                 <td className="t-mono">{o.quantity} {o.unit}</td>
-                                <td><span className={`badge ${o.priority === 'critical' ? 'badge-red' : o.priority === 'high' ? 'badge-yellow' : 'badge-gray'}`}>{o.priority || 'normal'}</span></td>
+                                <td><span className={`badge ${priorityBadgeClass(o.priority)}`}>{priorityLabel(o.priority)}</span></td>
                                 <td><span className={`badge ${o.status === 'planned' ? 'badge-green' : o.status === 'draft' ? 'badge-gray' : 'badge-blue'}`}>{o.status || 'draft'}</span></td>
                                 <td><button onClick={() => moveOrder(o.id, null, null)} className="btn btn-sm" style={{ padding: '2px 6px', fontSize: 10 }} title="Убрать из группы">↩</button></td>
                               </tr>
@@ -3487,8 +3488,8 @@ const changeOrderStatus = async (o: any, status: string) => {
             <>
               {/* ── Dashboard KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-                <div className="kpi-card" data-module="dash:metric:pools">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:pools]" copy="[dash:metric:pools] «Пулов»" />}<div className="kpi-label">Пулов</div><div className="kpi-val v">{projPools.length}</div><div className="kpi-sub">CCM-объединений</div></div>
-                <div className="kpi-card" data-module="dash:metric:pooled">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:pooled]" copy="[dash:metric:pooled] «В пулах»" />}<div className="kpi-label">В пулах</div><div className="kpi-val g">{orders.filter((o: any) => !!o.pool_id).length}</div><div className="kpi-sub">заказов</div></div>
+                <div className="kpi-card" data-module="dash:metric:pools">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:pools]" copy="[dash:metric:pools] «Кластеров»" />}<div className="kpi-label">Кластеров</div><div className="kpi-val v">{projPools.length}</div><div className="kpi-sub">CCM-объединений</div></div>
+                <div className="kpi-card" data-module="dash:metric:pooled">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:pooled]" copy="[dash:metric:pooled] «В кластерах»" />}<div className="kpi-label">В кластерах</div><div className="kpi-val g">{orders.filter((o: any) => !!o.pool_id).length}</div><div className="kpi-sub">заказов</div></div>
                 <div className="kpi-card" data-module="dash:metric:free">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:free]" copy="[dash:metric:free] «Свободных»" />}<div className="kpi-label">Свободных</div><div className="kpi-val">{orders.filter((o: any) => !o.pool_id).length}</div><div className="kpi-sub">доступно</div></div>
                 <div className="kpi-card" data-module="dash:metric:orders">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:orders]" copy="[dash:metric:orders] «Всего заказов»" />}<div className="kpi-label">Всего заказов</div><div className="kpi-val">{orders.length}</div><div className="kpi-sub">{totalQty.toFixed(0)} ед.</div></div>
               </div>
@@ -3496,7 +3497,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               {/* ── Pool cards grid ── */}
               <div className="panel">
                 <div className="panel-hdr">
-                  <div><span className="panel-title">📦 Пулы</span><span className="panel-sub" style={{ marginLeft: 8 }}>{selectedProject?.name}</span></div>
+                  <div><span className="panel-title">📦 Кластеры</span><span className="panel-sub" style={{ marginLeft: 8 }}>{selectedProject?.name}</span></div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     {newPoolInput ? (
                       <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -3508,15 +3509,15 @@ const changeOrderStatus = async (o: any, status: string) => {
                         <button onClick={() => setNewPoolInput(false)} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: 12 }}>✕</button>
                       </span>
                     ) : (
-                      <button onClick={() => { setNewPoolInput(true); setNewPoolName(''); }} className="btn btn-primary btn-sm">+ Пул</button>
+                      <button onClick={() => { setNewPoolInput(true); setNewPoolName(''); }} className="btn btn-primary btn-sm">+ Кластер</button>
                     )}
                   </div>
                 </div>
                 {projPools.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>
                     <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
-                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Пулов нет</div>
-                    <div>Создайте пул для CCM-объединения заказов с общими ресурсами.</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Кластеров нет</div>
+                    <div>Создайте кластер для CCM-объединения заказов с общими ресурсами.</div>
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
@@ -3556,23 +3557,23 @@ const changeOrderStatus = async (o: any, status: string) => {
             const poolOrders = orders.filter((o: any) => o.pool_id === selectedPool.id);
             return (<>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <button onClick={() => { setSelectedPool(null); }} className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>← К пулам</button>
+                <button onClick={() => { setSelectedPool(null); }} className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>← К кластерам</button>
                 <div>
                   <span style={{ fontWeight: 700, fontSize: 16 }}>📦 {selectedPool.name}</span>
                   <span className="t-mono" style={{ marginLeft: 10, fontSize: 12, color: '#8FA3BD' }}>{poolOrders.length} заказов</span>
                 </div>
                 <div style={{ flex: 1 }} />
-                <button onClick={() => { delPool(selectedPool.id, selectedPool.name); setSelectedPool(null); }} className="btn btn-danger btn-sm">🗑 Удалить пул</button>
+                <button onClick={() => { delPool(selectedPool.id, selectedPool.name); setSelectedPool(null); }} className="btn btn-danger btn-sm">🗑 Удалить кластер</button>
                 <button onClick={() => setEditingPool(true)} style={{ background: 'var(--btn-primary-bg, #3B82F6)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>✏️ Изменить</button>
               </div>
               <div className="panel" style={{ overflow: 'hidden' }}>
                 <div className="panel-hdr">
-                  <div><span className="panel-title">📦 Состав пула</span><span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{poolOrders.length}</span></div>
+                  <div><span className="panel-title">📦 Состав кластера</span><span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{poolOrders.length}</span></div>
                 </div>
                 {poolOrders.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 60, color: '#5A7090', fontSize: 13 }}>
                     <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
-                    <div>Пул пуст. Нажмите «Изменить» чтобы добавить заказы.</div>
+                    <div>Кластер пуст. Нажмите «Изменить» чтобы добавить заказы.</div>
                   </div>
                 ) : (
                   <table className="tbl">
@@ -3663,7 +3664,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 {unified.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 60, color: '#5A7090', fontSize: 13 }}>
                     <div style={{ fontSize: 36, marginBottom: 12 }}>📁</div>
-                    <div>Группа пуста. Нажмите «Изменить» чтобы добавить заказы и пулы.</div>
+                    <div>Группа пуста. Нажмите «Изменить» чтобы добавить заказы и кластеры.</div>
                   </div>
                 ) : (
                   <table className="tbl">
@@ -3686,7 +3687,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                               <td style={{ textAlign: 'center' }}>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setExpandedGroupPool(poolExpanded ? null : p.id); }}
-                                  title={poolExpanded ? 'Свернуть пул' : 'Развернуть пул'}
+                                  title={poolExpanded ? 'Свернуть кластер' : 'Развернуть кластер'}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: poolExpanded ? '#A78BFA' : '#7C6BAF', fontSize: 14, padding: '2px 6px', transition: 'color .15s' }}
                                   onMouseEnter={e => (e.currentTarget.style.color = '#A78BFA')}
                                   onMouseLeave={e => (e.currentTarget.style.color = poolExpanded ? '#A78BFA' : '#7C6BAF')}
@@ -3695,7 +3696,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                               <td><span style={{ fontSize: 16 }}>📦</span></td>
                               <td className="t-name" style={{ color: '#A78BFA', fontWeight: 600 }}>{p.name}</td>
                               <td className="t-mono" style={{ color: '#A78BFA' }}>{pOrders.length}</td>
-                              <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Пул</span></td>
+                              <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>Кластер</span></td>
                             </tr>
                             {poolExpanded && pOrders.map((o: any) => {
                               const bomOpen = expandedBomOrder === o.id;
@@ -3913,7 +3914,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🔗 Контроль цепочки заказов</div>
                   <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
-                    При переносе заказа в пул или группу система может предупреждать о связанных заказах (родительских и дочерних — весь «куст»).
+                    При переносе заказа в кластер или группу система может предупреждать о связанных заказах (родительских и дочерних — весь «куст»).
                   </div>
                   {([
                     { v: 'control', icon: '🔒', title: 'Контроль', desc: 'Перенос только всем кустом целиком. Вариант один: перенести весь куст или отменить.' },
@@ -3934,13 +3935,13 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </label>
                   ))}
                   <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 8, lineHeight: 1.5, background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.15)', borderRadius: 8, padding: '10px 12px' }}>
-                    💡 Связанные заказы — это те, что связаны через поле «Код заказа» в BOM или «Код заказа родителя». При переносе куста связанные заказы отвязываются от своих прежних групп/пулов, и расчёты по ним (включая расчёты пулов) аннулируются.
+                    💡 Связанные заказы — это те, что связаны через поле «Код заказа» в BOM или «Код заказа родителя». При переносе куста связанные заказы отвязываются от своих прежних групп/кластеров, и расчёты по ним (включая расчёты кластеров) аннулируются.
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🎨 Стиль графиков</div>
                   <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
-                    Палитра для графов CPM: рамка и заливка областей пулов, групп и кустов. Смысловые цвета
+                    Палитра для графов CPM: рамка и заливка областей кластеров, групп и кустов. Смысловые цвета
                     не меняются — критические операции остаются красными, с резервом синими.
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -4737,15 +4738,15 @@ const changeOrderStatus = async (o: any, status: string) => {
       const unclassified = single ? related.filter((x: any) => x.relation !== 'parent' && x.relation !== 'child') : related;
       const selfOrder = ordersInCluster.find((x: any) => x.id === selectedIds[0]) || order;
       const targetLabel = targetPoolId
-        ? `пул «${(pools[selectedProject?.id || ''] || []).find((p: any) => p.id === targetPoolId)?.name || targetPoolId.slice(0, 8)}»`
+        ? `кластер «${(pools[selectedProject?.id || ''] || []).find((p: any) => p.id === targetPoolId)?.name || targetPoolId.slice(0, 8)}»`
         : targetGroupId
           ? `группу «${(groups[selectedProject?.id || ''] || []).find((g: any) => g.id === targetGroupId)?.name || targetGroupId.slice(0, 8)}»`
-          : 'корень проекта (без группы/пула)';
+          : 'корень проекта (без группы/кластера)';
       const nameOf = (o: any) => o.ext_id || o.specification_name || o.id.slice(0, 8);
       const statusOf = (o: any) => {
         const parts: string[] = [];
         if (o.group_id) parts.push('в группе');
-        if (o.pool_id) parts.push('в пуле');
+        if (o.pool_id) parts.push('в кластере');
         if (o.has_cpm) parts.push('рассчитан (CPM)');
         return parts.length ? parts.join(' · ') : 'не сгруппирован';
       };
@@ -4801,7 +4802,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             )}
 
             <div style={{ fontSize: 12, color: '#F59E0B', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 8, padding: '10px 12px', marginBottom: 14, lineHeight: 1.5 }}>
-              При переносе всего куста связанные заказы будут отвязаны от своих прежних групп и пулов, а расчёты по ним (включая расчёты пулов) будут аннулированы.
+              При переносе всего куста связанные заказы будут отвязаны от своих прежних групп и кластеров, а расчёты по ним (включая расчёты кластеров) будут аннулированы.
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

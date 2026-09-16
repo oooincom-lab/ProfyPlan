@@ -71,9 +71,25 @@ def _shift_plural(n: int) -> str:
     return "%d операций сдвинуты" % n
 
 
+class ScheduleRequest(BaseModel):
+    start_date: Optional[datetime] = None
+    # «Что если» по мощности (шаг 2.9): множитель мощности всех ресурсов; 1.0 — обычный расчёт.
+    # Не сохраняется — только прикидка сценария.
+    power_factor: float = 1.0
+    # Авто-перевод заказов в «Завершён», если расчётный финиш уже прошёл (по умолчанию включён интерфейсом).
+    auto_complete: bool = False
+
+
+class CpmRequest(BaseModel):
+    """Параметры CPM-расчёта (тело запроса необязательно)."""
+    # Авто-перевод заказов в «Завершён», если расчётный финиш уже прошёл.
+    auto_complete: bool = False
+
+
 @calculator_router.post("/cpm")
 async def run_cpm(
     project_id: UUID,
+    body: Optional[CpmRequest] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
@@ -408,15 +424,6 @@ async def run_cpm(
         "warnings": warnings_cpm,
         "capacity_applied": bool(factors_cpm),
     }
-
-
-class ScheduleRequest(BaseModel):
-    start_date: Optional[datetime] = None
-    # «Что если» по мощности (шаг 2.9): множитель мощности всех ресурсов; 1.0 — обычный расчёт.
-    # Не сохраняется — только прикидка сценария.
-    power_factor: float = 1.0
-    # Авто-перевод заказов в «Завершён», если расчётный финиш уже прошёл (по умолчанию включён интерфейсом).
-    auto_complete: bool = False
 
 
 @calculator_router.post("/schedule")

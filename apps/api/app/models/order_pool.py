@@ -1,6 +1,6 @@
 """
 OrderPool — расчётное объединение заказов для CCM.
-Все заказы внутри пула: общий граф, общие ресурсы, единый критический путь.
+Все заказы внутри кластера: общий граф, общие ресурсы, единый критический путь.
 """
 import uuid
 from typing import Optional
@@ -12,7 +12,7 @@ from app.models.base import BaseModel
 
 
 class OrderPool(BaseModel):
-    """Пул заказов — CCM-объединение с общим графом и ресурсами."""
+    """Кластер заказов — CCM-объединение с общим графом и ресурсами."""
     __tablename__ = "order_pools"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

@@ -124,7 +124,7 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
     });
     setSelId(id);
   };
-  // Выделение строк мышью (как в группах/пулах): клик — накопление, Shift — диапазон от
+  // Выделение строк мышью (как в группах/кластерах): клик — накопление, Shift — диапазон от
   // последней выделенной, Ctrl/⌘ — точечно. В режиме выбора (onSelect) клик выбирает одну запись.
   const handleRowClick = (row: any, e: React.MouseEvent) => {
     if (editingId === row.id) return;

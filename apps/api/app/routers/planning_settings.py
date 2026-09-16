@@ -110,6 +110,25 @@ async def update_settings(
     return {"ok": True, "saved": len(data), "effective": eff["values"]}
 
 
+@router.post("/reset-defaults")
+async def reset_defaults(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Полный сброс настроек планирования к значениям по умолчанию.
+
+    Снимаются переопределения всех уровней (рабочий стол, проекты, группы) —
+    все параметры возвращаются к заводским значениям системы.
+    """
+    rows = (await db.execute(
+        select(PlanningSettings).where(PlanningSettings.tenant_id == tenant_id)
+    )).scalars().all()
+    for row in rows:
+        await db.delete(row)
+    await db.commit()
+    return {"ok": True, "removed": len(rows)}
+
+
 @router.delete("")
 async def reset_settings(
     scope: str,

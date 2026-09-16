@@ -1,6 +1,7 @@
 'use client';
 
 import { type MouseEvent as ReactMouseEvent } from 'react';
+import { priorityLabel, priorityBadgeClass, ORDER_PRIORITY_OPTIONS } from '@/lib/priority';
 
 export interface ListWinRec {
   id: string;
@@ -84,7 +85,7 @@ export default function ListWindowsLayer(props: {
                       <td className="t-name">{o.specification_name || o.ext_id || '—'}</td>
                       <td>{o.client || '—'}</td>
                       <td className="t-mono">{o.quantity} {o.unit}</td>
-                      <td><span className={`badge ${o.priority}`}>{o.priority === 'high' ? 'Выс.' : o.priority === 'critical' ? 'Крит.' : o.priority === 'low' ? 'Низк.' : 'Обыч.'}</span></td>
+                      <td><span className={`badge ${priorityBadgeClass(o.priority)}`}>{priorityLabel(o.priority)}</span></td>
                       <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? 'Черновик' : o.status === 'planned' ? 'План' : o.status === 'in_progress' ? 'В работе' : o.status === 'completed' ? 'Завершён' : o.status}</span></td>
                     </tr>
                   ))}
@@ -104,7 +105,7 @@ export default function ListWindowsLayer(props: {
                 <div key={p.id} onClick={() => onOpenPool(p)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderBottom: '1px dashed rgba(30,58,95,.5)', cursor: 'pointer', borderRadius: 6 }}>
                   <span style={{ flex: 1 }}>📦 {p.name}</span>
                 </div>
-              )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Пулов нет</div>
+              )) : <div style={{ color: '#5A7090', padding: 24, textAlign: 'center' }}>Кластеров нет</div>
             )}
           </div>
         </div>

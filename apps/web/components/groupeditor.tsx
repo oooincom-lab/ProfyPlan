@@ -276,7 +276,7 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
             }}>
             <div className="panel-hdr">
               <div>
-                <span className="panel-title">📦 Пулы в группе</span>
+                <span className="panel-title">📦 Кластеры в группе</span>
                 <span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{groupPools.length}</span>
               </div>
               <span className="t-mono" style={{ fontSize: 11, color: selGroup.pools.size > 0 ? '#A78BFA' : '#5A7090' }}>
@@ -286,7 +286,7 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
             <div style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
               {groupPools.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 20, color: '#5A7090', fontSize: 11, border: '2px dashed rgba(139,92,246,.1)', borderRadius: 8, margin: 4 }}>
-                  Перетащите пулы сюда
+                  Перетащите кластеры сюда
                 </div>
               ) : (
                 groupPools.map(p => (
@@ -336,14 +336,14 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
             onMouseEnter={e => { if (selFree.pools.size > 0) { e.currentTarget.style.background = 'rgba(139,92,246,.12)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,.5)'; } }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,.04)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,.25)'; }}>
             {arrowSVG('left', selFree.pools.size > 0 ? '#A78BFA' : '#5A7090')}
-            <span>+ Пулы</span>
+            <span>+ Кластеры</span>
           </button>
           <button onClick={() => removePools(Array.from(selGroup.pools))}
             disabled={selGroup.pools.size === 0} style={btnStyle(72)}
             onMouseEnter={e => { if (selGroup.pools.size > 0) { e.currentTarget.style.background = 'rgba(139,92,246,.12)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,.5)'; } }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,.04)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,.25)'; }}>
             {arrowSVG('right', selGroup.pools.size > 0 ? '#A78BFA' : '#5A7090')}
-            <span>− Пулы</span>
+            <span>− Кластеры</span>
           </button>
         </div>
 
@@ -399,7 +399,7 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
             }}>
             <div className="panel-hdr">
               <div>
-                <span className="panel-title">📦 Свободные пулы</span>
+                <span className="panel-title">📦 Свободные кластеры</span>
                 <span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{freePools.length}</span>
               </div>
               <span className="t-mono" style={{ fontSize: 11, color: selFree.pools.size > 0 ? '#A78BFA' : '#5A7090' }}>
@@ -409,7 +409,7 @@ export default function GroupEditor({ group, orders, pools, onClose, onRefresh, 
             <div style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
               {freePools.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 20, color: '#5A7090', fontSize: 11, border: '2px dashed rgba(139,92,246,.1)', borderRadius: 8, margin: 4 }}>
-                  Все пулы распределены
+                  Все кластеры распределены
                 </div>
               ) : (
                 freePools.map(p => (

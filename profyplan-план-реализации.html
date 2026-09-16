@@ -219,6 +219,38 @@ a:hover{text-decoration:underline}
 </div>
 </div>
 
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">Next</span> 6.4 Перед фазой 2: CPM и Гант — довести до корректной работы (16.09.2026)</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CPM-эндпоинт падал с 500</div><div class="detail">В /calculate/cpm использовалась неопределённая переменная body — расчёт не запускался ни на одном проекте с операциями. Исправлено, проверено: 45 операций, критических 15.</div></div><span class="status green">исправлено</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Движок CPM: зависимости FF/SF</div><div class="detail">Прямой и обратный проход для FF и SF считаются неверно (сейчас не проявляется — все 151 зависимость типа FS).</div></div><span class="status">в работе</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Критический путь как путь</div><div class="detail">Сейчас это список операций с нулевым резервом без порядка; нужен упорядоченный путь и корректная обработка нескольких ветвей.</div></div><span class="status">в работе</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Согласовать CPM и Гант</div><div class="detail">Гант строится по календарному расчёту (дни, графики работы), CPM — по чистой длительности сети (часы). Нужно единое объяснение и, где надо, приведение к одному виду.</div></div><span class="status">в работе</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">Next</span> 6.5 Приоритетный расчёт заказа (согласовано 16.09.2026)</div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Шаг 1. Реквизит и настройки</div><div class="detail">Флаг «Приоритетный заказ», наследование по цепочке с блокировкой поля и пояснением, раздел настроек проекта «Использование приоритетных заказов», подсказки к каждому полю.</div></div><span class="status">в работе</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Шаг 2. Якорь начала</div><div class="detail">Жёсткая фиксация даты и времени старта приоритетного заказа, пересчёт, журнал сдвигов, откат, призрак «до/после».</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Шаг 3. Приоритет по ресурсам и окно конфликта</div><div class="detail">Вытеснение без разрезания; окно конфликта из четырёх действий (предложение по умолчанию первым); конкуренция приоритетных по приоритетам.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Шаг 4. Переплетение (разрезание)</div><div class="detail">Деление ресурса по сменам с предохранителями: минимальный участок, лимит участников, повторная переналадка, без каскада.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Чистка приоритетов заказов</div><div class="detail">Один справочник значений и подписей (низкий · обычный · высокий · срочный), проверка на входе, починка данных; живой приоритет — только очерёдность.</div></div><span class="status">в работе</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-done">Done</span> 6.6 «Кластер» и уровни настроек (17.09.2026)</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Переименование «Пул» → «Кластер»</div><div class="detail">Только пользовательские тексты: 102 вхождения в 17 файлах. Таблица, поле привязки и адреса запросов оставлены как есть — риск нулевой.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Уровни настроек: проект — политика, кластер — ресурсы</div><div class="detail">Уровень по умолчанию в панели — «Проект»; «наследование приоритета» перенесено в «Интерфейс»; добавлены параметры целостности цепочки и «свободный заказ = кластер из одного».</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Уровень «Кластер» в цепочке разрешения</div><div class="detail">Система → рабочий стол → проект → группа → кластер; правила конкуренции за ресурс живут в кластере.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Реквизит «Приоритетный заказ»</div><div class="detail">Наследование по цепочке заказов, заблокированное поле с пояснением, поведение выше любого приоритета.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Целостность цепочки в интерфейсе</div><div class="detail">При добавлении заказа в кластер или группу подтягивать всю цепочку (или спрашивать) — по настройке.</div></div><span class="status">в плане</span></div>
+</div>
+</div>
+
 <!-- Timeline -->
 <h2>Хронология поставок</h2>
 <div class="timeline">

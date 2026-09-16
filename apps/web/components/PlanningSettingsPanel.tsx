@@ -37,7 +37,8 @@ export default function PlanningSettingsPanel({
 }) {
   const [params, setParams] = useState<Param[]>([]);
   const [values, setValues] = useState<Record<string, { value: any; source: string }>>({});
-  const [scope, setScope] = useState<'workspace' | 'project' | 'group'>('workspace');
+  // Если панель открыта из проекта — сразу уровень «Проект» (политика плана живёт в проекте).
+  const [scope, setScope] = useState<'workspace' | 'project' | 'group'>(projectId ? 'project' : 'workspace');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
@@ -134,6 +135,19 @@ export default function PlanningSettingsPanel({
     setBusy(false);
   };
 
+  // Полный сброс: снимает переопределения всех уровней — настройки возвращаются к заводским.
+  const resetDefaults = async () => {
+    if (typeof window !== 'undefined' && !window.confirm(
+      'Сбросить все настройки планирования к значениям по умолчанию?\n\nБудут сняты переопределения всех уровней: рабочий стол, проекты и группы.')) return;
+    setBusy(true);
+    try {
+      const r = await af('/planning-settings/reset-defaults', { method: 'POST' });
+      await load();
+      setMsg('Настройки сброшены к значениям по умолчанию — снято переопределений: ' + (r.removed ?? 0));
+    } catch (e: any) { setMsg(String(e.message || e)); }
+    setBusy(false);
+  };
+
   const paramGroups = Array.from(new Set(params.map(p => p.group)));
   const isOverride = (key: string) => values[key]?.source === scope;
 
@@ -197,6 +211,11 @@ export default function PlanningSettingsPanel({
             title="Убрать все переопределения этого уровня"
             style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>
             Сбросить уровень
+          </button>
+          <button type="button" onClick={resetDefaults} disabled={busy}
+            title="Вернуть все настройки планирования к заводским значениям: снимает переопределения рабочего стола, проектов и групп"
+            style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: '#FCA5A5', borderRadius: 8, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+            ↺ Настройки по умолчанию
           </button>
         </span>
       </div>

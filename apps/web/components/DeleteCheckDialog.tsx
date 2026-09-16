@@ -182,7 +182,7 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
           {(result?.can_delete || (!!replaceWith && (replaceOptions?.length || 0) > 0)) && (
             <button className="dc-btn dc-btn-danger" onClick={handleDelete} disabled={deleting}>
               
-              {deleting ? 'Удаление...' : (totalCascade > 0 ? 'Удалить всё (' + (totalCascade + 1) + ')' : (result?.detach?.length ? 'Удалить пул (освободить ' + result.detach.reduce((s, d) => s + d.count, 0) + ')' : 'Удалить'))}
+              {deleting ? 'Удаление...' : (totalCascade > 0 ? 'Удалить всё (' + (totalCascade + 1) + ')' : (result?.detach?.length ? 'Удалить кластер (освободить ' + result.detach.reduce((s, d) => s + d.count, 0) + ')' : 'Удалить'))}
             </button>
           )}
         </div>

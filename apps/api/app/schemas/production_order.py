@@ -18,7 +18,8 @@ class ProductionOrderCreate(BaseModel):
     unit: str = "pcs"
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-    priority: str = "normal"
+    # Единый набор: low | normal | high | critical (подпись «Срочный» = critical).
+    priority: str = Field(default="normal", pattern="^(low|normal|high|critical)$")
     client: Optional[str] = None
     client_id: Optional[str] = None
     notes: Optional[str] = None
@@ -62,6 +63,7 @@ class ExcelOrderRow(BaseModel):
     quantity: float = 1.0
     start_date: Optional[str] = None  # "2026-08-01"
     due_date: Optional[str] = None
+    # На входе допускаем русские подписи и код urgent — словарь импорта приведёт к канону.
     priority: str = "normal"
     client: str = ""
     parent_order_id: Optional[str] = None  # ext_id родительского заказа (куст)

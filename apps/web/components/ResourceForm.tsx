@@ -93,7 +93,7 @@ export default function ResourceForm({ form, onChange, schedules, saving, onSave
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl()}>Доступ</span>
           <select value={form.scope || 'shared'} onChange={e => onChange({ scope: e.target.value })} style={input()}>
-            <option value="shared">🌐 Общий (межпроектный пул)</option>
+            <option value="shared">🌐 Общий (межпроектный кластер)</option>
             <option value="project">🔒 Проектный (резерв под один проект)</option>
           </select>
         </label>

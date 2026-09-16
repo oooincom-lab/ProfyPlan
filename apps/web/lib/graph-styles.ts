@@ -6,7 +6,7 @@
  *
  * Цвета разделены на смысловые и объектовые:
  *   смысловые — критические операции (красный), операции с резервом (синий);
- *   объектовые — простой заказ, группа с маркерами, пул (варьируется палитрой).
+ *   объектовые — простой заказ, группа с маркерами, кластер (варьируется палитрой).
  */
 
 export type GraphPaletteGroup = 'plain' | 'deep' | 'deepest' | 'brand';
@@ -15,11 +15,11 @@ export interface GraphPalette {
   id: string;
   group: GraphPaletteGroup;
   name: string;
-  /** цвет рамки и контура объектов пула */
+  /** цвет рамки и контура объектов кластера */
   frame: string;
-  /** цвет заливки области пула */
+  /** цвет заливки области кластера */
   fill: string;
-  /** плотность заливки области пула (0..1) */
+  /** плотность заливки области кластера (0..1) */
   fillOpacity: number;
   note: string;
 }
@@ -35,13 +35,13 @@ export const GRAPH_PALETTES: GraphPalette[] = [
   // 1–6 обычная заливка
   { id: 'jade', group: 'plain', name: 'Нефрит', frame: '#4FB79B', fill: '#17453C', fillOpacity: 0.55, note: 'Спокойный зелёный: не спорит с критическим.' },
   { id: 'sea', group: 'plain', name: 'Море', frame: '#3FA9C9', fill: '#123F4C', fillOpacity: 0.55, note: 'Близок к цвету заказа, отличие по насыщенности.' },
-  { id: 'graphite', group: 'plain', name: 'Графит', frame: '#8A9CB3', fill: '#26313F', fillOpacity: 0.7, note: 'Нейтральный: пул как служебный объект.' },
-  { id: 'rose', group: 'plain', name: 'Пыльная роза', frame: '#C77E93', fill: '#4A2531', fillOpacity: 0.6, note: 'Явно «не красный», пул и критические не спутать.' },
+  { id: 'graphite', group: 'plain', name: 'Графит', frame: '#8A9CB3', fill: '#26313F', fillOpacity: 0.7, note: 'Нейтральный: кластер как служебный объект.' },
+  { id: 'rose', group: 'plain', name: 'Пыльная роза', frame: '#C77E93', fill: '#4A2531', fillOpacity: 0.6, note: 'Явно «не красный», кластер и критические не спутать.' },
   { id: 'lavender', group: 'plain', name: 'Глубокая лаванда', frame: '#9C8BE0', fill: '#2E2A4D', fillOpacity: 0.65, note: 'Близко к цвету группы — только вместе со сменой цвета группы.' },
   { id: 'copper', group: 'plain', name: 'Медь', frame: '#C08A5A', fill: '#4A2F1C', fillOpacity: 0.6, note: 'Тёплый, мягче янтарного.' },
 
   // 7–12 глубокая
-  { id: 'jade-deep', group: 'deep', name: 'Нефрит глубокий', frame: '#3E9A82', fill: '#08211C', fillOpacity: 0.95, note: 'Плотный тёмный фон: пул как отдельная зона.' },
+  { id: 'jade-deep', group: 'deep', name: 'Нефрит глубокий', frame: '#3E9A82', fill: '#08211C', fillOpacity: 0.95, note: 'Плотный тёмный фон: кластер как отдельная зона.' },
   { id: 'sea-deep', group: 'deep', name: 'Море глубокое', frame: '#2E86A3', fill: '#07202A', fillOpacity: 0.95, note: 'Плотный фон, бирюзовая рамка.' },
   { id: 'graphite-deep', group: 'deep', name: 'Графит глубокий', frame: '#6E7F94', fill: '#151D26', fillOpacity: 0.95, note: 'Сдержанный служебный вид.' },
   { id: 'rose-deep', group: 'deep', name: 'Роза глубокая', frame: '#A96377', fill: '#2A1119', fillOpacity: 0.95, note: 'Тёмный фон, розовая рамка.' },
@@ -50,8 +50,8 @@ export const GRAPH_PALETTES: GraphPalette[] = [
 
   // 13–18 бездонная
   { id: 'jade-abyss', group: 'deepest', name: 'Нефрит бездонный', frame: '#2E7D69', fill: '#051512', fillOpacity: 1, note: 'Почти чёрный фон, рамка несёт гамму.' },
-  { id: 'sea-abyss', group: 'deepest', name: 'Море бездонное', frame: '#24708A', fill: '#04141C', fillOpacity: 1, note: 'Максимальный контраст для критических внутри пула.' },
-  { id: 'graphite-abyss', group: 'deepest', name: 'Графит бездонный', frame: '#55637A', fill: '#0C1117', fillOpacity: 1, note: 'Пул как «тёмная зона» без цвета.' },
+  { id: 'sea-abyss', group: 'deepest', name: 'Море бездонное', frame: '#24708A', fill: '#04141C', fillOpacity: 1, note: 'Максимальный контраст для критических внутри кластера.' },
+  { id: 'graphite-abyss', group: 'deepest', name: 'Графит бездонный', frame: '#55637A', fill: '#0C1117', fillOpacity: 1, note: 'Кластер как «тёмная зона» без цвета.' },
   { id: 'rose-abyss', group: 'deepest', name: 'Роза бездонная', frame: '#8C4C60', fill: '#1B0A10', fillOpacity: 1, note: 'Тёмная зона с розовой рамкой.' },
   { id: 'lavender-abyss', group: 'deepest', name: 'Лаванда бездонная', frame: '#6A5CA8', fill: '#0F0B20', fillOpacity: 1, note: 'Тёмная зона с фиолетовой рамкой.' },
   { id: 'copper-abyss', group: 'deepest', name: 'Медь бездонная', frame: '#8A5C3A', fill: '#1B0F06', fillOpacity: 1, note: 'Тёмная зона с медной рамкой.' },

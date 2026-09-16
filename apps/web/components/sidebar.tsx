@@ -127,7 +127,7 @@ export default function Sidebar(props: SidebarProps) {
         <span className="s-fh">{p.name}</span>
         <span className="s-fi" onClick={() => loadProjectOrdersView(p)}>📋 Заказы</span>
         <span className="s-fi" onClick={() => { onSelectGroup(null, p); loadProjectGroups(p); }}>📁 Группы</span>
-        <span className="s-fi" onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}>📦 Пулы</span>
+        <span className="s-fi" onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}>📦 Кластеры</span>
         <span className="s-fi" onClick={() => { setSelectedProject(p); setView('settings'); }}>⚙️ Настройки</span>
         <span className="s-fi" onClick={() => loadProjectGantt(p)}>📊 Диаграмма Ганта</span>
       </span>
@@ -185,14 +185,14 @@ export default function Sidebar(props: SidebarProps) {
                 <span className="s-fh">{openProj.name}<small>открыт</small></span>
                 <span className="s-fi active" onClick={() => loadProjectOrdersView(openProj)}>📋 Заказы</span>
                 <span className="s-fi" onClick={() => { onSelectGroup(null, openProj); loadProjectGroups(openProj); }}>📁 Группы</span>
-                <span className="s-fi" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}>📦 Пулы</span>
+                <span className="s-fi" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}>📦 Кластеры</span>
                 <span className="s-fi" onClick={() => { setSelectedProject(openProj); setView('settings'); }}>⚙️ Настройки</span>
                 <span className="s-fi" onClick={() => loadProjectGantt(openProj)}>📊 Диаграмма Ганта</span>
               </span>
             </button>
             <button className="s-rail-item" onClick={() => loadProjectOrdersView(openProj)}><span className="s-tip">Заказы</span>📋</button>
             <button className="s-rail-item" onClick={() => { onSelectGroup(null, openProj); loadProjectGroups(openProj); }}><span className="s-tip">Группы</span>📁</button>
-            <button className="s-rail-item" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}><span className="s-tip">Пулы</span>📦</button>
+            <button className="s-rail-item" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}><span className="s-tip">Кластеры</span>📦</button>
             <button className="s-rail-item" onClick={() => { setSelectedProject(openProj); setView('settings'); }}><span className="s-tip">Настройки</span>⚙️</button>
             <button className="s-rail-item" onClick={() => loadProjectGantt(openProj)}><span className="s-tip">Диаграмма Ганта</span>📊</button>
           </div>
@@ -452,7 +452,7 @@ export default function Sidebar(props: SidebarProps) {
                   </div>
                 ))}
 
-                {/* Пулы — arrow + name */}
+                {/* Кластеры — arrow + name */}
                 <div
                   className="s-sub"
                   style={view === 'project-pools' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
@@ -468,7 +468,7 @@ export default function Sidebar(props: SidebarProps) {
                     onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}
                     style={{ cursor: 'pointer' }}
                   >
-                    📦 Пулы{debug && <DebugBadge debug={debug} text="[nav:pools]" />}
+                    📦 Кластеры{debug && <DebugBadge debug={debug} text="[nav:pools]" />}
                   </span>
                 </div>
 

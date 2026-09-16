@@ -132,7 +132,7 @@ async def delete_group(
     )).scalars().all()
     for o in orders:
         o.group_id = None
-    # Возвращаем пулы группы в корень
+    # Возвращаем кластеры группы в корень
     pools = (await db.execute(
         select(OrderPool).where(OrderPool.group_id == group_id)
     )).scalars().all()
@@ -177,7 +177,7 @@ async def create_pool(
     db.add(pool)
     await db.flush()
 
-    # Перемещаем заказы в пул
+    # Перемещаем заказы в кластер
     for oid in body.order_ids:
         result = await db.execute(
             select(ProductionOrder).where(ProductionOrder.id == oid, ProductionOrder.tenant_id == tenant_id)
@@ -185,7 +185,7 @@ async def create_pool(
         order = result.scalar_one_or_none()
         if order:
             order.pool_id = pool.id
-            order.group_id = None  # заказ в пуле не может быть в группе напрямую
+            order.group_id = None  # заказ в кластере не может быть в группе напрямую
 
     await db.commit()
     await db.refresh(pool)
@@ -204,7 +204,7 @@ async def delete_pool(
     )
     pool = result.scalar_one_or_none()
     if not pool:
-        raise HTTPException(404, "Пул не найден")
+        raise HTTPException(404, "Кластер не найден")
     # Возвращаем заказы в корень проекта
     orders = (await db.execute(
         select(ProductionOrder).where(ProductionOrder.pool_id == pool_id)
@@ -232,7 +232,7 @@ async def move_pool(
     )
     pool = result.scalar_one_or_none()
     if not pool:
-        raise HTTPException(404, "Пул не найден")
+        raise HTTPException(404, "Кластер не найден")
     pool.group_id = body.group_id
     await db.commit()
     return {"ok": True, "group_id": str(pool.group_id) if pool.group_id else None}

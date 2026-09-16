@@ -75,7 +75,7 @@ class ProductionOrder(BaseModel):
         Integer, nullable=True
     )
 
-    # Группа / Пул (ровно одно из двух или оба NULL = в корне проекта)
+    # Группа / Кластер (ровно одно из двух или оба NULL = в корне проекта)
     group_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("order_groups.id", ondelete="SET NULL"),
         nullable=True,
