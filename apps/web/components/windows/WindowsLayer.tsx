@@ -18,6 +18,41 @@ import AppModal from '@/components/AppModal';
 import { API_ORIGIN, API_V1 } from '@/lib/api';
 import { CatalogOpEditForm } from '@/components/CatalogOps';
 
+// ── Единая шапка MDI-окна: свернуть, развернуть, раскладка окон (Snap), закрыть ──
+// Все типы окон обязаны использовать эту шапку — иначе набор кнопок расходится
+// (часть окон раньше рисовала свою шапку без «Раскладки окон»).
+type WinTitleBarProps = {
+  w: WinRec;
+  dot: string;
+  title: string;
+  debug?: boolean;
+  debugId?: { badge: string; copy: string };
+  onDrag: (e: any, w: WinRec) => void;
+  onReset: (id: string) => void;
+  onToggleMin: (id: string) => void;
+  onToggleMax: (id: string) => void;
+  onClose: (id: string) => void;
+  onSnap: (id: string) => void;
+};
+
+function WinTitleBar({ w, dot, title, debug, debugId, onDrag, onReset, onToggleMin, onToggleMax, onClose, onSnap }: WinTitleBarProps) {
+  return (
+    <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      <span className="ttl">{title}</span>
+      {debug && debugId && <DebugBadge text={debugId.badge} copy={debugId.copy} debug={debug} />}
+      <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
+      <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
+        {w.max
+          ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V6a2 2 0 0 1 2-2h3" /><path d="M20 9V6a2 2 0 0 0-2-2h-3" /><path d="M4 15v3a2 2 0 0 0 2 2h3" /><path d="M20 15v3a2 2 0 0 1-2 2h-3" /></svg>
+          : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3H6a3 3 0 0 0-3 3v3" /><path d="M15 3h3a3 3 0 0 1 3 3v3" /><path d="M9 21H6a3 3 0 0 1-3-3v-3" /><path d="M15 21h3a3 3 0 0 0 3-3v-3" /></svg>}
+      </button>
+      <button className="pp-wbtn" title="Раскладка окон (Snap)" onClick={(e) => { e.stopPropagation(); onSnap(w.id); }}>⛶</button>
+      <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
+    </div>
+  );
+}
+
 type WindowsLayerProps = {
   wins: WinRec[];
   lay: LayState | null;
@@ -283,6 +318,14 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
   };
 
+  // Открыть выбор раскладки (Snap) для конкретного окна.
+  const snapWin = (id: string) => {
+    onFocus(id);
+    setSnapSel(null);
+    setSnapCell(-1);
+    setLay(prev => (prev && prev.winId === id && !prev.cols) ? null : { winId: id, cols: 0, rows: 0, placed: [] });
+  };
+
   const reorderWins = (from: number, to: number) => {
     setWins(prev => {
       const arr = [...prev];
@@ -315,13 +358,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
               onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
-                <span className="ttl">{w.title || 'Новый заказ'}</span>
-                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
-              </div>
+              <WinTitleBar w={w} dot="#22D3EE" title={w.title || 'Новый заказ'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
               <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto', height: 'calc(100% - 32px)' }}>
                 <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Название заказа *</div>
                 <input value={f.specification_name || ''} onChange={e => set('specification_name', e.target.value)} placeholder="Например: Мост автомобильный"
@@ -388,14 +425,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
               onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: ((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? '#A78BFA' : '#F59E0B', flexShrink: 0 }} />
-                <span className="ttl">{w.title || (((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? 'Графики работы' : 'Производственные календари')}</span>
-                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>⛶</button>
-                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
-              </div>
+              <WinTitleBar w={w} dot={((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? '#A78BFA' : '#F59E0B'} title={w.title || (((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? 'Графики работы' : 'Производственные календари')} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
               <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 {((w.kind as any) === 'wsched' || (w.kind as any) === 'wsched-edit') ? <WorkScheduleManager debug={debug} selectMode={(w.kind as any) === 'wsched' ? !!(w.data as any)?.selectMode : false} mode={(w.kind as any) === 'wsched-edit' ? 'edit' : 'list'} schedule={(w.kind as any) === 'wsched-edit' ? (w.data as any)?.schedule : null} onEditItem={(w.kind as any) === 'wsched' ? ((s: any) => onOpenWschedEdit ? onOpenWschedEdit(s) : null) : undefined} onCreate={(w.kind as any) === 'wsched' ? (() => onOpenWschedEdit ? onOpenWschedEdit(null) : null) : undefined} refreshKey={refreshWsched} onPick={(w.kind as any) === 'wsched' ? ((s: any) => { const cb = (w.data as any)?.onPick; cb?.(s); setWins(prev => prev.filter((x: any) => x.id !== w.id)); }) : undefined} onSaved={(w.kind as any) === 'wsched-edit' ? (() => { setWins(prev => prev.filter((x: any) => x.id !== w.id)); onWschedChanged?.(); }) : undefined} onClose={(w.kind as any) === 'wsched-edit' ? (() => setWins(prev => prev.filter((x: any) => x.id !== w.id))) : undefined} /> : <ProductionCalendarManager debug={debug} />}
               </div>
@@ -416,13 +446,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
               onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
-                <span className="ttl">{w.title || 'Календарь ресурса'}</span>
-                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
-              </div>
+              <WinTitleBar w={w} dot="#22D3EE" title={w.title || 'Календарь ресурса'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
               <div style={{ padding: '12px 14px', overflow: 'auto', height: 'calc(100% - 32px)' }}>
                 <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>Ресурс: <b style={{ color: '#E8EEF5' }}>{w.data?.resourceName || '—'}</b></div>
 
@@ -503,13 +527,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
                 style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
                 onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-                <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} />
-                  <span className="ttl">{w.data?.title || w.title}</span>
-                  {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                  <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                  <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>×</button>
-                </div>
+                <WinTitleBar w={w} dot="#10B981" title={w.data?.title || w.title} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
                 <div style={{ padding: '12px 14px', overflow: 'auto' }}>
                   {cols.map((c: any) => (
                     <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
@@ -568,14 +586,21 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
           // ── Окно редактирования записи справочника (универсальное по колонкам) ──
           if (w.kind === 'catoped') {
-    return (
-      <CatalogOpEditForm
-        item={w.data || null}
-        onSaved={() => { try { window.dispatchEvent(new Event('profyplan:catalog-ops-changed')); } catch {} }}
-        onClose={() => onClose(w.id)}
-      />
-    );
-  }
+            return (
+              <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+                style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+                onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+                <WinTitleBar w={w} dot="#A78BFA" title={w.title || 'Операция справочника'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
+                <div style={{ padding: '12px 14px', overflow: 'auto' }}>
+                  <CatalogOpEditForm
+                    item={w.data || null}
+                    onSaved={() => { try { window.dispatchEvent(new Event('profyplan:catalog-ops-changed')); } catch {} }}
+                    onClose={() => onClose(w.id)}
+                  />
+                </div>
+              </div>
+            );
+          }
   if (w.kind === 'diredit') {
             const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position'].includes(c.key));
             const rowsForm = (w.form || {}) as Record<string, string>;
@@ -584,13 +609,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
                 style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
                 onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-                <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} />
-                  <span className="ttl">{w.data?.title || w.title}</span>
-                  {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                  <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                  <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>×</button>
-                </div>
+                <WinTitleBar w={w} dot="#10B981" title={w.data?.title || w.title} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
                 <div style={{ padding: '12px 14px', overflow: 'auto' }}>
                   {cols.map((c: any) => (
                     <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
@@ -655,13 +674,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
             <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
               style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
               onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-              <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
-                <span className="ttl">{w.title || 'Добавить операцию в маршрут'}</span>
-                {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-                <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-                <button className="pp-wbtn" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
-              </div>
+              <WinTitleBar w={w} dot="#22D3EE" title={w.title || 'Добавить операцию в маршрут'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
               <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto', height: 'calc(100% - 32px)' }}>
                 <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>Операция * <span style={{ color: '#5A7090' }}>(из каталога операций; длительность подставится по умолчанию):</span></div>
                 <ReferenceField
@@ -736,19 +749,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
           <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
             style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
             onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
-            <div className="pp-win-title" onPointerDown={(e) => onDrag(e, w)} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.pp-wbtn')) return; onReset(w.id); }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isList ? '#22D3EE' : isBom ? '#A78BFA' : isDir ? '#10B981' : isResEdit ? '#F59E0B' : '#3B82F6', flexShrink: 0 }} />
-              <span className="ttl">{isList ? (w.title || 'Список') : isDir ? (w.title || 'Справочник') : isResEdit ? (w.title || 'Ресурс') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))}</span>
-              {debug && <DebugBadge text={debugIdOf(w, wi).badge} copy={debugIdOf(w, wi).copy} debug={debug} />}
-              <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
-              <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
-                {w.max
-                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V6a2 2 0 0 1 2-2h3" /><path d="M20 9V6a2 2 0 0 0-2-2h-3" /><path d="M4 15v3a2 2 0 0 0 2 2h3" /><path d="M20 15v3a2 2 0 0 1-2 2h-3" /></svg>
-                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3H6a3 3 0 0 0-3 3v3" /><path d="M15 3h3a3 3 0 0 1 3 3v3" /><path d="M9 21H6a3 3 0 0 1-3-3v-3" /><path d="M15 21h3a3 3 0 0 0 3-3v-3" /></svg>}
-              </button>
-              <button className="pp-wbtn" title="Раскладка окон (Snap)" onClick={(e) => { e.stopPropagation(); onFocus(w.id); setSnapSel(null); setSnapCell(-1); setLay(prev => (prev && prev.winId === w.id && !prev.cols) ? null : { winId: w.id, cols: 0, rows: 0, placed: [] }); }}>⛶</button>
-              <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
-            </div>
+            <WinTitleBar w={w} dot={isList ? '#22D3EE' : isBom ? '#A78BFA' : isDir ? '#10B981' : isResEdit ? '#F59E0B' : '#3B82F6'} title={isList ? (w.title || 'Список') : isDir ? (w.title || 'Справочник') : isResEdit ? (w.title || 'Ресурс') : ((o!.ext_id || o!.id) + ' · ' + (o!.specification_name || ''))} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
 
             {!isList && !isBom && !isDir && !isResEdit && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #1E3252', background: '#0D1F3A', flexShrink: 0 }}>
