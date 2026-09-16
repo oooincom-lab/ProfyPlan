@@ -17,6 +17,7 @@ class DepartmentUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=50)
     schedule_id: Optional[UUID] = None
     parent_id: Optional[UUID] = None
+    is_active: Optional[bool] = None
 
 
 class DepartmentOut(BaseModel):
@@ -28,4 +29,5 @@ class DepartmentOut(BaseModel):
     code: Optional[str] = None
     schedule_id: Optional[UUID] = None
     parent_id: Optional[UUID] = None
+    is_active: bool = True
     created_at: datetime

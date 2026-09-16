@@ -16,6 +16,7 @@ import ResourceForm from '@/components/ResourceForm';
 import DebugBadge from '@/components/DebugBadge';
 import AppModal from '@/components/AppModal';
 import { API_ORIGIN, API_V1 } from '@/lib/api';
+import { CatalogOpEditForm } from '@/components/CatalogOps';
 
 type WindowsLayerProps = {
   wins: WinRec[];
@@ -238,6 +239,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
+  if (w.kind === 'catoped') return w.title || 'Операция справочника';
     const o = w.data || orderById(w.orderId);
     const base = o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + base : base;
@@ -247,6 +249,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
+  if (w.kind === 'catoped') return w.title || 'Операция справочника';
     if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
     if (w.kind === 'cal') return w.title || 'Календарь ресурса';
     if (w.kind === 'wsched') return w.title || 'Графики работы';
@@ -274,6 +277,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'cal') return { badge: `[cal:openCalWin #${n}]`, copy: `[cal:openCalWin #${n}] «${title}»` };
     if (w.kind === 'wsched') return { badge: `[wsched:openWin #${n}]`, copy: `[wsched:openWin #${n}] «${title}»` };
     if (w.kind === 'wsched-edit') return { badge: `[wsched-edit:openWin #${n}]`, copy: `[wsched-edit:openWin #${n}] «${title}»` };
+  if (w.kind === 'catoped') return { badge: `[catoped:openWin #${n}]`, copy: `[catoped:openWin #${n}] «${title}»` };
     if (w.kind === 'pcal') return { badge: `[pcal:openWin #${n}]`, copy: `[pcal:openWin #${n}] «${title}»` };
     if (w.kind === 'neworder') return { badge: `[neworder:openWin #${n}]`, copy: `[neworder:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
@@ -563,7 +567,16 @@ export default function WindowsLayer(props: WindowsLayerProps) {
           }
 
           // ── Окно редактирования записи справочника (универсальное по колонкам) ──
-          if (w.kind === 'diredit') {
+          if (w.kind === 'catoped') {
+    return (
+      <CatalogOpEditForm
+        item={w.data || null}
+        onSaved={() => { try { window.dispatchEvent(new Event('profyplan:catalog-ops-changed')); } catch {} }}
+        onClose={() => onClose(w.id)}
+      />
+    );
+  }
+  if (w.kind === 'diredit') {
             const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position'].includes(c.key));
             const rowsForm = (w.form || {}) as Record<string, string>;
             const up = (patch: Record<string, string>) => setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, form: { ...x.form, ...patch } } : x));

@@ -8,7 +8,7 @@
 import uuid
 from typing import Optional
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import BaseModel
@@ -27,3 +27,4 @@ class ProjectStage(BaseModel):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")

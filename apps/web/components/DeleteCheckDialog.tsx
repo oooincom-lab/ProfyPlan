@@ -22,20 +22,34 @@ interface DeleteCheckDialogProps {
   loading?: boolean;
   error?: string | null;
   debug?: boolean;
+  /** Если задан — диалог предложит перенести ссылки на выбранную запись вместо простого удаления. */
+  replaceOptions?: { id: string; name: string }[];
+  /** Альтернатива удалению: убрать объект в архив (если удалить нельзя). */
+  onArchive?: () => void | Promise<void>;
+  replaceLabel?: string;
 }
 
-export default function DeleteCheckDialog({ entityType, entityId, entityName, onClose, onDeleted, result, loading, error, debug = false }: DeleteCheckDialogProps) {
+export default function DeleteCheckDialog({ entityType, entityId, entityName, onClose, onDeleted, result, loading, error, debug = false , replaceOptions, replaceLabel, onArchive}: DeleteCheckDialogProps) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [replaceWith, setReplaceWith] = useState<string>('');
+
+  const pluralRu = (n: number, one: string, few: string, many: string) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  };
 
   const handleDelete = async () => {
-    if (!result?.can_delete) return;
+    if (!result?.can_delete && !replaceWith) return;
     setDeleting(true);
     try {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const h: Record<string, string> = { 'Content-Type': 'application/json' };
       if (tok) h['Authorization'] = `Bearer ${tok}`;
-      const r = await fetch(API_V1 + '/safe-delete/' + entityType + '/' + entityId, {
+      const _q = replaceWith ? ('?replace_with=' + replaceWith) : '';
+      const r = await fetch(API_V1 + '/safe-delete/' + entityType + '/' + entityId + _q, {
         method: 'DELETE',
         headers: h,
       });
@@ -87,7 +101,7 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
         `}</style>
         <div className="dc-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h2 className="dc-title" style={{ margin: 0 }}>⚠️ Удаление {result?.entity.label.toLowerCase() || entityType}</h2>
+            <h2 className="dc-title" style={{ margin: 0 }}>⚠️ Удаление — {result?.entity.label || entityType}</h2>
             <DebugBadge debug={debug} text="[delete:dialog]" copy={`[delete:dialog] «${result?.entity.label.toLowerCase() || entityType}»`} />
           </div>
           <div className="dc-entity">{result?.entity.name || entityName || entityId}</div>
@@ -97,7 +111,7 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
           {displayError && <div className="dc-block"><div className="dc-block-title">Ошибка</div><div className="dc-row">{displayError}</div></div>}
           {result && !result.can_delete && totalBlocking > 0 && (
             <div className="dc-block">
-              <div className="dc-block-title">⛔ Невозможно удалить — {totalBlocking} ссылок</div>
+              <div className="dc-block-title">⛔ Невозможно удалить — {totalBlocking} {pluralRu(totalBlocking, 'связь', 'связи', 'связей')}</div>
               {result.blocking.map(b => (
                 <div key={b.key}>
                   <div style={{ fontSize: 12, color: '#FCA5A5', fontWeight: 500, marginTop: 6 }}>{b.label} ({b.count})</div>
@@ -133,11 +147,41 @@ export default function DeleteCheckDialog({ entityType, entityId, entityName, on
           {result && result.can_delete && totalCascade === 0 && (!result.detach || result.detach.length === 0) && (
             <div className="dc-safe"><div className="dc-safe-text">Объект нигде не используется. Удаление безопасно.</div></div>
           )}
+          {(!replaceOptions || replaceOptions.length === 0) && result && !result.can_delete && (
+            <div style={{ marginTop: 12, fontSize: 12.5, color: '#FCA5A5' }}>
+              Список операций для переноса пуст — перенос недоступен. Сообщите об этом: это не должно происходить.
+            </div>
+          )}
+          {replaceOptions && replaceOptions.length > 0 && (
+            <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.3)', borderRadius: 8 }}>
+              <div style={{ fontSize: 12.5, color: '#CBD8EA', marginBottom: 6 }}>
+                {result && !result.can_delete
+                  ? 'Есть связи — выберите, куда их перенести, и удаление станет возможным.'
+                  : 'Можно перенести связанные записи на другую операцию вместо простого удаления.'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12.5, color: '#8FA3BD' }}>{replaceLabel || 'Перенести ссылки на:'}</span>
+                <select value={replaceWith} onChange={(e) => setReplaceWith(e.target.value)}
+                  style={{ background: '#0B1522', color: '#E8EEF8', border: '1px solid #26364F', borderRadius: 6, padding: '4px 8px', fontSize: 12.5, minWidth: 200 }}>
+                  <option value="">— не переносить —</option>
+                  {replaceOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
         <div className="dc-footer">
-          <button className="dc-btn dc-btn-cancel" onClick={onClose} disabled={deleting}>{result?.can_delete === false ? 'OK' : 'Отмена'}</button>
-          {result?.can_delete && (
+          {onArchive && (
+            <button className="dc-btn" disabled={deleting}
+              onClick={async () => { setDeleting(true); try { await onArchive(); } finally { setDeleting(false); } onClose(); }}
+              style={{ background: 'rgba(148,163,184,.15)', color: '#CBD8EA', border: '1px solid #334155' }}>
+              🗄 Убрать в архив
+            </button>
+          )}
+          <button className="dc-btn dc-btn-cancel" onClick={onClose} disabled={deleting}>{result?.can_delete === false && !replaceWith ? 'OK' : 'Отмена'}</button>
+          {(result?.can_delete || (!!replaceWith && (replaceOptions?.length || 0) > 0)) && (
             <button className="dc-btn dc-btn-danger" onClick={handleDelete} disabled={deleting}>
+              
               {deleting ? 'Удаление...' : (totalCascade > 0 ? 'Удалить всё (' + (totalCascade + 1) + ')' : (result?.detach?.length ? 'Удалить пул (освободить ' + result.detach.reduce((s, d) => s + d.count, 0) + ')' : 'Удалить'))}
             </button>
           )}

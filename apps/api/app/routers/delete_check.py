@@ -175,7 +175,9 @@ DEPENDENCY_MAP = {
         "model": CatalogOperation,
         "label": "Операция (каталог)",
         "name_field": "name",
-        "cascade": [],
+        "cascade": [
+            ("operations", Operation, "catalog_operation_id", "name"),
+        ],
         "blocking": [
             ("routing_operations", RoutingOperation, "catalog_operation_id", "name"),
         ],
@@ -250,6 +252,8 @@ async def delete_check(
             'calendars': 'resource_calendar',
             'stages': 'stage',
             'operations': 'catalog_operation',
+            'catalog-operations': 'catalog_operation',
+            'catalog_operations': 'catalog_operation',
             'departments': 'department',
             'organizations': 'organization',
         }
@@ -352,6 +356,7 @@ async def delete_check(
 async def safe_delete(
     entity_type: str,
     entity_id: uuid.UUID,
+    replace_with: uuid.UUID | None = None,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -363,6 +368,8 @@ async def safe_delete(
             'calendars': 'resource_calendar',
             'stages': 'stage',
             'operations': 'catalog_operation',
+            'catalog-operations': 'catalog_operation',
+            'catalog_operations': 'catalog_operation',
             'departments': 'department',
             'organizations': 'organization',
         }
@@ -383,12 +390,31 @@ async def safe_delete(
         raise HTTPException(404, f"{info['label']} не найден")
 
     # 2. Verify no blocking references exist (double-check at deletion time)
-    for key, dep_model, fk_field, _name_col in info.get("blocking", []):
+    #    Если задана замена — ссылки перенаправляются, а не блокируют удаление.
+    _replace_mode = entity_type == "catalog_operation" and replace_with is not None
+    for key, dep_model, fk_field, _name_col in ([] if _replace_mode else info.get("blocking", [])):
         count = await _count(db, dep_model, fk_field, entity_id)
         if count > 0:
             raise HTTPException(409, f"Невозможно удалить: есть {count} ссылок ({BLOCKING_LABELS.get(key, key)})")
 
     # 3. Handle cascade deletions and cleanups
+    # catalog_operation + replace_with: переносим все ссылки на другую операцию справочника
+    if _replace_mode:
+        repl = (await db.execute(select(CatalogOperation).where(
+            CatalogOperation.id == replace_with, CatalogOperation.tenant_id == tenant_id
+        ))).scalar_one_or_none()
+        if not repl:
+            raise HTTPException(404, "Операция для замены не найдена")
+        if repl.id == entity_id:
+            raise HTTPException(400, "Нельзя заменить операцию самой собой")
+        moved = 0
+        for _k, dep_model, fk_field, _nc in (info.get("blocking", []) + info.get("cascade", [])):
+            rows = (await db.execute(select(dep_model).where(getattr(dep_model, fk_field) == entity_id))).scalars().all()
+            for row in rows:
+                setattr(row, fk_field, repl.id)
+                moved += 1
+        await db.flush()
+
     # order_pool: return orders to root before deleting
     if entity_type == "order_pool":
         orders = (await db.execute(

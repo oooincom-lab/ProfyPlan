@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
             request.scope["path"] = path[4:]
         return await call_next(request)
 
-    from app.routers import auth, projects, resources, global_resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check, project_stages, catalog_operations, departments, order_resources, schedule_assignments, calendar_exceptions, organizations, resource_events, reports, department_quotas, reports_loading, reports_departments, planning_settings, planning_pins
+    from app.routers import auth, projects, resources, global_resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check, directory_state, project_stages, catalog_operations, departments, order_resources, schedule_assignments, calendar_exceptions, organizations, resource_events, reports, department_quotas, reports_loading, reports_departments, planning_settings, planning_pins
     from app.routers.suppliers import sc_router
     app.include_router(auth.router)
     app.include_router(projects.router)
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(work_schedules.router)
     app.include_router(production_calendars.router)
     app.include_router(delete_check.router)
+    app.include_router(directory_state.router)
     app.include_router(project_stages.router)
     app.include_router(catalog_operations.router)
     app.include_router(departments.router)

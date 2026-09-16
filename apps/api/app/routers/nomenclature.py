@@ -16,10 +16,13 @@ router = APIRouter(prefix="/v1/nomenclature", tags=["nomenclature"])
 async def list_items(
     project_id: str | None = None,
     ntype: str | None = None,
+    include_archived: bool = False,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Nomenclature).where(Nomenclature.tenant_id == tenant_id)
+    if not include_archived:
+        stmt = stmt.where(Nomenclature.is_active.isnot(False))
     if project_id:
         stmt = stmt.where(Nomenclature.project_id == project_id)
     if ntype:

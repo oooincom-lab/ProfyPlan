@@ -9,6 +9,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import CatalogOpsImport from '@/components/CatalogOpsImport';
+import DeleteCheckDialog from '@/components/DeleteCheckDialog';
 
 type Item = {
   id: string; name: string; code?: string | null; article?: string | null; article_source?: string | null;
@@ -31,8 +32,7 @@ export default function CatalogOps({ panelMode }: { panelMode?: string }) {
   const [form, setForm] = useState<Partial<Item> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [similar, setSimilar] = useState<Item[]>([]);
-  const [del, setDel] = useState<{ item: Item; rel: any } | null>(null);
-  const [replaceWith, setReplaceWith] = useState<string>('');
+  const [del, setDel] = useState<{ item: Item; check: any; cands: { id: string; name: string }[] } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -54,6 +54,11 @@ export default function CatalogOps({ panelMode }: { panelMode?: string }) {
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [search, showArchived]);
+  useEffect(() => {
+    const h = () => { load(); };
+    window.addEventListener('profyplan:catalog-ops-changed', h);
+    return () => window.removeEventListener('profyplan:catalog-ops-changed', h);
+  }, [search, showArchived]);
 
   const checkSimilar = async (name: string) => {
     if (!name || name.trim().length < 4) { setSimilar([]); return; }
@@ -81,21 +86,21 @@ export default function CatalogOps({ panelMode }: { panelMode?: string }) {
   };
 
   const openDelete = async (item: Item) => {
-    const r = await fetch(api + '/v1/catalog-operations/' + item.id + '/relations', { headers: headers() });
-    setDel({ item, rel: r.ok ? await r.json() : null });
-    setReplaceWith('');
+    const r = await fetch(api + '/v1/delete-check/catalog_operation/' + item.id, { headers: headers() });
+    const check = r.ok ? await r.json() : null;
+    // кандидатов для переноса грузим здесь же — не зависим от того, успел ли загрузиться список панели
+    let cands: { id: string; name: string }[] = [];
+    try {
+      const lr = await fetch(api + '/v1/catalog-operations?limit=500', { headers: headers() });
+      if (lr.ok) {
+        const lj = await lr.json();
+        const arr = Array.isArray(lj) ? lj : (lj.items || []);
+        cands = arr.filter((x: any) => x.id !== item.id).map((x: any) => ({ id: x.id, name: x.name }));
+      }
+    } catch { /* без списка — просто без выбора переноса */ }
+    setDel({ item, check, cands });
   };
 
-  const doDelete = async (mode: 'plain' | 'replace' | 'force') => {
-    if (!del) return;
-    const q = mode === 'replace' ? '?replace_with=' + replaceWith : (mode === 'force' ? '?force=true' : '');
-    if (mode === 'replace' && !replaceWith) { setErr('Выберите операцию для замены'); return; }
-    const r = await fetch(api + '/v1/catalog-operations/' + del.item.id + q, { method: 'DELETE', headers: headers() });
-    if (r.status === 204) { setDel(null); setMsg('Удалено'); load(); return; }
-    let d: any = null;
-    try { d = await r.json(); } catch {}
-    setErr(typeof d?.detail === 'string' ? d.detail : 'Не удалось удалить: ' + r.status);
-  };
 
   const field = (label: string, node: React.ReactNode) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
@@ -134,7 +139,7 @@ export default function CatalogOps({ panelMode }: { panelMode?: string }) {
             {items.map((it) => (
               <tr key={it.id} style={{ opacity: it.is_active === false ? 0.5 : 1 }}>
                 <td style={{ padding: '7px 10px', borderBottom: '1px solid #1E2C42', color: '#8FA3BD' }}>{it.code || '—'}</td>
-                <td style={{ padding: '7px 10px', borderBottom: '1px solid #1E2C42' }}>{it.name}</td>
+                <td style={{ padding: '7px 10px', borderBottom: '1px solid #1E2C42' }}>{it.name}{it.is_active === false && (<span title="Запись в архиве" style={{ marginLeft: 6, color: '#EF4444', fontSize: 13, lineHeight: 1, cursor: 'help' }}>⊘</span>)}</td>
                 <td style={{ padding: '7px 10px', borderBottom: '1px solid #1E2C42', color: '#8FA3BD' }}>{TYPE_LABEL[it.op_type || 'work']}</td>
                 <td style={{ padding: '7px 10px', borderBottom: '1px solid #1E2C42' }}>
                   {it.norm_typical ?? '—'}
@@ -146,7 +151,12 @@ export default function CatalogOps({ panelMode }: { panelMode?: string }) {
                   {it.updated_by || '—'}{it.last_change?.at ? ' · ' + String(it.last_change.at).slice(0, 10) : ''}
                 </td>
                 <td style={{ padding: '7px 10px', borderBottom: '1px solid #1E2C42', whiteSpace: 'nowrap' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setForm(it); setErr(null); setSimilar([]); }}>✏️</button>{' '}
+                  <button className="btn btn-secondary btn-sm" onClick={() => {
+                  if (panelMode === 'window') {
+                    try { window.dispatchEvent(new CustomEvent('profyplan:open-catoped', { detail: it })); return; } catch {}
+                  }
+                  setForm(it); setErr(null); setSimilar([]);
+                }}>✏️</button>{' '}
                   <button className="btn btn-secondary btn-sm" onClick={async () => {
                     await fetch(api + '/v1/catalog-operations/' + it.id, { method: 'PATCH', headers: headers(), body: JSON.stringify({ is_active: !(it.is_active !== false) }) });
                     load();
@@ -222,34 +232,119 @@ export default function CatalogOps({ panelMode }: { panelMode?: string }) {
         </div>
       ) : null}
 
-      {/* мастер удаления */}
+      {/* удаление — общий диалог (перенос ссылок поддерживается) */}
       {del ? (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(6,12,22,.72)', zIndex: 4250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ width: 'min(720px, 96vw)', background: '#0F1B2D', border: '1px solid #26364F', borderRadius: 12, padding: 16 }}>
-            <b style={{ fontSize: 14 }}>Удаление операции «{del.item.name}»</b>
-            {err ? <div style={{ color: '#F87171', fontSize: 12.5, marginTop: 8 }}>{err}</div> : null}
-            <div style={{ fontSize: 12.5, color: '#CBD8EA', marginTop: 10 }}>
-              Связанных операций заказов: <b>{del.rel?.total_operations ?? 0}</b>
-              {del.rel?.operations_linked ? <span style={{ color: '#8FA3BD' }}> (по ссылке: {del.rel.operations_linked})</span> : null}
-              {del.rel?.operations_same_name ? <span style={{ color: '#8FA3BD' }}> (совпадает по названию: {del.rel.operations_same_name})</span> : null}
-            </div>
-            {del.rel?.sample?.length ? (
-              <div style={{ marginTop: 8, maxHeight: 140, overflow: 'auto', fontSize: 12, color: '#8FA3BD', background: '#152238', border: '1px solid #26364F', borderRadius: 8, padding: 8 }}>
-                {del.rel.sample.map((s: any) => <div key={s.id}>• {s.name}</div>)}
-              </div>
-            ) : null}
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
-              <select value={replaceWith} onChange={(e) => setReplaceWith(e.target.value)} style={{ minWidth: 260 }}>
-                <option value="">— выбрать замену —</option>
-                {items.filter((x) => x.id !== del.item.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-              </select>
-              <button className="btn btn-primary btn-sm" onClick={() => doDelete('replace')}>Заменить на выбранную</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => doDelete('force')}>Удалить со связанными</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setDel(null)}>Отмена</button>
-            </div>
-          </div>
-        </div>
+        <DeleteCheckDialog
+          entityType="catalog_operation"
+          entityId={del.item.id}
+          entityName={del.item.name}
+          result={del.check}
+          onClose={() => setDel(null)}
+          onDeleted={() => { load(); setMsg('Операция удалена'); }}
+          replaceOptions={del.cands}
+          onArchive={async () => {
+            await fetch(api + '/v1/catalog-operations/' + del.item.id, { method: 'PATCH', headers: headers(), body: JSON.stringify({ is_active: false }) });
+            load();
+            setMsg('Операция убрана в архив');
+          }}
+          replaceLabel="Перенести связанные операции на:"
+        />
       ) : null}
+    </div>
+  );
+}
+
+
+/** Форма записи справочника операций. Используется и внутри панели, и в отдельном окне. */
+export function CatalogOpEditForm({ item, onSaved, onClose }: { item?: any; onSaved: () => void; onClose?: () => void }) {
+  const [f, setF] = useState<any>(() => ({
+    name: item?.name || '', code: item?.code || '', article: item?.article || '', article_source: item?.article_source || '',
+    op_type: item?.op_type || 'work', unit: item?.unit || 'hour',
+    norm_typical: item?.norm_typical ?? '', norm_min: item?.norm_min ?? '', norm_max: item?.norm_max ?? '',
+    setup_time: item?.setup_time ?? 0, teardown_time: item?.teardown_time ?? 0,
+    tags: item?.tags || '', notes: item?.notes || '',
+  }));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const api = process.env.NEXT_PUBLIC_API_URL || '';
+  const headers = () => ({ 'Content-Type': 'application/json', Authorization: '***' + 'rer ' + (localStorage.getItem('profyplan_token') || '') });
+  const num = (v: any) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
+
+  const save = async () => {
+    if (!f.name.trim()) { setMsg('Укажите название'); return; }
+    setBusy(true); setMsg(null);
+    const body: any = {
+      name: f.name.trim(), code: f.code || null, article: f.article || null, article_source: f.article_source || null,
+      op_type: f.op_type || 'work', unit: f.unit || 'hour',
+      norm_typical: num(f.norm_typical), norm_min: num(f.norm_min), norm_max: num(f.norm_max),
+      setup_time: num(f.setup_time) ?? 0, teardown_time: num(f.teardown_time) ?? 0,
+      tags: f.tags || null, notes: f.notes || null,
+    };
+    try {
+      const r = item?.id
+        ? await fetch(api + '/v1/catalog-operations/' + item.id, { method: 'PATCH', headers: headers(), body: JSON.stringify(body) })
+        : await fetch(api + '/v1/catalog-operations', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+      if (r.ok || r.status === 201) {
+        onSaved();
+        if (onClose) onClose(); else setMsg('Сохранено');
+      } else if (r.status === 409) {
+        setMsg('Такая операция уже есть в справочнике (совпало название или код)');
+      } else {
+        const t = await r.text();
+        setMsg('Ошибка ' + r.status + ': ' + t.slice(0, 120));
+      }
+    } catch (e: any) {
+      setMsg('Ошибка связи: ' + String(e).slice(0, 80));
+    }
+    setBusy(false);
+  };
+
+  const row = (label: string, node: React.ReactNode) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#8FA3BD' }}>
+      {label}
+      {node}
+    </label>
+  );
+  const inp = (key: string, type = 'text') => (
+    <input type={type} value={f[key] ?? ''} onChange={(e) => setF({ ...f, [key]: e.target.value })}
+      style={{ background: '#0B1522', color: '#E8EEF8', border: '1px solid #26364F', borderRadius: 6, padding: '6px 8px', fontSize: 12.5 }} />
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {row('Название', inp('name'))}
+        {row('Код (внутренний)', inp('code'))}
+        {row('Артикул', inp('article'))}
+        {row('Источник артикула', inp('article_source'))}
+        {row('Тип', (
+          <select value={f.op_type} onChange={(e) => setF({ ...f, op_type: e.target.value })}
+            style={{ background: '#0B1522', color: '#E8EEF8', border: '1px solid #26364F', borderRadius: 6, padding: '6px 8px' }}>
+            <option value="work">Работа</option><option value="wait">Ожидание</option><option value="milestone">Веха</option>
+          </select>
+        ))}
+        {row('Единица', (
+          <select value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}
+            style={{ background: '#0B1522', color: '#E8EEF8', border: '1px solid #26364F', borderRadius: 6, padding: '6px 8px' }}>
+            <option value="hour">Час</option><option value="shift">Смена</option><option value="day">День</option>
+          </select>
+        ))}
+        {row('Типовая норма', inp('norm_typical'))}
+        {row('Вилка: минимум', inp('norm_min'))}
+        {row('Вилка: максимум', inp('norm_max'))}
+        {row('Настройка', inp('setup_time'))}
+        {row('Переналадка', inp('teardown_time'))}
+        {row('Теги', inp('tags'))}
+      </div>
+      {row('Примечания', (
+        <textarea value={f.notes ?? ''} onChange={(e) => setF({ ...f, notes: e.target.value })} rows={3}
+          style={{ background: '#0B1522', color: '#E8EEF8', border: '1px solid #26364F', borderRadius: 6, padding: 8, fontFamily: 'inherit', fontSize: 12.5 }} />
+      ))}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? '⏳ Сохранение…' : 'Сохранить'}</button>
+        {onClose ? <button className="btn btn-secondary btn-sm" onClick={onClose}>Закрыть</button> : null}
+        {msg ? <span style={{ fontSize: 12.5, color: '#FBBF24' }}>{msg}</span> : null}
+      </div>
     </div>
   );
 }

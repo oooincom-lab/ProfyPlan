@@ -16,10 +16,13 @@ router = APIRouter(prefix="/v1/counterparties", tags=["counterparties"])
 @router.get("/", response_model=list[CounterpartyOut])
 async def list_items(
     search: str | None = None,
+    include_archived: bool = False,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Counterparty).where(Counterparty.tenant_id == tenant_id)
+    if not include_archived:
+        stmt = stmt.where(Counterparty.is_active.isnot(False))
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(or_(

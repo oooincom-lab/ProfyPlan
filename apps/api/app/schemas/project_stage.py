@@ -16,6 +16,7 @@ class ProjectStageUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     code: Optional[str] = Field(None, max_length=50)
     position: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class ProjectStageOut(BaseModel):
@@ -27,4 +28,5 @@ class ProjectStageOut(BaseModel):
     name: str
     code: Optional[str] = None
     position: int
+    is_active: bool = True
     created_at: datetime

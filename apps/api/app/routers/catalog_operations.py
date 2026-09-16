@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 """Справочник технологических операций.
 
 Возможности: поиск, проверка дублей (код и нормализованное название), подсказка
@@ -65,6 +66,8 @@ async def _find_duplicate(db: AsyncSession, tenant_id, name: str, code: Optional
 async def list_items(
     search: str | None = None,
     include_archived: bool = False,
+    limit: int = 500,
+    offset: int = 0,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -80,7 +83,7 @@ async def list_items(
             CatalogOperation.article.ilike(like),
             CatalogOperation.tags.ilike(like),
         ))
-    stmt = stmt.order_by(CatalogOperation.name)
+    stmt = stmt.order_by(CatalogOperation.name).offset(max(0, offset)).limit(max(1, min(limit, 2000)))
     res = await db.execute(stmt)
     return res.scalars().all()
 
@@ -242,3 +245,39 @@ async def delete_item(
     await db.delete(item)
     await db.commit()
     return None
+
+
+# ── Пакетные операции (множественное выделение) ────────────────────────────────
+
+class BulkStateIn(BaseModel):
+    """Пакетное изменение состояния записей справочника."""
+    ids: list[uuid.UUID]
+    is_active: bool
+
+
+class BulkStateOut(BaseModel):
+    updated: int
+    skipped: int
+
+
+@router.patch("/bulk/state", response_model=BulkStateOut)
+async def bulk_state(
+    body: BulkStateIn,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Убрать в архив или вернуть из архива сразу несколько записей."""
+    if not body.ids:
+        return BulkStateOut(updated=0, skipped=0)
+    rows = (await db.execute(select(CatalogOperation).where(
+        CatalogOperation.tenant_id == tenant_id,
+        CatalogOperation.id.in_(body.ids),
+    ))).scalars().all()
+    for row in rows:
+        if bool(row.is_active) != bool(body.is_active):
+            row.is_active = bool(body.is_active)
+            row.updated_by = "массовая операция"
+            row.updated_at = datetime.utcnow()
+    await db.commit()
+    return BulkStateOut(updated=len([r for r in rows if bool(r.is_active) == bool(body.is_active)]),
+                        skipped=max(0, len(body.ids) - len(rows)))

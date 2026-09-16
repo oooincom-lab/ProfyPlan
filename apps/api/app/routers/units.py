@@ -47,12 +47,14 @@ OKEI_SEED = [
 
 @router.get("/", response_model=list[UnitOut])
 async def list_units(
+    include_archived: bool = False,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    res = await db.execute(
-        select(Unit).where(Unit.tenant_id == tenant_id, Unit.is_active == True).order_by(Unit.symbol_int)
-    )
+    stmt = select(Unit).where(Unit.tenant_id == tenant_id)
+    if not include_archived:
+        stmt = stmt.where(Unit.is_active.isnot(False))
+    res = await db.execute(stmt.order_by(Unit.symbol_int))
     return res.scalars().all()
 
 

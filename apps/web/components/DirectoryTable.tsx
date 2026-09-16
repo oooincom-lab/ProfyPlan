@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import DataImport from './DataImport';
 import DeleteCheckDialog from './DeleteCheckDialog';
+import MassDeleteDialog from './MassDeleteDialog';
 
 type ColumnDef = {
   key: string;
@@ -83,6 +84,88 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const [deleteCheckResult, setDeleteCheckResult] = useState<any>(null);
   const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
   const [deleteCheckError, setDeleteCheckError] = useState<string | null>(null);
+  const [archFilter, setArchFilter] = useState<'active' | 'all' | 'archived'>('active');
+  const [justArchived, setJustArchived] = useState<{ ids: string[]; name: string } | null>(null);
+  // множественное выделение (Ctrl/Shift) + контекстное меню
+  const [selIds, setSelIds] = useState<Set<string>>(new Set());
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [massDeleteOpen, setMassDeleteOpen] = useState(false);
+  // Режим групповых операций: включается отдельным флажком. Пока выключен —
+  // клик по строке выбирает одну запись (предыдущее выделение сбрасывается).
+  const [bulkMode, setBulkMode] = useState(false);
+  const isOpsDir = entity === 'catalog-operations' || entity === 'operations';
+  // Справочники, для которых доступен архив (совпадает со списком на сервере).
+  const ARCHIVE_ENTITIES = new Set(['catalog-operations', 'operations', 'nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations', 'stages', 'work-schedules', 'work_schedules']);
+  const canArchive = ARCHIVE_ENTITIES.has(entity);
+  // Тип сущности для проверки связей и безопасного удаления (сервер знает
+  // единственное число; справочник операций — catalog_operation).
+  const deleteEntityType = isOpsDir ? 'catalog_operation' : entity;
+  const entityLabel =
+    isOpsDir ? 'Операции'
+    : entity === 'nomenclature' ? 'Номенклатура'
+    : entity === 'units' ? 'Единицы измерения'
+    : entity === 'counterparties' ? 'Контрагенты'
+    : entity === 'resources' ? 'Ресурсы'
+    : entity === 'departments' ? 'Подразделения'
+    : entity === 'organizations' ? 'Организации'
+    : entity === 'stages' ? 'Этапы'
+    : entity;
+  const toggleSel = (id: string, e?: any) => {
+    setSelIds(prev => {
+      const n = new Set(prev);
+      if (e?.shiftKey && selId) {
+        const ids = filtered.map((r: any) => String(r.id));
+        const a = ids.indexOf(String(selId)), b = ids.indexOf(String(id));
+        if (a >= 0 && b >= 0) { for (let i = Math.min(a, b); i <= Math.max(a, b); i++) n.add(ids[i]); return n; }
+      }
+      if (e?.ctrlKey || e?.metaKey) { if (n.has(id)) n.delete(id); else n.add(id); return n; }
+      if (n.size === 1 && n.has(id)) { n.clear(); return n; }
+      n.clear(); n.add(id); return n;
+    });
+    setSelId(id);
+  };
+  // Выделение строк мышью (как в группах/пулах): клик — накопление, Shift — диапазон от
+  // последней выделенной, Ctrl/⌘ — точечно. В режиме выбора (onSelect) клик выбирает одну запись.
+  const handleRowClick = (row: any, e: React.MouseEvent) => {
+    if (editingId === row.id) return;
+    const id = String(row.id);
+    // Обычный клик без модификаторов (вне режима групповых операций) — выбрать одну запись.
+    if (!bulkMode && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      setSelIds(new Set([id]));
+      setSelId(id);
+      return;
+    }
+    const ids = filtered.map((r: any) => String(r.id));
+    if (e.shiftKey && selId) {
+      const a = ids.indexOf(String(selId));
+      const b = ids.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        setSelIds(prev => { const n = new Set(prev); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) n.add(ids[i]); return n; });
+        setSelId(id);
+        return;
+      }
+    }
+    if (e.ctrlKey || e.metaKey) {
+      setSelIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+      setSelId(id);
+      return;
+    }
+    setSelIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    setSelId(id);
+  };
+  // Единый эндпоинт архива для всех справочников.
+  const directoryState = async (ids: string[], isActive: boolean) => {
+    if (!ids.length) return;
+    await af(`${apiBase}/v1/directory/bulk/state`, { method: 'PATCH', body: JSON.stringify({ entity, ids, is_active: isActive }) });
+  };
+  const bulkState = async (isActive: boolean) => {
+    const ids = Array.from(selIds);
+    if (!ids.length) return;
+    await directoryState(ids, isActive);
+    setJustArchived(isActive ? null : { ids, name: `Записей убрано в архив: ${ids.length}` });
+    setSelIds(new Set());
+    await load();
+  };
   const [deleteCheckTarget, setDeleteCheckTarget] = useState<{ id: string; name: string } | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -109,9 +192,15 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
   const load = async () => {
     setLoading(true);
     try {
-      const r = await af(endpoints?.list || `${apiBase}/v1/${entity}/`);
+      const _base = endpoints?.list || `${apiBase}/v1/${entity}/`;
+      const _url = canArchive && archFilter !== 'active' ? (_base + (_base.includes('?') ? '&' : '?') + 'include_archived=true') : _base;
+      const r = await af(_url);
       if (r.ok) {
         let rows: any[] = await r.json();
+        if (canArchive) {
+          if (archFilter === 'active') rows = rows.filter((x: any) => x.is_active !== false);
+          else if (archFilter === 'archived') rows = rows.filter((x: any) => x.is_active === false);
+        }
         // Иерархия подразделений (03.09.2026): обогащение (головное подразделение, глубина) + порядок по дереву
         if (entity === 'departments') {
           const byId = new Map<string, any>(rows.map((x: any) => [String(x.id), x]));
@@ -189,6 +278,11 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
     } catch (e: any) { setErrNew('Ошибка: ' + (e.message || '')); }
   };
 
+  // Перезагрузка списка при смене фильтра «Активные / Все / Только архивные»
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archFilter]);
   const deleteRow = async (id: string, name: string) => {
     setDeleteCheckTarget({ id, name });
     setDeleteCheckLoading(true);
@@ -296,6 +390,23 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
     return out;
   }, [rows, filtered, entity, expanded, sortKey, sortDir]);
 
+  // Клавиатура: Esc — снять выделение, Ctrl/⌘+A — выделить всё отфильтрованное.
+  useEffect(() => {
+    if (onSelect || !bulkMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setSelIds(new Set()); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A' || e.key === 'ф' || e.key === 'Ф')) {
+        const t = e.target as HTMLElement | null;
+        const tag = (t?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        e.preventDefault();
+        setSelIds(new Set(filtered.map((r: any) => String(r.id))));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [filtered, onSelect, bulkMode]);
+
   if (loading) return <div style={{ padding: 16, color: '#5A7090' }}>Загрузка...</div>;
 
   return (
@@ -333,6 +444,26 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
             📋 Импорт
           </button>
         )}
+        {canArchive && (
+          <select value={archFilter} onChange={(e) => setArchFilter(e.target.value as any)}
+            style={{ background: '#162844', color: '#CBD8EA', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 8px', fontSize: 12 }}>
+            <option value="active">Активные</option>
+            <option value="all">Все</option>
+            <option value="archived">Только архивные</option>
+          </select>
+        )}
+        {justArchived && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#CBD8EA', background: 'rgba(251,191,36,.1)', border: '1px solid rgba(251,191,36,.35)', borderRadius: 6, padding: '3px 8px' }}>
+            {justArchived.name}
+            <button className="btn btn-secondary btn-sm"
+              onClick={async () => {
+                await directoryState(justArchived.ids, true);
+                setJustArchived(null);
+                await load();
+              }}>Вернуть</button>
+            <button onClick={() => setJustArchived(null)} style={{ background: 'none', border: 'none', color: '#8FA3BD', cursor: 'pointer' }}>✕</button>
+          </span>
+        )}
         {!compact && (
           <button
             className="btn btn-primary btn-sm"
@@ -347,6 +478,20 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
           >
             + Добавить
           </button>
+        )}
+        {!onSelect && filtered.length > 0 && (
+          <label
+            title="Групповые действия: выделение нескольких строк"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', userSelect: 'none', background: '#162844', border: '1px solid ' + (bulkMode ? '#3B82F6' : '#2A4060'), borderRadius: 6, padding: '4px 10px', color: bulkMode ? '#93C5FD' : '#5A7090' }}
+          >
+            <input
+              type="checkbox"
+              checked={bulkMode}
+              onChange={(e) => { setBulkMode(e.target.checked); if (!e.target.checked) setSelIds(new Set()); }}
+              style={{ cursor: 'pointer' }}
+            />
+            Выбрать несколько
+          </label>
         )}
         {entity === 'departments' && (
           <>
@@ -412,6 +557,25 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
       {/* Table */}
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
+          {bulkMode && !onSelect && (
+            <tr>
+              <th colSpan={columns.length + (onSelect ? 0 : 1)} style={{ borderBottom: '1px solid #1E3252', padding: '6px 10px', background: 'rgba(59,130,246,.12)', textTransform: 'none', letterSpacing: 0, fontFamily: 'Inter, sans-serif', fontWeight: 400, color: '#CBD8EA', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12 }}>
+                  <span style={{ fontWeight: 600 }}>Выбрано: {selIds.size}</span>
+                  {canArchive && (
+                    <button className="btn btn-sm" disabled={selIds.size === 0} style={{ background: selIds.size ? '#162844' : 'rgba(30,50,82,.5)', color: selIds.size ? '#93C5FD' : '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: selIds.size ? 'pointer' : 'not-allowed' }} onClick={() => bulkState(false)}>🗄 В архив</button>
+                  )}
+                  {canArchive && (
+                    <button className="btn btn-sm" disabled={selIds.size === 0} style={{ background: selIds.size ? '#162844' : 'rgba(30,50,82,.5)', color: selIds.size ? '#93C5FD' : '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: selIds.size ? 'pointer' : 'not-allowed' }} onClick={() => bulkState(true)}>↩︎ Вернуть</button>
+                  )}
+                  <button className="btn btn-sm" disabled={selIds.size === 0} style={{ background: selIds.size ? 'rgba(239,68,68,.12)' : 'rgba(30,50,82,.5)', color: selIds.size ? '#F87171' : '#5A7090', border: '1px solid ' + (selIds.size ? 'rgba(239,68,68,.4)' : '#2A4060'), borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: selIds.size ? 'pointer' : 'not-allowed' }} onClick={() => setMassDeleteOpen(true)}>🗑 Удалить</button>
+                  <button className="btn btn-sm" style={{ background: 'transparent', color: '#93C5FD', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelIds(new Set(filtered.map((r: any) => String(r.id))))}>Выделить всё</button>
+                  <div style={{ flex: 1 }} />
+                  <button className="btn btn-sm" disabled={selIds.size === 0} style={{ background: 'transparent', color: selIds.size ? '#8FA3BD' : '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: selIds.size ? 'pointer' : 'not-allowed' }} onClick={() => setSelIds(new Set())}>Снять выделение</button>
+                </div>
+              </th>
+            </tr>
+          )}
           <tr>
             {columns.map(c => (
               <th
@@ -442,19 +606,25 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
         <tbody>
           {(entity === 'departments' ? visibleRows : filtered).map(row => (
             <tr
+              onContextMenu={(e) => { e.preventDefault(); if (!selIds.has(String(row.id))) toggleSel(String(row.id)); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
               data-dt-row={String(row.id)}
               key={row.id}
-              onClick={onSelect ? () => setSelId(row.id) : undefined}
+              onClick={onSelect ? () => setSelId(row.id) : (e) => handleRowClick(row, e)}
               onMouseEnter={() => setHoverId(String(row.id))}
               onMouseLeave={() => setHoverId((h) => (h === String(row.id) ? null : h))}
               onDoubleClick={() => { if (onEditWindow) onEditWindow(row); else if (onSelect) onSelect(row); }}
               style={{
                 borderBottom: '1px solid #162844',
-                background: (onSelect && selId === row.id) || hoverId === String(row.id) ? 'rgba(59,130,246,.14)' : undefined,
-                cursor: onSelect ? 'pointer' : (onEditWindow ? 'pointer' : undefined),
+                background: (onSelect ? selId === row.id : selIds.has(String(row.id)))
+                  ? 'rgba(59,130,246,.18)'
+                  : (hoverId === String(row.id) ? 'rgba(59,130,246,.09)' : undefined),
+                boxShadow: !onSelect && selIds.has(String(row.id)) ? 'inset 3px 0 0 0 #3B82F6' : undefined,
+                opacity: row.is_active === false ? 0.62 : 1,
+                cursor: 'pointer',
+                userSelect: 'none',
               }}
             >
-              {columns.map(c => (
+              {columns.map((c, ci) => (
                 <td key={c.key} style={{ padding: '7px 10px', color: '#B0C4DE', ...(entity === 'departments' && c.key === 'name' ? { paddingLeft: 6 + (Number((row as any)._depth) || 0) * 18 } : {}) }}>
                   {entity === 'departments' && c.key === 'name' && (() => {
                     const hasKids = rows.some((r: any) => r.parent_id && String(r.parent_id) === String(row.id));
@@ -480,9 +650,12 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                   ) : (
                     row[c.key] ?? '—'
                   )}
+                  {ci === 0 && row.is_active === false && (
+                    <span title="Запись в архиве" style={{ marginLeft: 6, color: '#EF4444', fontSize: 13, lineHeight: 1, cursor: 'help' }}>⊘</span>
+                  )}
                 </td>
               ))}
-              {(
+              {!onSelect && (
                 <td style={{ padding: '4px 6px', display: 'flex', gap: 4 }}>
                   {editingId === row.id ? (
                     <>
@@ -492,10 +665,23 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
                   ) : (
                     <>
                       {onRowDashboard && (
-                        <button onClick={() => onRowDashboard(row)} style={{ background: 'none', border: 'none', color: '#93C5FD', cursor: 'pointer', opacity: 0.85, fontSize: 12 }} title="Дашборд: часы, мощность, проекты, конфликты, потери">📊</button>
+                        <button onClick={(e) => { e.stopPropagation(); onRowDashboard(row); }} style={{ background: 'none', border: 'none', color: '#93C5FD', cursor: 'pointer', opacity: 0.85, fontSize: 12 }} title="Дашборд: часы, мощность, проекты, конфликты, потери">📊</button>
                       )}
-                      <button onClick={() => { if (onEditWindow) onEditWindow(row); else if (onManageEdit) onManageEdit(row); else { setEditingId(row.id); setEditVals({}); } }} style={{ background: 'none', border: 'none', color: onEditWindow ? '#60A5FA' : '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
-                      <button onClick={() => { if (onManageDelete) onManageDelete(row); else deleteRow(row.id, row.name || row.specification_name || ''); }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
+                      <button onClick={(e) => { e.stopPropagation(); if (onEditWindow) onEditWindow(row); else if (onManageEdit) onManageEdit(row); else { setEditingId(row.id); setEditVals({}); } }} style={{ background: 'none', border: 'none', color: onEditWindow ? '#60A5FA' : '#5A7090', cursor: 'pointer', fontSize: 12 }} title="Редактировать">✎</button>
+                      <button onClick={(e) => { e.stopPropagation(); if (onManageDelete) onManageDelete(row); else deleteRow(row.id, row.name || row.specification_name || ''); }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', opacity: 0.6, fontSize: 12 }} title="Удалить">🗑</button>
+                      {canArchive && (
+                        <button title={row.is_active === false ? 'Вернуть из архива' : 'Убрать в архив'}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const restore = row.is_active === false;
+                            await directoryState([String(row.id)], restore);
+                            setJustArchived(restore ? null : { ids: [String(row.id)], name: `«${row.name}» убрана в архив` });
+                            await load();
+                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: .8 }}>
+                          {row.is_active === false ? '↩︎' : '🗄'}
+                        </button>
+                      )}
                     </>
                   )}
                 </td>
@@ -541,6 +727,34 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
         </tbody>
       </table>
 
+      {/* контекстное меню выделенных строк */}
+      {ctxMenu && selIds.size > 0 && (
+        <div style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 10050, background: '#0F1B2D', border: '1px solid #2A4060', borderRadius: 8, padding: 6, minWidth: 240, boxShadow: '0 10px 30px rgba(0,0,0,.5)' }}
+          onMouseLeave={() => setCtxMenu(null)}>
+          <div style={{ fontSize: 11, color: '#5A7090', padding: '4px 8px' }}>Выбрано: {selIds.size}</div>
+          <button style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 0, color: '#CBD8EA', padding: '6px 8px', cursor: 'pointer' }} onClick={() => { setCtxMenu(null); bulkState(false); }}>🗄 Убрать в архив</button>
+          <button style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 0, color: '#CBD8EA', padding: '6px 8px', cursor: 'pointer' }} onClick={() => { setCtxMenu(null); bulkState(true); }}>↩︎ Вернуть из архива</button>
+          <button style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 0, color: '#F87171', padding: '6px 8px', cursor: 'pointer' }} onClick={() => { setCtxMenu(null); setMassDeleteOpen(true); }}>🗑 Удалить…</button>
+          <button style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 0, color: '#8FA3BD', padding: '6px 8px', cursor: 'pointer' }} onClick={() => { setCtxMenu(null); setSelIds(new Set()); }}>Снять выделение</button>
+        </div>
+      )}
+
+      {/* Мастер массового удаления */}
+      {massDeleteOpen && selIds.size > 0 && (
+        <MassDeleteDialog
+          apiBase={apiBase}
+          entity={entity}
+          entityType={deleteEntityType}
+          entityLabel={entityLabel}
+          ids={Array.from(selIds)}
+          rows={rows.filter((r: any) => selIds.has(String(r.id))).map((r: any) => ({ id: String(r.id), name: r.name || r.specification_name || r.name_ru || String(r.id) }))}
+          replaceOptions={rows.filter((r: any) => !selIds.has(String(r.id))).map((r: any) => ({ id: String(r.id), name: r.name || r.specification_name || r.name_ru || String(r.id) })).slice(0, 500)}
+          archiveCapable={canArchive}
+          onClose={() => setMassDeleteOpen(false)}
+          onDone={() => { setSelIds(new Set()); load(); }}
+        />
+      )}
+
       {/* Import modal */}
       {showImport && synonyms && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}
@@ -568,10 +782,18 @@ export default function DirectoryTable({ entity, columns, apiBase, onSelect, onM
       {/* Delete-check dialog */}
       {deleteCheckTarget && (
         <DeleteCheckDialog
-          entityType={entity}
+          entityType={deleteEntityType}
           entityId={deleteCheckTarget.id}
           entityName={deleteCheckTarget.name}
           result={deleteCheckResult}
+          replaceOptions={(entity === 'catalog-operations' || entity === 'operations')
+            ? (rows || []).filter((x: any) => x.id !== deleteCheckTarget.id).map((x: any) => ({ id: x.id, name: x.name }))
+            : undefined}
+          replaceLabel="Перенести связанные операции на:"
+          onArchive={canArchive ? async () => {
+            await directoryState([String(deleteCheckTarget.id)], false);
+            await load();
+          } : undefined}
           loading={deleteCheckLoading}
           error={deleteCheckError}
           onClose={() => { setDeleteCheckTarget(null); setDeleteCheckResult(null); }}

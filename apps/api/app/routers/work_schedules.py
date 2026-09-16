@@ -25,12 +25,15 @@ def _load_slots():
 @router.get("/", response_model=list[WorkScheduleOut])
 async def list_items(
     search: str | None = None,
+    include_archived: bool = False,
     tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(WorkSchedule).options(_load_slots()).where(
         WorkSchedule.tenant_id == tenant_id
     )
+    if not include_archived:
+        stmt = stmt.where(WorkSchedule.is_active.isnot(False))
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(WorkSchedule.name.ilike(like))

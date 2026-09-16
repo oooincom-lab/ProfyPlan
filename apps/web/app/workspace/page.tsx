@@ -255,6 +255,15 @@ export default function AppShell() {
   const sidebarWidth = menuMode === 'auto' ? 0 : (sidebarCollapsed ? 64 : 260);
   const effCollapsed = menuMode === 'auto' ? (autoEnabled && sidebarCollapsed) : sidebarCollapsed;
   const win = useWindows(sidebarWidth);
+  // Открытие окна правки записи справочника из панели справочника
+  useEffect(() => {
+    const h = (e: any) => {
+      win.openWin({ kind: 'catoped' as any, title: 'Операция справочника', data: e?.detail || null });
+    };
+    window.addEventListener('profyplan:open-catoped', h as any);
+    return () => window.removeEventListener('profyplan:open-catoped', h as any);
+  }, [win]);
+
   const [pendingList, setPendingList] = useState<{ kind: 'orders' | 'groups' | 'pools'; title: string } | null>(null);
   const dashHeadRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

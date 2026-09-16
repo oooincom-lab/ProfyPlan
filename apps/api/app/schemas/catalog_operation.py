@@ -1,3 +1,4 @@
+from datetime import datetime
 """Схемы справочника операций."""
 from decimal import Decimal
 from typing import Optional
@@ -62,7 +63,7 @@ class CatalogOperationOut(BaseModel):
     notes: Optional[str] = None
     is_active: bool = True
     updated_by: Optional[str] = None
-    updated_at: Optional[str] = None
+    updated_at: Optional[datetime] = None
     last_change: Optional[dict] = None
 
     model_config = {"from_attributes": True}

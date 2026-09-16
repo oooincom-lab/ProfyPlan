@@ -6,7 +6,8 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 
 export type WinRec = {
   id: string;
-  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'wsched-edit' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd';
+  kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'wsched-edit' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd'
+  | 'catoped';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';

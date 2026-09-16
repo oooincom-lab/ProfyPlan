@@ -34,15 +34,17 @@ def _to_out(r: Resource) -> ResourceOut:
 @router.get("", response_model=list[ResourceOut])
 async def list_resources(
     project_id: UUID,
+    include_archived: bool = False,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
-    result = await db.execute(
-        select(Resource).where(
-            Resource.project_id == project_id,
-            Resource.tenant_id == tenant_id,
-        )
+    stmt = select(Resource).where(
+        Resource.project_id == project_id,
+        Resource.tenant_id == tenant_id,
     )
+    if not include_archived:
+        stmt = stmt.where(Resource.is_active.isnot(False))
+    result = await db.execute(stmt)
     items = []
     for r in result.scalars().all():
         d = {k: str(v) if isinstance(v, UUID) else v for k, v in r.__dict__.items() if not k.startswith('_')}

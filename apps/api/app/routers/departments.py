@@ -16,10 +16,13 @@ router = APIRouter(prefix="/v1/departments", tags=["departments"])
 @router.get("/", response_model=list[DepartmentOut])
 async def list_items(
     search: str | None = None,
+    include_archived: bool = False,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Department).where(Department.tenant_id == tenant_id)
+    if not include_archived:
+        stmt = stmt.where(Department.is_active.isnot(False))
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(or_(

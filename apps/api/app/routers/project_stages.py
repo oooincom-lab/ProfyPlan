@@ -59,6 +59,7 @@ async def _assert_project(
 async def list_stages(
     project_id: str,
     search: str | None = None,
+    include_archived: bool = False,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -66,6 +67,8 @@ async def list_stages(
         ProjectStage.tenant_id == tenant_id,
         ProjectStage.project_id == project_id,
     )
+    if not include_archived:
+        stmt = stmt.where(ProjectStage.is_active.isnot(False))
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(ProjectStage.name.ilike(like))
