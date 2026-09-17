@@ -14,6 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
+from app.services.priority_chain import (
+    build_children_map,
+    build_index,
+    chain_summary,
+    count_descendants,
+    resolve_priority,
+)
 from app.models.product_structure import ProductStructure
 from app.models.routing import Routing, RoutingOperation
 from app.models.catalog_operation import CatalogOperation
@@ -1114,7 +1121,9 @@ async def list_orders(
     stmt = stmt.order_by(ProductionOrder.created_at.desc())
     res = await db.execute(stmt)
     orders = res.scalars().all()
-    return [_order_to_out(o) for o in orders]
+    by_id = build_index(orders)
+    children = build_children_map(orders)
+    return [_order_to_out(o, by_id, children) for o in orders]
 
 
 async def _resolve_parent_order(
@@ -1189,11 +1198,13 @@ async def create_order(
         client_id=client_id,
         notes=body.notes,
         parent_order_id=parent_id,
+        is_priority=bool(body.is_priority),
     )
     db.add(order)
     await db.commit()
     await db.refresh(order)
-    return _order_to_out(order)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return _order_to_out(order, by_id, children)
 
 
 # ── GET /check-duplicate ───────────────────────────────────────
@@ -1237,6 +1248,29 @@ async def check_duplicate(
     }
 
 
+# ── GET /priority/chain ────────────────────────────────
+# (тоже ДО /{order_id}, чтобы "priority" не попал в UUID-парсер)
+
+@router.get("/priority/chain")
+async def priority_chain(
+    project_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Сводка по реквизиту «Приоритетный заказ» в проекте.
+
+    Возвращает, сколько заказов приоритетны фактически, у кого признак
+    свой и сколько подчинённых он за собой тянет.
+    """
+    rows = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == UUID(project_id),
+        )
+    )).scalars().all()
+    return chain_summary(rows)
+
+
 # ── GET /{id} ──────────────────────────────────────────────────
 
 @router.get("/{order_id}", response_model=ProductionOrderOut)
@@ -1253,10 +1287,13 @@ async def get_order(
     order = res.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Заказ не найден")
-    return _order_to_out(order)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return _order_to_out(order, by_id, children)
 
 
-def _order_to_out(o: ProductionOrder) -> ProductionOrderOut:
+def _order_to_out(o: ProductionOrder, by_id: Optional[dict] = None, children: Optional[dict] = None) -> ProductionOrderOut:
+    st = resolve_priority(o, by_id)
+    src = st["source"]
     return ProductionOrderOut(
         id=str(o.id),
         tenant_id=str(o.tenant_id),
@@ -1276,10 +1313,36 @@ def _order_to_out(o: ProductionOrder) -> ProductionOrderOut:
         group_id=str(o.group_id) if o.group_id else None,
         pool_id=str(o.pool_id) if o.pool_id else None,
         parent_order_id=str(o.parent_order_id) if o.parent_order_id else None,
+        is_priority=st["own"],
+        priority_effective=st["effective"],
+        priority_inherited=st["inherited"],
+        priority_locked=st["locked"],
+        priority_lock_reason=st["reason"],
+        priority_source_order_id=str(src.id) if src is not None else None,
+        priority_source_ext_id=(src.ext_id if src is not None else None),
+        priority_descendants=count_descendants(o.id, children),
         exploded_at=o.exploded_at,
         operations_created=o.operations_created,
         created_at=o.created_at,
     )
+
+
+async def _load_chain(
+    db: AsyncSession, tenant_id, project_id,
+) -> tuple[dict, dict]:
+    """Цепочка заказов проекта для расчёта наследования признака.
+
+    Возвращает (индекс по id, карта детей по parent_order_id).
+    """
+    if not project_id:
+        return {}, {}
+    rows = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.project_id == project_id,
+        )
+    )).scalars().all()
+    return build_index(rows), build_children_map(rows)
 
 
 # ── POST /{id}/expand ──────────────────────────────────────────
@@ -1477,10 +1540,11 @@ async def update_order(
         raise HTTPException(404, "Заказ не найден")
     body_fields = body.model_dump(exclude_unset=True)
     for field in ("specification_name", "ext_id", "unit", "priority", "client", "notes", "status"):
-        v = getattr(body, field, None)
-        if v is not None:
-            setattr(order, field, v)
-    if body.client_id is not None:
+        # Только явно присланные поля: иначе PUT с одним реквизитом затирал остальные
+        # значениями по умолчанию схемы (priority -> normal, unit -> pcs).
+        if body_fields.get(field) is not None:
+            setattr(order, field, body_fields[field])
+    if body_fields.get("client_id") is not None:
         if body.client_id:
             c = (await db.execute(select(Counterparty).where(
                 Counterparty.id == UUID(body.client_id),
@@ -1491,11 +1555,11 @@ async def update_order(
                 order.client = c.name
         else:
             order.client_id = None
-    if body.quantity is not None:
+    if body_fields.get("quantity") is not None:
         order.quantity = body.quantity
-    if body.start_date is not None:
+    if body_fields.get("start_date") is not None:
         order.start_date = body.start_date
-    if body.due_date is not None:
+    if body_fields.get("due_date") is not None:
         order.due_date = body.due_date
     if 'parent_order_id' in body_fields:
         if not body.parent_order_id:
@@ -1505,9 +1569,20 @@ async def update_order(
                 body.parent_order_id, str(order.project_id) if order.project_id else None,
             tenant_id, db
         )
+    # Реквизит «Приоритетный заказ». Сначала разрешается новая позиция в цепочке,
+    # затем проверяется блокировка: у подчинённого приоритетного родителя
+    # изменение поля запрещено.
+    if 'is_priority' in body_fields and body.is_priority is not None:
+        by_id, _children = await _load_chain(db, tenant_id, order.project_id)
+        by_id[order.id] = order
+        st = resolve_priority(order, by_id)
+        if st["locked"]:
+            raise HTTPException(409, st["reason"] or "Реквизит задан родительским заказом — изменение запрещено")
+        order.is_priority = bool(body.is_priority)
     await db.commit()
     await db.refresh(order)
-    return _order_to_out(order)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return _order_to_out(order, by_id, children)
 
 
 # ── PATCH /{id}/move ───────────────────────────────────────────
@@ -1544,7 +1619,8 @@ async def move_order(
     order.pool_id = UUID(body.pool_id) if body.pool_id else None
     await db.commit()
     await db.refresh(order)
-    return _order_to_out(order)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return _order_to_out(order, by_id, children)
 
 
 # ── DELETE /{id} ──────────────────────────────────────────────

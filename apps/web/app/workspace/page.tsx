@@ -607,6 +607,7 @@ const [chainDialog, setChainDialog] = useState<null | {
       quantity: String(selOrder.quantity ?? ''),
       unit: selOrder.unit || '',
       priority: selOrder.priority || 'normal',
+      is_priority: (selOrder.priority_locked ? !!selOrder.priority_effective : !!selOrder.is_priority) ? '1' : '0',
       start_date: selOrder.start_date || '',
       due_date: selOrder.due_date || '',
       status: selOrder.status || 'draft',
@@ -619,6 +620,8 @@ const [chainDialog, setChainDialog] = useState<null | {
     if (!selOrder) return;
     try {
       const body: any = { quantity: Number(editForm.quantity) || 1, priority: editForm.priority, status: editForm.status, unit: editForm.unit || undefined };
+      // Признак «Приоритетный заказ» не трогаем, если он задан родительским заказом.
+      if (!selOrder.priority_locked && editForm.is_priority !== undefined) body.is_priority = editForm.is_priority === '1';
       if (editForm.client_id) body.client_id = editForm.client_id;
       if (editForm.start_date) body.start_date = editForm.start_date;
       if (editForm.due_date) body.due_date = editForm.due_date;
@@ -634,6 +637,7 @@ const [chainDialog, setChainDialog] = useState<null | {
     if (!o) return;
     try {
       const body: any = { quantity: Number(w.form.quantity) || 1, priority: w.form.priority, status: w.form.status, unit: w.form.unit || undefined };
+      if (!o.priority_locked && w.form.is_priority !== undefined) body.is_priority = w.form.is_priority === '1';
       if (w.form.client_id) body.client_id = w.form.client_id;
       if (w.form.start_date) body.start_date = w.form.start_date;
       if (w.form.due_date) body.due_date = w.form.due_date;
@@ -2123,7 +2127,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                               {orderShowAll && <td className="t-name" style={{ fontSize: 12 }}>{ti.name}</td>}
                               <td className="t-graph"><span className={isDyn(o) ? 'g-dyn' : 'g-pln'} title={isDyn(o) ? `${o.operations_created || '?'} операций` : 'Нет графа'}>{isDyn(o) ? '⚡' : '○'}</span></td>
                               <td className="t-mono">{o.ext_id || '—'}</td>
-                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{isFree && depth === 0 && <span title="Свободный заказ (без родителя)" style={{ display: 'inline-block', background: 'rgba(245,158,11,.14)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>своб.</span>}{o.specification_name || o.ext_id || '—'}</td>
+                              <td className="t-name" style={{ color: o.pool_id ? '#A78BFA' : undefined }}>{depth > 0 && <span title="Подчинённый заказ (цепочка)" style={{ display: 'inline-block', background: 'rgba(139,92,246,.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⛓</span>}{isFree && depth === 0 && <span title="Свободный заказ (без родителя)" style={{ display: 'inline-block', background: 'rgba(245,158,11,.14)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.4)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>своб.</span>}{o.priority_locked
+                                  ? <span title={o.priority_lock_reason || 'Приоритетный заказ (признак унаследован)'} style={{ display: 'inline-block', background: 'rgba(239,68,68,.14)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⚑⛓</span>
+                                  : o.is_priority
+                                    ? <span title={'Приоритетный заказ' + (o.priority_descendants ? ` — признак унаследуют подчинённые: ${o.priority_descendants}` : '')} style={{ display: 'inline-block', background: 'rgba(245,158,11,.16)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⚑</span>
+                                    : null}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${priorityBadgeClass(o.priority)}`}>{priorityLabel(o.priority)}</span></td>
@@ -2452,7 +2460,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           {!o && !isModal && <div style={{ color: '#5A7090', fontSize: 12.5 }}>Кликните по заказу в списке, чтобы увидеть его карточку: состав, маршрут, ресурсы и план.</div>}
                           {o && panelTab === 'order' && !panelEditing && (
                             <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', priorityLabel(o.priority)], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
+                              {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', priorityLabel(o.priority)], ['Приоритетный заказ', o.priority_locked ? `Да — унаследован от ${o.priority_source_ext_id || 'заказа-родителя'}` : (o.is_priority ? `Да${o.priority_descendants ? ` — признак унаследуют подчинённые: ${o.priority_descendants}` : ''}` : 'Нет')], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
                               <div key={k} style={{ display: 'contents' }}>
                                 <div style={{ color: '#5A7090' }}>{k}</div>
                                 <div style={{ color: '#E2E8F0' }}>{v}</div>
@@ -2479,6 +2487,20 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                 <select value={editForm.priority || ''} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
                                   {ORDER_PRIORITY_OPTIONS.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}
                                 </select>
+                              </label>
+                              <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'flex-start', gap: 8 }}>
+                                <span style={{ color: '#8FA3BD', fontSize: 12, paddingTop: 2 }}>Приоритетный заказ</span>
+                                <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  <input type="checkbox" disabled={!!o.priority_locked}
+                                    checked={o.priority_locked ? !!o.priority_effective : editForm.is_priority === '1'}
+                                    onChange={e => setEditForm(f => ({ ...f, is_priority: e.target.checked ? '1' : '0' }))}
+                                    style={{ accentColor: '#F59E0B', width: 15, height: 15 }} />
+                                  <span style={{ fontSize: 11, lineHeight: 1.35, color: o.priority_locked ? '#FCD34D' : '#5A7090' }}>
+                                    {o.priority_locked
+                                      ? (o.priority_lock_reason || 'Признак задан родительским заказом — изменение запрещено')
+                                      : 'Неприкосновенный заказ: не режется, вытесняет остальных, обязательный якорь старта. Признак наследуют подчинённые заказы.'}
+                                  </span>
+                                </span>
                               </label>
                               <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: '#8FA3BD', fontSize: 12 }}>Старт</span>
@@ -4128,7 +4150,7 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {/* ═══ Планирование и расчёт: настройки с наследованием (шаг 1.1) ═══ */}
           {view === 'settings' && !selectedProject && (
-            <PlanningSettingsPanel projectId={null} groupId={null} />
+            <PlanningSettingsPanel projectId={selectedProject?.id ?? null} groupId={null} />
           )}
 
           {/* ═══ DIRECTORY MODAL ═══ */}

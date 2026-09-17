@@ -25,6 +25,9 @@ class ProductionOrderCreate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     parent_order_id: Optional[str] = None
+    # Реквизит «Приоритетный заказ»: неприкосновенность заказа.
+    # У подчинённого заказа, чей родитель приоритетен, поле заблокировано.
+    is_priority: Optional[bool] = None
 
 
 class ProductionOrderOut(BaseModel):
@@ -46,6 +49,15 @@ class ProductionOrderOut(BaseModel):
     group_id: Optional[str] = None
     pool_id: Optional[str] = None
     parent_order_id: Optional[str] = None
+    # Приоритетный заказ: свой признак + вычисленное наследование по цепочке.
+    is_priority: bool = False                      # собственный признак заказа
+    priority_effective: bool = False               # итог: свой или унаследованный
+    priority_inherited: bool = False               # пришёл от заказа-родителя
+    priority_locked: bool = False                  # поле недоступно для изменения
+    priority_lock_reason: Optional[str] = None     # пояснение, почему заблокировано
+    priority_source_order_id: Optional[str] = None
+    priority_source_ext_id: Optional[str] = None
+    priority_descendants: int = 0                  # сколько подчинённых унаследуют признак
     exploded_at: Optional[datetime] = None
     operations_created: Optional[int] = None
     created_at: datetime

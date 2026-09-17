@@ -33,22 +33,27 @@ async def _get_row(db: AsyncSession, tenant_id: UUID, scope: str, scope_id: Opti
 async def get_settings(
     project_id: Optional[UUID] = None,
     group_id: Optional[UUID] = None,
+    pool_id: Optional[UUID] = None,
     tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Эффективные настройки с указанием источника каждого значения."""
-    return await resolve_settings(db, tenant_id, project_id, group_id)
+    return await resolve_settings(db, tenant_id, project_id, group_id, pool_id)
 
 
 @router.get("/levels")
 async def get_levels(
     project_id: Optional[UUID] = None,
     group_id: Optional[UUID] = None,
+    pool_id: Optional[UUID] = None,
     tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Значения каждого уровня отдельно + эффективные (для экрана настроек)."""
-    result: dict[str, Any] = {"effective": await resolve_settings(db, tenant_id, project_id, group_id), "scopes": {}}
+    result: dict[str, Any] = {
+        "effective": await resolve_settings(db, tenant_id, project_id, group_id, pool_id),
+        "scopes": {},
+    }
     result["scopes"]["workspace"] = await _get_row(db, tenant_id, "workspace", None)
     result["scopes"]["workspace"] = dict(result["scopes"]["workspace"].settings or {}) if result["scopes"]["workspace"] else {}
     if project_id:
@@ -57,6 +62,9 @@ async def get_levels(
     if group_id:
         row = await _get_row(db, tenant_id, "group", group_id)
         result["scopes"]["group"] = dict(row.settings or {}) if row else {}
+    if pool_id:
+        row = await _get_row(db, tenant_id, "pool", pool_id)
+        result["scopes"]["pool"] = dict(row.settings or {}) if row else {}
     return result
 
 
@@ -72,15 +80,19 @@ async def update_settings(
     перенос текущих значений уровня в настройки рабочего стола (кнопка
     «сделать значениями по умолчанию»).
     """
-    if body.scope not in ("workspace", "project", "group"):
-        raise HTTPException(400, "scope должен быть workspace, project или group")
+    if body.scope not in ("workspace", "project", "group", "pool"):
+        raise HTTPException(400, "scope должен быть workspace, project, group или pool")
     if body.scope != "workspace" and not body.scope_id:
-        raise HTTPException(400, "Для project/group нужен scope_id")
+        raise HTTPException(400, "Для project/group/pool нужен scope_id")
 
     # режим «сделать значениями по умолчанию»: копируем эффективные значения уровня на рабочий стол
     if body.settings.get("__promote_to_workspace__") and body.scope != "workspace":
-        eff = await resolve_settings(db, tenant_id, body.scope_id if body.scope == "project" else None,
-                                    body.scope_id if body.scope == "group" else None)
+        eff = await resolve_settings(
+            db, tenant_id,
+            body.scope_id if body.scope == "project" else None,
+            body.scope_id if body.scope == "group" else None,
+            body.scope_id if body.scope == "pool" else None,
+        )
         row = await _get_row(db, tenant_id, "workspace", None)
         payload = {k: v["value"] for k, v in eff["values"].items()}
         if row:
@@ -106,7 +118,8 @@ async def update_settings(
     await db.commit()
     eff = await resolve_settings(db, tenant_id,
                                  body.scope_id if body.scope == "project" else None,
-                                 body.scope_id if body.scope == "group" else None)
+                                 body.scope_id if body.scope == "group" else None,
+                                 body.scope_id if body.scope == "pool" else None)
     return {"ok": True, "saved": len(data), "effective": eff["values"]}
 
 
@@ -137,8 +150,8 @@ async def reset_settings(
     db: AsyncSession = Depends(get_db),
 ):
     """Сбросить все переопределения уровня (вернуть к наследованию)."""
-    if scope not in ("workspace", "project", "group"):
-        raise HTTPException(400, "scope должен быть workspace, project или group")
+    if scope not in ("workspace", "project", "group", "pool"):
+        raise HTTPException(400, "scope должен быть workspace, project, group или pool")
     row = await _get_row(db, tenant_id, scope, scope_id)
     if row:
         await db.delete(row)

@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,6 +73,14 @@ class ProductionOrder(BaseModel):
     # Кол-во созданных операций при последней развёртке
     operations_created: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
+    )
+
+    # Реквизит «Приоритетный заказ» (не путать с критическим путём):
+    # заказ неприкосновенен — не режется, вытесняет остальных, получает якорь старта.
+    # Наследуется по цепочке: если приоритетен родитель, подчинённые тоже приоритетны,
+    # а их поле заблокировано (см. app/services/priority_chain.py).
+    is_priority: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
     )
 
     # Группа / Кластер (ровно одно из двух или оба NULL = в корне проекта)

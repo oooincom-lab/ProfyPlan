@@ -2,7 +2,8 @@
 Реестр параметров планирования и разрешение значений по уровням.
 
 Уровни (от младшего к старшему): system (значения по умолчанию) →
-workspace (рабочий стол) → project (проект) → group (группа заказов).
+workspace (рабочий стол) → project (проект) → group (группа заказов) →
+pool (кластер заказов — расчётное объединение, правила конкуренции за ресурс).
 """
 from typing import Any, Optional
 from uuid import UUID
@@ -158,7 +159,8 @@ PARAMS: list[dict] = [
 ]
 
 PARAMS_BY_KEY = {p["key"]: p for p in PARAMS}
-LEVELS = ["system", "workspace", "project", "group"]
+# Уровни от старшего к младшему. Кластер — расчётный уровень (правила конкуренции за ресурс).
+LEVELS = ["system", "workspace", "project", "group", "pool"]
 
 
 async def _load_level(db: AsyncSession, tenant_id: UUID, scope: str, scope_id: Optional[UUID]) -> dict:
@@ -179,14 +181,21 @@ async def resolve_settings(
     tenant_id: UUID,
     project_id: Optional[UUID] = None,
     group_id: Optional[UUID] = None,
+    pool_id: Optional[UUID] = None,
 ) -> dict:
-    """Собирает эффективные значения и источник каждого параметра."""
+    """Собирает эффективные значения и источник каждого параметра.
+
+    Порядок наследования: система → рабочий стол → проект → группа → кластер.
+    Кластер — расчётный уровень: там живут правила конкуренции за ресурс.
+    """
     layers: list[tuple[str, dict]] = [("system", {p["key"]: p["default"] for p in PARAMS})]
     layers.append(("workspace", await _load_level(db, tenant_id, "workspace", None)))
     if project_id:
         layers.append(("project", await _load_level(db, tenant_id, "project", project_id)))
     if group_id:
         layers.append(("group", await _load_level(db, tenant_id, "group", group_id)))
+    if pool_id:
+        layers.append(("pool", await _load_level(db, tenant_id, "pool", pool_id)))
 
     out: dict[str, dict] = {}
     for key, meta in PARAMS_BY_KEY.items():

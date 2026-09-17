@@ -769,7 +769,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </>
                 )}
                 {!w.editing ? (
-                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
+                  <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', is_priority: (o!.priority_locked ? !!o!.priority_effective : !!o!.is_priority) ? '1' : '0', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
                     style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
                 ) : (
                   <>
@@ -878,7 +878,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && !w.editing && (
                 <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: '6px 10px', fontSize: 13 }}>
-                  {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', priorityLabel(o!.priority)], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
+                  {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', priorityLabel(o!.priority)], ['Приоритетный заказ', o!.priority_locked ? `Да — унаследован от ${o!.priority_source_ext_id || 'заказа-родителя'}` : (o!.is_priority ? `Да${o!.priority_descendants ? ` — признак унаследуют подчинённые: ${o!.priority_descendants}` : ''}` : 'Нет')], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
                     <div key={kv[0]} style={{ display: 'contents' }}>
                       <div style={{ color: '#5A7090' }}>{kv[0]}</div>
                       <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
@@ -905,6 +905,20 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     <select value={w.form.priority || ''} onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, priority: e.target.value } } : x))} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }}>
                       {ORDER_PRIORITY_OPTIONS.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}
                     </select>
+                  </label>
+                  <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#8FA3BD', fontSize: 12 }}>Приоритетный заказ</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" disabled={!!o!.priority_locked}
+                        checked={o!.priority_locked ? !!o!.priority_effective : w.form.is_priority === '1'}
+                        onChange={e => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.form, is_priority: e.target.checked ? '1' : '0' } } : x))}
+                        style={{ accentColor: '#F59E0B' }} />
+                      <span style={{ fontSize: 11, color: o!.priority_locked ? '#FCD34D' : '#5A7090', lineHeight: 1.35 }}>
+                        {o!.priority_locked
+                          ? (o!.priority_lock_reason || 'Признак задан родительским заказом — изменение запрещено')
+                          : 'Неприкосновенный заказ: не режется, вытесняет остальных, обязательный якорь старта'}
+                      </span>
+                    </span>
                   </label>
                   <label style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#8FA3BD', fontSize: 12 }}>Старт</span>
