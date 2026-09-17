@@ -220,12 +220,12 @@ a:hover{text-decoration:underline}
 </div>
 
 <div class="phase">
-<div class="phase-header"><span class="tag tag-next">Next</span> 6.4 Перед фазой 2: CPM и Гант — довести до корректной работы (16.09.2026)</div>
+<div class="phase-header"><span class="tag tag-done">Done</span> 6.4 Перед фазой 2: CPM и Гант — доведены до корректной работы (17.09.2026)</div>
 <div class="task-list">
-<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CPM-эндпоинт падал с 500</div><div class="detail">В /calculate/cpm использовалась неопределённая переменная body — расчёт не запускался ни на одном проекте с операциями. Исправлено, проверено: 45 операций, критических 15.</div></div><span class="status green">исправлено</span></div>
-<div class="task"><span class="icon">□</span><div class="body"><div class="title">Движок CPM: зависимости FF/SF</div><div class="detail">Прямой и обратный проход для FF и SF считаются неверно (сейчас не проявляется — все 151 зависимость типа FS).</div></div><span class="status">в работе</span></div>
-<div class="task"><span class="icon">□</span><div class="body"><div class="title">Критический путь как путь</div><div class="detail">Сейчас это список операций с нулевым резервом без порядка; нужен упорядоченный путь и корректная обработка нескольких ветвей.</div></div><span class="status">в работе</span></div>
-<div class="task"><span class="icon">□</span><div class="body"><div class="title">Согласовать CPM и Гант</div><div class="detail">Гант строится по календарному расчёту (дни, графики работы), CPM — по чистой длительности сети (часы). Нужно единое объяснение и, где надо, приведение к одному виду.</div></div><span class="status">в работе</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">CPM-эндпоинт падал с 500</div><div class="detail">В /calculate/cpm использовалась неопределённая переменная. Исправлено ранее, проверено на живом проекте.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Движок CPM: зависимости FF/SF</div><div class="detail">В прямом проходе для FF и SF не вычиталась длительность последователя, в обратном — прибавлялась его же длительность вместо предшественника. Поздние сроки и резервы разъезжались. Исправлено, проверено на четырёх типах связей.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Критический путь как путь</div><div class="detail">Раньше — просто список операций с нулевым резервом. Теперь узлы связываются «плотными» связями и выстраиваются в упорядоченные цепочки; ветвей может быть несколько, самая длинная отдаётся как основной путь. На живом проекте: 11 операций, старты вдоль пути не убывают.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Согласовать CPM и Гант</div><div class="detail">Соотношение зафиксировано и проверено на данных: CPM считает в часах сети, календарь — в рабочих днях по графикам работы. 3968,6 ч ÷ 8 ч = 496,1 дн — ровно длительность проекта на диаграмме.</div></div><span class="status green">готово</span></div>
 </div>
 </div>
 

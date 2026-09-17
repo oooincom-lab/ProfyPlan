@@ -45,10 +45,11 @@ class Dependency:
 class CPMResult:
     """Результат расчёта CPM."""
     nodes: dict[str, OperationNode]
-    critical_path: list[str]  # ID операций критического пути
+    critical_path: list[str]        # самая длинная упорядоченная критическая цепочка
     total_duration: Decimal
     project_early_start: Decimal = Decimal("0")
     project_early_finish: Decimal = Decimal("0")
+    critical_paths: list[list[str]] = field(default_factory=list)  # все ветви критического пути
 
 
 def calculate_cpm(
@@ -108,7 +109,7 @@ def calculate_cpm(
 
         for dep in predecessors[nid]:
             pred = nodes[str(dep.predecessor_id)]
-            es_candidate = _forward_shift(pred, dep)
+            es_candidate = _forward_shift(pred, node, dep)
             node.early_start = max(node.early_start, es_candidate)
 
         _c = (constraints or {}).get(nid)
@@ -130,7 +131,7 @@ def calculate_cpm(
 
         for dep in successors[nid]:
             succ = nodes[str(dep.successor_id)]
-            lf_candidate = _backward_shift(succ, dep)
+            lf_candidate = _backward_shift(node, succ, dep)
             node.late_finish = min(node.late_finish, lf_candidate)
 
         _c2 = (constraints or {}).get(nid)
@@ -143,69 +144,142 @@ def calculate_cpm(
     critical_path_ids: list[str] = []
     for node in nodes.values():
         node.total_float = node.late_finish - node.early_finish
-        # Free float: сколько можно задержать, не влияя на раннее начало последователей
-        min_succ_es = project_duration
-        for dep in successors[str(node.id)]:
-            succ = nodes[str(dep.successor_id)]
-            succ_es = _backward_shift_for_float(succ, dep)
-            min_succ_es = min(min_succ_es, succ_es)
-        node.free_float = min_succ_es - node.early_finish if successors[str(node.id)] else project_duration - node.early_finish
-        node.free_float = max(Decimal("0"), node.free_float)
+        # Свободный резерв: на сколько можно задержать операцию, не сдвигая
+        # ни одного последователя — считается по типу связи.
+        if successors[str(node.id)]:
+            free_float = None
+            for dep in successors[str(node.id)]:
+                succ = nodes[str(dep.successor_id)]
+                slack = _free_float_slack(node, succ, dep)
+                free_float = slack if free_float is None else min(free_float, slack)
+            node.free_float = max(Decimal("0"), free_float)
+        else:
+            node.free_float = max(Decimal("0"), project_duration - node.early_finish)
 
         # Критический путь: total_float == 0
         if node.total_float <= Decimal("0"):
             node.is_critical = True
             critical_path_ids.append(str(node.id))
 
+    # Критический путь как путь: упорядоченная цепочка по «плотным» связям.
+    # Узлов с нулевым резервом может быть несколько ветвей — отдаём их списком,
+    # а в critical_path кладём самую длинную цепочку (совместимость с прежним API).
+    chains = _critical_chains(nodes, successors)
+    longest = max(chains, key=len) if chains else critical_path_ids
+
     return CPMResult(
         nodes=nodes,
-        critical_path=critical_path_ids,
+        critical_path=longest,
+        critical_paths=chains,
         total_duration=project_duration,
         project_early_start=Decimal("0"),
         project_early_finish=project_duration,
     )
 
 
-def _forward_shift(pred: OperationNode, dep: Dependency) -> Decimal:
-    """Расчёт Early Start последователя из предшественника (прямой проход)."""
+def _forward_shift(pred: OperationNode, succ: OperationNode, dep: Dependency) -> Decimal:
+    """Нижняя граница раннего старта последователя (прямой проход).
+
+    FS: финиш последователя после финиша предшественника;
+    SS: старт последователя после старта предшественника;
+    FF: финиш последователя после финиша предшественника — значит, старт
+        последователя не раньше, чем этот финиш минус его собственная длительность;
+    SF: финиш последователя после старта предшественника — то же со старта.
+    """
     if dep.dep_type == "FS":
         return pred.early_finish + dep.lag
-    elif dep.dep_type == "FF":
-        return pred.early_finish + dep.lag - dep.lag + (Decimal("0") if pred.total_duration > Decimal("0") else Decimal("0"))
-        # FF: successor finishes after predecessor finishes + lag
-        # Early start of successor = predecessor.early_finish + lag - successor.duration (not available here)
-        # Мы возвращаем ограничение на раннее начало через ранний финиш
-    elif dep.dep_type == "SS":
+    if dep.dep_type == "SS":
         return pred.early_start + dep.lag
-    elif dep.dep_type == "SF":
-        return pred.early_start + dep.lag
+    if dep.dep_type == "FF":
+        return pred.early_finish + dep.lag - succ.total_duration
+    if dep.dep_type == "SF":
+        return pred.early_start + dep.lag - succ.total_duration
     return pred.early_finish + dep.lag
 
 
-def _backward_shift(succ: OperationNode, dep: Dependency) -> Decimal:
-    """Расчёт Late Finish предшественника из последователя (обратный проход)."""
+def _backward_shift(pred: OperationNode, succ: OperationNode, dep: Dependency) -> Decimal:
+    """Верхняя граница позднего финиша предшественника (обратный проход)."""
     if dep.dep_type == "FS":
         return succ.late_start - dep.lag
-    elif dep.dep_type == "FF":
+    if dep.dep_type == "FF":
         return succ.late_finish - dep.lag
-    elif dep.dep_type == "SS":
-        return succ.late_start - dep.lag + succ.total_duration
-    elif dep.dep_type == "SF":
-        return succ.late_finish - dep.lag + succ.total_duration
+    if dep.dep_type == "SS":
+        return succ.late_start - dep.lag + pred.total_duration
+    if dep.dep_type == "SF":
+        return succ.late_finish - dep.lag + pred.total_duration
     return succ.late_start - dep.lag
 
 
-def _backward_shift_for_float(succ: OperationNode, dep: Dependency) -> Decimal:
-    """Для расчёта free float: раннее начало последователя с учётом зависимости."""
+def _free_float_slack(pred: OperationNode, succ: OperationNode, dep: Dependency) -> Decimal:
+    """Насколько можно сдвинуть предшественника, не тронув последователя."""
     if dep.dep_type == "FS":
-        return succ.early_start
-    elif dep.dep_type == "FF":
-        return succ.early_finish
+        return succ.early_start - dep.lag - pred.early_finish
+    if dep.dep_type == "FF":
+        return succ.early_finish - dep.lag - pred.early_finish
+    if dep.dep_type == "SS":
+        return succ.early_start - dep.lag - pred.early_start
+    if dep.dep_type == "SF":
+        return succ.early_finish - dep.lag - pred.early_start
+    return succ.early_start - dep.lag - pred.early_finish
+
+
+def _link_is_tight(pred: OperationNode, succ: OperationNode, dep: Dependency) -> bool:
+    """Связь «держит» последователя: он стартует ровно на границе ограничения."""
+    eps = Decimal("0.001")
+    if dep.dep_type == "FS":
+        bound = pred.early_finish + dep.lag
     elif dep.dep_type == "SS":
-        return succ.early_start
-    elif dep.dep_type == "SF":
-        return succ.early_finish
-    return succ.early_start
+        bound = pred.early_start + dep.lag
+    elif dep.dep_type == "FF":
+        bound = pred.early_finish + dep.lag - succ.total_duration
+    else:
+        bound = pred.early_start + dep.lag - succ.total_duration
+    return abs(succ.early_start - bound) <= eps
+
+
+def _critical_chains(nodes: dict, successors: dict) -> list:
+    """Упорядоченные критические цепочки.
+
+    Идём только по «плотным» связям между операциями с нулевым резервом — так
+    получается путь, а не просто список. Ветвей может быть несколько: каждая
+    начинается с критической операции, у которой нет критического предшественника
+    по плотной связи.
+    """
+    eps = Decimal("0.001")
+    critical = {nid for nid, n in nodes.items() if n.total_float <= eps}
+    tight_in: dict = {}
+    for pid, deps in successors.items():
+        if pid not in critical:
+            continue
+        for dep in deps:
+            sid = str(dep.successor_id)
+            if sid in critical and _link_is_tight(nodes[pid], nodes[sid], dep):
+                tight_in.setdefault(sid, []).append(pid)
+
+    chains: list = []
+    for start in sorted(critical, key=lambda nid: (nodes[nid].early_start, nodes[nid].name)):
+        if tight_in.get(start):
+            continue
+        chain, seen, current = [], {start}, start
+        while current is not None:
+            chain.append(current)
+            nxt = None
+            for dep in successors.get(current, []):
+                sid = str(dep.successor_id)
+                if sid in critical and sid not in seen and _link_is_tight(nodes[current], nodes[sid], dep):
+                    nxt = sid
+                    break
+            if nxt:
+                seen.add(nxt)
+            current = nxt
+        chains.append(chain)
+
+    # страховка: критическая операция без плотных связей (одиночка)
+    covered = {nid for chain in chains for nid in chain}
+    for nid in sorted(critical - covered, key=lambda x: nodes[x].early_start):
+        chains.append([nid])
+    chains.sort(key=lambda ch: (nodes[ch[0]].early_start, -len(ch)))
+    return chains
 
 
 def _topological_sort(

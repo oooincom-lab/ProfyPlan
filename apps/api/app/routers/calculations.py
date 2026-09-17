@@ -418,6 +418,10 @@ async def run_cpm(
         "method": "CPM",
         "total_duration": float(result.total_duration),
         "critical_path": result.critical_path,
+        # Критический путь как путь: упорядоченная цепочка. Ветвей может быть
+        # несколько — отдаём их списком, а critical_path держит самую длинную.
+        "critical_paths": [{"operations": ch, "names": [result.nodes[i].name for i in ch]} for ch in (result.critical_paths or [])],
+        "critical_path_names": [result.nodes[i].name for i in result.critical_path],
         "nodes": nodes,
         "node_count": len(nodes),
         "critical_count": len(result.critical_path),
