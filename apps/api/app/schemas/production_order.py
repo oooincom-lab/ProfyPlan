@@ -71,6 +71,21 @@ class ProductionOrderOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ConflictResolveRequest(BaseModel):
+    """Решение по конфликту приоритетного заказа на общем ресурсе.
+
+    action: shift_other — сдвинуть операцию другого заказа;
+            shift_anchor — сдвинуть якорь приоритетного заказа (нужна anchor_at);
+            interleave — разрешить частичное переплетение (согласие фиксируется,
+                         разрезание включается настройкой переплетения);
+            unpriority — снять признак приоритетного заказа.
+    """
+    conflict_id: str
+    action: str
+    anchor_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
 class OrderAnchorRequest(BaseModel):
     """Якорь старта приоритетного заказа.
 

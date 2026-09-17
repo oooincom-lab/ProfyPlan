@@ -250,6 +250,9 @@ export default function AppShell() {
   const [anchorInput, setAnchorInput] = useState<string>('');
   const [anchorGhost, setAnchorGhost] = useState<any>(null);
   const [anchorBusy, setAnchorBusy] = useState(false);
+  const [conflictsData, setConflictsData] = useState<any>(null);
+  const [conflictsBusy, setConflictsBusy] = useState(false);
+  const [conflictGhost, setConflictGhost] = useState<any>(null);
   const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[]; variant: 'modal' | 'panel' } | null>(null);
   const [routings, setRoutings] = useState<any[]>([]);
   const [resourcesList, setResourcesList] = useState<any[]>([]);
@@ -508,6 +511,8 @@ const [chainDialog, setChainDialog] = useState<null | {
     setPanelEditing(false);
     setAnchorInput('');
     setAnchorGhost(null);
+    setConflictsData(null);
+    setConflictGhost(null);
   };
 
   const openGroupEditor = (g: any) => {
@@ -635,6 +640,37 @@ const [chainDialog, setChainDialog] = useState<null | {
       setPanelEditing(false);
       if (selectedProject) await loadProjectOrdersView(selectedProject);
     } catch (e: any) { setMsg('Ошибка сохранения: ' + (e.message || String(e))); }
+  };
+
+  // ── Конфликты на общих ресурсах (окно конфликта) ──
+  const loadConflicts = async (orderId: string) => {
+    setConflictsBusy(true);
+    try {
+      const r = await apiF<any>(`/production-orders/${orderId}/conflicts`);
+      setConflictsData(r);
+      setConflictGhost(null);
+      setMsg(`Конфликтов: ${(r.summary || {}).total || 0}`);
+    } catch (e: any) { setMsg('Конфликты: ' + (e.message || String(e))); setConflictsData(null); }
+    setConflictsBusy(false);
+  };
+
+  const resolveConflict = async (orderId: string, conflictId: string, action: string) => {
+    setConflictsBusy(true);
+    try {
+      const body: any = { conflict_id: conflictId, action };
+      if (action === 'shift_anchor') {
+        const value = window.prompt('Новая дата и время якоря старта (ГГГГ-ММ-ДДTЧЧ:ММ):', '');
+        if (!value) { setConflictsBusy(false); return; }
+        body.anchor_at = value;
+      }
+      const r = await apiF<any>(`/production-orders/${orderId}/conflicts/resolve`, { method: 'POST', body: JSON.stringify(body) });
+      setConflictGhost(r.ghost || null);
+      const notes = [...(r.warnings || []), ...(r.notes || [])].join(' · ');
+      setMsg('Решение принято.' + (notes ? ' ' + notes : ''));
+      await loadConflicts(orderId);
+      if (selectedProject) await loadProjectOrdersView(selectedProject);
+    } catch (e: any) { setMsg('Решение по конфликту: ' + (e.message || String(e))); }
+    setConflictsBusy(false);
   };
 
   // ── Якорь старта приоритетного заказа ──
@@ -2547,6 +2583,81 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                     </div>
                                   ))}
                                   {anchorGhost.note && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>{anchorGhost.note}</div>}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {o && panelTab === 'order' && o.priority_effective && (
+                            <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>⛔ Конфликты на общих ресурсах</span>
+                                <button disabled={conflictsBusy} onClick={() => loadConflicts(o.id)}
+                                  style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer' }}>
+                                  {conflictsData ? 'Обновить' : 'Проверить конфликты'}
+                                </button>
+                                {conflictsData && <span style={{ fontSize: 11, color: '#5A7090' }}>
+                                  всего: {(conflictsData.summary || {}).total || 0}, на ресурсах: {(conflictsData.summary || {}).resources || 0}, заказов затронуто: {(conflictsData.summary || {}).other_orders || 0}
+                                </span>}
+                              </div>
+                              {conflictsData && !conflictsData.available && (
+                                <div style={{ fontSize: 11.5, color: '#FCD34D' }}>{conflictsData.reason || 'Конфликты недоступны'}</div>
+                              )}
+                              {conflictsData && conflictsData.available && ((conflictsData.conflicts || []).length === 0) && (
+                                <div style={{ fontSize: 11.5, color: '#86EFAC' }}>Пересечений с другими заказами нет.</div>
+                              )}
+                              {(conflictsData?.conflicts || []).slice(0, 5).map((c: any) => (
+                                <div key={c.id} style={{ background: '#0A1628', border: '1px solid ' + (c.blocking ? 'rgba(239,68,68,.45)' : '#1E3252'), borderRadius: 8, padding: '8px 10px', marginBottom: 6 }}>
+                                  <div style={{ fontSize: 12, color: '#E8EEF5' }}>
+                                    <b>{c.resource_name || 'ресурс'}</b> · пересечение {c.overlap_hours} ч
+                                    {c.resolved ? <span style={{ color: '#86EFAC', marginLeft: 6 }}>решено</span> : null}
+                                    {c.blocking ? <span style={{ color: '#FCA5A5', marginLeft: 6 }}>требует решения</span> : null}
+                                  </div>
+                                  <div style={{ fontSize: 11.5, color: '#B0C4DE', marginTop: 3 }}>
+                                    наш заказ: {c.priority_operation?.name} [{String(c.priority_operation?.start || '').slice(11, 16)}–{String(c.priority_operation?.finish || '').slice(11, 16)}]
+                                  </div>
+                                  <div style={{ fontSize: 11.5, color: '#B0C4DE' }}>
+                                    другой заказ {c.other_operation?.order_ext_id || ''}: {c.other_operation?.name} [{String(c.other_operation?.start || '').slice(11, 16)}–{String(c.other_operation?.finish || '').slice(11, 16)}]
+                                    {c.other_operation?.order_is_priority ? ' · приоритетный' : ''}
+                                  </div>
+                                  <div style={{ fontSize: 11.5, color: '#FCD34D', marginTop: 3 }}>Предложение: {c.proposal?.description}</div>
+                                  {(c.warnings || []).map((w: string, i: number) => (
+                                    <div key={i} style={{ fontSize: 11, color: '#FCA5A5', marginTop: 2 }}>{w}</div>
+                                  ))}
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                                    <button disabled={conflictsBusy} onClick={() => resolveConflict(o.id, c.id, c.proposal?.action === 'shift_anchor' ? 'shift_anchor' : 'shift_other')}
+                                      style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                                      ✓ Принять предложение
+                                    </button>
+                                    <button disabled={conflictsBusy} onClick={() => resolveConflict(o.id, c.id, 'shift_anchor')}
+                                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer' }}>
+                                      Сдвинуть якорь вручную
+                                    </button>
+                                    <button disabled={conflictsBusy} onClick={() => resolveConflict(o.id, c.id, 'interleave')}
+                                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer' }}>
+                                      Разрешить переплетение
+                                    </button>
+                                    <button disabled={conflictsBusy} onClick={() => resolveConflict(o.id, c.id, 'unpriority')}
+                                      style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: '#FCA5A5', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer' }}>
+                                      Снять приоритетность
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {conflictGhost && conflictGhost.available && (
+                                <div style={{ marginTop: 6, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                                  <div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>
+                                    После решения: сдвинулось заказов {conflictGhost.shifted}
+                                    {conflictGhost.project_finish_after ? ' · финиш проекта ' + (conflictGhost.project_finish_before || '—') + ' → ' + conflictGhost.project_finish_after : ''}
+                                  </div>
+                                  {(conflictGhost.rows || []).slice(0, 5).map((r: any) => (
+                                    <div key={r.order_id} style={{ display: 'flex', gap: 8, fontSize: 11.5, color: '#B0C4DE' }}>
+                                      <span style={{ minWidth: 92 }}>{r.order_ext_id || String(r.order_id).slice(0, 8)}</span>
+                                      <span style={{ minWidth: 54, color: (r.delta_days || 0) > 0 ? '#FCA5A5' : '#86EFAC' }}>
+                                        {(r.delta_days || 0) > 0 ? '+' : ''}{r.delta_days} дн
+                                      </span>
+                                      <span style={{ color: '#5A7090' }}>{String(r.before_point || r.before_start || '—').slice(0, 16).replace('T', ' ')} → {String(r.after_point || r.after_start || '—').slice(0, 16).replace('T', ' ')}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                             </div>

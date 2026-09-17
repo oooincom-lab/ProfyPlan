@@ -33,6 +33,7 @@ from app.models.counterparty import Counterparty
 from app.models.department import Department
 from app.models.resource import Resource
 from app.schemas.production_order import (
+    ConflictResolveRequest,
     OrderAnchorRequest,
     ProductionOrderCreate,
     ProductionOrderOut,
@@ -2103,4 +2104,176 @@ async def rollback_order_anchor(
         "restored_from": str(entry.id),
         "ghost": ghost,
         "warnings": warns,
+    }
+
+# ── Конфликты приоритетного заказа на общих ресурсах ──────────
+#
+# Шаг 3 блока 6.5: «приоритет по общим ресурсам» и «окно конфликта».
+# Конфликт — пересечение по времени операций разных заказов на одном ресурсе.
+# Автоматически ничего не разрешается: система показывает вариант по умолчанию
+# и четыре действия, из которых первое — предложение.
+
+CONFLICT_PIN_PREFIX = "Вытеснение приоритетным заказом"
+
+
+async def _conflicts_for(db: AsyncSession, tenant_id, order: ProductionOrder) -> tuple:
+    """(данные конфликтов, настройки заказа)."""
+    from app.services.priority_conflicts import find_conflicts
+    settings = await _settings_for_order(db, tenant_id, order)
+    data = await find_conflicts(db, tenant_id, order, settings)
+    return data, settings
+
+
+@router.get("/{order_id}/conflicts")
+async def get_order_conflicts(
+    order_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Конфликты приоритетного заказа с другими заказами на общих ресурсах."""
+    order = await _get_order_or_404(db, tenant_id, order_id)
+    by_id, _children = await _load_chain(db, tenant_id, order.project_id)
+    by_id[order.id] = order
+    p_st = resolve_priority(order, by_id)
+    if not p_st["effective"]:
+        raise HTTPException(400, "Конфликты считаются для приоритетного заказа — сначала отметьте заказ приоритетным")
+
+    data, _settings = await _conflicts_for(db, tenant_id, order)
+
+    # какие конфликты уже разрешены вытеснением (есть закрепление «вытеснения»)
+    ops = await _order_operations(db, tenant_id, await _chain_order_ids(db, tenant_id, order))
+    op_ids = [o.id for o in ops]
+    resolved = set()
+    if op_ids:
+        rows = (await db.execute(
+            select(OperationPin).where(
+                OperationPin.tenant_id == tenant_id,
+                OperationPin.note.like(CONFLICT_PIN_PREFIX + "%"),
+            )
+        )).scalars().all()
+        for pin in rows:
+            note = pin.note or ""
+            if "[conflict:" in note:
+                resolved.add(note.split("[conflict:", 1)[1].rstrip("]"))
+    for c in data.get("conflicts", []):
+        c["resolved"] = c["id"] in resolved
+    if data.get("summary") is not None:
+        data["summary"]["resolved"] = sum(1 for c in data.get("conflicts", []) if c.get("resolved"))
+    return data
+
+
+@router.post("/{order_id}/conflicts/resolve")
+async def resolve_order_conflict(
+    order_id: str,
+    body: ConflictResolveRequest,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Применить решение по конфликту (окно конфликта).
+
+    Действия: сдвинуть операцию другого заказа, сдвинуть якорь приоритетного
+    заказа, разрешить частичное переплетение, снять признак приоритетного заказа.
+    Автоматически не разрешается ничего — действие приходит от человека.
+    """
+    order = await _get_order_or_404(db, tenant_id, order_id)
+    by_id, _children = await _load_chain(db, tenant_id, order.project_id)
+    by_id[order.id] = order
+    p_st = resolve_priority(order, by_id)
+    if not p_st["effective"]:
+        raise HTTPException(400, "Конфликты считаются для приоритетного заказа")
+
+    if body.action not in ("shift_other", "shift_anchor", "interleave", "unpriority"):
+        raise HTTPException(400, "action должен быть shift_other, shift_anchor, interleave или unpriority")
+
+    data, settings = await _conflicts_for(db, tenant_id, order)
+    conflict = next((c for c in data.get("conflicts", []) if c["id"] == body.conflict_id), None)
+    if not conflict:
+        raise HTTPException(404, "Конфликт не найден — возможно, он уже разрешён или план изменился")
+
+    keep_before_after = bool(settings.get("priority_orders.keep_before_after", True))
+    ext_by_order = {str(o.id): o.ext_id for o in by_id.values()}
+    warnings: list = []
+    notes: list = []
+    snap_before = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
+
+    if body.action == "shift_other":
+        other_op_id = conflict["other_operation"]["operation_id"]
+        finish_at = _parse_dt(conflict["priority_operation"]["finish"])
+        if not finish_at:
+            raise HTTPException(400, "Не удалось определить финиш операции приоритетного заказа")
+        other_op = await db.get(Operation, UUID(other_op_id))
+        if not other_op:
+            raise HTTPException(404, "Операция другого заказа не найдена")
+        note = "%s %s [conflict:%s]" % (CONFLICT_PIN_PREFIX, (order.ext_id or str(order.id)[:8]), body.conflict_id)
+        pin = (await db.execute(
+            select(OperationPin).where(
+                OperationPin.tenant_id == tenant_id,
+                OperationPin.operation_id == other_op.id,
+                OperationPin.note.like(CONFLICT_PIN_PREFIX + "%"),
+            )
+        )).scalars().first()
+        if pin:
+            pin.pin_at = finish_at
+            pin.pin_type = "start_not_earlier"
+            pin.is_hard = True
+            pin.note = note
+        else:
+            db.add(OperationPin(
+                id=uuid4(), tenant_id=tenant_id, project_id=order.project_id,
+                operation_id=other_op.id, group_id=order.group_id,
+                pin_type="start_not_earlier", pin_at=finish_at, is_hard=True, note=note,
+            ))
+        warnings.append("Операция другого заказа сдвинута за приоритетную: она начнётся не раньше %s." %
+                        finish_at.isoformat(timespec="minutes"))
+
+    elif body.action == "shift_anchor":
+        anchor_at = body.anchor_at
+        if anchor_at is None:
+            raise HTTPException(400, "Для действия «сдвинуть якорь» нужна дата и время (anchor_at)")
+        anchor_at = anchor_at.replace(tzinfo=None, microsecond=0)
+        a_st = resolve_anchor(order, by_id)
+        if a_st["locked"]:
+            raise HTTPException(409, a_st["reason"] or "Якорь наследуется от заказа-родителя")
+        pins_count, warns = await _apply_anchor(db, tenant_id, order, anchor_at)
+        warnings.extend(warns)
+
+    elif body.action == "interleave":
+        notes.append(
+            "Согласие на частичное переплетение зафиксировано. Разрезание операции между заказами "
+            "включится вместе с настройкой «Разрешать частичное переплетение»."
+        )
+
+    else:  # unpriority
+        if p_st["locked"]:
+            raise HTTPException(409, "Признак задан родительским заказом — снимать нужно у родителя")
+        order.is_priority = False
+        await _apply_anchor(db, tenant_id, order, None)
+        notes.append("Признак приоритетного заказа снят, якорь старта очищен.")
+
+    await db.flush()
+    snap_after = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
+    ghost = (_ghost(snap_before, snap_after, ext_by_order) if keep_before_after
+             else {"available": False, "rows": [], "note": "Хранение плана «до/после» выключено в настройках проекта."})
+
+    await _log_shift(db, tenant_id, order, "conflict", {
+        "order_id": str(order.id),
+        "order_ext_id": order.ext_id,
+        "conflict_id": body.conflict_id,
+        "action": body.action,
+        "resource_name": conflict.get("resource_name"),
+        "other_order_ext_id": conflict["other_operation"].get("order_ext_id"),
+        "ghost": ghost if keep_before_after else None,
+    }, note=body.note)
+    await db.commit()
+    await db.refresh(order)
+
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return {
+        "ok": True,
+        "action": body.action,
+        "conflict_id": body.conflict_id,
+        "order": _order_to_out(order, by_id, children),
+        "ghost": ghost,
+        "warnings": warnings,
+        "notes": notes,
     }
