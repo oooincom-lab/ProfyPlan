@@ -82,6 +82,13 @@ class ProductionOrder(BaseModel):
     is_priority: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    # Якорь старта приоритетного заказа: жёсткая дата и время начала.
+    # Задаётся у того заказа, который держит признак; подчинённые наследуют
+    # (см. app/services/priority_chain.resolve_anchor). В расчёте превращается
+    # в жёсткое закрепление первых операций заказа (operation_pins).
+    priority_anchor_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Группа / Кластер (ровно одно из двух или оба NULL = в корне проекта)
     group_id: Mapped[Optional[uuid.UUID]] = mapped_column(

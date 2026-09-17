@@ -109,6 +109,9 @@ type WindowsLayerProps = {
   onResize: (e: any, w: WinRec) => void;
   onApplyCell: (colCount: number, colIndex: number, rowCount: number, rowIndex: number) => void;
   onSaveEdit: (w: WinRec) => void;
+  onAnchorChange?: (orderId: string, value: string | null) => Promise<void>;
+  onAnchorRollback?: (orderId: string) => Promise<void>;
+  anchorGhost?: any;
   onNodeOrderChange: (nodeId: string, orderId: string | null) => void;
   onBomNodeQuantity: (nodeId: string, value: number) => void;
   onBomNodeRemove: (nodeId: string) => void;
@@ -197,6 +200,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById, onNodeNomenclatureChange,
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
+  onAnchorChange, onAnchorRollback, anchorGhost,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
     schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
@@ -227,6 +231,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const allMin = wins.length > 0 && wins.every(w => w.min);
   const [snapSel, setSnapSel] = useState<{ c: number; r: number } | null>(null);
   const [snapCell, setSnapCell] = useState(-1);
+  const [anchorInput, setAnchorInput] = useState<Record<string, string>>({});
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [delOp, setDelOp] = useState<{ id: string; name: string } | null>(null);
@@ -884,6 +889,60 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
                     </div>
                   ))}
+                </div>
+              )}
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && (
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>⚓ Якорь старта</span>
+                    <span style={{ fontSize: 11, color: '#5A7090' }}>жёсткая дата и время начала приоритетного заказа</span>
+                  </div>
+                  {!o!.priority_effective ? (
+                    <div style={{ fontSize: 12, color: '#5A7090' }}>Якорь доступен приоритетному заказу.</div>
+                  ) : o!.priority_anchor_locked ? (
+                    <div style={{ fontSize: 12, color: '#FCD34D' }}>
+                      Наследуется от заказа-родителя {o!.priority_anchor_source_ext_id || '—'}
+                      {o!.priority_anchor_effective_at ? ': ' + String(o!.priority_anchor_effective_at).slice(0, 16).replace('T', ' ') : ' (не задан)'}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                      <input type="datetime-local" value={anchorInput[w.id] || ''}
+                        onChange={e => setAnchorInput(prev => ({ ...prev, [w.id]: e.target.value }))}
+                        style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 6, color: '#E2E8F0', padding: '5px 8px', fontSize: 12.5 }} />
+                      <button disabled={!anchorInput[w.id]} onClick={() => onAnchorChange && onAnchorChange(o!.id, anchorInput[w.id] || '')}
+                        style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: anchorInput[w.id] ? 'pointer' : 'default', opacity: anchorInput[w.id] ? 1 : 0.5 }}>
+                        {o!.priority_anchor_at ? 'Переставить' : 'Задать якорь'}
+                      </button>
+                      {!!o!.priority_anchor_at && (
+                        <button onClick={() => onAnchorChange && onAnchorChange(o!.id, null)}
+                          style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>Снять</button>
+                      )}
+                      <button onClick={() => onAnchorRollback && onAnchorRollback(o!.id)}
+                        title="Вернуть значение якоря, которое было до последнего изменения"
+                        style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>↶ Откатить сдвиг</button>
+                      <span style={{ fontSize: 11, color: '#5A7090' }}>
+                        {o!.priority_anchor_at ? 'текущее: ' + String(o!.priority_anchor_at).slice(0, 16).replace('T', ' ') : 'якорь не задан'}
+                      </span>
+                    </div>
+                  )}
+                  {anchorGhost && anchorGhost.available && (
+                    <div style={{ marginTop: 8, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>
+                        Что изменилось: сдвинулось заказов {anchorGhost.shifted}
+                        {anchorGhost.project_finish_after ? ' · финиш проекта ' + (anchorGhost.project_finish_before || '—') + ' → ' + anchorGhost.project_finish_after : ''}
+                      </div>
+                      {(anchorGhost.rows || []).slice(0, 6).map((r: any) => (
+                        <div key={r.order_id} style={{ display: 'flex', gap: 8, fontSize: 11.5, color: '#B0C4DE' }}>
+                          <span style={{ minWidth: 92 }}>{r.order_ext_id || String(r.order_id).slice(0, 8)}</span>
+                          <span style={{ minWidth: 54, color: (r.delta_days || 0) > 0 ? '#FCA5A5' : '#86EFAC' }}>
+                            {(r.delta_days || 0) > 0 ? '+' : ''}{r.delta_days} дн
+                          </span>
+                          <span style={{ color: '#5A7090' }}>{String(r.before_point || r.before_start || '—').slice(0, 16).replace('T', ' ')} → {String(r.after_point || r.after_start || '—').slice(0, 16).replace('T', ' ')}</span>
+                        </div>
+                      ))}
+                      {anchorGhost.note && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>{anchorGhost.note}</div>}
+                    </div>
+                  )}
                 </div>
               )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && w.editing && (

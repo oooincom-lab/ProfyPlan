@@ -14,11 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
+from app.models.group_shift_log import GroupShiftLog
+from app.models.operation_pin import OperationPin
 from app.services.priority_chain import (
     build_children_map,
     build_index,
     chain_summary,
     count_descendants,
+    resolve_anchor,
     resolve_priority,
 )
 from app.models.product_structure import ProductStructure
@@ -30,6 +33,7 @@ from app.models.counterparty import Counterparty
 from app.models.department import Department
 from app.models.resource import Resource
 from app.schemas.production_order import (
+    OrderAnchorRequest,
     ProductionOrderCreate,
     ProductionOrderOut,
     ExcelImportResult,
@@ -1293,6 +1297,7 @@ async def get_order(
 
 def _order_to_out(o: ProductionOrder, by_id: Optional[dict] = None, children: Optional[dict] = None) -> ProductionOrderOut:
     st = resolve_priority(o, by_id)
+    anchor_st = resolve_anchor(o, by_id)
     src = st["source"]
     return ProductionOrderOut(
         id=str(o.id),
@@ -1321,6 +1326,11 @@ def _order_to_out(o: ProductionOrder, by_id: Optional[dict] = None, children: Op
         priority_source_order_id=str(src.id) if src is not None else None,
         priority_source_ext_id=(src.ext_id if src is not None else None),
         priority_descendants=count_descendants(o.id, children),
+        priority_anchor_at=o.priority_anchor_at,
+        priority_anchor_effective_at=anchor_st["effective"],
+        priority_anchor_inherited=anchor_st["inherited"],
+        priority_anchor_locked=anchor_st["locked"],
+        priority_anchor_source_ext_id=(anchor_st["source"].ext_id if anchor_st["source"] is not None else None),
         exploded_at=o.exploded_at,
         operations_created=o.operations_created,
         created_at=o.created_at,
@@ -1642,3 +1652,455 @@ async def delete_order(
         raise HTTPException(404, "Заказ не найден")
     await db.delete(order)
     await db.commit()
+
+# ── Якорь старта приоритетного заказа ──────────────────────────
+#
+# Якорь — жёсткая дата и время начала приоритетного заказа. В расчёте он
+# превращается в жёсткое закрепление первых операций заказа (operation_pins,
+# тип start_not_earlier), поэтому календарный расчёт соблюдает его как
+# ограничение, а зависимые заказы сдвигаются автоматически.
+# Изменения пишутся в журнал сдвигов (group_shift_logs) с «до/после».
+
+ANCHOR_NOTE_PREFIX = "Якорь старта"
+
+
+async def _get_order_or_404(db: AsyncSession, tenant_id, order_id: str) -> ProductionOrder:
+    order = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.id == UUID(order_id),
+            ProductionOrder.tenant_id == tenant_id,
+        )
+    )).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    return order
+
+
+async def _chain_order_ids(db: AsyncSession, tenant_id, order: ProductionOrder) -> list:
+    """Идентификаторы «тела» заказа: сам заказ и все подчинённые на любую глубину.
+
+    Цепочка заказов считается одним телом (передел), поэтому операции могут
+    лежать как на самом приоритетном заказе, так и на его подчинённых.
+    """
+    _by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    ids = [order.id]
+    seen = {order.id}
+    stack = [order.id]
+    while stack:
+        cur = stack.pop()
+        for kid in children.get(cur, []):
+            if kid.id not in seen:
+                seen.add(kid.id)
+                ids.append(kid.id)
+                stack.append(kid.id)
+    return ids
+
+
+async def _order_operations(db: AsyncSession, tenant_id, order_ids: list) -> list:
+    if not order_ids:
+        return []
+    return (await db.execute(
+        select(Operation).where(
+            Operation.tenant_id == tenant_id,
+            Operation.order_id.in_(order_ids),
+        )
+    )).scalars().all()
+
+
+async def _order_root_operations(db: AsyncSession, tenant_id, order_ids: list) -> list:
+    """Первые операции тела заказа: те, у которых нет предшественника внутри тела."""
+    ops = await _order_operations(db, tenant_id, order_ids)
+    if not ops:
+        return []
+    ids = {o.id for o in ops}
+    deps = (await db.execute(
+        select(OperationDependency).where(OperationDependency.successor_id.in_(ids))
+    )).scalars().all()
+    has_pred = {d.successor_id for d in deps if d.predecessor_id in ids}
+    roots = [o for o in ops if o.id not in has_pred]
+    return roots or ops
+
+
+def _anchor_note(order: ProductionOrder) -> str:
+    return "%s приоритетного заказа %s [anchor:%s]" % (
+        ANCHOR_NOTE_PREFIX, (order.ext_id or str(order.id)[:8]), order.id,
+    )
+
+
+async def _clear_anchor_pins(db: AsyncSession, tenant_id, order: ProductionOrder) -> int:
+    ops = await _order_operations(db, tenant_id, await _chain_order_ids(db, tenant_id, order))
+    ids = [o.id for o in ops]
+    if not ids:
+        return 0
+    pins = (await db.execute(
+        select(OperationPin).where(
+            OperationPin.tenant_id == tenant_id,
+            OperationPin.operation_id.in_(ids),
+            OperationPin.note.like(ANCHOR_NOTE_PREFIX + "%"),
+        )
+    )).scalars().all()
+    for pin in pins:
+        await db.delete(pin)
+    return len(pins)
+
+
+async def _apply_anchor_pins(db: AsyncSession, tenant_id, order: ProductionOrder, anchor_at, roots: list) -> int:
+    created = 0
+    note = _anchor_note(order)
+    for op in roots:
+        pin = (await db.execute(
+            select(OperationPin).where(
+                OperationPin.tenant_id == tenant_id,
+                OperationPin.operation_id == op.id,
+                OperationPin.note.like(ANCHOR_NOTE_PREFIX + "%"),
+            )
+        )).scalars().first()
+        if pin:
+            pin.pin_at = anchor_at
+            pin.pin_type = "start_not_earlier"
+            pin.is_hard = True
+            pin.note = note
+        else:
+            db.add(OperationPin(
+                id=uuid4(), tenant_id=tenant_id, project_id=order.project_id,
+                operation_id=op.id, group_id=order.group_id,
+                pin_type="start_not_earlier", pin_at=anchor_at, is_hard=True, note=note,
+            ))
+            created += 1
+    return created
+
+
+async def _apply_anchor(db: AsyncSession, tenant_id, order: ProductionOrder, anchor_at) -> tuple:
+    """Ставит или снимает якорь заказа вместе с закреплениями. Возвращает (число закреплений, предупреждения)."""
+    warnings: list = []
+    await _clear_anchor_pins(db, tenant_id, order)
+    if anchor_at is None:
+        order.priority_anchor_at = None
+        return 0, warnings
+    order.priority_anchor_at = anchor_at
+    roots = await _order_root_operations(db, tenant_id, await _chain_order_ids(db, tenant_id, order))
+    if not roots:
+        warnings.append("В цепочке заказа нет операций — якорь сохранён, но закрепление в расчёте не создано.")
+        return 0, warnings
+    created = await _apply_anchor_pins(db, tenant_id, order, anchor_at, roots)
+    return len(roots), warnings
+
+
+def _parse_dt(value):
+    """Разбор даты-времени из ответа расчёта: сравнение идёт по «настенным» часам."""
+    if not value:
+        return None
+    try:
+        d = datetime.fromisoformat(str(value))
+    except Exception:
+        return None
+    if d.tzinfo is not None:
+        d = d.replace(tzinfo=None)
+    return d
+
+
+async def _settings_for_order(db: AsyncSession, tenant_id, order: ProductionOrder) -> dict:
+    from app.services.planning_settings import resolve_settings
+    try:
+        res = await resolve_settings(db, tenant_id, order.project_id, pool_id=order.pool_id)
+        return {k: v.get("value") for k, v in (res.get("values") or {}).items()}
+    except Exception:
+        return {}
+
+
+async def _schedule_snapshot(db: AsyncSession, tenant_id, project_id) -> Optional[dict]:
+    """Компактный снимок календарного плана: по заказам — ранний старт и поздний финиш."""
+    from app.routers.calculations import run_schedule
+    try:
+        res = await run_schedule(project_id=project_id, body=None, db=db, tenant_id=tenant_id)
+    except Exception:
+        return None
+    ops = (await db.execute(
+        select(Operation).where(
+            Operation.tenant_id == tenant_id, Operation.project_id == project_id,
+        )
+    )).scalars().all()
+    op_to_order = {o.id: o.order_id for o in ops}
+    per_order: dict = {}
+    for node in (res or {}).get("nodes", []):
+        # узел расчёта отдаёт order_id напрямую; иначе связываем через операцию
+        ord_id = None
+        raw_ord = node.get("order_id")
+        if raw_ord:
+            try:
+                ord_id = UUID(str(raw_ord))
+            except Exception:
+                ord_id = None
+        if ord_id is None:
+            raw_op = node.get("operation_id") or node.get("id")
+            if raw_op:
+                try:
+                    ord_id = op_to_order.get(UUID(str(raw_op)))
+                except Exception:
+                    ord_id = None
+        if not ord_id:
+            continue
+        key = str(ord_id)
+        cur = per_order.setdefault(key, {"start": None, "finish": None, "operations": 0})
+        st_dt, fn_dt = _parse_dt(node.get("start_datetime")), _parse_dt(node.get("finish_datetime"))
+        if st_dt and (cur["start"] is None or st_dt < cur["start"]):
+            cur["start"] = st_dt
+        if fn_dt and (cur["finish"] is None or fn_dt > cur["finish"]):
+            cur["finish"] = fn_dt
+        cur["operations"] += 1
+    for v in per_order.values():
+        v["start"] = v["start"].isoformat(timespec="minutes") if v["start"] else None
+        v["finish"] = v["finish"].isoformat(timespec="minutes") if v["finish"] else None
+    return {
+        "project_finish_date": (res or {}).get("project_finish_date"),
+        "project_duration_days": (res or {}).get("total_duration_days"),
+        "orders": per_order,
+        "warnings": [w.get("message") for w in (res or {}).get("warnings", [])][:8],
+    }
+
+
+def _ghost(before: Optional[dict], after: Optional[dict], ext_by_order: Optional[dict] = None) -> dict:
+    """«Призрак»: что именно сдвинулось после установки или снятия якоря."""
+    if not after:
+        return {"available": False, "rows": [], "note": "Календарный расчёт недоступен — «призрак» не построен."}
+    rows = []
+    for oid, a in (after.get("orders") or {}).items():
+        b = ((before or {}).get("orders") or {}).get(oid) or {}
+        if not b:
+            continue
+        bs, as_ = _parse_dt(b.get("start")), _parse_dt(a.get("start"))
+        bf, af = _parse_dt(b.get("finish")), _parse_dt(a.get("finish"))
+        start_delta = round((as_ - bs).total_seconds() / 86400.0, 2) if (bs and as_) else None
+        finish_delta = round((af - bf).total_seconds() / 86400.0, 2) if (bf and af) else None
+        # у заказа может сдвинуться только финиш (старт держат предшественники)
+        if (start_delta in (None, 0)) and (finish_delta in (None, 0)):
+            continue
+        use_finish = (start_delta in (None, 0)) and (finish_delta not in (None, 0))
+        rows.append({
+            "order_id": oid,
+            "order_ext_id": (ext_by_order or {}).get(oid),
+            "basis": "finish" if use_finish else "start",
+            "delta_days": finish_delta if use_finish else start_delta,
+            "before_start": b.get("start"),
+            "after_start": a.get("start"),
+            "before_finish": b.get("finish"),
+            "after_finish": a.get("finish"),
+            "before_point": b.get("finish") if use_finish else b.get("start"),
+            "after_point": a.get("finish") if use_finish else a.get("start"),
+        })
+    rows.sort(key=lambda r: -abs(r.get("delta_days") or 0))
+    finish_before = (before or {}).get("project_finish_date")
+    finish_after = after.get("project_finish_date")
+    fb, fa = _parse_dt(finish_before), _parse_dt(finish_after)
+    return {
+        "available": True,
+        "rows": rows[:12],
+        "shifted": len(rows),
+        "project_finish_before": finish_before,
+        "project_finish_after": finish_after,
+        "project_finish_delta_days": (round((fa - fb).total_seconds() / 86400.0, 2) if (fb and fa) else None),
+    }
+
+
+async def _log_shift(db: AsyncSession, tenant_id, order: ProductionOrder, action: str, payload: dict, note=None) -> None:
+    db.add(GroupShiftLog(
+        id=uuid4(), tenant_id=tenant_id, project_id=order.project_id,
+        group_id=order.group_id, action=action, payload=payload, note=note,
+    ))
+
+
+@router.get("/{order_id}/anchor")
+async def get_order_anchor(
+    order_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Состояние якоря старта: значение, наследование, закрепления и журнал по заказу."""
+    order = await _get_order_or_404(db, tenant_id, order_id)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    by_id[order.id] = order
+    a_st = resolve_anchor(order, by_id)
+    ops = await _order_operations(db, tenant_id, await _chain_order_ids(db, tenant_id, order))
+    ids = [o.id for o in ops]
+    pins = []
+    if ids:
+        rows = (await db.execute(
+            select(OperationPin).where(
+                OperationPin.tenant_id == tenant_id,
+                OperationPin.operation_id.in_(ids),
+                OperationPin.note.like(ANCHOR_NOTE_PREFIX + "%"),
+            )
+        )).scalars().all()
+        pins = [{"id": str(p.id), "operation_id": str(p.operation_id), "pin_at": p.pin_at.isoformat(),
+                 "pin_type": p.pin_type, "is_hard": p.is_hard} for p in rows]
+    log_rows = (await db.execute(
+        select(GroupShiftLog).where(
+            GroupShiftLog.tenant_id == tenant_id,
+            GroupShiftLog.project_id == order.project_id,
+        ).order_by(GroupShiftLog.created_at.desc()).limit(200)
+    )).scalars().all()
+    journal = [
+        {"id": str(e.id), "action": e.action, "created_at": e.created_at,
+         "before_anchor": (e.payload or {}).get("before_anchor"),
+         "after_anchor": (e.payload or {}).get("after_anchor"),
+         "restored_from": (e.payload or {}).get("restored_from"),
+         "note": e.note}
+        for e in log_rows if (e.payload or {}).get("order_id") == str(order.id)
+    ][:10]
+    return {
+        "order": _order_to_out(order, by_id, children),
+        "anchor": {
+            "own": a_st["own"], "effective": a_st["effective"], "inherited": a_st["inherited"],
+            "locked": a_st["locked"], "reason": a_st["reason"],
+            "source_ext_id": (a_st["source"].ext_id if a_st["source"] is not None else None),
+        },
+        "operations_total": len(ops),
+        "pins": pins,
+        "journal": journal,
+    }
+
+
+@router.put("/{order_id}/anchor")
+async def set_order_anchor(
+    order_id: str,
+    body: OrderAnchorRequest,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Задать (или снять, передав null) якорь старта приоритетного заказа.
+
+    Якорь превращается в жёсткое закрепление первых операций заказа, поэтому
+    календарный расчёт обязан его соблюсти, а зависимые заказы сдвигаются.
+    Возвращает «призрак» — какой заказ насколько сдвинулся.
+    """
+    order = await _get_order_or_404(db, tenant_id, order_id)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    by_id[order.id] = order
+
+    p_st = resolve_priority(order, by_id)
+    if not p_st["effective"]:
+        raise HTTPException(400, "Якорь старта задаётся только приоритетному заказу — сначала отметьте заказ приоритетным")
+    a_st = resolve_anchor(order, by_id)
+    if a_st["locked"]:
+        raise HTTPException(409, a_st["reason"] or "Якорь наследуется от заказа-родителя")
+
+    anchor_at = body.anchor_at
+    if anchor_at is not None:
+        anchor_at = anchor_at.replace(tzinfo=None, microsecond=0)   # «настенное» время предприятия, как у закреплений
+
+    settings = await _settings_for_order(db, tenant_id, order)
+    keep_before_after = bool(settings.get("priority_orders.keep_before_after", True))
+    shift_dependents = bool(settings.get("priority_orders.shift_dependents", True))
+    allow_before = bool(settings.get("priority_orders.allow_start_before_predecessors", True))
+    mode_on = bool(settings.get("priority_orders.enabled", False))
+
+    warnings: list = []
+    before_anchor = a_st["effective"]
+
+    snap_before = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
+
+    if anchor_at is not None and not allow_before and snap_before:
+        cur = (snap_before.get("orders") or {}).get(str(order.id)) or {}
+        planned_start = _parse_dt(cur.get("start"))
+        if planned_start and anchor_at < planned_start:
+            raise HTTPException(
+                409,
+                "Якорь раньше расчётного старта заказа — предшественники не успевают. "
+                "Разрешите старт раньше предшественников в настройках «Приоритетные заказы».",
+            )
+
+    pins_count, warns = await _apply_anchor(db, tenant_id, order, anchor_at)
+    warnings.extend(warns)
+    if anchor_at is not None and not mode_on:
+        warnings.append("Режим «Использование приоритетных заказов» выключен в настройках — якорь сохранён и закрепления поставлены.")
+    await db.flush()
+
+    snap_after = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
+    ext_by_order = {str(o.id): o.ext_id for o in by_id.values()}
+    if keep_before_after:
+        ghost = _ghost(snap_before, snap_after, ext_by_order)
+        if not shift_dependents:
+            ghost = dict(ghost)
+            ghost["note"] = "Сдвиг зависимых заказов выключен в настройках — сдвиги показаны справочно."
+    else:
+        ghost = {"available": False, "rows": [], "note": "Хранение плана «до/после» выключено в настройках проекта."}
+
+    await _log_shift(db, tenant_id, order, "anchor" if anchor_at else "unanchor", {
+        "order_id": str(order.id),
+        "order_ext_id": order.ext_id,
+        "before_anchor": before_anchor.isoformat(timespec="minutes") if before_anchor else None,
+        "after_anchor": anchor_at.isoformat(timespec="minutes") if anchor_at else None,
+        "pinned_operations": pins_count,
+        "shift_dependents": shift_dependents,
+        "ghost": ghost if keep_before_after else None,
+    }, note=body.note)
+    await db.commit()
+    await db.refresh(order)
+
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return {
+        "ok": True,
+        "order": _order_to_out(order, by_id, children),
+        "anchor_effective": anchor_at.isoformat(timespec="minutes") if anchor_at else None,
+        "pinned_operations": pins_count,
+        "ghost": ghost,
+        "warnings": warnings,
+    }
+
+
+@router.post("/{order_id}/anchor/rollback")
+async def rollback_order_anchor(
+    order_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Откат последнего изменения якоря: возвращает значение, которое было до него."""
+    order = await _get_order_or_404(db, tenant_id, order_id)
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    by_id[order.id] = order
+
+    rows = (await db.execute(
+        select(GroupShiftLog).where(
+            GroupShiftLog.tenant_id == tenant_id,
+            GroupShiftLog.project_id == order.project_id,
+        ).order_by(GroupShiftLog.created_at.desc()).limit(200)
+    )).scalars().all()
+    entry = next((e for e in rows
+                  if (e.payload or {}).get("order_id") == str(order.id)
+                  and e.action in ("anchor", "unanchor")), None)
+    if not entry:
+        raise HTTPException(404, "В журнале нет изменений якоря по этому заказу")
+
+    target_raw = (entry.payload or {}).get("before_anchor")
+    target = datetime.fromisoformat(target_raw).replace(tzinfo=None) if target_raw else None
+    settings = await _settings_for_order(db, tenant_id, order)
+    keep_before_after = bool(settings.get("priority_orders.keep_before_after", True))
+
+    snap_before = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
+    pins_count, warns = await _apply_anchor(db, tenant_id, order, target)
+    await db.flush()
+    snap_after = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
+    ghost = _ghost(snap_before, snap_after, {str(o.id): o.ext_id for o in by_id.values()}) if keep_before_after else {
+        "available": False, "rows": [], "note": "Хранение плана «до/после» выключено в настройках проекта."}
+
+    await _log_shift(db, tenant_id, order, "rollback", {
+        "order_id": str(order.id),
+        "order_ext_id": order.ext_id,
+        "restored_from": str(entry.id),
+        "before_anchor": (entry.payload or {}).get("after_anchor"),
+        "after_anchor": target_raw,
+        "pinned_operations": pins_count,
+        "ghost": ghost if keep_before_after else None,
+    })
+    await db.commit()
+    await db.refresh(order)
+
+    by_id, children = await _load_chain(db, tenant_id, order.project_id)
+    return {
+        "ok": True,
+        "order": _order_to_out(order, by_id, children),
+        "anchor_effective": target.isoformat(timespec="minutes") if target else None,
+        "restored_from": str(entry.id),
+        "ghost": ghost,
+        "warnings": warns,
+    }

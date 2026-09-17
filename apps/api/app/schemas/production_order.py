@@ -58,11 +58,27 @@ class ProductionOrderOut(BaseModel):
     priority_source_order_id: Optional[str] = None
     priority_source_ext_id: Optional[str] = None
     priority_descendants: int = 0                  # сколько подчинённых унаследуют признак
+    # Якорь старта приоритетного заказа: своё значение + вычисленное наследование.
+    priority_anchor_at: Optional[datetime] = None
+    priority_anchor_effective_at: Optional[datetime] = None
+    priority_anchor_inherited: bool = False
+    priority_anchor_locked: bool = False
+    priority_anchor_source_ext_id: Optional[str] = None
     exploded_at: Optional[datetime] = None
     operations_created: Optional[int] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class OrderAnchorRequest(BaseModel):
+    """Якорь старта приоритетного заказа.
+
+    anchor_at = null — снять якорь. Время принимается в ISO-8601; без зоны
+    считается местным временем проекта.
+    """
+    anchor_at: Optional[datetime] = None
+    note: Optional[str] = None
 
 
 # ── Excel Import — Вкладка 1: Заказы ──────────────────────────

@@ -75,6 +75,53 @@ def resolve_priority(order: Any, by_id: Optional[dict] = None) -> dict:
     }
 
 
+def resolve_anchor(order: Any, by_id: Optional[dict] = None) -> dict:
+    """Состояние якоря старта (жёсткой даты и времени начала).
+
+    Якорь живёт у того заказа, который держит признак «Приоритетный заказ»:
+    у подчинённых он наследуется и не меняется отдельно.
+
+    own        — якорь задан непосредственно у заказа;
+    effective  — итоговое значение: своё или от приоритетного родителя;
+    inherited  — значение пришло от родителя;
+    locked     — менять якорь у этого заказа нельзя (смотреть у источника);
+    source     — заказ, который держит якорь.
+    """
+    by_id = by_id or {order.id: order}
+    own = getattr(order, "priority_anchor_at", None)
+    seen: set = set()
+    cur_id = order.parent_order_id
+    source = None
+    while cur_id and cur_id in by_id and cur_id not in seen:
+        seen.add(cur_id)
+        ancestor = by_id[cur_id]
+        if ancestor.is_priority:
+            source = ancestor
+            break
+        cur_id = ancestor.parent_order_id
+
+    if source is not None:
+        return {
+            "own": own,
+            "effective": getattr(source, "priority_anchor_at", None),
+            "inherited": True,
+            "locked": True,
+            "source": source,
+            "reason": (
+                f"Якорь задаётся у заказа-родителя {_label(source)} — "
+                "подчинённые наследуют его значение."
+            ),
+        }
+    return {
+        "own": own,
+        "effective": own,
+        "inherited": False,
+        "locked": False,
+        "source": None,
+        "reason": None,
+    }
+
+
 def count_descendants(order_id, children: Optional[dict] = None) -> int:
     """Сколько заказов унаследует признак от этого заказа (вся цепочка вниз)."""
     if not children:

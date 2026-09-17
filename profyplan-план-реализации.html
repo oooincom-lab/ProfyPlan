@@ -261,6 +261,18 @@ a:hover{text-decoration:underline}
 </div>
 </div>
 
+<div class="phase">
+<div class="phase-header"><span class="tag tag-progress">Done</span> 6.8 Якорь старта приоритетного заказа — шаг 2 (17.09.2026)</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Жёсткий якорь старта</div><div class="detail">Дата и время начала приоритетного заказа превращаются в закрепление первых операций, календарный расчёт обязан их соблюсти. Колонка приказа и миграция 0036_order_anchor.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Якорь живёт у держателя признака</div><div class="detail">Задаётся у заказа с признаком, подчинённые наследуют и менять не могут (отказ с пояснением). При переносе к другому родителю значение пересчитывается.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Журнал сдвигов и «призрак» до/после</div><div class="detail">Каждое изменение якоря пишется в журнал снимком: какие заказы сдвинулись, на сколько дней, что стало с финишем проекта. Хранение — по настройке проекта.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Откат изменения</div><div class="detail">Возврат к значению якоря, которое было до последнего изменения, с записью в журнал и новым «призраком».</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Проверки по настройкам</div><div class="detail">Старт раньше предшественников — по настройке (иначе отказ с объяснением); «сдвигать зависимые заказы» и «хранить план до/после» учтены; якорь нельзя задать неприоритетному заказу.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Осталось в шаге 2</div><div class="detail">Проверки при перегрузке ресурса и нулевой мощности в окне якоря; пометка якоря на диаграмме Ганта.</div></div><span class="status">в плане</span></div>
+</div>
+</div>
+
 <!-- Timeline -->
 <h2>Хронология поставок</h2>
 <div class="timeline">
