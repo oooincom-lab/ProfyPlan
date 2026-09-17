@@ -249,6 +249,7 @@ export default function AppShell() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [anchorInput, setAnchorInput] = useState<string>('');
   const [anchorGhost, setAnchorGhost] = useState<any>(null);
+  const [ganttInterleave, setGanttInterleave] = useState<any>(null);
   const [anchorBusy, setAnchorBusy] = useState(false);
   const [conflictsData, setConflictsData] = useState<any>(null);
   const [conflictsBusy, setConflictsBusy] = useState(false);
@@ -1945,6 +1946,20 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       const body = p?.start_date ? { start_date: p.start_date } : {};
       const r = await apiF<any>(`/projects/${p.id}/calculate/schedule`, { method: 'POST', body: JSON.stringify(body) });
       setGanttData(r);
+      // Список заказов нужен диаграмме: цепочки, метка якоря и раскладка переплетения.
+      try {
+        const ords = await apiF<any>(`/production-orders/?project_id=${p.id}`);
+        const list = Array.isArray(ords) ? ords : (ords?.items || []);
+        if (Array.isArray(list)) setProjectOrders(prev => ({ ...prev, [p.id]: list }));
+      } catch { /* без списка заказов диаграмма всё равно строится */ }
+      // Последняя согласованная раскладка переплетения — из журнала сдвигов.
+      try {
+        const log = await apiF<any>(`/projects/${p.id}/shift-log?limit=50`);
+        const plan = (Array.isArray(log) ? log : (log?.items || []))
+          .filter((e: any) => (e.payload || {}).interleave_plan)
+          .map((e: any) => ({ ...e.payload.interleave_plan, at: e.created_at, order: e.payload.order_ext_id, other: e.payload.other_order_ext_id }))[0] || null;
+        setGanttInterleave(plan);
+      } catch { setGanttInterleave(null); }
       setMsg('Проект рассчитан: финиш ' + (r?.project_finish_date || '—') +
         ' · операций ' + ((r?.nodes || []).length) +
         ((r?.warnings || []).length ? ' · предупреждений ' + (r.warnings || []).length : ''));
@@ -3437,6 +3452,12 @@ const changeOrderStatus = async (o: any, status: string) => {
                         <span style={{ fontSize: 12, fontWeight: 600, color: '#E8EEF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.ext_id || '—'}</span>
                         <span style={{ fontSize: 10.5, color: '#8FA3BD', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.specification_name}</span>
                         {kids.length > 0 && <span style={{ fontSize: 10, color: col, fontWeight: 600 }}>· {kids.length}</span>}
+                        {o.priority_effective && o.priority_anchor_effective_at && (
+                          <span title={'Якорь старта: ' + String(o.priority_anchor_effective_at).slice(0, 16).replace('T', ' ')}
+                            style={{ fontSize: 9.5, color: '#F59E0B', border: '1px solid rgba(245,158,11,.45)', background: 'rgba(245,158,11,.12)', borderRadius: 5, padding: '0 4px', whiteSpace: 'nowrap' }}>
+                            ⚓ {String(o.priority_anchor_effective_at).slice(8, 10)}.{String(o.priority_anchor_effective_at).slice(5, 7)} {String(o.priority_anchor_effective_at).slice(11, 16)}
+                          </span>
+                        )}
                       </div>
                       {kids.length > 0 && <div style={{ display: 'flex', flexDirection: 'column' }}>{kids.map((k) => renderChain(k, depth + 1))}</div>}
                     </div>
@@ -3457,6 +3478,37 @@ const changeOrderStatus = async (o: any, status: string) => {
                   </div>
                 );
               })()}
+              {ganttInterleave && ganttInterleave.ok
+                && (!ganttInterleave.order || (projectOrders[selectedProject?.id || ''] || []).some((o: any) => o.ext_id === ganttInterleave.order)) && (
+                <div style={{ marginBottom: 14, padding: 12, background: 'rgba(245,158,11,.05)', border: '1px solid rgba(245,158,11,.28)', borderRadius: 10 }}>
+                  <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#F59E0B', fontWeight: 600, marginBottom: 8 }}>
+                    ⛓ Переплетение на общих ресурсах — согласованная раскладка
+                  </div>
+                  <div style={{ fontSize: 12, color: '#E8EEF5', marginBottom: 6 }}>
+                    {ganttInterleave.order || 'приоритетный заказ'} и {ganttInterleave.other || 'другой заказ'} · окно {String((ganttInterleave.window || {}).from || '').replace('T', ' ')} — {String((ganttInterleave.window || {}).to || '').replace('T', ' ')}
+                    {' · '}участков {(ganttInterleave.summary || {}).segments}, переключений {(ganttInterleave.summary || {}).switches}, наладка {(ganttInterleave.summary || {}).added_setup_hours} ч
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                    {(ganttInterleave.segments || []).slice(0, 32).map((seg: any, i: number) => (
+                      <span key={i} title={String(seg.from).replace('T', ' ') + ' — ' + String(seg.to).replace('T', ' ') + ' · ' + seg.hours + ' ч'}
+                        style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, fontWeight: 600,
+                          background: seg.owner === 'priority' ? 'rgba(16,185,129,.18)' : 'rgba(245,158,11,.16)',
+                          color: seg.owner === 'priority' ? '#10B981' : '#F59E0B',
+                          border: '1px solid ' + (seg.owner === 'priority' ? 'rgba(16,185,129,.4)' : 'rgba(245,158,11,.4)') }}>
+                        {String(seg.from).slice(11, 16)}
+                      </span>
+                    ))}
+                    {(ganttInterleave.segments || []).length > 32 && <span style={{ fontSize: 10, color: '#5A7090' }}>… ещё {(ganttInterleave.segments || []).length - 32}</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#8FA3BD' }}>
+                    <span style={{ color: '#10B981', fontWeight: 600 }}>зелёные</span> — участки приоритетного заказа, <span style={{ color: '#F59E0B', fontWeight: 600 }}>оранжевые</span> — уступающего.
+                    Длительность операции при этом не режется: раскладка согласована и зафиксирована, движок считает операцию целым блоком.
+                  </div>
+                  {(ganttInterleave.warnings || []).map((w: string, i: number) => (
+                    <div key={i} style={{ fontSize: 11, color: '#FCD34D', marginTop: 3 }}>{w}</div>
+                  ))}
+                </div>
+              )}
               {ganttLoading && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Загрузка данных CPM...</div>}
               {!ganttLoading && !ganttData && <div style={{ textAlign: 'center', padding: 48, color: '#5A7090' }}>Нет данных. Запустите CPM-расчёт для проекта.</div>}
               {(() => {

@@ -2,7 +2,7 @@
 Excel-импорт: трёхвкладочный формат (Заказы + BOM + Маршруты).
 """
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 from uuid import uuid4, UUID
@@ -1797,6 +1797,69 @@ def _parse_dt(value):
     return d
 
 
+async def _anchor_window_checks(
+    db: AsyncSession, tenant_id, order: ProductionOrder, anchor_at, settings: dict,
+) -> tuple:
+    """Проверки в окне якоря: занятость общих ресурсов и нулевая мощность.
+
+    Возвращает (предупреждения, блокирующая причина). Настройки «при перегрузке»
+    и «при нулевой мощности» решают: предупредить или запретить постановку якоря.
+    """
+    warnings: list = []
+    block_reason = None
+    if anchor_at is None:
+        return warnings, block_reason
+
+    on_zero = str(settings.get("priority_orders.on_zero_capacity", "warn") or "warn")
+    on_overload = str(settings.get("priority_orders.on_overload", "warn") or "warn")
+
+    roots = await _order_root_operations(db, tenant_id, await _chain_order_ids(db, tenant_id, order))
+    if not roots:
+        return warnings, block_reason
+    hours = max([float(getattr(o, "duration_base", 0) or 0) for o in roots] + [0.0])
+    if hours <= 0:
+        hours = 8.0
+    window_end = anchor_at + timedelta(hours=hours)
+
+    from app.services.priority_conflicts import find_conflicts, parse_dt
+    data = await find_conflicts(db, tenant_id, order, settings)
+    if not data.get("available"):
+        warnings.append("Проверки окна якоря пропущены: %s" % (data.get("reason") or "расчёт недоступен"))
+        return warnings, block_reason
+
+    in_window = []
+    for c in data.get("conflicts") or []:
+        c_from, c_to = parse_dt(c.get("overlap_from")), parse_dt(c.get("overlap_to"))
+        if c_from and c_to and c_from < window_end and c_to > anchor_at:
+            in_window.append(c)
+
+    if in_window:
+        text = "; ".join(
+            "«%s» занят заказом %s (%s ч)" % (c.get("resource_name") or "ресурс",
+                                              c["other_operation"].get("order_ext_id") or "—",
+                                              c.get("overlap_hours"))
+            for c in in_window[:3]
+        )
+        if on_overload == "block":
+            block_reason = "Ресурс в окне якоря занят: %s. Настройка «при перегрузке» — запрещать постановку якоря." % text
+        else:
+            warnings.append("Ресурс в окне якоря занят: %s. Настройка «при перегрузке» — предупреждать." % text)
+
+    zero = [c for c in in_window if c.get("zero_capacity_events")]
+    if zero:
+        text = "; ".join(
+            "«%s»: %s" % (c.get("resource_name") or "ресурс", (c["zero_capacity_events"][0].get("reason") or "нулевая мощность"))
+            for c in zero[:3]
+        )
+        if on_zero == "block":
+            block_reason = ("В окне якоря ресурс имеет нулевую или сниженную мощность: %s. "
+                            "Настройка «при нулевой мощности» — запрещать постановку якоря." % text)
+        else:
+            warnings.append("В окне якоря ресурс имеет нулевую или сниженную мощность: %s." % text)
+
+    return warnings, block_reason
+
+
 async def _settings_for_order(db: AsyncSession, tenant_id, order: ProductionOrder) -> dict:
     from app.services.planning_settings import resolve_settings
     try:
@@ -2006,6 +2069,12 @@ async def set_order_anchor(
                 "Якорь раньше расчётного старта заказа — предшественники не успевают. "
                 "Разрешите старт раньше предшественников в настройках «Приоритетные заказы».",
             )
+
+    # Проверки в окне якоря: занятость ресурсов и нулевая мощность.
+    win_warns, win_block = await _anchor_window_checks(db, tenant_id, order, anchor_at, settings)
+    if win_block:
+        raise HTTPException(409, win_block)
+    warnings.extend(win_warns)
 
     pins_count, warns = await _apply_anchor(db, tenant_id, order, anchor_at)
     warnings.extend(warns)
