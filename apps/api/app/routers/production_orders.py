@@ -2194,6 +2194,7 @@ async def resolve_order_conflict(
     ext_by_order = {str(o.id): o.ext_id for o in by_id.values()}
     warnings: list = []
     notes: list = []
+    interleave_plan = None
     snap_before = await _schedule_snapshot(db, tenant_id, order.project_id) if keep_before_after else None
 
     if body.action == "shift_other":
@@ -2238,10 +2239,52 @@ async def resolve_order_conflict(
         warnings.extend(warns)
 
     elif body.action == "interleave":
-        notes.append(
-            "Согласие на частичное переплетение зафиксировано. Разрезание операции между заказами "
-            "включится вместе с настройкой «Разрешать частичное переплетение»."
+        from app.services.interleave import build_interleave_plan
+        other_op_obj = await db.get(Operation, UUID(conflict["other_operation"]["operation_id"]))
+        p_start = _parse_dt(conflict["priority_operation"]["start"])
+        p_finish = _parse_dt(conflict["priority_operation"]["finish"])
+        o_start = _parse_dt(conflict["other_operation"]["start"])
+        o_finish = _parse_dt(conflict["other_operation"]["finish"])
+        if not (p_start and p_finish and o_start and o_finish):
+            raise HTTPException(400, "Не удалось определить интервалы операций для переплетения")
+        other_hours = (o_finish - o_start).total_seconds() / 3600.0
+        setup = float(getattr(other_op_obj, "setup_time", 0) or 0) if other_op_obj else 0.0
+        plan = build_interleave_plan(
+            {"name": conflict["priority_operation"]["name"], "start": p_start, "finish": p_finish,
+             "hours": (p_finish - p_start).total_seconds() / 3600.0},
+            {"name": conflict["other_operation"]["name"], "start": o_start, "finish": o_finish,
+             "hours": other_hours},
+            settings, setup_hours=setup,
         )
+        if not plan.get("ok"):
+            raise HTTPException(400, plan.get("refusal") or "Переплетение невозможно")
+        interleave_plan = plan
+        warnings.extend(plan.get("warnings") or [])
+        notes.append(plan.get("note") or "")
+        # согласованная раскладка: чужую операцию не пускаем раньше её первого участка
+        first_start = plan.get("summary", {}).get("first_inferior_start")
+        if other_op_obj and first_start:
+            first_at = _parse_dt(first_start)
+            note = "Переплетение с приоритетным заказом %s [conflict:%s]" % (
+                (order.ext_id or str(order.id)[:8]), body.conflict_id)
+            pin = (await db.execute(
+                select(OperationPin).where(
+                    OperationPin.tenant_id == tenant_id,
+                    OperationPin.operation_id == other_op_obj.id,
+                    OperationPin.note.like("Переплетение%"),
+                )
+            )).scalars().first()
+            if pin:
+                pin.pin_at = first_at
+                pin.pin_type = "start_not_earlier"
+                pin.is_hard = True
+                pin.note = note
+            else:
+                db.add(OperationPin(
+                    id=uuid4(), tenant_id=tenant_id, project_id=order.project_id,
+                    operation_id=other_op_obj.id, group_id=order.group_id,
+                    pin_type="start_not_earlier", pin_at=first_at, is_hard=True, note=note,
+                ))
 
     else:  # unpriority
         if p_st["locked"]:
@@ -2262,6 +2305,7 @@ async def resolve_order_conflict(
         "action": body.action,
         "resource_name": conflict.get("resource_name"),
         "other_order_ext_id": conflict["other_operation"].get("order_ext_id"),
+        "interleave_plan": interleave_plan,
         "ghost": ghost if keep_before_after else None,
     }, note=body.note)
     await db.commit()
@@ -2273,6 +2317,7 @@ async def resolve_order_conflict(
         "action": body.action,
         "conflict_id": body.conflict_id,
         "order": _order_to_out(order, by_id, children),
+        "interleave_plan": interleave_plan,
         "ghost": ghost,
         "warnings": warnings,
         "notes": notes,

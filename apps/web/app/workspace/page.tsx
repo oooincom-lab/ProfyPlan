@@ -253,6 +253,7 @@ export default function AppShell() {
   const [conflictsData, setConflictsData] = useState<any>(null);
   const [conflictsBusy, setConflictsBusy] = useState(false);
   const [conflictGhost, setConflictGhost] = useState<any>(null);
+  const [interleavePlan, setInterleavePlan] = useState<any>(null);
   const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[]; variant: 'modal' | 'panel' } | null>(null);
   const [routings, setRoutings] = useState<any[]>([]);
   const [resourcesList, setResourcesList] = useState<any[]>([]);
@@ -513,6 +514,7 @@ const [chainDialog, setChainDialog] = useState<null | {
     setAnchorGhost(null);
     setConflictsData(null);
     setConflictGhost(null);
+    setInterleavePlan(null);
   };
 
   const openGroupEditor = (g: any) => {
@@ -665,6 +667,7 @@ const [chainDialog, setChainDialog] = useState<null | {
       }
       const r = await apiF<any>(`/production-orders/${orderId}/conflicts/resolve`, { method: 'POST', body: JSON.stringify(body) });
       setConflictGhost(r.ghost || null);
+      setInterleavePlan(r.interleave_plan || null);
       const notes = [...(r.warnings || []), ...(r.notes || [])].join(' · ');
       setMsg('Решение принято.' + (notes ? ' ' + notes : ''));
       await loadConflicts(orderId);
@@ -2643,6 +2646,31 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                   </div>
                                 </div>
                               ))}
+                              {interleavePlan && interleavePlan.ok && (
+                                <div style={{ marginTop: 6, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                                  <div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>
+                                    Переплетение: окно {String((interleavePlan.window || {}).from || '').replace('T', ' ')} — {String((interleavePlan.window || {}).to || '').replace('T', ' ')}
+                                    {' · '}участков {(interleavePlan.summary || {}).segments}, переключений {(interleavePlan.summary || {}).switches}, наладка {(interleavePlan.summary || {}).added_setup_hours} ч
+                                  </div>
+                                  {(interleavePlan.segments || []).slice(0, 8).map((seg: any, i: number) => (
+                                    <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5 }}>
+                                      <span style={{ minWidth: 96, color: seg.owner === 'priority' ? '#86EFAC' : '#FCD34D' }}>
+                                        {seg.owner === 'priority' ? 'приоритетный' : 'уступающий'}
+                                      </span>
+                                      <span style={{ color: '#B0C4DE' }}>
+                                        {String(seg.from).slice(11, 16)} — {String(seg.to).slice(11, 16)} ({seg.hours} ч)
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {(interleavePlan.segments || []).length > 8 && (
+                                    <div style={{ fontSize: 11, color: '#5A7090' }}>… ещё {interleavePlan.segments.length - 8} участков</div>
+                                  )}
+                                  {(interleavePlan.warnings || []).map((w: string, i: number) => (
+                                    <div key={i} style={{ fontSize: 11, color: '#FCD34D', marginTop: 2 }}>{w}</div>
+                                  ))}
+                                  {interleavePlan.note && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 2 }}>{interleavePlan.note}</div>}
+                                </div>
+                              )}
                               {conflictGhost && conflictGhost.available && (
                                 <div style={{ marginTop: 6, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
                                   <div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>
