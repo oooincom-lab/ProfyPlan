@@ -16,6 +16,7 @@ from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
 from app.models.group_shift_log import GroupShiftLog
 from app.models.operation_pin import OperationPin
+from app.services.order_priority import normalize_priority
 from app.services.priority_chain import (
     build_children_map,
     build_index,
@@ -149,13 +150,9 @@ async def _get_or_create_nomenclature(
 
 # ── Карты русских значений (7-вкладочный формат) ──────────────
 
-PRIORITY_MAP_RU = {
-    "высокий": "high", "high": "high",
-    "обычный": "normal", "normal": "normal",
-    "низкий": "low", "low": "low",
-    "критичный": "critical", "critical": "critical",
-    "": "normal", None: "normal",
-}
+# Приоритет разбирается по единому справочнику (app/services/order_priority.py):
+# «Срочный», «критический», urgent и прочие формулировки сходятся к critical.
+# См. вызовы normalize_priority ниже.
 
 NODE_TYPE_MAP_RU = {
     "сборка": "assembly", "assembly": "assembly",
@@ -429,7 +426,7 @@ async def _import_orders(
                 order.quantity = _parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1"))
                 order.start_date = _parse_date(row[4] if len(row) > 4 else None)
                 order.due_date = _parse_date(row[5] if len(row) > 5 else None)
-                order.priority = PRIORITY_MAP_RU.get(_str(row[6] if len(row) > 6 else None).lower(), "normal")
+                order.priority = normalize_priority(_str(row[6] if len(row) > 6 else None))
                 order.client = client_name
                 order.client_id = client_id
                 result.orders_updated += 1
@@ -444,7 +441,7 @@ async def _import_orders(
                     quantity=_parse_decimal(row[3] if len(row) > 3 else 1, Decimal("1")),
                     start_date=_parse_date(row[4] if len(row) > 4 else None),
                     due_date=_parse_date(row[5] if len(row) > 5 else None),
-                    priority=PRIORITY_MAP_RU.get(_str(row[6] if len(row) > 6 else None).lower(), "normal"),
+                    priority=normalize_priority(_str(row[6] if len(row) > 6 else None)),
                     client=client_name,
                     client_id=client_id,
                     status="draft",

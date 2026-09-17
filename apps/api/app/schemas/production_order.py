@@ -5,7 +5,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.order_priority import allowed_text, is_known_priority, normalize_priority
 
 
 # ── ProductionOrder ────────────────────────────────────────────
@@ -18,8 +20,21 @@ class ProductionOrderCreate(BaseModel):
     unit: str = "pcs"
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-    # Единый набор: low | normal | high | critical (подпись «Срочный» = critical).
-    priority: str = Field(default="normal", pattern="^(low|normal|high|critical)$")
+    # Единый набор значений — справочник приоритетов: low | normal | high | critical.
+    # Знакомые формулировки («Срочный», «Высокий», urgent) приводятся к каноническому виду.
+    priority: str = Field(default="normal")
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _priority_by_dictionary(cls, value):
+        if value is None:
+            return "normal"
+        if not is_known_priority(value):
+            raise ValueError(
+                "Недопустимый приоритет «%s». Допустимо: %s (low, normal, high, critical)."
+                % (value, allowed_text())
+            )
+        return normalize_priority(value)
     client: Optional[str] = None
     client_id: Optional[str] = None
     notes: Optional[str] = None
