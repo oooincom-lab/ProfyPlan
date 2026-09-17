@@ -4597,6 +4597,11 @@ const changeOrderStatus = async (o: any, status: string) => {
         onAnchorChange={changeOrderAnchor}
         onAnchorRollback={rollbackOrderAnchor}
         anchorGhost={anchorGhost}
+        onConflictsLoad={loadConflicts}
+        onConflictResolve={resolveConflict}
+        conflictsData={conflictsData}
+        interleavePlan={interleavePlan}
+        conflictGhost={conflictGhost}
         onNodeOrderChange={handleNodeOrderChange}
         onBomNodeQuantity={handleBomNodeQuantity}
         onBomNodeRemove={handleBomNodeRemove}

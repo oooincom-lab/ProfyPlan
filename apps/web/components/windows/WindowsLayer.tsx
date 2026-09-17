@@ -112,6 +112,11 @@ type WindowsLayerProps = {
   onAnchorChange?: (orderId: string, value: string | null) => Promise<void>;
   onAnchorRollback?: (orderId: string) => Promise<void>;
   anchorGhost?: any;
+  onConflictsLoad?: (orderId: string) => Promise<void>;
+  onConflictResolve?: (orderId: string, conflictId: string, action: string) => Promise<void>;
+  conflictsData?: any;
+  interleavePlan?: any;
+  conflictGhost?: any;
   onNodeOrderChange: (nodeId: string, orderId: string | null) => void;
   onBomNodeQuantity: (nodeId: string, value: number) => void;
   onBomNodeRemove: (nodeId: string) => void;
@@ -201,6 +206,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
     onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
   onAnchorChange, onAnchorRollback, anchorGhost,
+  onConflictsLoad, onConflictResolve, conflictsData, interleavePlan, conflictGhost,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
     schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
@@ -941,6 +947,88 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         </div>
                       ))}
                       {anchorGhost.note && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>{anchorGhost.note}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && o!.priority_effective && (
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>⛔ Конфликты на общих ресурсах</span>
+                    <button onClick={() => onConflictsLoad && onConflictsLoad(o!.id)}
+                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer' }}>
+                      {conflictsData ? 'Обновить' : 'Проверить конфликты'}
+                    </button>
+                    {conflictsData && <span style={{ fontSize: 11, color: '#5A7090' }}>
+                      всего: {(conflictsData.summary || {}).total || 0}, на ресурсах: {(conflictsData.summary || {}).resources || 0}, заказов затронуто: {(conflictsData.summary || {}).other_orders || 0}
+                    </span>}
+                  </div>
+                  {conflictsData && !conflictsData.available && (
+                    <div style={{ fontSize: 11.5, color: '#FCD34D' }}>{conflictsData.reason || 'Конфликты недоступны'}</div>
+                  )}
+                  {conflictsData && conflictsData.available && ((conflictsData.conflicts || []).length === 0) && (
+                    <div style={{ fontSize: 11.5, color: '#86EFAC' }}>Пересечений с другими заказами нет.</div>
+                  )}
+                  {(conflictsData?.conflicts || []).slice(0, 5).map((c: any) => (
+                    <div key={c.id} style={{ background: '#0A1628', border: '1px solid ' + (c.blocking ? 'rgba(239,68,68,.45)' : '#1E3252'), borderRadius: 8, padding: '8px 10px', marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, color: '#E8EEF5' }}>
+                        <b>{c.resource_name || 'ресурс'}</b> · пересечение {c.overlap_hours} ч
+                        {c.resolved ? <span style={{ color: '#86EFAC', marginLeft: 6 }}>решено</span> : null}
+                        {c.blocking ? <span style={{ color: '#FCA5A5', marginLeft: 6 }}>требует решения</span> : null}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#B0C4DE', marginTop: 3 }}>
+                        наш заказ: {c.priority_operation?.name} [{String(c.priority_operation?.start || '').slice(11, 16)}–{String(c.priority_operation?.finish || '').slice(11, 16)}]
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#B0C4DE' }}>
+                        другой заказ {c.other_operation?.order_ext_id || ''}: {c.other_operation?.name} [{String(c.other_operation?.start || '').slice(11, 16)}–{String(c.other_operation?.finish || '').slice(11, 16)}]
+                        {c.other_operation?.order_is_priority ? ' · приоритетный' : ''}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#FCD34D', marginTop: 3 }}>Предложение: {c.proposal?.description}</div>
+                      {(c.warnings || []).map((x: string, i: number) => (
+                        <div key={i} style={{ fontSize: 11, color: '#FCA5A5', marginTop: 2 }}>{x}</div>
+                      ))}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        <button onClick={() => onConflictResolve && onConflictResolve(o!.id, c.id, c.proposal?.action === 'shift_anchor' ? 'shift_anchor' : 'shift_other')}
+                          style={{ background: '#3B82F6', border: 0, color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>✓ Принять предложение</button>
+                        <button onClick={() => onConflictResolve && onConflictResolve(o!.id, c.id, 'shift_anchor')}
+                          style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer' }}>Сдвинуть якорь вручную</button>
+                        <button onClick={() => onConflictResolve && onConflictResolve(o!.id, c.id, 'interleave')}
+                          style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer' }}>Разрешить переплетение</button>
+                        <button onClick={() => onConflictResolve && onConflictResolve(o!.id, c.id, 'unpriority')}
+                          style={{ background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: '#FCA5A5', borderRadius: 6, padding: '4px 10px', fontSize: 11.5, cursor: 'pointer' }}>Снять приоритетность</button>
+                      </div>
+                    </div>
+                  ))}
+                  {interleavePlan && interleavePlan.ok && (
+                    <div style={{ marginTop: 6, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>
+                        Переплетение: окно {String((interleavePlan.window || {}).from || '').replace('T', ' ')} — {String((interleavePlan.window || {}).to || '').replace('T', ' ')}
+                        {' · '}участков {(interleavePlan.summary || {}).segments}, переключений {(interleavePlan.summary || {}).switches}, наладка {(interleavePlan.summary || {}).added_setup_hours} ч
+                      </div>
+                      {(interleavePlan.segments || []).slice(0, 8).map((seg: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5 }}>
+                          <span style={{ minWidth: 96, color: seg.owner === 'priority' ? '#86EFAC' : '#FCD34D' }}>{seg.owner === 'priority' ? 'приоритетный' : 'уступающий'}</span>
+                          <span style={{ color: '#B0C4DE' }}>{String(seg.from).slice(11, 16)} — {String(seg.to).slice(11, 16)} ({seg.hours} ч)</span>
+                        </div>
+                      ))}
+                      {(interleavePlan.warnings || []).map((x: string, i: number) => (
+                        <div key={i} style={{ fontSize: 11, color: '#FCD34D', marginTop: 2 }}>{x}</div>
+                      ))}
+                    </div>
+                  )}
+                  {conflictGhost && conflictGhost.available && (
+                    <div style={{ marginTop: 6, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>
+                        После решения: сдвинулось заказов {conflictGhost.shifted}
+                        {conflictGhost.project_finish_after ? ' · финиш проекта ' + (conflictGhost.project_finish_before || '—') + ' → ' + conflictGhost.project_finish_after : ''}
+                      </div>
+                      {(conflictGhost.rows || []).slice(0, 5).map((r: any) => (
+                        <div key={r.order_id} style={{ display: 'flex', gap: 8, fontSize: 11.5, color: '#B0C4DE' }}>
+                          <span style={{ minWidth: 92 }}>{r.order_ext_id || String(r.order_id).slice(0, 8)}</span>
+                          <span style={{ minWidth: 54, color: (r.delta_days || 0) > 0 ? '#FCA5A5' : '#86EFAC' }}>{(r.delta_days || 0) > 0 ? '+' : ''}{r.delta_days} дн</span>
+                          <span style={{ color: '#5A7090' }}>{String(r.before_point || r.before_start || '—').slice(0, 16).replace('T', ' ')} → {String(r.after_point || r.after_start || '—').slice(0, 16).replace('T', ' ')}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
