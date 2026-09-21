@@ -1,0 +1,123 @@
+﻿C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:669: const value = window.prompt('Новая дата и время якоря старта (ГГГГ-ММ-ДДTЧЧ:ММ):', '');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:684: // ── Якорь старта приоритетного заказа ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:691: setMsg('Якорь старта сохранён.' + (w ? ' ' + w : ''));
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:1888: if (Math.abs(power - 1.0) > 1e-9) setScaleInfo(`Сценарий ×${power.toFixed(1)}: финиш ${sch?.project_finish_date || '—'} (обычный план: ${scaleBaseFinish || '—'})`);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:1981: setMsg('Проект рассчитан: финиш ' + (r?.project_finish_date || '—') +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2428: <th style={{ cursor: 'pointer' }} onClick={() => doSort('start_date')}>Старт{sortArrow('start_date')}</th>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2429: <th style={{ cursor: 'pointer' }} onClick={() => doSort('due_date')}>Финиш{sortArrow('due_date')}</th>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2564: {[['Клиент', o.client || '—'], ['Кол-во', String(o.quantity ?? '—')], ['Ед.', o.unit || '—'], ['Приоритет', priorityLabel(o.priority)], ['Приоритетный заказ', o.priority_locked ? `Да — унаследован от ${o.priority_source_ext_id || 'заказа-родителя'}` : (o.is_priority ? `Да${o.priority_descendants ? ` — признак унаследуют подчинённые: ${o.priority_descendants}` : ''}` : 'Нет')], ['Статус', o.status || '—'], ['Старт', o.start_date || '—'], ['Финиш', o.due_date || '—'], ['Загружен', o.created_at ? new Date(o.created_at).toLocaleString('ru-RU') : '—'], ['Заказ родителя', o.parent_order_id || '—']].map(([k, v]) => (
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2575: <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>⚓ Якорь старта</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2610: {anchorGhost.project_finish_after ? ' · финиш проекта ' + (anchorGhost.project_finish_before || '—') + ' → ' + anchorGhost.project_finish_after : ''}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2711: {conflictGhost.project_finish_after ? ' · финиш проекта ' + (conflictGhost.project_finish_before || '—') + ' → ' + conflictGhost.project_finish_after : ''}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2756: : 'Неприкосновенный заказ: не режется, вытесняет остальных, обязательный якорь старта. Признак наследуют подчинённые заказы.'}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2761: <span style={{ color: '#8FA3BD', fontSize: 12 }}>Старт</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2765: <span style={{ color: '#8FA3BD', fontSize: 12 }}>Финиш</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2915: <div style={{ fontSize: 10.5, color: '#5A7090', textTransform: 'uppercase' }}>Финиш проекта</div>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3382: <table className="tbl"><thead><tr><th className="t-graph">Граф</th><th>ID</th><th>Продукт</th><th>Клиент</th><th>Кол-во</th><th>Приор.</th><th>Статус</th><th>Старт</th><th>Финиш</th><th style={{ width: 40 }}></th></tr></thead>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3424: <label style={{ fontSize: 11, color: '#8FA3BD', display: 'inline-flex', alignItems: 'center' }}>Старт:
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3427: {ganttData?.project_finish_date && <span style={{ fontSize: 11, color: '#8FA3BD' }}>→ финиш <span style={{ color: '#10B981', fontWeight: 600 }}>{ganttData.project_finish_date.slice(8, 10)}.{ganttData.project_finish_date.slice(5, 7)}.{ganttData.project_finish_date.slice(0, 4)}</span></span>}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3474: <span title={'Якорь старта: ' + String(o.priority_anchor_effective_at).slice(0, 16).replace('T', ' ')}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3619: <th style={{ width: 130 }}>Старт</th>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3620: <th style={{ width: 130 }}>Финиш</th>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3621: <th style={{ width: 105 }}>Поздн. старт</th>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:3622: <th style={{ width: 105 }}>Поздн. финиш</th>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:4271: При расчёте проекта заказ «В работе», чей расчётный финиш уже прошёл, автоматически переводится
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:4276: Автоматически завершать заказы по прошедшему финишу
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CCMDashboardV2.tsx:416: {suggestion.suggestion?.new_finish ? <span>· новый финиш: {String(suggestion.suggestion.new_finish).slice(0, 10)}</span> : null}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ClipboardPaste.tsx:16: start_date: ['старт', 'начало', 'с', 'от', 'start', 'begin', 'from', 'начать', 'дата начала'],
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ClipboardPaste.tsx:17: due_date: ['финиш', 'конец', 'до', 'по', 'end', 'finish', 'to', 'due', 'окончание', 'дата окончания'],
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ClipboardPaste.tsx:25: unit: 'Ед. изм.', client: 'Клиент', start_date: 'Старт', due_date: 'Финиш',
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:6: * (Вариант 2: «дни на связях» + Старт/Финиш, круги/карточки операций,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:72: /** Виртуальное событие сети: начальное «Старт» или завершающее «Финиш». */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:101: * становятся нечитаемыми, поэтому «на старте» показываем крупнее (с прокруткой),
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:244: const critPath: string[] = (p.cpmResult && p.cpmResult.critical_path) || [];
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:245: const mainSet = new Set(critPath.map(String));
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:319: // Начальное («Старт») и завершающее («Финиш») события — отдельный цвет и форма.
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:433: /* ── виртуальные события «Старт» и «Финиш» ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:437: «Старт» ставится на колонку левее самой ранней начальной операции, «Финиш» —
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:438: правее самой поздней завершающей; связь идёт от «Старта» ко всем начальным
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:439: и от всех завершающих к «Финишу» (пунктир, нулевая длительность). */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:465: virtuals.push({ id: 'start', kind: 'start', label: 'Старт', x: minCx - COL_PITCH, y: meanY(ep.initialIds), color: startColor });
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:469: virtuals.push({ id: 'finish', kind: 'finish', label: 'Финиш', x: maxCx + COL_PITCH, y: meanY(ep.finalIds), color: finishColor });
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:476: полотна расширяется, чтобы «Старт»/«Финиш» попадали в подгонку «По размеру».
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:497: Считаются только по реальным операциям и связям; виртуальные «Старт»/«Финиш»
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:681: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:693: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:708: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:738: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:854: ctx.setLineDash(dashedW ? [Math.max(4, 5 * S), Math.max(3, 4 * S)] : []);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:858: ctx.lineWidth = bothCrit ? 3 : (dashedW ? 1.15 : 1.5);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:860: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:891: /* ── связи со «Стартом»/«Финишем» — пунктир, нулевая длительность ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:916: ctx.setLineDash([Math.max(4, 5 * S), Math.max(3, 4 * S)]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:918: ctx.lineWidth = 1.4;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:920: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:952: ctx.lineWidth = o.crit ? 2 : 1.2;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:976: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1033: ctx.lineWidth = o.crit ? 2 : (stretchCompact ? 1.8 : 1.3);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1057: /* ── виртуальные события «Старт»/«Финиш» — отдельная форма (капсула) и цвет ── */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1077: ctx.lineWidth = 2.4;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1081: // содержимое: цветной маркер + подпись «Старт»/«Финиш»
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1108: ctx.lineWidth = 2;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1233: /* ── попадание в виртуальное событие «Старт»/«Финиш» ── */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1507: <LegendPill color={startColor} label="Старт" />
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1508: <LegendPill color={finishColor} label="Финиш" />
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1509: <span style={{ color: '#5A7090' }}>· сплошная — работа · пунктир — логическая связь без задержки · тонкий пунктир со «Старта»/на «Финиш» — связи начального/завершающего события · толще — критический путь · колесо — масштаб · наведение — подсказка</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1585: <Row k="Ранний старт" v={fmtDayMonth(addDays(startDate, tooltip.op.es))} />
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1586: <Row k="Ранний финиш" v={fmtDayMonth(addDays(startDate, tooltip.op.ef))} />
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1641: /** Метка виртуального события «Старт»/«Финиш» — форма-капсула, как на полотне. */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:215: ctx.strokeStyle='rgba(60,90,130,0.12)';ctx.lineWidth=0.3;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:221: ctx.strokeStyle='rgba(60,90,130,0.45)';ctx.lineWidth=0.6;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:228: ctx.strokeStyle='rgba(96,165,250,0.35)';ctx.lineWidth=1;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:258: ctx.strokeStyle='rgba(90,112,144,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:298: ctx.lineWidth=both?1.8:1.2;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:331: ctx.strokeStyle='rgba(16,185,129,0.6)';ctx.lineWidth=2;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:341: ctx.strokeStyle='rgba(139,92,246,0.6)';ctx.lineWidth=2;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx:352: ctx.strokeStyle=o.crit?'rgba(239,68,68,0.5)':'rgba(96,165,250,0.55)';ctx.lineWidth=o.crit?2:1.5;ctx.stroke();
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ganttchart.tsx:142: ctx.lineWidth = 0.5;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ganttchart.tsx:164: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ganttchart.tsx:165: ctx.setLineDash([4, 4]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ganttchart.tsx:170: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ganttchart.tsx:220: ctx.lineWidth = 2;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:190: ctx.lineWidth = 0.5;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:211: ctx.lineWidth = e.type === 'resource' ? 0.5 : 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:212: ctx.setLineDash(e.type === 'inter_project' ? [4, 3] : []);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:217: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:239: ctx.lineWidth = n.isCritical ? 2.5 : 1.5;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:245: ctx.lineWidth = 2;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:246: ctx.setLineDash([3, 2]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:250: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:281: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:295: `Старт: ${hoveredNode.earlyStart}ч`,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\networkgraph.tsx:296: `Финиш: ${hoveredNode.earlyFinish}ч`,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:183: ctx.strokeStyle = 'rgba(60,90,130,0.12)'; ctx.lineWidth = 0.5;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:196: ctx.strokeStyle = '#5A7090'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:198: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:213: ctx.strokeStyle = 'rgba(245,158,11,0.7)'; ctx.lineWidth = 2;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:224: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:242: ctx.strokeStyle = st.stroke; ctx.lineWidth = st.lw;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:243: if (st.dash) ctx.setLineDash(st.dash); else ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:244: ctx.stroke(); ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:248: ctx.strokeStyle = '#B45309'; ctx.lineWidth = 1.5;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:260: ctx.strokeStyle = '#EF4444'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 2]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:262: ctx.setLineDash([]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx:284: ctx.fillStyle = '#162844'; ctx.strokeStyle = '#1E3252'; ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ProjectWidgets.tsx:90: <div className="kpi-label">Финиш проекта</div>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ReportsPanel.tsx:143: <thead><tr><th>Проект</th><th>Приоритет</th><th>Текущий старт</th><th>Предлагаемый старт</th><th>Сдвиг</th></tr></thead>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\resourceloadchart.tsx:83: ctx.lineWidth = 1;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:892: {[['Клиент', o!.client || '—'], ['Кол-во', String(o!.quantity ?? '—')], ['Ед.', o!.unit || '—'], ['Приоритет', priorityLabel(o!.priority)], ['Приоритетный заказ', o!.priority_locked ? `Да — унаследован от ${o!.priority_source_ext_id || 'заказа-родителя'}` : (o!.is_priority ? `Да${o!.priority_descendants ? ` — признак унаследуют подчинённые: ${o!.priority_descendants}` : ''}` : 'Нет')], ['Статус', o!.status || '—'], ['Старт', o!.start_date || '—'], ['Финиш', o!.due_date || '—'], ['Заказ родителя', o!.parent_order_id || '—']].map((kv: any) => (
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:903: <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>⚓ Якорь старта</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:938: {anchorGhost.project_finish_after ? ' · финиш проекта ' + (anchorGhost.project_finish_before || '—') + ' → ' + anchorGhost.project_finish_after : ''}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:1023: {conflictGhost.project_finish_after ? ' · финиш проекта ' + (conflictGhost.project_finish_before || '—') + ' → ' + conflictGhost.project_finish_after : ''}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:1066: : 'Неприкосновенный заказ: не режется, вытесняет остальных, обязательный якорь старта'}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:1071: <span style={{ color: '#8FA3BD', fontSize: 12 }}>Старт</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:1075: <span style={{ color: '#8FA3BD', fontSize: 12 }}>Финиш</span>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-layout.ts:142: // ── стартовый порядок внутри колонки: по раннему старту, затем по длительности/имени ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-layout.ts:171: // ── стартовая раскладка: внутри колонки равномерная укладка с центрированием ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:238: // ── связи: геометрия (старт/финиш + возможный обход посторонних узлов) ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:279: // геометрию можно добавить виртуальные события «Старт»/«Финиш» (они
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-structure.ts:25: /** Описание начального/завершающего события сети (виртуальные «Старт» и «Финиш»). */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-structure.ts:41: * и не подавляли виртуальный «Финиш». Распознаются только узлы-маркеры:
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-structure.ts:42: * «Начало», «Старт», «Сдача», «Финиш», «Завершение», «Окончание» и т.п.
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-structure.ts:44: const START_NAME_RE = /^\s*(начал|старт|start)/i;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-structure.ts:45: const FINISH_NAME_RE = /^\s*(финиш|окончан|завершен|сдач|finish|end)/i;

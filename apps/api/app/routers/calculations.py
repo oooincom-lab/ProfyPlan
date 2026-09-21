@@ -84,6 +84,9 @@ class CpmRequest(BaseModel):
     """Параметры CPM-расчёта (тело запроса необязательно)."""
     # Авто-перевод заказов в «Завершён», если расчётный финиш уже прошёл.
     auto_complete: bool = False
+    # Область расчёта: если передан, считаем только операции цепочки этого заказа
+    # (сам заказ и все подчинённые по parent_order_id).
+    order_id: Optional[UUID] = None
 
 
 @calculator_router.post("/cpm")
@@ -116,6 +119,42 @@ async def run_cpm(
         )
     )
     operations = ops_result.scalars().all()
+
+    # Область расчёта по заказу: сам заказ + все подчинённые по parent_order_id.
+    order_scope_id: Optional[UUID] = None
+    if body is not None and getattr(body, "order_id", None) is not None:
+        order_scope_id = body.order_id
+        root_order = (await db.execute(
+            select(ProductionOrder).where(
+                ProductionOrder.id == order_scope_id,
+                ProductionOrder.tenant_id == tenant_id,
+            )
+        )).scalar_one_or_none()
+        if not root_order or (
+            root_order.project_id is not None and str(root_order.project_id) != str(project_id)
+        ):
+            raise HTTPException(status_code=404, detail="Заказ не найден в проекте")
+        chain_ids: set = {order_scope_id}
+        frontier = [order_scope_id]
+        while frontier:
+            children = (await db.execute(
+                select(ProductionOrder.id).where(
+                    ProductionOrder.parent_order_id.in_(frontier),
+                    ProductionOrder.tenant_id == tenant_id,
+                )
+            )).scalars().all()
+            frontier = []
+            for cid in children:
+                if cid not in chain_ids:
+                    chain_ids.add(cid)
+                    frontier.append(cid)
+        operations = [op for op in operations if op.order_id in chain_ids]
+        if len(operations) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="В выбранном заказе меньше двух операций — расчёт CPM невозможен",
+            )
+
     if len(operations) < 2:
         _total = (await db.execute(
             select(func.count()).select_from(Operation).where(
@@ -140,6 +179,12 @@ async def run_cpm(
         ).where(Operation.project_id == project_id)
     )
     dependencies = deps_result.scalars().all()
+    if order_scope_id is not None:
+        _scope_ids = {op.id for op in operations}
+        dependencies = [
+            d for d in dependencies
+            if d.predecessor_id in _scope_ids and d.successor_id in _scope_ids
+        ]
 
     # Конвертируем в словари для движка
     ops_dicts = [
@@ -367,11 +412,49 @@ async def run_cpm(
                 pass
 
     # Формируем ответ
+    op_by_id = {op.id: op for op in operations}
+
+    def _hpd_for(op) -> float:
+        """Рабочих часов в дне по графику ресурса операции (для перевода часов в дни)."""
+        if op is None:
+            return 8.0
+        try:
+            _v = float(hpd_for_op_cpm(op) or 8.0)
+        except Exception:
+            _v = 8.0
+        return _v if _v > 0 else 8.0
+
+    # Точка отсчёта для дат: старт проекта, иначе сегодня
+    if project.start_date:
+        proj_start_dt = project.start_date
+        if getattr(proj_start_dt, "tzinfo", None) is not None:
+            proj_start_dt = proj_start_dt.replace(tzinfo=None)
+    else:
+        proj_start_dt = datetime.combine(date.today(), time(8, 0))
+
+    # Нумерация операций по раннему старту — для подписей на сетевом графе
+    _ordered_ids = sorted(
+        result.nodes.keys(),
+        key=lambda nid: (float(result.nodes[nid].early_start), result.nodes[nid].name or ""),
+    )
+    _number_by_id = {nid: _i + 1 for _i, nid in enumerate(_ordered_ids)}
+
     nodes = []
     for nid, node in result.nodes.items():
+        _op = op_by_id.get(UUID(nid) if isinstance(nid, str) else nid)
+        _hpd = _hpd_for(_op)
+        _dur_days = float(node.total_duration) / _hpd
+        _es_days = float(node.early_start) / _hpd
+        _ef_days = float(node.early_finish) / _hpd
+        _ls_days = float(node.late_start) / _hpd
+        _lf_days = float(node.late_finish) / _hpd
+        _start_dt = proj_start_dt + timedelta(days=_es_days)
+        _finish_dt = proj_start_dt + timedelta(days=_ef_days)
         nodes.append({
             "id": nid,
+            "number": _number_by_id.get(nid),
             "name": node.name,
+            "order_id": str(_op.order_id) if (_op is not None and getattr(_op, "order_id", None)) else None,
             "duration": float(node.total_duration),
             "capacity_multiplier": round(float(factors_cpm.get(nid, 1.0)), 4),
             "capacity_events": ev_used_cpm.get(nid, []),
@@ -385,6 +468,17 @@ async def run_cpm(
             "total_float": float(node.total_float),
             "free_float": float(node.free_float),
             "is_critical": node.is_critical,
+            # Дни (по графику работы ресурса операции) — для сетевого графика
+            "hours_per_day": _hpd,
+            "duration_days": round(_dur_days, 4),
+            "early_start_day": round(_es_days, 4),
+            "early_finish_day": round(_ef_days, 4),
+            "late_start_day": round(_ls_days, 4),
+            "late_finish_day": round(_lf_days, 4),
+            "total_float_days": round(float(node.total_float) / _hpd, 4),
+            "free_float_days": round(float(node.free_float) / _hpd, 4),
+            "start_datetime": _start_dt.isoformat(timespec="minutes"),
+            "finish_datetime": _finish_dt.isoformat(timespec="minutes"),
         })
 
     # Авто-«Завершён»: заказ «В работе», чей расчётный финиш уже прошёл, переводится в «Завершён».
@@ -416,6 +510,9 @@ async def run_cpm(
     return {
         "project_id": str(project_id),
         "method": "CPM",
+        "order_id": str(order_scope_id) if order_scope_id else None,
+        "project_start_date": proj_start_dt.date().isoformat(),
+        "hours_per_day": 8.0,
         "total_duration": float(result.total_duration),
         "critical_path": result.critical_path,
         # Критический путь как путь: упорядоченная цепочка. Ветвей может быть

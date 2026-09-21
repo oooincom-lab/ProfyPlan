@@ -181,6 +181,8 @@ export default function AppShell() {
   const [view, setView] = useState<View>('dashboard');
   const [netData, setNetData] = useState<any>(null);
   const [netLoading, setNetLoading] = useState(false);
+  const [netOrderId, setNetOrderId] = useState<string | null>(null);
+  const [netError, setNetError] = useState<string | null>(null);
   const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, resIds: {}, pins: [], events: [] });
   const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
   const [scaleBusy, setScaleBusy] = useState(false);
@@ -1833,14 +1835,28 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
   };
 
   // ── Сеть CPM (вид рабочего поля) ──
-  const loadProjectNetwork = async (p: any) => {
+  // orderId: undefined — сохранить текущую область; null/'' — весь проект; id — цепочка заказа.
+  const loadProjectNetwork = async (p: any, orderId?: string | null) => {
     if (!p && !selectedProject) return;
     const proj = p || selectedProject;
-    setSelectedProject(proj); setView('network'); setNetLoading(true); setNetData(null);
+    const sameProject = selectedProject?.id === proj.id;
+    const oid = orderId !== undefined ? orderId : (sameProject ? netOrderId : null);
+    setSelectedProject(proj); setView('network');
+    setNetOrderId(oid || null);
+    setNetLoading(true); setNetData(null); setNetError(null);
+    // список заказов проекта — для селектора области расчёта
+    if (!sameProject) setOrders([]);
+    if (!orders.length || !sameProject) {
+      apiF<any[]>(`/production-orders/?project_id=${proj.id}`)
+        .then((o) => { if (Array.isArray(o)) setOrders(o); })
+        .catch(() => {});
+    }
     try {
-      const r = await apiF<any>('/projects/' + proj.id + '/calculate/cpm', { method: 'POST', body: JSON.stringify({}) });
+      const body: any = oid ? { order_id: oid } : {};
+      const r = await apiF<any>('/projects/' + proj.id + '/calculate/cpm', { method: 'POST', body: JSON.stringify(body) });
       setNetData(r);
     } catch (e: any) {
+      setNetError(e?.message || String(e));
       setMsg('Ошибка сети CPM: ' + (e?.message || String(e)));
     }
     setNetLoading(false);
@@ -4588,15 +4604,47 @@ const changeOrderStatus = async (o: any, status: string) => {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 16, fontWeight: 700 }}>Сеть CPM</span>
                 <span style={{ fontSize: 12.5, color: '#8FA3BD' }}>{selectedProject?.name || 'проект не выбран'}</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD' }}>
+                  Заказ:
+                  <select
+                    value={netOrderId || ''}
+                    disabled={!selectedProject || netLoading}
+                    onChange={(e) => { const v = e.target.value || null; setNetOrderId(v); if (selectedProject) loadProjectNetwork(selectedProject, v); }}
+                    style={{ background: '#0F1E36', color: '#E8EEF5', border: '1px solid #26364F', borderRadius: 6, padding: '4px 8px', fontSize: 12, maxWidth: 320 }}
+                  >
+                    <option value="">— весь проект —</option>
+                    {(orders || [])
+                      .filter((o: any) => !o.project_id || !selectedProject || String(o.project_id) === String(selectedProject.id))
+                      .map((o: any) => (
+                        <option key={o.id} value={o.id}>{o.ext_id || o.code || 'заказ'}{o.specification_name ? ' · ' + o.specification_name : ''}</option>
+                      ))}
+                  </select>
+                </label>
                 <span style={{ flex: 1 }} />
-                <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
+                <button onClick={() => loadProjectNetwork(selectedProject, netOrderId)} disabled={!selectedProject || netLoading} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
                 <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">📊 К Ганту</button>
                 <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
               </div>
               <div style={{ flex: 1, minHeight: 420, position: 'relative', overflow: 'hidden' }}>
-                {netLoading && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Загрузка сети…</div>}
-                {!netLoading && !netData && <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>}
-                {!netLoading && netData && <CpmGraph cpmResult={netData} height="calc(100vh - 190px)" paletteId={paletteId} />}
+                {netLoading && (
+                  <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Расчёт CPM и построение сети…</div>
+                )}
+                {!netLoading && netError && (
+                  <div style={{ padding: 32, textAlign: 'center', color: '#F87171' }}>
+                    <div style={{ marginBottom: 10 }}>Не удалось рассчитать сеть:</div>
+                    <div style={{ fontSize: 12.5, color: '#FDA4AF', marginBottom: 12 }}>{netError}</div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => loadProjectNetwork(selectedProject, netOrderId)}>Повторить</button>
+                  </div>
+                )}
+                {!netLoading && !netError && !netData && (
+                  <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Выберите проект в разделе «Инструменты» или откройте сеть из проекта.</div>
+                )}
+                {!netLoading && !netError && netData && netData.node_count === 0 && (
+                  <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>В выбранной области расчёта нет операций.</div>
+                )}
+                {!netLoading && !netError && netData && netData.node_count > 0 && (
+                  <CpmGraph cpmResult={netData} paletteId={paletteId} />
+                )}
               </div>
             </div>
           )}

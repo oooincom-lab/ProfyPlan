@@ -1,0 +1,42 @@
+﻿C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:30: settingsToLayoutOptions, getLayoutPreset, loadLayoutPreset, saveLayoutPreset,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:31: sanitizeLayoutPreset, LAYOUT_PRESETS, DEFAULT_LAYOUT_PRESET, STRETCH_K,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:330: useEffect(() => { setLayoutPreset(loadLayoutPreset()); }, []);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:596: stretchK: STRETCH_K,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:962: if (!o.crit && intensityK(o.durDays, o.tf) > (st.stretchK ?? 0.8)) {
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1031: const stretchCompact = !o.crit && !o.branch && intensityK(o.durDays, o.tf) > (st.stretchK ?? 0.8);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1389: // Порог напряжённости (STRETCH_K) — внутреннее значение, в интерфейсе не меняется.
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1390: }, [draw, visibleOps, allDeps, mode, unit, critOnly, showEdgeDays, fontSize, layoutFull, STRETCH_K]);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1474: {LAYOUT_PRESETS.map((p) => (
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1506: <LegendDot color={stretchColor} label={'Напряжённые (K>' + String(STRETCH_K).replace('.', ',') + ')'} />
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:1596: (intensityK(tooltip.op.durDays, tooltip.op.tf) > STRETCH_K ? ' · натянута' : '')
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:20: stretchK: number;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:22: crossingsTarget: number;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:24: hitsTarget: number;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:26: weightCross: number;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:32: optPasses: number;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:36: stretchK: 0.8,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:37: crossingsTarget: 20,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:38: hitsTarget: 0,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:39: weightCross: 1,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:42: optPasses: 8,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:69: settings: { stretchK: 0.75, crossingsTarget: 30, hitsTarget: 2, weightCross: 1, weightHit: 1, weightOverlap: 50, optPasses: 7 },
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:75: settings: { stretchK: 0.8, crossingsTarget: 16, hitsTarget: 0, weightCross: 1, weightHit: 1, weightOverlap: 60, optPasses: 10 },
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:81: settings: { stretchK: 0.85, crossingsTarget: 0, hitsTarget: 0, weightCross: 1, weightHit: 1, weightOverlap: 80, optPasses: 20 },
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:96: stretchK: clampNum(src.stretchK, 0.3, 1, d.stretchK),
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:97: crossingsTarget: Math.round(clampNum(src.crossingsTarget, 0, 999, d.crossingsTarget)),
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:98: hitsTarget: Math.round(clampNum(src.hitsTarget, 0, 999, d.hitsTarget)),
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:99: weightCross: clampNum(src.weightCross, 0.1, 1000, d.weightCross),
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:102: optPasses: Math.round(clampNum(src.optPasses, 0, 40, d.optPasses)),
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:134: localPasses: s.optPasses,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:135: crossWeight: s.weightCross,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:146: t.stretchK === s.stretchK &&
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:147: t.crossingsTarget === s.crossingsTarget &&
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:148: t.hitsTarget === s.hitsTarget &&
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:149: t.weightCross === s.weightCross &&
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:152: t.optPasses === s.optPasses
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:175: export const STRETCH_K = 0.8;
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:196: export const LAYOUT_PRESETS: LayoutPresetDef[] = [
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:199: settings: { ...DEFAULT_SETTINGS, optPasses: 6 },
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:209: settings: { ...DEFAULT_SETTINGS, optPasses: 16, weightOverlap: 80 },
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:221: return LAYOUT_PRESETS.find((p) => p.id === id) || LAYOUT_PRESETS[1];
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:225: export function loadLayoutPreset(): LayoutPreset {

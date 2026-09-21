@@ -1,0 +1,50 @@
+﻿C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\audit\audit.ts:95: ' пересечений=' + String(m.crossings).padStart(4) +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\audit\audit.ts:97: '  наложений_узлов=' + String(m.nodeOverlaps).padStart(3) +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\audit\audit.ts:98: '  плотность=' + String(m.density).padStart(5) + '%' +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\audit\audit.ts:163: console.log('  (пересечения / сквозь узлы / наложения узлов / плотность)');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-lab\run.ts:60: ' пересечений=' + String(m.crossings).padStart(4) +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-lab\run.ts:62: '  наложений_узлов=' + String(m.nodeOverlaps) +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-lab\run.ts:63: '  плотность=' + String(m.density).padStart(4) + '%' +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-lab\sweep.ts:54: console.log('=== ' + mode + ' === всего ' + rs.length + ', с 0 проходов/0 наложений: ' + ok.length);
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-lab\verify.ts:45: console.log('  ' + mode + ': пересечений=' + m.crossings + ' сквозь_узлы=' + m.edgeNodeHits + ' наложений_узлов=' + m.nodeOverlaps + ' плотность=' + m.density + '%  [t_layout=' + (t1 - t0) + 'мс]');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-verify\verify.ts:56: ' пересечений=' + m.crossings +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-verify\verify.ts:58: '  наложений_узлов=' + m.nodeOverlaps +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-verify\verify.ts:59: '  плотность=' + m.density + '%' +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\cpm-verify\verify.ts:81: ' наложений_виртуальных_с_реальными=' + overlaps,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-live\measure.ts:171: ' пересечений=' + m.crossings +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-live\measure.ts:172: '  наложений_на_узлы=' + m.edgeNodeHits +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-live\measure.ts:173: '  наложений_узлов=' + m.nodeOverlaps +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-live\measure.ts:174: '  плотность=' + m.density + '%' +
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-selfcheck\check.ts:22: console.log('\n[2] Два перекрывающихся прямоугольника → наложений узлов = 1');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-selfcheck\check.ts:29: console.log('\n[3] Два пересекающихся отрезка → пересечений = 1');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-selfcheck\check.ts:47: console.log('\n[5] Связь обходит одиночный посторонний узел → наложений на узлы = 0');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\.openclaw\tmp\metrics-selfcheck\check.ts:55: console.log('\n[6] Стену узлов обойти нельзя → наложений на узлы = 1');
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:2642: <div style={{ fontSize: 11.5, color: '#86EFAC' }}>Пересечений с другими заказами нет.</div>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx:4641: Пересечений {netMetrics.crossings} · Наложений на узлы {netMetrics.edgeNodeHits} · Наложений узлов {netMetrics.nodeOverlaps} · Плотность {netMetrics.density}%
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\windows\WindowsLayer.tsx:970: <div style={{ fontSize: 11.5, color: '#86EFAC' }}>Пересечений с другими заказами нет.</div>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:496: /* ── метрики качества раскладки (пересечения, наложения, плотность) ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:512: Ноль пересечений обещаем только в структурной укладке («По связям»). Считаем её
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmGraph.tsx:513: и берём число пересечений: ноль — граф планарный, иначе показываем минимум. */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmReadability.tsx:5: * Показывает строку вида «Читаемость 92 %» с цветной точкой:
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmReadability.tsx:8: * узлов, плотность и вердикт о планарности. Числа не сглаживаются: показатель
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmReadability.tsx:32: /** Минимум пересечений в структурной укладке — для вердикта о планарности. */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmReadability.tsx:60: title={'Читаемость: ' + BAND_LABEL[band]}
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmReadability.tsx:67: Читаемость {score}&nbsp;%
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmReadability.tsx:101: <DetailRow k="Плотность" v={metrics.density + ' %'} />
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\GraphStylePicker.tsx:150: Предпросмотр выбранного: <b>{preview.name}</b> · рамка <code>{preview.frame}</code> · заливка <code>{preview.fill}</code> · плотность {Math.round(preview.fillOpacity * 100)} %
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\PortfolioWidgets.tsx:103: <div className="kpi-sub">{totals.conflicts ?? 0} пересечений</div>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ProjectWidgets.tsx:102: <div className="kpi-sub">{conflicts ? 'есть пересечения' : 'нет пересечений'}</div>
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-layout.ts:152: //    затем последователей) — снижает число пересечений связей ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:127: * Минимум пересечений в структурной укладке («По связям») — по нему строится
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:131: /** Достижим ли ноль пересечений в структурной укладке (граф планарный). */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:277: // ── плотность: площадь узлов к площади полотна ──
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:308: /** Плотность (%), начиная с которой полотно считается перегруженным. */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:316: * наложения узлов, плотность) — без сглаживания:
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:340: * Вердикт о планарности сети — информация, а не настройка. Ноль пересечений
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:342: * без пересечений, граф планарный; иначе показываем достигнутый минимум.
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:347: ? 'Граф планарный — ноль пересечений достижим в режиме «По связям»'
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-metrics.ts:348: : 'Граф непланарный — минимум ' + n + ' пересечений';
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:14: * реальных данных дальнейший рост этого веса ухудшает число пересечений,
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:21: /** Цель по числу пересечений связей (по ней показывается «цель достигнута»). */
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\cpm-settings.ts:60: * эталонных данных подъём этого веса УХУДШАЕТ число пересечений (жадный локальный
+C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\graph-styles.ts:22: /** плотность заливки области кластера (0..1) */

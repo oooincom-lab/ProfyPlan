@@ -1,0 +1,126 @@
+﻿65: crit: boolean;
+74: id: 'start' | 'finish';
+75: kind: 'start' | 'finish';
+161: return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+176: function dayOffsetToDate(start: Date, offsetDays: number): Date {
+177: return new Date(start.getTime() + offsetDays * 86400000);
+185: return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
+244: const critPath: string[] = (p.cpmResult && p.cpmResult.critical_path) || [];
+245: const mainSet = new Set(critPath.map(String));
+247: ((p.cpmResult && p.cpmResult.critical_paths) || []).forEach((b: any) => {
+254: const es = n.early_start_day != null ? num(n.early_start_day) : num(n.early_start, 0) / hpd;
+255: const ef = n.early_finish_day != null ? num(n.early_finish_day) : num(n.early_finish, es + durDays);
+256: const ls = n.late_start_day != null ? num(n.late_start_day) : num(n.late_start, es);
+257: const lf = n.late_finish_day != null ? num(n.late_finish_day) : num(n.late_finish, ef);
+264: const crit = !!(n.is_critical != null ? n.is_critical : n.critical);
+273: crit,
+316: const critColor = '#EF4444';
+320: const startColor = '#34D399';
+321: const finishColor = '#F472B6';
+322: const START_EDGE = 'rgba(52,211,153,0.62)';
+323: const FINISH_EDGE = 'rgba(244,114,182,0.62)';
+341: const [critOnly, setCritOnly] = useState(false);
+387: const startDate = useMemo<Date | null>(() => {
+388: const s = props.cpmResult && (props.cpmResult.project_start_date || props.cpmResult.project_start);
+394: const dayToDate = useCallback((day: number): Date | null => (startDate ? addDays(startDate, day) : null), [startDate]);
+398: if (!startDate || (!periodFrom && !periodTo)) return mappedOps;
+399: const from = periodFrom ? (new Date(periodFrom).getTime() - startDate.getTime()) / 86400000 : -Infinity;
+400: const to = periodTo ? (new Date(periodTo).getTime() - startDate.getTime()) / 86400000 : Infinity;
+402: }, [mappedOps, periodFrom, periodTo, startDate]);
+407: () => (critOnly ? visibleOps.filter((o) => o.crit) : visibleOps),
+408: [visibleOps, critOnly],
+464: if (!ep.hasExplicitStart) {
+465: virtuals.push({ id: 'start', kind: 'start', label: 'Старт', x: minCx - COL_PITCH, y: meanY(ep.initialIds), color: startColor });
+466: ep.initialIds.forEach((id) => { if (pos[id]) vEdges.push({ from: 'start', to: id, color: startColor }); });
+468: if (!ep.hasExplicitFinish) {
+469: virtuals.push({ id: 'finish', kind: 'finish', label: 'Финиш', x: maxCx + COL_PITCH, y: meanY(ep.finalIds), color: finishColor });
+470: ep.finalIds.forEach((id) => { if (pos[id]) vEdges.push({ from: id, to: 'finish', color: finishColor }); });
+473: }, [layout, layoutOps, allDeps, startColor, finishColor]);
+503: mappedOps.map((o) => ({ id: o.id, crit: o.crit })),
+505: critOnly,
+509: [layoutFull, allDeps, mappedOps, critOnly, fontSize, unit, resetNonce, posNonce],
+519: mappedOps.map((o) => ({ id: o.id, crit: o.crit })),
+521: critOnly,
+523: }, [layoutOps, allDeps, layoutOpts, mappedOps, critOnly]);
+551: if (!startDate || !mappedOps.length) return null;
+555: from: isoDate(addDays(startDate, Math.floor(minEs))),
+556: to: isoDate(addDays(startDate, Math.ceil(maxEf))),
+558: }, [mappedOps, startDate]);
+592: mode, unit, critOnly, showEdgeDays,
+593: startDate, dayToDate,
+594: reserveColor, branchColor, critColor, stretchColor,
+634: if (st.mode === 'byDate' && st.startDate) {
+645: const date = addDays(st.startDate, d);
+673: const gStart = Math.floor(d0 / gStep) * gStep;
+674: for (let d = gStart; d <= d1 + gStep; d += gStep) {
+680: ctx.strokeStyle = 'rgba(60,90,130,0.30)';
+681: ctx.lineWidth = 1;
+692: ctx.strokeStyle = 'rgba(96,165,250,0.22)';
+693: ctx.lineWidth = 1;
+707: ctx.strokeStyle = 'rgba(96,165,250,0.30)';
+708: ctx.lineWidth = 1;
+715: const date = addDays(st.startDate, d);
+730: const lStart = Math.floor(d0 / lStep) * lStep;
+731: for (let d = lStart; d <= d1 + lStep; d += lStep) {
+737: ctx.strokeStyle = 'rgba(90,112,144,0.6)';
+738: ctx.lineWidth = 1;
+741: const dd = dayOffsetToDate(st.startDate, d);
+748: label = String(Math.floor(tm / 60)).padStart(2, '0') + ':' + String(tm % 60).padStart(2, '0');
+752: label = String(hh).padStart(2, '0') + ':00';
+769: st.ops.forEach((o: GOp) => { if (!st.critOnly || o.crit) visIds.add(o.id); });
+773: const edgesToDraw: { a: GOp; b: GOp; bothCrit: boolean; anyBranch: boolean }[] = [];
+782: edgesToDraw.push({ a, b, bothCrit: a.crit && b.crit, anyBranch: a.branch || b.branch });
+788: if (st.critOnly && !o.crit) return;
+800: edgesToDraw.forEach(({ a, b, bothCrit, anyBranch }) => {
+849: const dashedW = zeroLag && !bothCrit;
+854: ctx.setLineDash(dashedW ? [Math.max(4, 5 * S), Math.max(3, 4 * S)] : []);
+855: ctx.strokeStyle = bothCrit
+858: ctx.lineWidth = bothCrit ? 3 : (dashedW ? 1.15 : 1.5);
+860: ctx.setLineDash([]);
+868: ctx.fillStyle = bothCrit ? 'rgba(239,68,68,0.85)' : (anyBranch ? 'rgba(245,158,11,0.75)' : 'rgba(96,165,250,0.6)');
+886: ctx.fillStyle = bothCrit ? 'rgba(252,165,165,0.95)' : 'rgba(176,196,222,0.9)';
+916: ctx.setLineDash([Math.max(4, 5 * S), Math.max(3, 4 * S)]);
+917: ctx.strokeStyle = ve.color;
+918: ctx.lineWidth = 1.4;
+920: ctx.setLineDash([]);
+933: if (st.critOnly && !o.crit) return;
+940: const accent = o.crit ? critColor : (o.branch ? branchColor : reserveColor);
+951: ctx.strokeStyle = o.crit ? 'rgba(239,68,68,0.85)' : (o.branch ? 'rgba(245,158,11,0.8)' : 'rgba(96,165,250,0.65)');
+952: ctx.lineWidth = o.crit ? 2 : 1.2;
+954: if (o.crit) {
+962: if (!o.crit && intensityK(o.durDays, o.tf) > (st.stretchK ?? 0.8)) {
+973: ctx.fillStyle = o.crit ? 'rgba(239,68,68,0.22)' : (o.branch ? 'rgba(245,158,11,0.2)' : 'rgba(96,165,250,0.18)');
+975: ctx.strokeStyle = accent;
+976: ctx.lineWidth = 1;
+1025: ctx.fillStyle = o.crit ? 'rgba(239,68,68,0.10)' : 'rgba(96,165,250,0.07)';
+1031: const stretchCompact = !o.crit && !o.branch && intensityK(o.durDays, o.tf) > (st.stretchK ?? 0.8);
+1032: ctx.strokeStyle = o.crit ? 'rgba(239,68,68,0.9)' : (o.branch ? 'rgba(245,158,11,0.85)' : (stretchCompact ? 'rgba(167,139,250,0.95)' : 'rgba(96,165,250,0.7)'));
+1033: ctx.lineWidth = o.crit ? 2 : (stretchCompact ? 1.8 : 1.3);
+1042: ctx.fillStyle = o.crit ? '#E8EEF5' : 'rgba(176,196,222,0.8)';
+1076: ctx.strokeStyle = v.color;
+1077: ctx.lineWidth = 2.4;
+1107: ctx.strokeStyle = v.color;
+1108: ctx.lineWidth = 2;
+1114: ctx.fillText(v.kind === 'start' ? '▶' : '■', cx, cy + 0.5);
+1153: critOnly ? 'crit' : 'all', layoutOps.length,
+1166: }, [visibleOps, allDeps, mode, projectId, periodFrom, periodTo, critOnly, layoutOps, fitToContent, draw]);
+1218: if (st.critOnly && !o.crit) continue;
+1380: setCritOnly(false);
+1390: }, [draw, visibleOps, allDeps, mode, unit, critOnly, showEdgeDays, fontSize, layoutFull, STRETCH_K]);
+1396: const critCount = mappedOps.filter((o) => o.crit).length;
+1416: <Badge tone="crit">Критических: {critCount}</Badge>
+1449: <input className="cpmui-chk" type="checkbox" checked={critOnly} onChange={(e) => setCritOnly(e.target.checked)} />
+1503: <LegendDot color={critColor} label="Критический путь" />
+1507: <LegendPill color={startColor} label="Старт" />
+1508: <LegendPill color={finishColor} label="Финиш" />
+1523: <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+1565: {tooltip.virt.kind === 'start' ? '▶ ' : '■ '}{tooltip.virt.label}
+1568: {tooltip.virt.kind === 'start' ? 'Начальное событие сети' : 'Завершающее событие сети'}
+1571: {tooltip.virt.kind === 'start'
+1583: {startDate ? (
+1585: <Row k="Ранний старт" v={fmtDayMonth(addDays(startDate, tooltip.op.es))} />
+1586: <Row k="Ранний финиш" v={fmtDayMonth(addDays(startDate, tooltip.op.ef))} />
+1599: <div style={{ marginTop: 6, color: tooltip.op.crit ? '#EF4444' : (tooltip.op.branch ? '#F59E0B' : '#10B981') }}>
+1600: {tooltip.op.crit ? '⚠ Критический путь' : (tooltip.op.branch ? '◆ Ветвь критического пути' : 'С резервом')}
+1613: function Badge({ children, tone }: { children: React.ReactNode; tone?: 'crit' | 'ok' | 'warn' }) {
+1615: tone === 'crit' ? { color: '#FCA5A5', bg: 'rgba(239,68,68,0.12)', bd: 'rgba(239,68,68,0.28)' }
