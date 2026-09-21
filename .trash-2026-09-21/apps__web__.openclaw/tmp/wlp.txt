@@ -1,0 +1,5 @@
+﻿33 onOpenDirectory: (entity: string) => void;
+68 export default function WindowsLayer(props: WindowsLayerProps) {
+73 onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
+264 <DirectoryPicker entity="counterparties" apiBase="https://profyplan.ru/api" value={w.form.client_id || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, 
+272 <DirectoryPicker entity="units" apiBase="https://profyplan.ru/api" value={w.form.unit || null} onChange={(v) => setWins(prev => prev.map(x => x.id === w.id ? { ...x, form: { ...x.f

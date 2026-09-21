@@ -1,0 +1,2 @@
+﻿191 const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void) => {
+421 openWin, openBomWin, openListWin, openDirWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled

@@ -1,0 +1,13 @@
+ void;
+  debug?: boolean;
+};
+
+function fmtPreds(p: any): string {
+  if (Array.isArray(p)) return p.join(', ');
+  if (typeof p === 'string' && p.trim()) return p.split(/[;,\s]+/).filter(Boolean).join(', ');
+  return '';
+}
+
+const TAB_LIST: { v: OrderTab; l: stri
+---USE---
+hours ? ' · Наладка: ' + op.setup_hours + ' ч' : ''}{op.teardown_hours ? ' · Снятие: ' + op.teardown_hours + ' ч' : ''}{fmtPreds(op.predecessors) ? ' · Предш.: ' + fmtPreds(op.predecessors) : ''}{Number(op.output_quantity) ? ' · Вых. годн.:

@@ -1,0 +1,4 @@
+﻿onManageEdit={w.data?.onManageEdit -> True
+onRoutingOpUpdate(op.id, { duration_hours -> True
+w.editing ? ( -> True
+onDirManageEdit?.(w.data -> True

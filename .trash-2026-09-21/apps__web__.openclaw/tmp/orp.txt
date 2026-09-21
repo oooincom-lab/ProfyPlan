@@ -1,0 +1,36 @@
+﻿611   };
+612 
+613   const reloadRoutings = async () => {
+614     try {
+615       const r = await apiF<any>('/bom/routings?page_size=200').catch(() => null);
+616       if (r && Array.isArray(r.items)) setRoutings(r.items);
+617     } catch {}
+618   };
+619 
+620   const handleRoutingOpUpdate = async (opId: string, patch: Record<string, any>) => {
+621     try {
+622       await apiF(`/bom/routing-operations/${opId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+623       await reloadRoutings();
+624     } catch (e: any) { setMsg('╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╤П ╨╛╨┐╨╡╤А╨░╤Ж╨╕╨╕: ' + (e.message || String(e))); }
+625   };
+626 
+627   const openResourcePick = (opId: string) => {
+628     const wid = win.openDirWin('resources', 'ЁЯФз ╨Т╤Л╨▒╨╛╤А ╤А╨╡╤Б╤Г╤А╤Б╨░', DIR_COLUMNS.resources.columns, (row: any) => {
+629       handleRoutingOpUpdate(opId, { resource_type_id: row.id });
+630       win.closeWin(wid);
+631     });
+632   };
+633 
+634   // BOM-╤Г╨╖╨╗╤Л ╨╖╨░╨║╨░╨╖╨░ + BOM ╨┐╨╛╨┤╤З╨╕╨╜╤С╨╜╨╜╤Л╤Е ╨╖╨░╨║╨░╨╖╨╛╨▓ (╤В╤Г╤Б╨║╨╗╤Л╨╡, ╤З╨╡╤А╨╡╨╖ order_id ╨╜╨░ ╤Г╨╖╨╗╨░╤Е)
+635   const orderBomNodesWithSuborders = (o: any) => {
+636     const projId = selectedProject?.id || '';
+637     const all = bomTrees[projId] || [];
+638     if (!all.length) return [];
+639     const own = orderBomNodes(o)
+640       .filter((n: any) => !(n.order_id && n.order_id !== o.id))
+641       .map((n: any) => ({
+642         ...n,
+643         _ownerId: o.id,
+644         _ownerExtId: o.ext_id || o.specification_name || '',
+645       }));
+646     const ordersList = projectOrders[projId] || [];

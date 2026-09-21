@@ -1,0 +1,3 @@
+﻿1282 const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
+2178 {view === 'project-orders' && (panelMode === 'window' ? <div ref={dashHeadRef}>{renderSectionDashboard()}</div> : renderOrdersView())}
+3116 renderOrdersTable={() => renderOrdersView('table')}

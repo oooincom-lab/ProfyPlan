@@ -1,0 +1,240 @@
+﻿1261     if (!newPoolInput) { setNewPoolInput(true); setNewPoolName(''); return; }
+1262     if (!newPoolName.trim()) { setNewPoolInput(false); return; }
+1263     await apiF(`/projects/${selectedProject.id}/pools`, { method: 'POST', body: JSON.stringify({ name: newPoolName.trim(), order_ids: [] }) });
+1264     setNewPoolInput(false);
+1265     await loadProjectPools(selectedProject);
+1266   };
+1267 
+1268   const delPool = (plid: string, plname: string) => {
+1269     runDeleteCheck('order_pool', plid, plname);
+1270   };
+1271 
+1272   const renderSectionDashboard = () => (
+1273     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
+1274       <div className="kpi-card" data-module="dash:metric:orders">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:orders]" copy="[dash:metric:orders] ┬л╨Т╤Б╨╡
+1275       <div className="kpi-card" data-module="dash:metric:dyn">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:dyn]" copy="[dash:metric:dyn] ┬л╨Ф╨╕╨╜╨░╨╝╨╕╤З╨╡╤Б╨║╨╕╨╡
+1276       <div className="kpi-card" data-module="dash:metric:work">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:work]" copy="[dash:metric:work] ┬л╨Т ╤А╨░╨▒╨╛╤В╨╡┬╗
+1277       <div className="kpi-card" data-module="dash:metric:priority">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:priority]" copy="[dash:metric:priority
+1278       <div className="kpi-card" data-module="dash:metric:groups">{debugMode && <DebugBadge debug={debugMode} corner text="[dash:metric:groups]" copy="[dash:metric:groups] ┬л╨У╤А╤Г
+1279     </div>
+1280   );
+1281 
+1282 const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
+1283             const getTypeInfo = (o: any) => {
+1284               if (o.group_id) { const g = projGroups.find(gr => gr.id === o.group_id); return { icon: 'ЁЯУБ', label: '╨У╤А╤Г╨┐╨┐╨░', name: g?.name || 'тАФ', id: o.group_id }; }
+1285               if (o.pool_id) { const p = projPools.find(pl => pl.id === o.pool_id); return { icon: 'ЁЯУж', label: '╨Я╤Г╨╗', name: p?.name || 'тАФ', id: o.pool_id }; }
+1286               return { icon: 'тАФ', label: '╨б╨▓╨╛╨▒╨╛╨┤╨╜╤Л╨╣', name: 'тАФ', id: null };
+1287             };
+1288             let filtered = orderShowAll ? [...orders] : orders.filter((o: any) => !o.group_id && !o.pool_id);
+1289             if (orderShowAll && orderTypeFilter !== 'all' && orderTypeFilter !== 'free') {
+1290               filtered = filtered.filter((o: any) => o.group_id === orderTypeFilter || o.pool_id === orderTypeFilter);
+1291             }
+1292             if (orderShowAll && orderTypeFilter === 'free') {
+1293               filtered = filtered.filter((o: any) => !o.group_id && !o.pool_id);
+1294             }
+1295             if (orderSortKey) {
+1296               filtered.sort((a: any, b: any) => {
+1297                 let aVal: string, bVal: string;
+1298                 if (orderSortKey === '_type') {
+1299                   aVal = getTypeInfo(a).label; bVal = getTypeInfo(b).label;
+1300                 } else if (orderSortKey === '_typeName') {
+1301                   aVal = getTypeInfo(a).name; bVal = getTypeInfo(b).name;
+1302                 } else {
+1303                   aVal = (a[orderSortKey] || '').toString().toLowerCase();
+1304                   bVal = (b[orderSortKey] || '').toString().toLowerCase();
+1305                 }
+1306                 if (orderSortDir === 'asc') return aVal.localeCompare(bVal);
+1307                 return bVal.localeCompare(aVal);
+1308               });
+1309             }
+1310             // тФАтФА ╨Ш╨╡╤А╨░╤А╤Е╨╕╤П: DFS ╨┐╨╛ parent_order_id (╨╖╨░╤Й╨╕╤В╨░ ╨╛╤В ╤Ж╨╕╨║╨╗╨╛╨▓) тФАтФА
+1311             const childMap = new Map<string, any[]>();
+1312             const idSet = new Set<string>(filtered.map((o: any) => o.id));
+1313             filtered.forEach((o: any) => {
+1314               if (o.parent_order_id && idSet.has(o.parent_order_id)) {
+1315                 if (!childMap.has(o.parent_order_id)) childMap.set(o.parent_order_id, []);
+1316                 childMap.get(o.parent_order_id)!.push(o);
+1317               }
+1318             });
+1319             const treeRows: { o: any; depth: number; hasChildren: boolean; collapsed: boolean }[] = [];
+1320             const visitedIds = new Set<string>();
+1321             const markVisited = (ord: any) => {
+1322               const kids = childMap.get(ord.id) || [];
+1323               kids.forEach((c: any) => {
+1324                 if (visitedIds.has(c.id)) return;
+1325                 visitedIds.add(c.id);
+1326                 markVisited(c);
+1327               });
+1328             };
+1329             const walkTree = (ord: any, depth: number) => {
+1330               if (visitedIds.has(ord.id)) return;
+1331               visitedIds.add(ord.id);
+1332               const children = childMap.get(ord.id) || [];
+1333               const collapsed = collapsedOrderIds.has(ord.id);
+1334               treeRows.push({ o: ord, depth, hasChildren: children.length > 0, collapsed });
+1335               if (collapsed) { markVisited(ord); return; }
+1336               children.forEach((c: any) => walkTree(c, depth + 1));
+1337             };
+1338             filtered.forEach((o: any) => { if (!o.parent_order_id || !idSet.has(o.parent_order_id)) walkTree(o, 0); });
+1339             filtered.forEach((o: any) => { if (!visitedIds.has(o.id)) walkTree(o, 0); });
+1340             const sortArrow = (key: string) => orderSortKey === key ? (orderSortDir === 'asc' ? ' тЦ╝' : ' тЦ▓') : '';
+1341             const doSort = (key: string) => {
+1342               if (orderSortKey === key) {
+1343                 if (orderSortDir === 'asc') { setOrderSortDir('desc'); }
+1344                 else { setOrderSortKey(null); setOrderSortDir('asc'); }
+1345               } else { setOrderSortKey(key); setOrderSortDir('asc'); }
+1346             };
+1347             return (
+1348               <>
+1349                 <div style={mode === 'table' ? { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: 420, overflow: 'hidden' } : { display: 'fl
+1350                 <div style={mode === 'table' ? { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' } : { flex: 1, minWidth: 0 }}>
+1351                 <div className="panel" style={mode === 'table' ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, overflow: 'hidden' } : und
+1352                   <div className="panel-hdr">
+1353                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+1354                       <div><span className="panel-title">╨Ч╨░╨║╨░╨╖╤Л</span><span className="panel-sub">{filtered.length} ╨╕╨╖ {orders.length}</span></div>
+1355                       <span style={{ display: 'inline-flex', background: '#0B1B33', border: '1px solid #1E3A5F', borderRadius: 8, padding: 2 }}>
+1356                         {([['bom', '╨б╨╛╤Б╤В╨░╨▓'], ['both', '╨б╨╛╤Б╤В╨░╨▓ + ╨Ь╨░╤А╤И╤А╤Г╤В╤Л'], ['routes', '╨Ь╨░╤А╤И╤А╤Г╤В╤Л']] as const).map(([v, label]) => (
+1357                           <button key={v} onClick={() => setTreeMode(v)} style={{ border: 0, background: treeMode === v ? '#3B82F6' : 'transparent', color: treeMode === v ? '#
+1358                         ))}
+1359                       </span>
+1360                     </div>
+1361                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 10px', alignItems: 'center', justifyContent: 'flex-end' }}>
+1362                       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD', cursor: 'pointer' }}>
+1363                         <input type="checkbox" checked={orderShowAll} onChange={e => { setOrderShowAll(e.target.checked); if (!e.target.checked) setOrderTypeFilter('free'); el
+1364                         ╨Я╨╛╨║╨░╨╖╨░╤В╤М ╨▓╤Б╨╡ ╨╖╨░╨║╨░╨╖╤Л
+1365                       </label>
+1366                       {orderShowAll && (
+1367                         <select value={orderTypeFilter} onChange={e => setOrderTypeFilter(e.target.value)} style={{ background: '#0A1628', border: '1px solid #1E3252', borderR
+1368                           <option value="all">╨Т╤Б╨╡ ╤В╨╕╨┐╤Л</option>
+1369                           <option value="free">╨б╨▓╨╛╨▒╨╛╨┤╨╜╤Л╨╡</option>
+1370                           {projGroups.map((g: any) => <option key={'g-'+g.id} value={g.id}>ЁЯУБ {g.name}</option>)}
+1371                           {projPools.map((p: any) => <option key={'p-'+p.id} value={p.id}>ЁЯУж {p.name}</option>)}
+1372                         </select>
+1373                       )}
+1374                       <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', b
+1375                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ ╨Ч╨░╨║╨░╨╖</button>
+1376                       <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>ЁЯУЛ ╨Т╤Б╤В╨░╨▓╨╕╤В╤М</button>
+1377                       <span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' }}>тЪб = CPM</span><span style={{ fontSize: 11, color: '#5A7090', whiteSpace: 'nowrap' 
+1378                     </div>
+1379                   </div>
+1380                   <div style={{
+1381                     padding: '8px 14px', marginBottom: 8, borderRadius: 8,
+1382                     border: '2px dashed #1E3252', textAlign: 'center',
+1383                     color: '#5A7090', fontSize: 12, transition: 'all .15s',
+1384                     cursor: 'default',
+1385                   }} onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.bac
+1386                     onDragLeave={(e) => { e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.background = 'transpare
+1387                     onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#1E3252'; e.currentTarget.style.color = '#5A7090'; e.currentTarget.style.backgrou
+1388                     ЁЯУН ╨С╤А╨╛╤Б╤М╤В╨╡ ╨╖╨░╨║╨░╨╖ ╤Б╤О╨┤╨░ тАФ ╤Г╨▒╤А╨░╤В╤М ╨╕╨╖ ╨│╤А╤Г╨┐╨┐╤Л/╨┐╤Г╨╗╨░
+1389                   </div>
+1390 
+1391                   {/* Bulk paste panel */}
+1392                   {showBulkPaste && (
+1393                     <div style={{
+1394                       background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: 16, marginBottom: 12,
+1395                     }}>
+1396                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+1397                         <span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>ЁЯУЛ ╨Т╤Б╤В╨░╨▓╨║╨░ ╨╖╨░╨║╨░╨╖╨╛╨▓ ╨╕╨╖ ╤В╨░╨▒╨╗╨╕╤Ж╤Л</span>
+1398                         <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }} style={{ background: 'none', border: 'none', color:
+1399                       </div>
+1400                       <textarea
+1401                         placeholder="╨б╨║╨╛╨┐╨╕╤А╤Г╨╣╤В╨╡ ╤В╨░╨▒╨╗╨╕╤Ж╤Г ╨╕╨╖ Excel (Ctrl+C), ╨╖╨░╤В╨╡╨╝ ╨▓╤Б╤В╨░╨▓╤М╤В╨╡ ╤Б╤О╨┤╨░ (Ctrl+V). ╨Я╨╡╤А╨▓╨░╤П ╤Б╤В╤А╨╛╨║╨░ тАФ ╨╖╨░╨│╨╛╨╗╨╛╨▓╨║╨╕."
+1402                         value={bulkPasteText}
+1403                         onChange={e => { const v = e.target.value; setBulkPasteText(v); if (v.includes('\n') || v.includes('\t')) handleBulkPaste(v); }}
+1404                         onPaste={e => { const t = e.clipboardData.getData('text'); setBulkPasteText(t); handleBulkPaste(t); }}
+1405                         style={{
+1406                           width: '100%', minHeight: 80, background: '#0F1E36', border: '1px solid #1E3252',
+1407                           borderRadius: 8, color: '#B0C4DE', padding: 12, fontSize: 12, resize: 'vertical',
+1408                           fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10,
+1409                         }}
+1410                       />
+1411                       {bulkMatchLoading && <div style={{ fontSize: 12, color: '#F59E0B', marginBottom: 8 }}>ЁЯФН ╨б╨╛╨┐╨╛╤Б╤В╨░╨▓╨╗╨╡╨╜╨╕╨╡ ╤Б ╨╜╨╛╨╝╨╡╨╜╨║╨╗╨░╤В╤Г╤А╨╛╨╣...</div>}
+1412                       {!bulkMatchLoading && Object.keys(bulkNomenMatches).length > 0 && (
+1413                         <div style={{ marginBottom: 10 }}>
+1414                           <div style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', marginBottom: 6 }}>
+1415                             ╨б╨╛╨┐╨╛╤Б╤В╨░╨▓╨╗╨╡╨╜╨╕╨╡ ╤Б ╨╜╨╛╨╝╨╡╨╜╨║╨╗╨░╤В╤Г╤А╨╛╨╣:
+1416                             <span style={{ color: '#10B981', marginLeft: 8 }}>
+1417                               тЬУ {Object.values(bulkNomenMatches).filter(Boolean).length}
+1418                             </span>
+1419                             <span style={{ color: '#EF4444', marginLeft: 4 }}>
+1420                               тЬЧ {Object.values(bulkNomenMatches).filter(v => v === null).length} ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨╛
+1421                             </span>
+1422                           </div>
+1423                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+1424                             {Object.entries(bulkNomenMatches).map(([name, match]) => (
+1425                               <span key={name} style={{
+1426                                 background: match ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+1427                                 border: `1px solid ${match ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+1428                                 borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#B0C4DE',
+1429                               }}>
+1430                                 {name} {match ? <span style={{ color: '#10B981' }}>тЖТ {match.name}</span> : <span style={{ color: '#EF4444' }}>тЬЧ</span>}
+1431                               </span>
+1432                             ))}
+1433                           </div>
+1434                         </div>
+1435                       )}
+1436                       <div style={{ display: 'flex', gap: 8 }}>
+1437                         <button onClick={bulkCreateOrders} disabled={!bulkPasteText.trim()}
+1438                           style={{
+1439                             background: bulkPasteText.trim() ? 'linear-gradient(135deg, #3B82F6, #2563EB)' : '#1E3252',
+1440                             color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px',
+1441                             cursor: bulkPasteText.trim() ? 'pointer' : 'default', fontSize: 13, fontWeight: 600,
+1442                           }}>
+1443                           тЬУ ╨б╨╛╨╖╨┤╨░╤В╤М ╨╖╨░╨║╨░╨╖╤Л
+1444                         </button>
+1445                         <button onClick={() => { setShowBulkPaste(false); setBulkPasteText(''); setBulkNomenMatches({}); }}
+1446                           style={{ background: 'transparent', border: '1px solid #2A4060', borderRadius: 8, color: '#5A7090', padding: '8px 20px', cursor: 'pointer', fontSize:
+1447                           ╨Ю╤В╨╝╨╡╨╜╨░
+1448                         </button>
+1449                       </div>
+1450                     </div>
+1451                   )}
+1452 
+1453                   <div style={mode === 'table' ? { flex: 1, minHeight: 250, overflow: 'auto' } : { overflowX: 'auto' }}>
+1454                     <table className="tbl" style={{ width: 'max-content' }}>
+1455                       <thead><tr>
+1456                         <th style={{ width: 96 }}></th>
+1457                         <th className="t-graph" style={{ cursor: 'pointer' }} onClick={() => doSort('_type')}>╨в╨╕╨┐{sortArrow('_type')}</th>
+1458                         {orderShowAll && <th style={{ cursor: 'pointer' }} onClick={() => doSort('_typeName')}>╨У╤А╤Г╨┐╨┐╨░ / ╨Я╤Г╨╗{sortArrow('_typeName')}</th>}
+1459                         <th className="t-graph">╨У╤А╨░╤Д</th>
+1460                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('ext_id')}>ID{sortArrow('ext_id')}</th>
+1461                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('specification_name')}>╨Я╤А╨╛╨┤╤Г╨║╤В{sortArrow('specification_name')}</th>
+1462                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('client')}>╨Ъ╨╗╨╕╨╡╨╜╤В{sortArrow('client')}</th>
+1463                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('quantity')}>╨Ъ╨╛╨╗-╨▓╨╛{sortArrow('quantity')}</th>
+1464                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('priority')}>╨Я╤А╨╕╨╛╤А╨╕╤В╨╡╤В{sortArrow('priority')}</th>
+1465                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('status')}>╨б╤В╨░╤В╤Г╤Б{sortArrow('status')}</th>
+1466                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('start_date')}>╨б╤В╨░╤А╤В{sortArrow('start_date')}</th>
+1467                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('due_date')}>╨д╨╕╨╜╨╕╤И{sortArrow('due_date')}</th>
+1468                         <th style={{ cursor: 'pointer' }} onClick={() => doSort('created_at')}>╨Ч╨░╨│╤А╤Г╨╢╨╡╨╜{sortArrow('created_at')}</th>
+1469                         <th style={{ width: 40 }}></th>
+1470                       </tr></thead>
+1471                       <tbody>
+1472                         {showNewOrder && (
+1473                           <tr>
+1474                             <td></td>
+1475                             <td className="t-mono">тАФ</td>
+1476                             {orderShowAll && <td className="t-mono">тАФ</td>}
+1477                             <td className="t-graph"><span className="g-pln">тЧЛ</span></td>
+1478                             <td className="t-mono">тАФ</td>
+1479                             <td><input value={newOrder.specification_name} onChange={e => setNewOrder({ ...newOrder, specification_name: e.target.value })} placeholder="╨Я╤А╨╛╨┤╤Г╨║
+1480                             <td><input value={newOrder.client} onChange={e => setNewOrder({ ...newOrder, client: e.target.value })} placeholder="╨Ъ╨╗╨╕╨╡╨╜╤В" style={{ background: '
+1481                             <td><input value={newOrder.quantity} onChange={e => setNewOrder({ ...newOrder, quantity: e.target.value })} type="number" min="1" style={{ backgrou
+1482                             <td><select value={newOrder.priority} onChange={e => setNewOrder({ ...newOrder, priority: e.target.value })} style={{ background: '#0A1628', border
+1483                             <td><span className="badge draft">╨Э╨╛╨▓╤Л╨╣</span></td>
+1484                             <td className="t-mono">тАФ</td>
+1485                             <td className="t-mono">тАФ</td>
+1486                             <td style={{ display: 'flex', gap: 4 }}>
+1487                               <button onClick={createOrder} style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 4, cur
+1488                               <button onClick={() => setShowNewOrder(false)} style={{ background: 'transparent', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 4
+1489                             </td>
+1490                           </tr>
+1491                         )}
+1492                         {treeRows.map(({ o, depth, hasChildren, collapsed }: any) => {
+1493                           const ti = getTypeInfo(o);
+1494                           const bomOpen = expandedBomOrder === o.id;
+1495                           return (
+1496                             <Fragment key={o.id}>
+1497                             <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move
+1498                               <td style={{ textAlign: 'left', paddingLeft: 4 + depth * 16, width: 96, minWidth: 96, maxWidth: 96, overflow: 'visible', boxShadow: depth > 0 ? '
+1499                                 <span style={{ display: 'inline-block', width: 22, textAlign: 'center' }}>
+1500                                   {hasChildren ? (

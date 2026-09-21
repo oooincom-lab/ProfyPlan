@@ -1,0 +1,35 @@
+﻿181         capacity_per_unit: String(res.capacity_per_unit ?? 1), capacity_unit: res.capacity_unit || 'hour',
+182         unit: res.unit || '', country_code: res.country_code || '', schedule_id: res.schedule_id || '',
+183       } : {
+184         name: '', resource_type: 'equipment', capacity_per_unit: '1', capacity_unit: 'hour',
+185         unit: '', country_code: '', schedule_id: '',
+186       },
+187     }]);
+188     return id;
+189   };
+190 
+191   const openDirWin = (entity: string, title: string, columns: any[], onSelect?: (row: any) => void) => {
+192     const d = deskRect();
+193     if (!onSelect) {
+194       const ex = wins.find(w => w.kind === 'dir' && w.data?.entity === entity);
+195       if (ex) {
+196         winZ.current += 1;
+197         setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, z: winZ.current } : w));
+198         return ex.id;
+199       }
+200     }
+201     const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+202     winZ.current += 1;
+203     setWins(prev => [...prev, {
+204       id,
+205       kind: 'dir' as const,
+206       orderId: '',
+207       data: { entity, columns, onSelect },
+208       title,
+209       x: d.x + 60,
+210       y: d.y + 40,
+211       w: Math.min(840, d.w - 80),
+212       h: Math.min(560, d.h - 80),
+213       min: false,
+214       z: winZ.current,
+215       tab: 'order' as const,

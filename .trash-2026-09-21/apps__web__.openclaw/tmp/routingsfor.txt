@@ -1,0 +1,46 @@
+﻿392   const routingFor = (o: any): any | null => {
+393     if (!routings.length) return null;
+394     const root = orderBomNodes(o).find((n: any) => !n.parent_id);
+395     const key = root?.routing_id || null;
+396     if (!key) return null;
+397     return routings.find((r: any) => r.id === key) || null;
+398   };
+399 
+400   const routingsFor = (o: any): any[] => {
+401     if (!routings.length) return [];
+402     const nodes = orderBomNodes(o);
+403     const ids = Array.from(new Set(nodes.filter((n: any) => n.routing_id && !n._boundary).map((n: any) => n.routing_id)));
+404     return routings.filter((r: any) => ids.includes(r.id));
+405   };
+406 
+407   const resName = (rid: any) => {
+408     if (!rid) return 'тАФ';
+409     const r = resourcesList.find((x: any) => x.id === rid || x.name === rid);
+410     return r ? r.name : String(rid).slice(0, 8) + 'тАж';
+411   };
+412 
+413   const openDirectory = (entity: string) => {
+====
+400   const routingsFor = (o: any): any[] => {
+401     if (!routings.length) return [];
+402     const nodes = orderBomNodes(o);
+403     const ids = Array.from(new Set(nodes.filter((n: any) => n.routing_id && !n._boundary).map((n: any) => n.routing_id)));
+404     return routings.filter((r: any) => ids.includes(r.id));
+405   };
+406 
+407   const resName = (rid: any) => {
+408     if (!rid) return 'тАФ';
+409     const r = resourcesList.find((x: any) => x.id === rid || x.name === rid);
+410     return r ? r.name : String(rid).slice(0, 8) + 'тАж';
+411   };
+412 
+413   const openDirectory = (entity: string) => {
+414     const cfg = DIR_COLUMNS[entity];
+415     if (!cfg) return;
+416     if (panelMode === 'window') {
+417       win.openDirWin(entity, cfg.title, cfg.columns);
+418     } else {
+419       setDirManager({ title: cfg.title, entity, columns: cfg.columns });
+420     }
+421   };
+====

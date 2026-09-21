@@ -1,0 +1,120 @@
+﻿121     try {
+122       const r = await af(`${apiBase}/v1/delete-check/${entity}/${id}`);
+123       if (!r.ok) { setDeleteCheckError('╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╛╨▓╨╡╤А╨║╨╕: ' + r.status); setDeleteCheckLoading(false); return; }
+124       setDeleteCheckResult(await r.json());
+125     } catch (e: any) {
+126       setDeleteCheckError(e.message || '╨Ю╤И╨╕╨▒╨║╨░');
+127     }
+128     setDeleteCheckLoading(false);
+129   };
+130 
+131   const ntypeLabel = (v: string) =>
+132     v === 'product' ? '╨Я╤А╨╛╨┤╤Г╨║╤В' : v === 'material' ? '╨Ь╨░╤В╨╡╤А╨╕╨░╨╗' : v === 'semi_finished' ? '╨Я╨╛╨╗╤Г╤Д╨░╨▒╤А╨╕╨║╨░╤В' : v === 'service' ? '╨г╤Б╨╗╤Г╨│╨░' : v;
+133 
+134   const handleSort = (colKey: string) => {
+135     if (sortKey === colKey) {
+136       const newDir = sortDir === 'asc' ? 'desc' : 'asc';
+137       setSortDir(newDir);
+138       savePrefs({ sortKey: colKey, sortDir: newDir });
+139     } else {
+140       setSortKey(colKey);
+141       setSortDir('asc');
+142       savePrefs({ sortKey: colKey, sortDir: 'asc' });
+143     }
+144   };
+145 
+146   const handleSearchFieldChange = (field: string) => {
+147     setSearchField(field);
+148     savePrefs({ searchField: field });
+149   };
+150 
+151   // Filter тЖТ Sort chain
+152   const filtered = useMemo(() => {
+153     let result = rows;
+154     if (filter) {
+155       const q = filter.toLowerCase();
+156       result = rows.filter(r => String(r[searchField] ?? '').toLowerCase().includes(q));
+157     }
+158     if (sortKey) {
+159       result = [...result].sort((a, b) => {
+160         const va = (a[sortKey] ?? '').toString().toLowerCase();
+161         const vb = (b[sortKey] ?? '').toString().toLowerCase();
+162         return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+163       });
+164     }
+165     return result;
+166   }, [rows, filter, searchField, sortKey, sortDir]);
+167 
+168   if (loading) return <div style={{ padding: 16, color: '#5A7090' }}>╨Ч╨░╨│╤А╤Г╨╖╨║╨░...</div>;
+169 
+170   return (
+171     <div>
+172       {/* Toolbar */}
+173       <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+174         {/* Search field selector */}
+175         <select
+176           value={searchField}
+177           onChange={e => handleSearchFieldChange(e.target.value)}
+178           style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '6px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'In
+179           title="╨Я╨╛╨╗╨╡ ╨┐╨╛╨╕╤Б╨║╨░"
+180         >
+181           {columns.map(c => (
+182             <option key={c.key} value={c.key}>{c.label}</option>
+183           ))}
+184         </select>
+185         {/* Search input */}
+186         <div style={{ position: 'relative', flex: '0 0 auto' }}>
+187           <input
+188             placeholder="╨Я╨╛╨╕╤Б╨║..."
+189             value={filter}
+190             onChange={e => setFilter(e.target.value)}
+191             style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '6px 10px 6px 30px', fontSize: 12, width: 180 }}
+192           />
+193           <span style={{ position: 'absolute', left: 10, top: 7, fontSize: 12, color: '#5A7090' }}>ЁЯФН</span>
+194         </div>
+195         <div style={{ flex: 1 }} />
+196         {!compact && !onSelect && (
+197           <>
+198             <button
+199               className="btn btn-sm"
+200               style={{ background: '#162844', color: '#5A7090', border: '1px solid #2A4060', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}
+201               onClick={() => setShowImport(true)}
+202             >
+203               ЁЯУЛ ╨Ш╨╝╨┐╨╛╤А╤В
+204             </button>
+205             <button
+206               className="btn btn-primary btn-sm"
+207               onClick={() => { setAdding(true); setNewRow({ name: '', ntype: 'product', unit: 'pcs', code: '' }); }}
+208             >
+209               + ╨Ф╨╛╨▒╨░╨▓╨╕╤В╤М
+210             </button>
+211           </>
+212         )}
+213         {onSelect && (
+214           <button
+215             disabled={!selId}
+216             onClick={() => { const row = filtered.find(r => r.id === selId); if (row) onSelect(row); }}
+217             style={{ background: selId ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : '#1E3252', border: '1px solid ' + (selId ? '#3B82F6' : '#2A4060'), borderRadius: 6, color:
+218           >
+219             тЬУ ╨Т╤Л╨▒╤А╨░╤В╤М
+220           </button>
+221         )}
+222       </div>
+223 
+224       {/* Table */}
+225       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+226         <thead>
+227           <tr>
+228             {columns.map(c => (
+229               <th
+230                 key={c.key}
+231                 onClick={() => { if (c.sortable !== false) handleSort(c.key); }}
+232                 style={{
+233                   textAlign: 'left', padding: '6px 10px', color: sortKey === c.key ? '#93C5FD' : '#60A5FA',
+234                   fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, fontWeight: 600,
+235                   textTransform: 'uppercase', letterSpacing: '.06em',
+236                   borderBottom: '1px solid #1E3252', width: c.width,
+237                   cursor: c.sortable !== false ? 'pointer' : 'default',
+238                   userSelect: 'none',
+239                 }}
+240               >

@@ -1,0 +1,13 @@
+﻿1497 <tr draggable onClick={() => openOrderPanel(o)} onDragStart={(e) => { e.dataTransfer.setData('orderId', o.id); e.dataTransfer.effectAllowed = 'move'; }} style={
+1536 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'
+1615 <button key={tb.v} onClick={() => { setPanelTab(tb.v); setPanelEditing(false); }} style={{ flex: 1, border: 0, background: 'transparent', color: panelTab === tb
+1620 {o && panelTab === 'order' && !panelEditing && (
+1630 {o && panelTab === 'order' && panelEditing && (
+1666 {o && panelTab === 'bom' && (
+1667 bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o.specification_name} />
+1670 {o && panelTab === 'route' && (() => {
+1738 {o && panelTab === 'res' && (() => {
+1756 {o && panelTab === 'plan' && (
+2556 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+2672 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+2712 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />

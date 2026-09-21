@@ -1,0 +1,27 @@
+﻿119             </div>
+120           </div>
+121         );
+122       })()}
+123 
+124       <BomTree
+125         nodes={nodes}
+126         orderName={order.specification_name}
+127         editable={editing}
+128         timeline={timeline}
+129         timelineDraft={timelineDraft}
+130         timelineLoading={timelineLoading}
+131         onLoadTimeline={onLoadTimeline}
+132         editable
+133         orders={orders}
+134         onNodeOrderChange={onNodeOrderChange}
+135         chainControl
+136         currentOrderId={order.id}
+137         anomalyIds={anomalyIds}
+138         routings={routings}
+139         showOps={treeMode !== 'bom'}
+140         showMaterials={treeMode !== 'routes'}
+141         resName={resName}
+142       />
+143     </div>
+144   );
+145 }

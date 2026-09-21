@@ -1,0 +1,3 @@
+﻿340 const saveResourceEdit = async (w: WinRec) => {
+2821 {view === 'resources' && <ResourceManager projects={projects} windowMode={panelMode === 'window'} debug={debugMode} onOpenResEdit={(res) => win.openResEdit(res)} />}
+3139 onSaveResourceEdit={saveResourceEdit}

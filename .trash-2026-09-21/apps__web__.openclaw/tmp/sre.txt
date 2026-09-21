@@ -1,0 +1,70 @@
+﻿326   };
+327 
+328   const loadPanelData = async (p: any) => {
+329     try {
+330       const [r, rs] = await Promise.all([
+331         apiF<any>('/bom/routings?page_size=200').catch(() => null),
+332         apiF<any[]>('/resources').catch(() => []),
+333       ]);
+334       if (r && Array.isArray(r.items)) setRoutings(r.items);
+335       if (Array.isArray(rs)) setResourcesList(rs);
+336     } catch {}
+337   };
+338 
+339   // ╨б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╨╡ ╤А╨╡╤Б╤Г╤А╤Б╨░ ╨╕╨╖ MDI-╨╛╨║╨╜╨░ ┬лresedit┬╗ (╤А╨╡╨╢╨╕╨╝ ┬л╨╛╨║╨╜╨░ ╨┤╨╗╤П ╤Б╨┐╨╕╤Б╨║╨╛╨▓┬╗)
+340   const saveResourceEdit = async (w: WinRec) => {
+341     const f = w.form || {};
+342     if (!f.name?.trim()) { setMsg('╨г╨║╨░╨╢╨╕╤В╨╡ ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╡ ╤А╨╡╤Б╤Г╤А╤Б╨░'); return; }
+343     win.setWins(prev => prev.map(x => x.id === w.id ? { ...x, saving: true } : x));
+344     const body: Record<string, any> = {
+345       name: f.name.trim(),
+346       resource_type: f.resource_type || 'equipment',
+347       capacity_per_unit: parseFloat(String(f.capacity_per_unit).replace(',', '.')) || 1,
+348       capacity_unit: f.capacity_unit || 'hour',
+349       unit: f.unit?.trim() || null,
+350       country_code: (f.country_code || '').trim().toUpperCase() || null,
+351       schedule_id: (f.schedule_id || '').trim() || null,
+352       is_active: true,
+353     };
+354     try {
+355       if (w.data && w.data.id) await apiF(`/resources/${w.data.id}`, { method: 'PUT', body: JSON.stringify(body) });
+356       else await apiF('/resources', { method: 'POST', body: JSON.stringify(body) });
+357       win.closeWin(w.id);
+358       try { const rs = await apiF<any[]>('/resources'); if (Array.isArray(rs)) setResourcesList(rs); } catch {}
+359     } catch (e: any) {
+360       setMsg(String(e));
+361       win.setWins(prev => prev.map(x => x.id === w.id ? { ...x, saving: false } : x));
+362     }
+363   };
+364 
+365   const selOrder = selOrderId ? (orders.find((o: any) => o.id === selOrderId) || null) : null;
+366 
+367   const openOrderPanel = (o: any) => {
+368     if (selectedProject) {
+369       loadBomTree(selectedProject.id);
+370       loadPanelData(selectedProject);
+371     }
+372     if (panelMode === 'window') { win.openWin(o); return; }
+373     setSelOrderId(o.id);
+374     setPanelTab('order');
+375     setPanelEditing(false);
+376   };
+377 
+378   const openGroupEditor = (g: any) => {
+379     if (!selectedProject) return;
+380     win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'groups')));
+381     setSelectedGroup(g); setSelectedProject(selectedProject); setView('project-groups'); setEditingGroup(false);
+382     (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const gs = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/groups`); const p
+383   };
+384 
+385   const openPoolEditor = (p: any) => {
+386     if (!selectedProject) return;
+387     win.setWins(prev => prev.filter(w => !(w.kind === 'list' && w.listKind === 'pools')));
+388     setSelectedPool(p); setSelectedProject(selectedProject); setView('project-pools'); setSelPoolOrders(new Set()); setSelFreeOrders(new Set()); setEditingPool(false);
+389     (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/${selectedProject.id}/pools`); setOrder
+390   };
+391 
+392   const routingFor = (o: any): any | null => {
+393     if (!routings.length) return null;
+394     const root = orderBomNodes(o).find((n: any) => !n.parent_id);
+395     const key = root?.routing_id || null;

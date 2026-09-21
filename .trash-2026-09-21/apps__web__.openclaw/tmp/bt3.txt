@@ -1,0 +1,1 @@
+﻿134 export default function BomTree({ nodes, compact = false, orderName, poolName, onOpenFull, timeline, timelineDraft, timelineLoading, onLoadTimeline, editable, orders, onNodeOrderChange, onNodeQuantityChange, onNodeRemove

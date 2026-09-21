@@ -1,0 +1,75 @@
+﻿3096       </div>
+3097 
+3098     {/* ╨Ю╨║╨╜╨░ ╨╖╨░╨║╨░╨╖╨╛╨▓ + ╨╛╨║╨╜╨░-╤Б╨┐╨╕╤Б╨║╨╕ (╨┐╨╛╨▓╨╡╤А╤Е ╤А╨░╨▒╨╛╤З╨╡╨│╨╛ ╤Б╤В╨╛╨╗╨░) */}
+3099     {win.wins.length > 0 && (
+3100       <WindowsLayer
+3101         wins={win.wins}
+3102         lay={win.lay}
+3103         snapZone={win.snapZone}
+3104         setWins={win.setWins}
+3105         setLay={win.setLay}
+3106         orders={orders}
+3107         resourcesList={resourcesList}
+3108         orderBomNodes={orderBomNodes}
+3109         routings={routings}
+3110         routingFor={routingFor}
+3111         routingsFor={routingsFor}
+3112         resName={resName}
+3113         groups={projGroups}
+3114         pools={projPools}
+3115         isDyn={isDyn}
+3116         renderOrdersTable={() => renderOrdersView('table')}
+3117         renderBomWindow={renderBomWindow}
+3118         onOpenOrder={openOrderPanel}
+3119         onOpenGroup={openGroupEditor}
+3120         onOpenPool={openPoolEditor}
+3121         onClose={win.closeWin}
+3122         onFocus={win.focusWin}
+3123         onToggleMin={win.toggleMinWin}
+3124         onMinimizeAll={win.toggleMinimizeAll}
+3125         onReset={win.resetWin}
+3126         onToggleMax={win.toggleMaxWin}
+3127         onDrag={win.startDrag}
+3128         onResize={win.startResize}
+3129         onApplyCell={win.applySnapCell}
+3130         onSaveEdit={saveWinEdit}
+3131         onNodeOrderChange={handleNodeOrderChange}
+3132         onBomNodeQuantity={handleBomNodeQuantity}
+3133         onBomNodeRemove={handleBomNodeRemove}
+3134         onBomNodeAdd={handleBomNodeAdd}
+3135         onRoutingOpUpdate={handleRoutingOpUpdate}
+3136         onPickResource={openResourcePick}
+3137         onOpenDirectory={openDirectory}
+3138         schedules={workSchedules}
+3139         onSaveResourceEdit={saveResourceEdit}
+3140         debug={debugMode}
+3141       />
+3142     )}
+3143 
+3144     {/* ╨г╨╜╨╕╨▓╨╡╤А╤Б╨░╨╗╤М╨╜╤Л╨╣ ╨╝╨╛╨┤╤Г╨╗╤М ╤Б╨┐╤А╨░╨▓╨╛╤З╨╜╨╕╨║╨░ (╨╝╨╛╨┤╨░╨╗╤М╨╜╨╛╨╡ ╨╛╨║╨╜╨╛) */}
+3145     {dirManager && (
+3146       <DirectoryManager
+3147         title={dirManager.title}
+3148         entity={dirManager.entity}
+3149         columns={dirManager.columns}
+3150         apiBase="https://profyplan.ru/api"
+3151         debug={debugMode}
+3152         onClose={() => setDirManager(null)}
+3153       />
+3154     )}
+3155 
+3156 
+3157     {/* Sidebar context menu */}
+3158     {sidebarCtx && (
+3159       <>
+3160         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998 }} onClick={() => setSidebarCtx(null)} onContextMenu={(e) => { e.preventDefault(); setSidebarCtx
+3161         <div style={{
+3162           position: 'fixed', left: sidebarCtx.x, top: sidebarCtx.y, zIndex: 9999,
+3163           background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252',
+3164           borderRadius: 10, padding: '4px 0', minWidth: 180,
+3165           boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+3166         }}>
+3167           {debugMode && <DebugBadge debug={debugMode} corner text="[ctx:menu]" />}
+3168           <button onClick={() => { setDirectoryModal(sidebarCtx.view); setSidebarCtx(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '
+3169             ЁЯУЛ ╨Ю╤В╨║╤А╤Л╤В╤М ╤Б╨┐╨╕╤Б╨╛╨║
+3170           </button>

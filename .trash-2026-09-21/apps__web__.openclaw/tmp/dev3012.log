@@ -1,0 +1,265 @@
+
+> @profyplan/web@0.1.0 dev
+> next dev -p 3000 -p 3012
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3012
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 7.7s
+ ○ Compiling /workspace ...
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for Compilation/modules|javascript/auto|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-flight-client-module-loader.js!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js??ruleSet[1].rules[16].oneOf[6].use[1]!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx|ssr from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=|false|mainFields=[|0=|main|]|dependencyType=|esm|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|import|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|true|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|@/lib/api from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=|false|mainFields=[|0=|main|]|dependencyType=|esm|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|import|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|true|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\api|query=||fragment=||module=|true|directory=|false|file=|false|internal=|false|fullySpecified=|true|descriptionFilePath=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\package.json|descriptionFileData=[|name=|@profyplan/web|version=|0.1.0|private=|true|scripts=[|dev=|next dev -p 3000|build=|next build|start=|next start|lint=|next lint|typecheck=|tsc --noEmit|]|dependencies=[|next=|^14.2.0|react=|^18.3.0|react-dom=|^18.3.0|reactflow=|^11.11.0|frappe-gantt=|^0.6.1|recharts=|^2.12.0|]|devDependencies=[|@types/node=|^20.11.0|@types/react=|^18.3.0|@types/react-dom=|^18.3.0|autoprefixer=|^10.4.0|postcss=|^8.4.0|tailwindcss=|^3.4.0|typescript=|^5.4.0|]|]|descriptionFileRoot=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web|relativePath=|./components from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|main|]|dependencyType=|commonjs|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|require|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|false|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|@/lib/api from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|main|]|dependencyType=|commonjs|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|require|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|false|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\lib\api|query=||fragment=||module=|true|directory=|false|file=|false|internal=|false|fullySpecified=|false|descriptionFilePath=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\package.json|descriptionFileData=[|name=|@profyplan/web|version=|0.1.0|private=|true|scripts=[|dev=|next dev -p 3000|build=|next build|start=|next start|lint=|next lint|typecheck=|tsc --noEmit|]|dependencies=[|next=|^14.2.0|react=|^18.3.0|react-dom=|^18.3.0|reactflow=|^11.11.0|frappe-gantt=|^0.6.1|recharts=|^2.12.0|]|devDependencies=[|@types/node=|^20.11.0|@types/react=|^18.3.0|@types/react-dom=|^18.3.0|autoprefixer=|^10.4.0|postcss=|^8.4.0|tailwindcss=|^3.4.0|typescript=|^5.4.0|]|]|descriptionFileRoot=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web|relativePath=|./components from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|module|1=|main|]|dependencyType=|esm|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|@/lib/api from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=|false|mainFields=[|0=|main|]|dependencyType=|esm|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|import|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|true|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|./OperationPanel from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=|false|mainFields=[|0=|main|]|dependencyType=|esm|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|import|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|true|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|./AutoCloseModal from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|main|]|dependencyType=|commonjs|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|require|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|false|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|./OperationPanel from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|main|]|dependencyType=|commonjs|modules=[|0=|node_modules|]|fallback=|false|exportsFields=[|0=|exports|]|importsFields=[|0=|imports|]|conditionNames=[|0=|node|1=|require|]|descriptionFiles=[|0=|package.json|]|extensions=[|0=|.js|1=|.json|2=|.node|]|enforceExtensions=|false|symlinks=|true|mainFiles=[|0=|index|]|roots=[|]|fullySpecified=|false|preferRelative=|false|preferAbsolute=|false|restrictions=[|]|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|./AutoCloseModal from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|module|1=|main|]|dependencyType=|esm|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|./OperationPanel from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for ResolverCachePlugin|normal|default|alias=[|server-only$=|next/dist/compiled/server-only/index|client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/client-only$=|next/dist/compiled/client-only/index|next/dist/compiled/server-only=|next/dist/compiled/server-only/index|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\head.js=|next/dist/client/components/noop-head|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\image.js=|next/dist/api/image|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\constants.js=|next/dist/api/constants|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\router.js=|next/dist/api/router|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dynamic.js=|next/dist/api/app-dynamic|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\script.js=|next/dist/api/script|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\link.js=|next/dist/api/link|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\navigation.js=|next/dist/api/navigation|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\headers.js=|next/dist/api/headers|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\og.js=|next/dist/api/og|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\server.js=|next/dist/api/server|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\document.js=|next/dist/api/document|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\app.js=|next/dist/api/app|react$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react|react-dom$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-dom|react/jsx-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-runtime|react/jsx-dev-runtime$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime|react-dom/client$=|next/dist/compiled/react-dom/client|react-dom/server$=|next/dist/compiled/react-dom/server|react-dom/static$=|next/dist/compiled/react-dom-experimental/static|react-dom/static.edge$=|next/dist/compiled/react-dom-experimental/static.edge|react-dom/static.browser$=|next/dist/compiled/react-dom-experimental/static.browser|react-dom/server.edge$=|next/dist/build/webpack/alias/react-dom-server-edge.js|react-dom/server.browser$=|next/dist/build/webpack/alias/react-dom-server-browser.js|react-server-dom-webpack/client$=|next/dist/compiled/react-server-dom-webpack/client|react-server-dom-webpack/client.edge$=|next/dist/server/future/route-modules/app-page/vendored/ssr/react-server-dom-webpack-client-edge|react-server-dom-webpack/server.edge$=|next/dist/compiled/react-server-dom-webpack/server.edge|react-server-dom-webpack/server.node$=|next/dist/compiled/react-server-dom-webpack/server.node|@vercel/turbopack-ecmascript-runtime/dev/client/hmr-client.ts=|next/dist/client/dev/noop-turbopack-hmr|]|mainFields=[|0=|module|1=|main|]|dependencyType=|esm|path=|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components|request=|./AutoCloseModal from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for FlagDependencyExportsPlugin|javascript/auto|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-flight-client-module-loader.js!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js??ruleSet[1].rules[16].oneOf[6].use[1]!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CCMDashboardV2.tsx|ssr from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for FlagDependencyExportsPlugin|javascript/auto|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-flight-client-module-loader.js!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js??ruleSet[1].rules[16].oneOf[6].use[1]!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx|ssr from pack: Error: invalid code -- missing end-of-block
+<w> [webpack.cache.PackFileCacheStrategy] Restoring failed for Compilation/codeGeneration|javascript/auto|C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-flight-client-module-loader.js!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js??ruleSet[1].rules[16].oneOf[6].use[1]!C:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\NetworkGraphV2.tsx|ssr|webpack-runtime from pack: Error: invalid code -- missing end-of-block
+ ✓ Compiled /workspace in 12.3s (533 modules)
+ GET /workspace 200 in 1304ms
+ GET /workspace 200 in 77ms
+ GET /workspace 200 in 39ms
+ ⨯ ./app/workspace/page.tsx
+Error: 
+  [31mx[0m Expected '=>', got 'loadProjectScale'
+      ,-[[36;1;4mC:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\app\workspace\page.tsx[0m:1729:1]
+ [2m1729[0m |   };
+ [2m1730[0m | 
+ [2m1731[0m |   // ── Шкала куста по ресурсам (шаг 2.3) ──
+ [2m1732[0m |   async def loadProjectScale(self, p: any, power: number = 1.0) => {
+      : [31;1m            ^^^^^^^^^^^^^^^^[0m
+ [2m1733[0m |     const proj = p || selectedProject;
+ [2m1734[0m |     if (!proj) return;
+ [2m1735[0m |     setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу куста…');
+      `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/workspace/page.tsx
+ ✓ Compiled in 1408ms (519 modules)
+ ✓ Compiled in 208ms (519 modules)
+ ✓ Compiled in 1166ms (519 modules)
+ ✓ Compiled in 202ms (519 modules)
+ ✓ Compiled in 2.4s (519 modules)
+ ⨯ ./components/ProjectWidgets.tsx
+Error: 
+  [31mx[0m the name `fmtDate` is defined multiple times
+     ,-[[36;1;4mC:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\ProjectWidgets.tsx[0m:12:1]
+ [2m 12[0m | }
+ [2m 13[0m | const API = resolveApiBase() + '/v1';
+ [2m 14[0m | 
+ [2m 15[0m | const fmtDate = (s?: string | null) => {
+     : [31;1m      ^^^|^^^[0m
+     :          [31;1m`-- [31;1mprevious definition of `fmtDate` here[0m[0m
+ [2m 16[0m |   if (!s) return '—';
+ [2m 17[0m |   const d = String(s).slice(0, 10).split('-');
+ [2m 18[0m |   return d.length === 3 ? `${d[2]}.${d[1]}.${d[0].slice(2)}` : String(s);
+ [2m 19[0m | };
+ [2m 20[0m | 
+ [2m 21[0m | /** Виджеты проекта: KPI расчёта, загрузка по неделям, события мощности и потери, риск PERT. */
+ [2m 22[0m | export default function ProjectWidgets({ projectId }: { projectId?: string | null }) {
+ [2m 23[0m |   const [loading, setLoading] = useState(false);
+ [2m 24[0m |   const [err, setErr] = useState<string | null>(null);
+ [2m 25[0m |   const [sched, setSched] = useState<any>(null);
+ [2m 26[0m |   const [load, setLoad] = useState<any>(null);
+ [2m 27[0m |   const [lost, setLost] = useState<any>(null);
+ [2m 28[0m |   const [pert, setPert] = useState<any>(null);
+ [2m 29[0m |   const [conflicts, setConflicts] = useState<number | null>(null);
+ [2m 30[0m | 
+ [2m 31[0m |   const af = async (path: string, opts?: RequestInit) => {
+ [2m 32[0m |     const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+ [2m 33[0m |     const h: Record<string, string> = { 'Content-Type': 'application/json', ...((opts?.headers as any) || {}) };
+ [2m 34[0m |     if (tok) h['Authorization'] = 'Bea' + 'rer ' + tok;
+ [2m 35[0m |     const r = await fetch(`${API}${path}`, { ...opts, headers: h });
+ [2m 36[0m |     if (!r.ok) throw new Error(`${r.status}`);
+ [2m 37[0m |     if (r.status === 204) return undefined as any;
+ [2m 38[0m |     return r.json();
+ [2m 39[0m |   };
+ [2m 40[0m | 
+ [2m 41[0m |   const refresh = useCallback(async () => {
+ [2m 42[0m |     if (!projectId) return;
+ [2m 43[0m |     setLoading(true); setErr(null);
+ [2m 44[0m |     try {
+ [2m 45[0m |       const [sc, rl, lh, pt, ov] = await Promise.all([
+ [2m 46[0m |         af(`/projects/${projectId}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }).catch(() => null),
+ [2m 47[0m |         af(`/reports/resource-loading?project_id=${projectId}&weeks=6`).catch(() => null),
+ [2m 48[0m |         af(`/reports/lost-hours?project_id=${projectId}`).catch(() => null),
+ [2m 49[0m |         af(`/ccm/projects/${projectId}/pert`, { method: 'POST', body: JSON.stringify({}) }).catch(() => null),
+ [2m 50[0m |         af('/ccm/resource-overload').catch(() => null),
+ [2m 51[0m |       ]);
+ [2m 52[0m |       setSched(sc); setLoad(rl); setLost(lh); setPert(pt);
+ [2m 53[0m |       let n = 0;
+ [2m 54[0m |       for (const r of ((ov || {}).resources || [])) {
+ [2m 55[0m |         const mine = (r.assignments || []).some((a: any) => a.project_id === projectId);
+ [2m 56[0m |         if (mine) n += (r.conflicts || []).length;
+ [2m 57[0m |       }
+ [2m 58[0m |       setConflicts(n);
+ [2m 59[0m |     } catch (e: any) { setErr(String(e?.message || e)); }
+ [2m 60[0m |     setLoading(false);
+ [2m 61[0m |   }, [projectId]);
+ [2m 62[0m | 
+ [2m 63[0m |   useEffect(() => { refresh(); }, [refresh]);
+ [2m 64[0m | 
+ [2m 65[0m |   if (!projectId) return null;
+ [2m 66[0m | 
+ [2m 67[0m |   const finish = sched?.project_finish_date;
+ [2m 68[0m |   const days = sched?.total_duration_days;
+ [2m 69[0m |   const critCount = (sched?.critical_path || []).length;
+ [2m 70[0m |   const warns = (sched?.warnings || []).length;
+ [2m 71[0m |   const weeks: any[] = (load?.weeks || []).filter((w: any) => w.demand_hours > 0);
+ [2m 72[0m |   const peak = load?.totals?.peak_percent ?? 0;
+ [2m 73[0m |   const sigma = pert?.total_std_dev;
+ [2m 74[0m | 
+ [2m 75[0m |   const kpi = 'kpi-card';
+ [2m 76[0m |   return (
+ [2m 77[0m |     <div style={{ marginBottom: 20 }}>
+ [2m 78[0m |       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+ [2m 79[0m |         <span style={{ fontSize: 13, fontWeight: 700, color: '#93C5FD' }}>📊 Сводка расчёта проекта</span>
+ [2m 80[0m |         <button type="button" onClick={refresh} disabled={loading}
+ [2m 81[0m |           style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit', opacity: loading ? .6 : 1 }}>
+ [2m 82[0m |           {loading ? 'Расчёт…' : '▶ Рассчитать проект'}
+ [2m 83[0m |         </button>
+ [2m 84[0m |         {err && <span style={{ fontSize: 11.5, color: '#FCA5A5' }}>ошибка: {err}</span>}
+ [2m 85[0m |         {loading && !sched && <span style={{ fontSize: 11.5, color: '#5A7090' }}>считаем…</span>}
+ [2m 86[0m |       </div>
+ [2m 87[0m | 
+ [2m 88[0m |       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 14 }}>
+ [2m 89[0m |         <div className={kpi} title="Дата окончания проекта по календарному расчёту с учётом графиков работы, событий мощности, долей и квот">
+ [2m 90[0m |           <div className="kpi-label">Финиш проекта</div>
+ [2m 91[0m |           <div className="kpi-val" style={{ fontSize: 20 }}>{fmtDate(finish)}</div>
+ [2m 92[0m |           <div className="kpi-sub">{days != null ? Number(days).toFixed(1).replace('.', ',') + ' дн' : 'нет расчёта'}</div>
+ [2m 93[0m |         </div>
+ [2m 94[0m |         <div className={kpi} title="Операции на критическом пути: их задержка сдвигает весь проект">
+ [2m 95[0m |           <div className="kpi-label">Критический путь</div>
+ [2m 96[0m |           <div className="kpi-val r" style={{ fontSize: 20 }}>{critCount}</div>
+ [2m 97[0m |           <div className="kpi-sub">{warns > 0 ? warns + ' предупр.' : 'без предупреждений'}</div>
+ [2m 98[0m |         </div>
+ [2m 99[0m |         <div className={kpi} title="Пересечения по общим ресурсам с другими проектами (CCM)">
+ [2m100[0m |           <div className="kpi-label">Конфликты ресурсов</div>
+ [2m101[0m |           <div className="kpi-val" style={{ fontSize: 20, color: conflicts ? '#FCD34D' : '#86EFAC' }}>{conflicts ?? '—'}</div>
+ [2m102[0m |           <div className="kpi-sub">{conflicts ? 'есть пересечения' : 'нет пересечений'}</div>
+ [2m103[0m |         </div>
+ [2m104[0m |         <div className={kpi} title="Разброс срока по PERT: чем больше σ, тем выше неопределённость оценок операций">
+ [2m105[0m |           <div className="kpi-label">Риск PERT</div>
+ [2m106[0m |           <div className="kpi-val" style={{ fontSize: 20, color: (sigma ?? 0) > 0 ? '#FCD34D' : '#8FA3BD' }}>σ {sigma ?? '—'}</div>
+ [2m107[0m |           <div className="kpi-sub">{pert?.confidence_68 && typeof pert.confidence_68.low === 'number' ? `± ${Number(pert.confidence_68.high - pert.confidence_68.low).toFixed(1).replace('.', ',')} дн` : pert?.confidence_68 ? `68%: ${fmtDateShort(pert.confidence_68.low)}–${fmtDateShort(pert.confidence_68.high)}` : '—'}</div>
+ [2m108[0m |         </div>
+ [2m109[0m |       </div>
+ [2m110[0m | 
+ [2m111[0m |       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
+ [2m112[0m |         <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: '10px 12px' }}>
+ [2m113[0m |           <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD', marginBottom: 8 }}>
+ [2m114[0m |             📈 Загрузка по неделям {peak ? <span style={{ color: peak > 100 ? '#F87171' : peak > 80 ? '#FCD34D' : '#86EFAC' }}>· пик {peak}%</span> : null}
+ [2m115[0m |           </div>
+ [2m116[0m |           {weeks.length === 0 && <div style={{ fontSize: 12, color: '#5A7090' }}>Нет данных о загрузке — нужен расчёт проекта с операциями.</div>}
+ [2m117[0m |           {weeks.map((w: any) => (
+ [2m118[0m |             <div key={w.week_start} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+ [2m119[0m |               <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD', width: 86, flexShrink: 0 }}>
+ [2m120[0m |                 {w.week_start.slice(8, 10)}.{w.week_start.slice(5, 7)}–{w.week_end.slice(8, 10)}.{w.week_end.slice(5, 7)}
+ [2m121[0m |               </span>
+ [2m122[0m |               <div style={{ position: 'relative', flex: 1, height: 12, background: '#0F1E36', borderRadius: 3, minWidth: 90 }}>
+ [2m123[0m |                 <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(w.load_percent, 100)}%`, borderRadius: 3, background: w.load_percent > 100 ? '#EF4444' : w.load_percent > 80 ? '#F59E0B' : '#22C55E' }} />
+ [2m124[0m |               </div>
+ [2m125[0m |               <span className="t-mono" style={{ fontSize: 11, color: '#8FA3BD', width: 44, textAlign: 'right', flexShrink: 0 }}>{w.load_percent}%</span>
+ [2m126[0m |             </div>
+ [2m127[0m |           ))}
+ [2m128[0m |         </div>
+ [2m129[0m | 
+ [2m130[0m |         <div style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 10, padding: '10px 12px' }}>
+ [2m131[0m |           <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD', marginBottom: 8 }}>⚡ События мощности и потери</div>
+ [2m132[0m |           {!lost && <div style={{ fontSize: 12, color: '#5A7090' }}>Нет данных.</div>}
+ [2m133[0m |           {lost && (
+ [2m134[0m |             <>
+ [2m135[0m |               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+ [2m136[0m |                 <span style={{ fontSize: 12, color: '#FCA5A5' }}>потери: <b>{lost.totals?.lost_text || '0 мин'}</b></span>
+ [2m137[0m |                 <span style={{ fontSize: 12, color: '#86EFAC' }}>выработка: <b>{lost.totals?.extra_text || '0 мин'}</b></span>
+ [2m138[0m |                 <span style={{ fontSize: 12, color: '#8FA3BD' }}>событий: <b>{lost.totals?.events ?? 0}</b></span>
+ [2m139[0m |               </div>
+ [2m140[0m |               <div style={{ maxHeight: 96, overflow: 'auto' }}>
+ [2m141[0m |                 {(lost.by_reason || []).slice(0, 4).map((r: any) => (
+ [2m142[0m |                   <div key={r.reason} style={{ display: 'flex', gap: 8, fontSize: 11.5, color: '#CBD5E1', padding: '2px 0' }}>
+ [2m143[0m |                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.reason}>{r.reason}</span>
+ [2m144[0m |                     <span style={{ color: '#FCA5A5' }}>{r.lost_text}</span>
+ [2m145[0m |                     <span style={{ color: '#86EFAC' }}>{r.extra_text}</span>
+ [2m146[0m |                   </div>
+ [2m147[0m |                 ))}
+ [2m148[0m |                 {!(lost.by_reason || []).length && <div style={{ fontSize: 11.5, color: '#5A7090' }}>Событий нет.</div>}
+ [2m149[0m |               </div>
+ [2m150[0m |             </>
+ [2m151[0m |           )}
+ [2m152[0m |           {(pert?.warnings || []).length > 0 && (
+ [2m153[0m |             <div style={{ marginTop: 8, fontSize: 11, color: '#FCD34D', borderTop: '1px dashed rgba(30,58,95,.7)', paddingTop: 6 }}>
+ [2m154[0m |               ⚠ {pert.warnings[0]}
+ [2m155[0m |             </div>
+ [2m156[0m |           )}
+ [2m157[0m |         </div>
+ [2m158[0m |       </div>
+ [2m159[0m |     </div>
+ [2m160[0m |   );
+ [2m161[0m | }
+ [2m162[0m | 
+ [2m163[0m | function fmtDate(s?: string | null) {
+     : [33;1m         ^^^|^^^[0m
+     :             [33;1m`-- [33;1m`fmtDate` redefined here[0m[0m
+ [2m164[0m |   if (!s) return '—';
+ [2m165[0m |   const d = String(s).slice(0, 10).split('-');
+ [2m166[0m |   return d.length === 3 ? `${d[2]}.${d[1]}.${d[0]}` : String(s);
+     `----
+
+Import trace for requested module:
+./components/ProjectWidgets.tsx
+./app/workspace/page.tsx
+ ✓ Compiled in 420ms (519 modules)
+ ✓ Compiled in 328ms (519 modules)
+ ⨯ ./components/CpmNetworkGraph.tsx
+Error: 
+  [31mx[0m 'import', and 'export' cannot be used outside of module code
+    ,-[[36;1;4mC:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx[0m:37:1]
+ [2m37[0m |                       String(e.to ?? e.target ?? e.successor_id ?? e.successor)] as [string, string])
+ [2m38[0m |     .filter((x: [string, string]) => x[0] !== 'undefined' && x[1] !== 'undefined');
+ [2m39[0m |   useEffect(() => { /* выбранная операция — наружу */ }, []);
+ [2m40[0m | export default function CPMPage(){
+    : [31;1m^^^^^^[0m
+ [2m41[0m |   // State
+ [2m42[0m |   const [graphStubs.projects, setProjects] = useState<any[]>([]);
+ [2m43[0m |   const [selectedId, setSelectedId] = useState<string|null>(null);
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/CpmNetworkGraph.tsx
+./app/workspace/page.tsx
+ ⨯ ./components/CpmNetworkGraph.tsx
+Error: 
+  [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4mC:\Users\user\.openclaw-autoclaw\agents\auto-designer\workspace\profyplan\apps\web\components\CpmNetworkGraph.tsx[0m:567:1]
+ [2m567[0m |   useEffect(() => { if (selectedId) loadGanttData(selectedId); }, [selectedId, loadGanttData]);
+ [2m568[0m | 
+ [2m569[0m |   return(
+ [2m570[0m |     <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:'var(--bg)',color:'var(--fg)',overflow:'hidden',height:'100vh'}}>
+     : [31;1m     ^^^[0m
+ [2m571[0m |       {/* TOPBAR */}
+ [2m572[0m |       <div className="topbar">
+ [2m573[0m |         <div className="topbar-left">
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/CpmNetworkGraph.tsx
+./app/workspace/page.tsx
+ ✓ Compiled in 1618ms (519 modules)

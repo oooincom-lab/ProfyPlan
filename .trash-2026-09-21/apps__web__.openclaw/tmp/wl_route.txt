@@ -1,0 +1,16 @@
+﻿50   onRoutingOpUpdate: (opId: string, patch: Record<string, any>) => void;
+60   { v: 'route', l: '╨Ь╨░╤А╤И╤А╤Г╤В' },
+79     onRoutingOpUpdate, onPickResource,
+168                 {!w.editing ? (
+253               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && !w.editing && (
+263               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && w.editing && (
+300                 bomNodes.length ? <BomTree nodes={bomNodes} compact orderName={o!.specification_name} routings={routings} showOps showMaterials resName={resName} editable
+303               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'route' && (() => {
+309                       const total = (r.operations || []).reduce((s: number, op: any) => s + (Number(op.duration_hours) || 0), 0);
+318                                 {w.editing ? (
+322                                       defaultValue={Number(op.duration_hours) || 0}
+323                                       key={'dur-' + op.id + '-' + (Number(op.duration_hours) || 0)}
+325                                       onBlur={(e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!Number.isNaN(v) && v >= 0 && Number(v.toFixed(
+332                                   <span style={{ color: '#FCD34D', fontSize: 12 }}>{Number(op.duration_hours) || 0} ╤З</span>
+336                                 {w.editing ? (
+457                 {w.editing && <span className="pp-tchip-dirty" title="╨Х╤Б╤В╤М ╨╜╨╡╤Б╨╛╤Е╤А╨░╨╜╤С╨╜╨╜╤Л╨╡ ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╨╕╤П" />}

@@ -1,0 +1,215 @@
+﻿2496 
+2497           {/* тХРтХРтХР POOL DETAIL тАФ Dual-list тХРтХРтХР */}
+2498           {view === 'project-pools' && selectedPool && !editingPool && (() => {
+2499             const poolOrders = orders.filter((o: any) => o.pool_id === selectedPool.id);
+2500             return (<>
+2501               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+2502                 <button onClick={() => { setSelectedPool(null); }} className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>тЖР ╨Ъ ╨┐╤Г╨╗╨░╨╝</button>
+2503                 <div>
+2504                   <span style={{ fontWeight: 700, fontSize: 16 }}>ЁЯУж {selectedPool.name}</span>
+2505                   <span className="t-mono" style={{ marginLeft: 10, fontSize: 12, color: '#8FA3BD' }}>{poolOrders.length} ╨╖╨░╨║╨░╨╖╨╛╨▓</span>
+2506                 </div>
+2507                 <div style={{ flex: 1 }} />
+2508                 <button onClick={() => { delPool(selectedPool.id, selectedPool.name); setSelectedPool(null); }} className="btn btn-danger btn-sm">ЁЯЧС ╨г╨┤╨░╨╗╨╕╤В╤М ╨┐╤Г╨╗</button>
+2509                 <button onClick={() => setEditingPool(true)} style={{ background: 'var(--btn-primary-bg, #3B82F6)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', curso
+2510               </div>
+2511               <div className="panel" style={{ overflow: 'hidden' }}>
+2512                 <div className="panel-hdr">
+2513                   <div><span className="panel-title">ЁЯУж ╨б╨╛╤Б╤В╨░╨▓ ╨┐╤Г╨╗╨░</span><span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{poolOrders.length}</span></div>
+2514                 </div>
+2515                 {poolOrders.length === 0 ? (
+2516                   <div style={{ textAlign: 'center', padding: 60, color: '#5A7090', fontSize: 13 }}>
+2517                     <div style={{ fontSize: 36, marginBottom: 12 }}>ЁЯУж</div>
+2518                     <div>╨Я╤Г╨╗ ╨┐╤Г╤Б╤В. ╨Э╨░╨╢╨╝╨╕╤В╨╡ ┬л╨Ш╨╖╨╝╨╡╨╜╨╕╤В╤М┬╗ ╤З╤В╨╛╨▒╤Л ╨┤╨╛╨▒╨░╨▓╨╕╤В╤М ╨╖╨░╨║╨░╨╖╤Л.</div>
+2519                   </div>
+2520                 ) : (
+2521                   <table className="tbl">
+2522                     <thead><tr>
+2523                       <th style={{ width: 30 }}></th>
+2524                       <th>╨Ч╨░╨║╨░╨╖</th><th>╨Ъ╨╗╨╕╨╡╨╜╤В</th><th style={{ width: 80 }}>╨Ъ╨╛╨╗-╨▓╨╛</th><th style={{ width: 80 }}>╨б╤В╨░╤В╤Г╤Б</th>
+2525                     </tr></thead>
+2526                     <tbody>
+2527                       {poolOrders.map((o: any) => {
+2528                         const bomOpen = expandedBomOrder === o.id;
+2529                         return (
+2530                         <Fragment key={o.id}>
+2531                         <tr>
+2532                           <td style={{ textAlign: 'center' }}>
+2533                             <button
+2534                               onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+2535                               title={bomOpen ? '╨б╨▓╨╡╤А╨╜╤Г╤В╤М BOM' : '╨Я╨╛╨║╨░╨╖╨░╤В╤М BOM'}
+2536                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color .15
+2537                               onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+2538                               onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+2539                             >{bomOpen ? 'тЦ╛' : 'тЦ╕'}</button>
+2540                           </td>
+2541                           <td className="t-name" style={{ color: '#A78BFA' }}>{o.specification_name || o.ext_id || 'тАФ'}</td>
+2542                           <td style={{ color: '#A78BFA' }}>{o.client || 'тАФ'}</td>
+2543                           <td className="t-mono">{o.quantity} {o.unit}</td>
+2544                           <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? '╨з╨╡╤А╨╜.' : o.status === 'planned' ? '╨Я╨╗╨░╨╜' : '╨а╨░╨▒.'}</span></td>
+2545                         </tr>
+2546                         {bomOpen && (
+2547                           <tr>
+2548                             <td colSpan={5} style={{ background: '#0F1E36', padding: 0 }}>
+2549                               <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+2550                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+2551                                   <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM ┬╖ {o.specification_name || o.ext_id || 'тАФ'}</span>
+2552                                   {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>╨╖╨░╨│╤А╤Г╨╖╨║╨░тАж</span>}
+2553                                   <span style={{ fontSize: 11, color: '#5A7090' }}>╤Б╤В╤А╤Г╨║╤В╤Г╤А╨░ ╨╕╨╖╨┤╨╡╨╗╨╕╤П</span>
+2554                                   <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', b
+2555                                 </div>
+2556                                 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+2557                               </div>
+2558                             </td>
+2559                           </tr>
+2560                         )}
+2561                         </Fragment>
+2562                         );
+2563                       })}
+2564                     </tbody>
+2565                   </table>
+2566                 )}
+2567               </div>
+2568             </>);
+2569           })()}
+2570 
+2571           {view === 'project-pools' && selectedPool && editingPool && (
+2572             <PoolEditor
+2573               pool={selectedPool}
+2574               debug={debugMode}
+2575               orders={orders}
+2576               onClose={() => setEditingPool(false)}
+2577               onRefresh={() => { (async () => { try { const o = await apiF<any[]>(`/production-orders/?project_id=${selectedProject.id}`); const pr = await apiF<{ items: any[] }>(`/projects/
+2578               onMoveOrders={(orderIds, poolId) => moveOrdersChecked(orderIds, null, poolId)}
+2579             />
+2580           )}
+2581 
+2582                     {/* тХРтХРтХР GROUP DETAIL тХРтХРтХР */}
+2583           {view === 'project-groups' && selectedGroup && !editingGroup && (() => {
+2584             const gOrders = orders.filter((o: any) => o.group_id === selectedGroup.id);
+2585             const gPools = projPools.filter((p: any) => p.group_id === selectedGroup.id);
+2586             // Unified list: pools + orders sorted by start_date
+2587             const unified = [
+2588               ...gPools.map((p: any) => ({ kind: 'pool', id: p.id, data: p, sortKey: p.created_at || '' })),
+2589               ...gOrders.map((o: any) => ({ kind: 'order', id: o.id, data: o, sortKey: o.planned_start || o.created_at || '' })),
+2590             ].sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+2591             return (<>
+2592               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+2593                 <button onClick={() => { setSelectedGroup(null); }} className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>тЖР ╨Ъ ╨│╤А╤Г╨┐╨┐╨░╨╝</button>
+2594                 <div>
+2595                   <span style={{ fontWeight: 700, fontSize: 16 }}>ЁЯУБ {selectedGroup.name}</span>
+2596                   <span className="t-mono" style={{ marginLeft: 10, fontSize: 12, color: '#8FA3BD' }}>{gOrders.length + gPools.length} ╤Н╨╗╨╡╨╝╨╡╨╜╤В╨╛╨▓</span>
+2597                 </div>
+2598                 <div style={{ flex: 1 }} />
+2599                 <button onClick={() => { runDeleteCheck('order_group', selectedGroup.id, selectedGroup.name); setSelectedGroup(null); }} className="btn btn-danger btn-sm">ЁЯЧС ╨г╨┤╨░╨╗╨╕╤В╤М</button>
+2600                 <button onClick={() => setEditingGroup(true)} style={{ background: 'var(--btn-primary-bg, #3B82F6)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', curs
+2601               </div>
+2602               <div className="panel" style={{ overflow: 'hidden' }}>
+2603                 <div className="panel-hdr">
+2604                   <div><span className="panel-title">ЁЯУБ ╨б╨╛╤Б╤В╨░╨▓ ╨│╤А╤Г╨┐╨┐╤Л</span><span className="t-mono" style={{ marginLeft: 6, fontSize: 11, color: '#8FA3BD' }}>{unified.length}</span></div>
+2605                 </div>
+2606                 {unified.length === 0 ? (
+2607                   <div style={{ textAlign: 'center', padding: 60, color: '#5A7090', fontSize: 13 }}>
+2608                     <div style={{ fontSize: 36, marginBottom: 12 }}>ЁЯУБ</div>
+2609                     <div>╨У╤А╤Г╨┐╨┐╨░ ╨┐╤Г╤Б╤В╨░. ╨Э╨░╨╢╨╝╨╕╤В╨╡ ┬л╨Ш╨╖╨╝╨╡╨╜╨╕╤В╤М┬╗ ╤З╤В╨╛╨▒╤Л ╨┤╨╛╨▒╨░╨▓╨╕╤В╤М ╨╖╨░╨║╨░╨╖╤Л ╨╕ ╨┐╤Г╨╗╤Л.</div>
+2610                   </div>
+2611                 ) : (
+2612                   <table className="tbl">
+2613                     <thead><tr>
+2614                       <th style={{ width: 30 }}></th>
+2615                       <th style={{ width: 60 }}>╨в╨╕╨┐</th>
+2616                       <th>╨Э╨░╨╖╨▓╨░╨╜╨╕╨╡</th>
+2617                       <th style={{ width: 100 }}>╨Ъ╨╛╨╗-╨▓╨╛ / ╨Ч╨░╨║╨░╨╖╨╛╨▓</th>
+2618                       <th style={{ width: 80 }}>╨б╤В╨░╤В╤Г╤Б</th>
+2619                     </tr></thead>
+2620                     <tbody>
+2621                       {unified.map(item => {
+2622                         if (item.kind === 'pool') {
+2623                           const p = item.data;
+2624                           const pOrders = orders.filter((o: any) => o.pool_id === p.id);
+2625                           const poolExpanded = expandedGroupPool === p.id;
+2626                           return (
+2627                             <Fragment key={'gp-' + p.id}>
+2628                             <tr style={{ background: 'rgba(139,92,246,.04)' }}>
+2629                               <td style={{ textAlign: 'center' }}>
+2630                                 <button
+2631                                   onClick={(e) => { e.stopPropagation(); setExpandedGroupPool(poolExpanded ? null : p.id); }}
+2632                                   title={poolExpanded ? '╨б╨▓╨╡╤А╨╜╤Г╤В╤М ╨┐╤Г╨╗' : '╨а╨░╨╖╨▓╨╡╤А╨╜╤Г╤В╤М ╨┐╤Г╨╗'}
+2633                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: poolExpanded ? '#A78BFA' : '#7C6BAF', fontSize: 14, padding: '2px 6px', transition: '
+2634                                   onMouseEnter={e => (e.currentTarget.style.color = '#A78BFA')}
+2635                                   onMouseLeave={e => (e.currentTarget.style.color = poolExpanded ? '#A78BFA' : '#7C6BAF')}
+2636                                 >{poolExpanded ? 'тЦ╛' : 'тЦ╕'}</button>
+2637                               </td>
+2638                               <td><span style={{ fontSize: 16 }}>ЁЯУж</span></td>
+2639                               <td className="t-name" style={{ color: '#A78BFA', fontWeight: 600 }}>{p.name}</td>
+2640                               <td className="t-mono" style={{ color: '#A78BFA' }}>{pOrders.length}</td>
+2641                               <td><span style={{ fontSize: 10, color: '#8B5CF6', fontWeight: 500 }}>╨Я╤Г╨╗</span></td>
+2642                             </tr>
+2643                             {poolExpanded && pOrders.map((o: any) => {
+2644                               const bomOpen = expandedBomOrder === o.id;
+2645                               return (
+2646                                 <Fragment key={'gpo-' + o.id}>
+2647                                 <tr style={{ background: 'rgba(139,92,246,.02)' }}>
+2648                                   <td style={{ textAlign: 'center' }}>
+2649                                     <button
+2650                                       onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+2651                                       title={bomOpen ? '╨б╨▓╨╡╤А╨╜╤Г╤В╤М BOM' : '╨Я╨╛╨║╨░╨╖╨░╤В╤М BOM'}
+2652                                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'c
+2653                                       onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+2654                                       onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+2655                                     >{bomOpen ? 'тЦ╛' : 'тЦ╕'}</button>
+2656                                   </td>
+2657                                   <td><span style={{ fontSize: 14, opacity: 0.5 }}>ЁЯУЛ</span></td>
+2658                                   <td className="t-name" style={{ paddingLeft: 20, color: '#A78BFA' }}>{o.specification_name || o.ext_id || 'тАФ'}</td>
+2659                                   <td className="t-mono">{o.quantity} {o.unit}</td>
+2660                                   <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? '╨з╨╡╤А╨╜.' : o.status === 'planned' ? '╨Я╨╗╨░╨╜' : '╨а╨░╨▒.'}</span></td>
+2661                                 </tr>
+2662                                 {bomOpen && (
+2663                                   <tr>
+2664                                     <td colSpan={5} style={{ background: '#0F1E36', padding: 0 }}>
+2665                                       <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+2666                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+2667                                           <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM ┬╖ {o.specification_name || o.ext_id || 'тАФ'}</span>
+2668                                           {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>╨╖╨░╨│╤А╤Г╨╖╨║╨░тАж</span>}
+2669                                           <span style={{ fontSize: 11, color: '#5A7090' }}>╤Б╤В╤А╤Г╨║╤В╤Г╤А╨░ ╨╕╨╖╨┤╨╡╨╗╨╕╤П</span>
+2670                                           <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60
+2671                                         </div>
+2672                                         <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} />
+2673                                       </div>
+2674                                     </td>
+2675                                   </tr>
+2676                                 )}
+2677                                 </Fragment>
+2678                               );
+2679                             })}
+2680                             </Fragment>
+2681                           );
+2682                         } else {
+2683                           const o = item.data;
+2684                           const bomOpen = expandedBomOrder === o.id;
+2685                           return (
+2686                             <Fragment key={'go-' + o.id}>
+2687                             <tr>
+2688                               <td style={{ textAlign: 'center' }}>
+2689                                 <button
+2690                                   onClick={(e) => { e.stopPropagation(); toggleBomOrder(o); }}
+2691                                   title={bomOpen ? '╨б╨▓╨╡╤А╨╜╤Г╤В╤М BOM' : '╨Я╨╛╨║╨░╨╖╨░╤В╤М BOM'}
+2692                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: bomOpen ? '#60A5FA' : '#5A7090', fontSize: 14, padding: '2px 6px', transition: 'color
+2693                                   onMouseEnter={e => (e.currentTarget.style.color = '#60A5FA')}
+2694                                   onMouseLeave={e => (e.currentTarget.style.color = bomOpen ? '#60A5FA' : '#5A7090')}
+2695                                 >{bomOpen ? 'тЦ╛' : 'тЦ╕'}</button>
+2696                               </td>
+2697                               <td><span style={{ fontSize: 14 }}>ЁЯУЛ</span></td>
+2698                               <td className="t-name" style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.specification_name || o.ext_id || 'тАФ'}</td>
+2699                               <td className="t-mono">{o.quantity} {o.unit}</td>
+2700                               <td><span className={`badge ${o.status}`}>{o.status === 'draft' ? '╨з╨╡╤А╨╜.' : o.status === 'planned' ? '╨Я╨╗╨░╨╜' : '╨а╨░╨▒.'}</span></td>
+2701                             </tr>
+2702                             {bomOpen && (
+2703                               <tr>
+2704                                 <td colSpan={5} style={{ background: '#0F1E36', padding: 0 }}>
+2705                                   <div style={{ padding: '12px 18px', borderTop: '1px solid #1E3252' }}>
+2706                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+2707                                       <span style={{ fontSize: 12, fontWeight: 600, color: '#B0C4DE', letterSpacing: '.02em' }}>BOM ┬╖ {o.specification_name || o.ext_id || 'тАФ'}</span>
+2708                                       {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>╨╖╨░╨│╤А╤Г╨╖╨║╨░тАж</span>}
+2709                                       <span style={{ fontSize: 11, color: '#5A7090' }}>╤Б╤В╤А╤Г╨║╤В╤Г╤А╨░ ╨╕╨╖╨┤╨╡╨╗╨╕╤П</span>
+2710                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA

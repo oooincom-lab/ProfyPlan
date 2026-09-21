@@ -1,0 +1,6 @@
+﻿26   routingsFor: (o: any) => any[];
+74     orderBomNodes, routingFor, routingsFor, resName, routings,
+304                 const rts = routingsFor(o);
+348                                       {op.resource_type_id ? resName(op.resource_type_id) : '╨Т╤Л╨▒╤А╨░╤В╤М ╤А╨╡╤Б╤Г╤А╤Б...'}
+352                                   <>╨а╨╡╤Б╤Г╤А╤Б: {resName(op.resource_type_id)}</>
+365                 for (const r of routingsFor(o)) for (const op of (r.operations || [])) if (op.resource_type_id) used.add(String(op.resource_type_id));
