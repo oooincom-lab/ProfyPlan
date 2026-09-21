@@ -308,6 +308,11 @@ function computeLayout(ops: GOp[], deps: [string, string][], mode: Mode, opts?: 
 
 /* ─────────────────────────── компонент ─────────────────────────── */
 
+/* Число стартов раскладки для планарного подграфа: укладка обязана дать ноль
+   пересечений, поэтому перебираем несколько детерминированных стартов и берём
+   лучший результат. Для непланарного графа старт один (ноль недостижим). */
+const PLANAR_RESTARTS = 8;
+
 export default function CpmGraph(props: CpmGraphProps) {
   // height не задан → полотно занимает всю доступную высоту родителя (вид рабочего поля).
   const { height, title, compact, onSelect } = props;
@@ -335,7 +340,6 @@ export default function CpmGraph(props: CpmGraphProps) {
     saveLayoutPreset(next);
   }, []);
   const activePreset = useMemo(() => getLayoutPreset(layoutPreset), [layoutPreset]);
-  const layoutOpts = useMemo(() => settingsToLayoutOptions(activePreset.settings), [activePreset]);
 
   const [mode, setMode] = useState<Mode>('byDate');
   const [unit, setUnit] = useState<'d' | 'h' | 'm'>('d');
@@ -407,6 +411,22 @@ export default function CpmGraph(props: CpmGraphProps) {
   const layoutOps = useMemo(
     () => (critOnly ? visibleOps.filter((o) => o.crit) : visibleOps),
     [visibleOps, critOnly],
+  );
+
+  /* ── планарность подграфа раскладки и число стартов оптимизации ──
+     Если граф планарный, укладка обязана дать ноль пересечений, поэтому
+     раскладка считается из нескольких стартов и берётся лучший. Если граф
+     непланарный, ноль недостижим — оставляем один старт (обычная оптимизация). */
+  const layoutPlanarity = useMemo(
+    () => checkPlanarity(layoutOps.map((o) => ({ id: o.id, crit: o.crit })), allDeps, false),
+    [layoutOps, allDeps],
+  );
+  const layoutOpts = useMemo(
+    () => ({
+      ...settingsToLayoutOptions(activePreset.settings),
+      restarts: layoutPlanarity.state === 'confirmed' ? PLANAR_RESTARTS : 1,
+    }),
+    [activePreset, layoutPlanarity],
   );
 
   const layout = useMemo(() => {

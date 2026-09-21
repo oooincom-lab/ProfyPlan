@@ -5,9 +5,12 @@
  * не зависит от React — одни и те же функции используют отрисовка (`CpmGraph`),
  * счётчик качества раскладки и автотест.
  */
-import { CARD_W, CARD_H, segRectHit, segCross, EDGE_PAD, OBSTACLE_PAD } from './cpm-metrics';
+import { CARD_W, CARD_H, segRectHit, segCross, EDGE_PAD, OBSTACLE_PAD, computeLayoutMetrics } from './cpm-metrics';
 
 export type Mode = 'byDate' | 'byLayer';
+
+/** Как строится колонка структурной укладки: по раннему старту или по глубине связей. */
+type ColKind = 'es' | 'topo';
 
 export interface GOp {
   id: string;
@@ -56,6 +59,13 @@ export interface LayoutOptions {
   baryMode?: 'mean' | 'median';
   /** Как считать цель подтяжки узла: среднее или медиана соседей. */
   pullMode?: 'mean' | 'median';
+  /**
+   * Число стартов оптимизации. Структурная укладка — разовый расчёт (не покадровый),
+   * поэтому дорогие проходы можно повторять из разных начальных порядков и брать
+   * лучший результат по числовому критерию: так укладка выходит из локального
+   * минимума, в который упирается единственный старт. 1 — единственный старт.
+   */
+  restarts?: number;
 }
 
 /** Минимальный зазор между узлами по обеим осям. */
@@ -77,6 +87,11 @@ const OB_HH = CARD_H / 2 + OBSTACLE_PAD;
  * Раскладка: колонки по датам/слоям, порядок внутри колонки (барицентр),
  * затем локальные улучшения по счётчику качества (перестановки соседних узлов
  * и подтяжка к средней линии соседей), затем «разведение рядов» с зазором.
+ *
+ * При `restarts > 1` те же проходы повторяются из нескольких начальных
+ * порядков (детерминированные старты) и берётся лучший по числовому критерию.
+ * Это дороже, но структурная укладка считается разово, а не покадрово, и на
+ * ней этот приём выводит раскладку из локального минимума.
  */
 export function computeLayout(
   ops: GOp[],
@@ -84,6 +99,48 @@ export function computeLayout(
   mode: Mode,
   opts: LayoutOptions = {},
 ): Layout {
+  const restarts = Math.max(1, Math.floor(opts.restarts ?? 1));
+  const key = layoutCacheKey(ops, deps, mode, opts, restarts);
+  const hit = layoutCache.get(key);
+  if (hit) return { ...hit, pos: { ...hit.pos } };
+
+  let best: Layout | null = null;
+  let bestCost = Infinity;
+  const metricNodes = ops.map((o) => ({ id: o.id, crit: o.crit }));
+  // Структурная укладка при нескольких стартах перебирает детерминированные старты
+  // по равному раннему старту И столько же стартов по топологической глубине (слой
+  // «по связям», без времени) — у каждой укладки свои сильные стороны, берём лучшую
+  // по счётчику панели.
+  const multi = mode === 'byLayer' && restarts > 1;
+  const total = multi ? restarts * 2 : restarts;
+  for (let s = 0; s < total; s++) {
+    const colKind: ColKind = multi && s >= restarts ? 'topo' : 'es';
+    const seed = multi ? (s % restarts) : null;
+    const r = computeLayoutOnce(ops, deps, mode, opts, seed, colKind);
+    // Выбор лучшего старта — по тому же счётчику, что видит панель (пересечения +
+    // проходы сквозь узлы + наложения узлов), а не по внутренней приближённой оценке.
+    const m = computeLayoutMetrics(r.layout, metricNodes, deps, false);
+    const cost = (opts.crossWeight ?? 1) * m.crossings + (opts.hitWeight ?? 1) * m.edgeNodeHits + (opts.overlapWeight ?? 50) * m.nodeOverlaps;
+    if (cost < bestCost) { bestCost = cost; best = r.layout; }
+  }
+  const result = best as Layout;
+  if (layoutCache.size >= LAYOUT_CACHE_MAX) {
+    const oldest = layoutCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) layoutCache.delete(oldest);
+  }
+  layoutCache.set(key, result);
+  return { ...result, pos: { ...result.pos } };
+}
+
+/** Один старт раскладки: возвращает укладку и её числовой критерий. */
+function computeLayoutOnce(
+  ops: GOp[],
+  deps: [string, string][],
+  mode: Mode,
+  opts: LayoutOptions,
+  seed: number | null,
+  colKind: ColKind,
+): { layout: Layout; cost: number } {
   const baryPasses = opts.baryPasses ?? 4;
   const localPasses = opts.localPasses ?? 8;
   const pullStep = opts.pullStep ?? 0.5;
@@ -119,7 +176,26 @@ export function computeLayout(
 
   let bucketDays = 1;
   let colOf: (o: GOp) => number;
-  if (mode === 'byLayer') {
+  if (mode === 'byLayer' && colKind === 'topo') {
+    // Структурная укладка «по связям»: слой — топологическая глубина (длина самого
+    // длинного пути от истоков). Время в определении слоя не участвует.
+    const depth: Record<string, number> = {};
+    ops.forEach((o) => { depth[o.id] = 0; });
+    const indeg: Record<string, number> = {};
+    ops.forEach((o) => { indeg[o.id] = preds[o.id].length; });
+    const q = ops.filter((o) => indeg[o.id] === 0).map((o) => o.id);
+    let head = 0;
+    while (head < q.length) {
+      const u = q[head++];
+      for (const v of succs[u]) {
+        if (depth[u] + 1 > depth[v]) depth[v] = depth[u] + 1;
+        if (--indeg[v] === 0) q.push(v);
+      }
+    }
+    const uniq = Array.from(new Set(ops.map((o) => depth[o.id]))).sort((a, b) => a - b);
+    const idx = new Map<number, number>(uniq.map((v, i) => [v, i]));
+    colOf = (o) => idx.get(depth[o.id]) ?? 0;
+  } else if (mode === 'byLayer') {
     const uniq = Array.from(new Set(ops.map((o) => Math.round(o.es * 1000) / 1000))).sort((a, b) => a - b);
     const idx = new Map<number, number>(uniq.map((v, i) => [v, i]));
     colOf = (o) => idx.get(Math.round(o.es * 1000) / 1000) ?? 0;
@@ -145,6 +221,17 @@ export function computeLayout(
     const g = groups.get(c)!;
     // Тай-брейк по имени — сравнение код-поинтов (без зависимости от локали браузера).
     g.sort((a, b) => (a.es - b.es) || (b.durDays - a.durDays) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    // Старт с номером seed≠null — детерминированно перемешиваем порядок внутри
+    // колонки: разные старты упираются в разные локальные минимумы, при этом
+    // результат воспроизводим (тот же старт — тот же порядок).
+    if (seed != null && g.length > 1) {
+      let st = (seed * 2654435761 + 1) >>> 0;
+      const rnd = () => { st = (st * 1664525 + 1013904223) >>> 0; return st / 4294967296; };
+      for (let i = g.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        const t = g[i]; g[i] = g[j]; g[j] = t;
+      }
+    }
     g.forEach((o, i) => { orderY[o.id] = i; });
   });
 
@@ -182,8 +269,9 @@ export function computeLayout(
   // ── локальные улучшения по счётчику качества ──
   // Принимаем изменение только если суммарный критерий
   // (пересечения + проходы сквозь узлы + наложения узлов) строго уменьшился.
+  let cost = 0;
   if (localPasses > 0 && ops.length > 1 && edges.length) {
-    improveLocally(ops, edges, preds, succs, colKeys, groups, pos, {
+    cost = improveLocally(ops, edges, preds, succs, colKeys, groups, pos, {
       localPasses, pullStep, moveWindow, maxEvals, crossWeight, hitWeight, overlapWeight, pullMode,
     });
   }
@@ -213,11 +301,33 @@ export function computeLayout(
   if (!ops.length) { minX = 0; maxX = 100; minY = 0; maxY = 100; }
 
   return {
-    pos, minX, maxX, minY, maxY,
-    pxPerDay: COL_PITCH / (mode === 'byDate' ? bucketDays : 1),
-    bucketDays,
-    minEs,
+    layout: {
+      pos, minX, maxX, minY, maxY,
+      pxPerDay: COL_PITCH / (mode === 'byDate' ? bucketDays : 1),
+      bucketDays,
+      minEs,
+    },
+    cost,
   };
+}
+
+/** Предел числа кэшируемых укладок (одна и та же раскладка запрашивается
+ *  несколько раз за отрисовку — кэш убирает повторный дорогой пересчёт). */
+const LAYOUT_CACHE_MAX = 8;
+const layoutCache = new Map<string, Layout>();
+
+/** Ключ кэша: режим + опции + подписи операций и связей (полное совпадение входа). */
+function layoutCacheKey(
+  ops: GOp[], deps: [string, string][], mode: Mode, opts: LayoutOptions, restarts: number,
+): string {
+  let o = '';
+  for (let i = 0; i < ops.length; i++) {
+    const x = ops[i];
+    o += x.id + '\u0001' + x.num + '\u0001' + x.es + '\u0001' + x.ef + '\u0001' + x.durDays + '\u0001' + x.name + '\u0001' + (x.crit ? 1 : 0) + '\u0002';
+  }
+  let d = '';
+  for (let i = 0; i < deps.length; i++) d += deps[i][0] + '\u0001' + deps[i][1] + '\u0002';
+  return mode + '\u0003' + restarts + '\u0003' + JSON.stringify(opts) + '\u0003' + o.length + '\u0003' + o + '\u0003' + d.length + '\u0003' + d;
 }
 
 /* ───────────────── локальный поиск по счётчику качества ───────────────── */
@@ -247,7 +357,7 @@ function improveLocally(
   groups: Map<number, GOp[]>,
   pos: Record<string, [number, number]>,
   o: SearchOpts,
-): void {
+): number {
   const n = ops.length;
   const ni: Record<string, number> = {};
   ops.forEach((op, i) => { ni[op.id] = i; });
@@ -456,4 +566,5 @@ function improveLocally(
 
   // записываем результат обратно
   ops.forEach((op, i) => { pos[op.id][1] = py[i]; });
+  return cur;
 }
