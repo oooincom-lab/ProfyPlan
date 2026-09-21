@@ -22,7 +22,7 @@ import { getProjectDependencies } from '@/lib/api';
 import { getPalette } from '@/lib/graph-styles';
 import {
   CARD_W, CARD_H, borderPoint, quadPt, pathHits, DETOUR_OFFSETS, edgeControl,
-  computeLayoutMetrics, type LayoutMetrics, type Rect,
+  computeLayoutMetrics, DEFAULT_GEOMETRY, type LayoutMetrics, type Rect,
 } from '@/lib/cpm-metrics';
 import { computeLayout as buildCpmLayout } from '@/lib/cpm-layout';
 import { checkCpmStructure, detectEndpoints, intensityK, type StructureIssue } from '@/lib/cpm-structure';
@@ -135,8 +135,8 @@ const PANEL_CSS = [
  * шагу раскладки, поэтому на мелком масштабе (большой граф) узлы не слипаются:
  * мировой зазор по вертикали всегда остаётся не меньше MIN_GAP.
  */
-function circleRadius(S: number): number {
-  return Math.max(CIRC_WORLD_R * S, Math.min(9, ROW_PITCH * 0.4 * S));
+function circleRadius(S: number, rowPitch: number = ROW_PITCH): number {
+  return Math.max(CIRC_WORLD_R * S, Math.min(9, rowPitch * 0.4 * S));
 }
 const FONT_MONO = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 const FONT_UI = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -340,6 +340,12 @@ export default function CpmGraph(props: CpmGraphProps) {
     saveLayoutPreset(next);
   }, []);
   const activePreset = useMemo(() => getLayoutPreset(layoutPreset), [layoutPreset]);
+  // Геометрия активного пресета: размер узлов, зазоры, отступ и множитель подписей.
+  // Используется и укладкой, и метриками, и отрисовкой — поэтому смена раскладки
+  // меняет и вид, и числа.
+  const geom = activePreset.geom || DEFAULT_GEOMETRY;
+  const colPitch = geom.cardW + geom.colGap;
+  const rowPitch = geom.cardH + geom.rowGap;
 
   const [mode, setMode] = useState<Mode>('byDate');
   const [unit, setUnit] = useState<'d' | 'h' | 'm'>('d');
@@ -421,12 +427,25 @@ export default function CpmGraph(props: CpmGraphProps) {
     () => checkPlanarity(layoutOps.map((o) => ({ id: o.id, crit: o.crit })), allDeps, false),
     [layoutOps, allDeps],
   );
+  /* ── положение «Без пересечений» в переключателе раскладки ──
+     Доступно лишь в структурной укладке («по слоям» — только там не рисуется
+     хронология). Ноль пересечений достижим только для планарного (под)графа —
+     это и есть исход проверки `layoutPlanarity`. Для непланарного (под)графа
+     положение выбирается с честной подписью «ноль недостижим для этой схемы». */
+  const noPlanAvailable = mode === 'byLayer';
+  const noPlanReachable = layoutPlanarity.state === 'confirmed';
+  // Число стартов оптимизации: больше одного — когда нужна укладка без
+  // пересечений. Это либо пресет «Без пересечений» (структурная укладка — только
+  // в режиме «По слоям»), либо планарный подграф (тогда ноль пересечений
+  // достижим и в «Обычно»/«Плотно»/«Для печати»). Для прочих — один старт.
+  const noplanActive = layoutPreset === 'noplan' && mode === 'byLayer';
   const layoutOpts = useMemo(
     () => ({
       ...settingsToLayoutOptions(activePreset.settings),
-      restarts: layoutPlanarity.state === 'confirmed' ? PLANAR_RESTARTS : 1,
+      restarts: (noplanActive || layoutPlanarity.state === 'confirmed') ? PLANAR_RESTARTS : 1,
+      geometry: geom,
     }),
-    [activePreset, layoutPlanarity],
+    [activePreset, layoutPlanarity, geom, noplanActive],
   );
 
   const layout = useMemo(() => {
@@ -441,15 +460,15 @@ export default function CpmGraph(props: CpmGraphProps) {
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       for (const id in L.pos) {
         const [x, y] = L.pos[id];
-        if (x - CARD_W / 2 < minX) minX = x - CARD_W / 2;
-        if (x + CARD_W / 2 > maxX) maxX = x + CARD_W / 2;
-        if (y - CARD_H / 2 < minY) minY = y - CARD_H / 2;
-        if (y + CARD_H / 2 > maxY) maxY = y + CARD_H / 2;
+        if (x - geom.cardW / 2 < minX) minX = x - geom.cardW / 2;
+        if (x + geom.cardW / 2 > maxX) maxX = x + geom.cardW / 2;
+        if (y - geom.cardH / 2 < minY) minY = y - geom.cardH / 2;
+        if (y + geom.cardH / 2 > maxY) maxY = y + geom.cardH / 2;
       }
       L.minX = minX; L.maxX = maxX; L.minY = minY; L.maxY = maxY;
     }
     return L;
-  }, [layoutOps, allDeps, mode, layoutOpts, posNonce]);
+  }, [layoutOps, allDeps, mode, layoutOpts, posNonce, geom]);
 
   /* ── виртуальные события «Старт» и «Финиш» ──
      Начальные — операции без предшественников, завершающие — без последующих.
@@ -483,15 +502,15 @@ export default function CpmGraph(props: CpmGraphProps) {
     const virtuals: VirtualNode[] = [];
     const vEdges: VirtualEdge[] = [];
     if (!ep.hasExplicitStart) {
-      virtuals.push({ id: 'start', kind: 'start', label: 'Старт', x: minCx - COL_PITCH, y: meanY(ep.initialIds), color: startColor });
+      virtuals.push({ id: 'start', kind: 'start', label: 'Старт', x: minCx - colPitch, y: meanY(ep.initialIds), color: startColor });
       ep.initialIds.forEach((id) => { if (pos[id]) vEdges.push({ from: 'start', to: id, color: startColor }); });
     }
     if (!ep.hasExplicitFinish) {
-      virtuals.push({ id: 'finish', kind: 'finish', label: 'Финиш', x: maxCx + COL_PITCH, y: meanY(ep.finalIds), color: finishColor });
+      virtuals.push({ id: 'finish', kind: 'finish', label: 'Финиш', x: maxCx + colPitch, y: meanY(ep.finalIds), color: finishColor });
       ep.finalIds.forEach((id) => { if (pos[id]) vEdges.push({ from: id, to: 'finish', color: finishColor }); });
     }
     return { virtuals, vEdges };
-  }, [layout, layoutOps, allDeps, startColor, finishColor]);
+  }, [layout, layoutOps, allDeps, startColor, finishColor, colPitch]);
 
   /* Раскладка с учётом виртуальных событий: их позиции добавляются в pos, а габарит
      полотна расширяется, чтобы «Старт»/«Финиш» попадали в подгонку «По размеру».
@@ -506,13 +525,13 @@ export default function CpmGraph(props: CpmGraphProps) {
     let maxY = layout.maxY;
     for (const v of vs) {
       pos[v.id] = [v.x, v.y];
-      if (v.x - CARD_W / 2 < minX) minX = v.x - CARD_W / 2;
-      if (v.x + CARD_W / 2 > maxX) maxX = v.x + CARD_W / 2;
-      if (v.y - CARD_H / 2 < minY) minY = v.y - CARD_H / 2;
-      if (v.y + CARD_H / 2 > maxY) maxY = v.y + CARD_H / 2;
+      if (v.x - geom.cardW / 2 < minX) minX = v.x - geom.cardW / 2;
+      if (v.x + geom.cardW / 2 > maxX) maxX = v.x + geom.cardW / 2;
+      if (v.y - geom.cardH / 2 < minY) minY = v.y - geom.cardH / 2;
+      if (v.y + geom.cardH / 2 > maxY) maxY = v.y + geom.cardH / 2;
     }
     return { ...layout, pos, minX, maxX, minY, maxY };
-  }, [layout, virtualInfo]);
+  }, [layout, virtualInfo, geom]);
 
   /* ── метрики качества раскладки (пересечения, наложения, плотность) ──
      Считаются только по реальным операциям и связям; виртуальные «Старт»/«Финиш»
@@ -524,10 +543,11 @@ export default function CpmGraph(props: CpmGraphProps) {
         mappedOps.map((o) => ({ id: o.id, crit: o.crit })),
         allDeps,
         critOnly,
+        geom,
       ),
     // Пересчитываются при смене раскладки: режим «по датам / по слоям», период,
     // выбор заказа, фильтр крит. пути, размер шрифта, единицы и «Сброс».
-    [layoutFull, allDeps, mappedOps, critOnly, fontSize, unit, resetNonce, posNonce],
+    [layoutFull, allDeps, mappedOps, critOnly, fontSize, unit, resetNonce, posNonce, geom],
   );
   /* ── пересечения по укладкам ──
      Обе укладки считаем независимо и показываем их числа как есть: в «По датам»
@@ -543,9 +563,10 @@ export default function CpmGraph(props: CpmGraphProps) {
         mops,
         allDeps,
         critOnly,
+        geom,
       ).crossings;
     return { byDate: count('byDate'), byLayer: count('byLayer') };
-  }, [layoutOps, allDeps, layoutOpts, mappedOps, critOnly]);
+  }, [layoutOps, allDeps, layoutOpts, mappedOps, critOnly, geom]);
 
   /* ── вердикт о планарности сети ──
      Отдельная проверка, не путать с метриками раскладки: те лишь считают
@@ -633,6 +654,14 @@ export default function CpmGraph(props: CpmGraphProps) {
     reserveColor, branchColor, critColor, stretchColor,
     fontScale,
     stretchK: STRETCH_K,
+    // Геометрия активного пресета раскладки — нужна и узлам, и связям, и шкале.
+    geom,
+    cardW: geom.cardW,
+    cardH: geom.cardH,
+    pad: geom.pad,
+    colPitch,
+    rowPitch,
+    labelScale: geom.labelScale ?? 1,
   };
 
   /* ── рисование ── */
@@ -654,6 +683,15 @@ export default function CpmGraph(props: CpmGraphProps) {
     const st = stateRef.current;
     const FS: number = st.fontScale || 1;
     const fsz = (px: number) => Math.max(6, Math.round(px * FS));
+    // Геометрия активного пресета раскладки. Размер узла и зазоры берём из
+    // состояния — так переключатель раскладки реально меняет и вид, и числа.
+    const CW: number = st.cardW || CARD_W;
+    const CH: number = st.cardH || CARD_H;
+    const PADW: number = st.pad != null ? st.pad : PAD;
+    const ROWP: number = st.rowPitch || ROW_PITCH;
+    const LBL: number = st.labelScale || 1;
+    // Подписи узлов масштабируются и размером шрифта, и пресетом раскладки.
+    const fszL = (px: number) => Math.max(6, Math.round(px * FS * LBL));
     // Защита от NaN/невалидного масштаба и смещения — canvas не должен оставаться пустым.
     const S: number = (Number.isFinite(st.scale) && st.scale > 0) ? st.scale : 0.8;
     const panX: number = Number.isFinite(st.panX) ? st.panX : 0;
@@ -662,7 +700,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     const sx = (x: number) => x * S + panX;
     const sy = (y: number) => y * S + panY;
     const cardMode = S >= LOD_CARD_MIN_SCALE;
-    const circR = circleRadius(S);
+    const circR = circleRadius(S, ROWP);
 
     ctx.fillStyle = '#0A1628';
     ctx.fillRect(0, 0, W, H);
@@ -673,8 +711,8 @@ export default function CpmGraph(props: CpmGraphProps) {
     if (st.mode === 'byDate' && st.startDate) {
       const L: Layout = st.layout;
       const ppd = L.pxPerDay;
-      const xOfDay = (d: number) => sx(PAD + (d - L.minEs) * ppd + CARD_W / 2);
-      const dayAtX = (x: number) => ((x - panX) / S - PAD - CARD_W / 2) / ppd + L.minEs;
+      const xOfDay = (d: number) => sx(PADW + (d - L.minEs) * ppd + CW / 2);
+      const dayAtX = (x: number) => ((x - panX) / S - PADW - CW / 2) / ppd + L.minEs;
       const d0 = Math.floor(dayAtX(0));
       const d1 = Math.ceil(dayAtX(W));
       const ppdScreen = ppd * S;
@@ -806,7 +844,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     /* ── данные для отрисовки ── */
     const visIds = new Set<string>();
     st.ops.forEach((o: GOp) => { if (!st.critOnly || o.crit) visIds.add(o.id); });
-    const halfOf = (card: boolean): [number, number] => (card ? [CARD_W / 2, CARD_H / 2] : [CIRC_WORLD_R, CIRC_WORLD_R]);
+    const halfOf = (card: boolean): [number, number] => (card ? [CW / 2, CH / 2] : [CIRC_WORLD_R, CIRC_WORLD_R]);
 
     /* ── связи ── */
     const edgesToDraw: { a: GOp; b: GOp; bothCrit: boolean; anyBranch: boolean }[] = [];
@@ -833,7 +871,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     // Виртуальные события входят в геометрию как препятствия, чтобы связи
     // реальных операций их не задевали (в счётчик качества они не входят).
     ((st.virtuals || []) as VirtualNode[]).forEach((v) => {
-      allRects.push({ id: v.id, x: v.x, y: v.y, hw: CARD_W / 2 + 6, hh: CARD_H / 2 + 6 });
+      allRects.push({ id: v.id, x: v.x, y: v.y, hw: CW / 2 + 6, hh: CH / 2 + 6 });
     });
 
     edgesToDraw.forEach(({ a, b, bothCrit, anyBranch }) => {
@@ -974,14 +1012,14 @@ export default function CpmGraph(props: CpmGraphProps) {
       if (!p) return;
       const cx = sx(p[0]);
       const cy = sy(p[1]);
-      if (cx < -CARD_W * S - 20 || cx > W + CARD_W * S + 20 || cy < -CARD_H * S - 20 || cy > H + CARD_H * S + 20) return;
+      if (cx < -CW * S - 20 || cx > W + CW * S + 20 || cy < -CH * S - 20 || cy > H + CH * S + 20) return;
 
       const accent = o.crit ? critColor : (o.branch ? branchColor : reserveColor);
       const hovered = hoverIdRef.current === o.id;
 
       if (cardMode) {
-        const w = CARD_W * S;
-        const h = CARD_H * S;
+        const w = CW * S;
+        const h = CH * S;
         const x = cx - w / 2;
         const y = cy - h / 2;
         ctx.fillStyle = hovered ? 'rgba(20,38,64,0.98)' : 'rgba(15,30,54,0.96)';
@@ -1015,7 +1053,7 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.lineWidth = 1;
         ctx.stroke();
         ctx.fillStyle = '#E8EEF5';
-        ctx.font = 'bold ' + fsz(clamp(Math.round(11 * S), 8, 14)) + 'px ' + FONT_MONO;
+        ctx.font = 'bold ' + fszL(clamp(Math.round(11 * S), 8, 14)) + 'px ' + FONT_MONO;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(o.num), bx, by + 0.5);
@@ -1026,31 +1064,31 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#E8EEF5';
-        ctx.font = 'bold ' + fsz(clamp(Math.round(10.5 * S), 8, 13)) + 'px ' + FONT_UI;
+        ctx.font = 'bold ' + fszL(clamp(Math.round(10.5 * S), 8, 13)) + 'px ' + FONT_UI;
         const codeLine = fitText(ctx, o.code, textRight - textLeft);
         ctx.fillText(codeLine, textLeft, y + h * 0.32);
         ctx.fillStyle = 'rgba(176,196,222,0.75)';
-        ctx.font = fsz(clamp(Math.round(9.5 * S), 7, 12)) + 'px ' + FONT_UI;
+        ctx.font = fszL(clamp(Math.round(9.5 * S), 7, 12)) + 'px ' + FONT_UI;
         const detailLine = fitText(ctx, o.detail || o.name, textRight - textLeft);
         if (detailLine) ctx.fillText(detailLine, textLeft, y + h * 0.63);
 
         // длительность и диапазон
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = 'rgba(176,196,222,0.85)';
-        ctx.font = fsz(clamp(Math.round(9 * S), 7, 12)) + 'px ' + FONT_MONO;
+        ctx.font = fszL(clamp(Math.round(9 * S), 7, 12)) + 'px ' + FONT_MONO;
         const durTxt = '⏱ ' + fmtDur(o.durDays, st.unit, o.hpd);
         ctx.fillText(durTxt, x + 6, y + h - 6);
 
         // резерв
         if (o.tf > 0.0001) {
           const resTxt = '+' + fmtReserve(o.tf, st.unit, o.hpd);
-          ctx.font = 'bold ' + fsz(clamp(Math.round(9 * S), 7, 12)) + 'px ' + FONT_MONO;
+          ctx.font = 'bold ' + fszL(clamp(Math.round(9 * S), 7, 12)) + 'px ' + FONT_MONO;
           ctx.fillStyle = '#F59E0B';
           ctx.textAlign = 'right';
           ctx.fillText(resTxt, x + w - 6, y + h - 6);
           ctx.textAlign = 'left';
         } else {
-          ctx.font = 'bold ' + fsz(clamp(Math.round(9 * S), 7, 12)) + 'px ' + FONT_MONO;
+          ctx.font = 'bold ' + fszL(clamp(Math.round(9 * S), 7, 12)) + 'px ' + FONT_MONO;
           ctx.fillStyle = 'rgba(239,68,68,0.9)';
           ctx.textAlign = 'right';
           ctx.fillText('крит', x + w - 6, y + h - 6);
@@ -1072,21 +1110,21 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.lineWidth = o.crit ? 2 : (stretchCompact ? 1.8 : 1.3);
         ctx.stroke();
         ctx.fillStyle = '#E8EEF5';
-        ctx.font = 'bold ' + fsz(clamp(Math.round(11 * S + 2), 8, 14)) + 'px ' + FONT_MONO;
+        ctx.font = 'bold ' + fszL(clamp(Math.round(11 * S + 2), 8, 14)) + 'px ' + FONT_MONO;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(o.num), cx, cy + 0.5);
 
         if (r >= 11) {
           ctx.fillStyle = o.crit ? '#E8EEF5' : 'rgba(176,196,222,0.8)';
-          ctx.font = fsz(clamp(Math.round(9.5 * S + 3), 8, 12)) + 'px ' + FONT_UI;
+          ctx.font = fszL(clamp(Math.round(9.5 * S + 3), 8, 12)) + 'px ' + FONT_UI;
           ctx.textBaseline = 'bottom';
-          const lbl = fitText(ctx, o.code, CARD_W * 0.9);
+          const lbl = fitText(ctx, o.code, CW * 0.9);
           ctx.fillText(lbl, cx, cy - r - 3);
         }
         if (o.tf > 0.0001 && r >= 9) {
           ctx.fillStyle = '#F59E0B';
-          ctx.font = 'bold ' + fsz(clamp(Math.round(9 * S + 2), 7, 11)) + 'px ' + FONT_MONO;
+          ctx.font = 'bold ' + fszL(clamp(Math.round(9 * S + 2), 7, 11)) + 'px ' + FONT_MONO;
           ctx.textBaseline = 'top';
           ctx.fillText('+' + fmtReserve(o.tf, st.unit, o.hpd), cx, cy + r + 2);
         }
@@ -1097,11 +1135,11 @@ export default function CpmGraph(props: CpmGraphProps) {
     ((st.virtuals || []) as VirtualNode[]).forEach((v) => {
       const cx = sx(v.x);
       const cy = sy(v.y);
-      if (cx < -CARD_W * S - 20 || cx > W + CARD_W * S + 20 || cy < -CARD_H * S - 20 || cy > H + CARD_H * S + 20) return;
+      if (cx < -CW * S - 20 || cx > W + CW * S + 20 || cy < -CH * S - 20 || cy > H + CH * S + 20) return;
       const hovered = hoverIdRef.current === v.id;
       if (cardMode) {
-        const w = CARD_W * S;
-        const h = CARD_H * S;
+        const w = CW * S;
+        const h = CH * S;
         const x = cx - w / 2;
         const y = cy - h / 2;
         const r = h / 2;
@@ -1118,7 +1156,7 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.stroke();
 
         // содержимое: цветной маркер + подпись «Старт»/«Финиш»
-        ctx.font = 'bold ' + fsz(clamp(Math.round(11 * S), 8, 14)) + 'px ' + FONT_UI;
+        ctx.font = 'bold ' + fszL(clamp(Math.round(11 * S), 8, 14)) + 'px ' + FONT_UI;
         const lbl = v.label;
         const tw = ctx.measureText(lbl).width;
         const dotR = Math.max(3, 4 * S);
@@ -1134,7 +1172,7 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.textBaseline = 'middle';
         ctx.fillText(lbl, lx + dotR * 2 + gap, cy + 0.5);
       } else {
-        const r = circleRadius(S) * 1.45;
+        const r = circleRadius(S, ROWP) * 1.45;
         ctx.beginPath();
         ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(10,22,40,0.6)';
@@ -1147,7 +1185,7 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.fillStyle = v.color;
-        ctx.font = 'bold ' + fsz(clamp(Math.round(11 * S + 2), 8, 14)) + 'px ' + FONT_UI;
+        ctx.font = 'bold ' + fszL(clamp(Math.round(11 * S + 2), 8, 14)) + 'px ' + FONT_UI;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(v.kind === 'start' ? '▶' : '■', cx, cy + 0.5);
@@ -1250,6 +1288,9 @@ export default function CpmGraph(props: CpmGraphProps) {
     const st = stateRef.current;
     const S: number = st.scale;
     const cardMode = S >= LOD_CARD_MIN_SCALE;
+    const CWv: number = st.cardW || CARD_W;
+    const CHv: number = st.cardH || CARD_H;
+    const ROWPv: number = st.rowPitch || ROW_PITCH;
     const sxv = (x: number) => x * S + st.panX;
     const syv = (y: number) => y * S + st.panY;
     for (let i = st.ops.length - 1; i >= 0; i--) {
@@ -1260,9 +1301,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       const cx = sxv(p[0]);
       const cy = syv(p[1]);
       if (cardMode) {
-        if (Math.abs(mx - cx) <= (CARD_W / 2) * S && Math.abs(my - cy) <= (CARD_H / 2) * S) return o;
+        if (Math.abs(mx - cx) <= (CWv / 2) * S && Math.abs(my - cy) <= (CHv / 2) * S) return o;
       } else {
-        const r = circleRadius(S);
+        const r = circleRadius(S, ROWPv);
         if ((mx - cx) ** 2 + (my - cy) ** 2 <= r * r) return o;
       }
     }
@@ -1274,6 +1315,9 @@ export default function CpmGraph(props: CpmGraphProps) {
     const st = stateRef.current;
     const S: number = st.scale;
     const cardMode = S >= LOD_CARD_MIN_SCALE;
+    const CWv: number = st.cardW || CARD_W;
+    const CHv: number = st.cardH || CARD_H;
+    const ROWPv: number = st.rowPitch || ROW_PITCH;
     const sxv = (x: number) => x * S + st.panX;
     const syv = (y: number) => y * S + st.panY;
     const vs: VirtualNode[] = st.virtuals || [];
@@ -1282,9 +1326,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       const cx = sxv(v.x);
       const cy = syv(v.y);
       if (cardMode) {
-        if (Math.abs(mx - cx) <= (CARD_W / 2) * S && Math.abs(my - cy) <= (CARD_H / 2) * S) return v;
+        if (Math.abs(mx - cx) <= (CWv / 2) * S && Math.abs(my - cy) <= (CHv / 2) * S) return v;
       } else {
-        const r = circleRadius(S) * 1.45;
+        const r = circleRadius(S, ROWPv) * 1.45;
         if ((mx - cx) ** 2 + (my - cy) ** 2 <= r * r) return v;
       }
     }
@@ -1510,22 +1554,42 @@ export default function CpmGraph(props: CpmGraphProps) {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <span style={{ color: '#5A7090' }}>Раскладка:</span>
           <div style={{ display: 'flex', gap: 0, border: '1px solid #26364F', borderRadius: 7, overflow: 'hidden' }}>
-            {LAYOUT_PRESETS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => applyLayoutPreset(p.id)}
-                title={p.hint}
-                style={{
-                  padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  background: layoutPreset === p.id ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : 'transparent',
-                  color: layoutPreset === p.id ? '#fff' : '#8FA3BD',
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
+            {LAYOUT_PRESETS.map((p) => {
+              const isNoPlan = p.id === 'noplan';
+              const disabled = isNoPlan && !noPlanAvailable;
+              const selected = layoutPreset === p.id;
+              const title = isNoPlan
+                ? (disabled
+                    ? 'Доступно в структурной укладке «По слоям»'
+                    : (noPlanReachable
+                        ? 'Структурная укладка без пересечений · хронология (даты) не показывается'
+                        : 'Ноль недостижим для этой схемы — будет показан достигнутый минимум'))
+                : p.hint;
+              const bg = selected
+                ? (isNoPlan && !noPlanReachable
+                    ? 'linear-gradient(135deg,#B45309,#92400E)'
+                    : 'linear-gradient(135deg,#3B82F6,#2563EB)')
+                : 'transparent';
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => applyLayoutPreset(p.id)}
+                  title={title}
+                  data-cpm-layout={p.id}
+                  style={{
+                    padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none',
+                    cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
+                    whiteSpace: 'nowrap',
+                    background: bg,
+                    color: selected ? '#fff' : '#8FA3BD',
+                  }}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
         </span>
         <span style={{ flex: 1 }} />
@@ -1536,6 +1600,28 @@ export default function CpmGraph(props: CpmGraphProps) {
           <button className="cpmui-btn" onClick={resetView}>Сброс</button>
         </div>
       </div>
+
+      {/* честная подпись к раскладке «Без пересечений» (структурная укладка):
+         при планарном подграфе — ноль достигнут и хронология не показывается,
+         при непланарном — прямо сказано, что ноль недостижим для этой схемы. */}
+      {layoutPreset === 'noplan' && mode === 'byLayer' && (
+        <div
+          data-cpm-noplan={noPlanReachable ? 'achieved' : 'unreachable'}
+          style={{
+            display: 'flex', gap: 6, alignItems: 'center', padding: '5px 10px', borderRadius: 8, fontSize: 11.5,
+            background: noPlanReachable ? 'rgba(16,185,129,0.10)' : 'rgba(245,158,11,0.10)',
+            border: '1px solid ' + (noPlanReachable ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'),
+            color: noPlanReachable ? '#6EE7B7' : '#FCD34D',
+          }}
+        >
+          <span aria-hidden="true">🕸</span>
+          <span>
+            {noPlanReachable
+              ? 'Раскладка «Без пересечений»: построена укладка без пересечений связей. Хронология (даты) в этой укладке не показывается.'
+              : 'Раскладка «Без пересечений»: ноль недостижим для этой схемы — показан достигнутый минимум пересечений.'}
+          </span>
+        </div>
+      )}
 
       {/* легенда */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: Math.round(11 * fontScale), color: '#8FA3BD' }}>

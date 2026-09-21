@@ -5,7 +5,10 @@
  * не зависит от React — одни и те же функции используют отрисовка (`CpmGraph`),
  * счётчик качества раскладки и автотест.
  */
-import { CARD_W, CARD_H, segRectHit, segCross, EDGE_PAD, OBSTACLE_PAD, computeLayoutMetrics } from './cpm-metrics';
+import {
+  CARD_W, CARD_H, segRectHit, segCross, computeLayoutMetrics,
+  BASE_COL_GAP, BASE_ROW_GAP, BASE_PAD, resolveGeometry, type LayoutGeometry,
+} from './cpm-metrics';
 
 export type Mode = 'byDate' | 'byLayer';
 
@@ -66,22 +69,23 @@ export interface LayoutOptions {
    * минимума, в который упирается единственный старт. 1 — единственный старт.
    */
   restarts?: number;
+  /**
+   * Геометрия раскладки (размер узлов, зазоры, отступ). От неё зависят и позиции
+   * узлов, и метрики качества, и отрисовка — поэтому переключатель раскладки
+   * меняет вид и числа, а не только внутренние проходы оптимизации.
+   */
+  geometry?: LayoutGeometry;
 }
 
 /** Минимальный зазор между узлами по обеим осям. */
 export const MIN_GAP = 12;
 /** Колонки: COL_PITCH = CARD_W + COL_GAP (> CARD_W + MIN_GAP). */
-export const COL_GAP = 34;
+export const COL_GAP = BASE_COL_GAP;
 /** Ряды: ROW_PITCH = CARD_H + ROW_GAP (> CARD_H + MIN_GAP). */
-export const ROW_GAP = 22;
+export const ROW_GAP = BASE_ROW_GAP;
 export const COL_PITCH = CARD_W + COL_GAP;
 export const ROW_PITCH = CARD_H + ROW_GAP;
-export const PAD = 70;
-
-const EDGE_HW = CARD_W / 2 + EDGE_PAD;
-const EDGE_HH = CARD_H / 2 + EDGE_PAD;
-const OB_HW = CARD_W / 2 + OBSTACLE_PAD;
-const OB_HH = CARD_H / 2 + OBSTACLE_PAD;
+export const PAD = BASE_PAD;
 
 /**
  * Раскладка: колонки по датам/слоям, порядок внутри колонки (барицентр),
@@ -119,7 +123,7 @@ export function computeLayout(
     const r = computeLayoutOnce(ops, deps, mode, opts, seed, colKind);
     // Выбор лучшего старта — по тому же счётчику, что видит панель (пересечения +
     // проходы сквозь узлы + наложения узлов), а не по внутренней приближённой оценке.
-    const m = computeLayoutMetrics(r.layout, metricNodes, deps, false);
+    const m = computeLayoutMetrics(r.layout, metricNodes, deps, false, opts.geometry);
     const cost = (opts.crossWeight ?? 1) * m.crossings + (opts.hitWeight ?? 1) * m.edgeNodeHits + (opts.overlapWeight ?? 50) * m.nodeOverlaps;
     if (cost < bestCost) { bestCost = cost; best = r.layout; }
   }
@@ -151,6 +155,20 @@ function computeLayoutOnce(
   const overlapWeight = opts.overlapWeight ?? 50;
   const baryMode = opts.baryMode ?? 'mean';
   const pullMode = opts.pullMode ?? 'mean';
+
+  // Геометрия текущего пресета: размер узла, зазоры и отступ. Одни и те же
+  // значения используют и укладка, и метрики (через computeLayoutMetrics),
+  // и отрисовка (через CpmGraph) — поэтому выбор раскладки меняет и вид, и числа.
+  const G = resolveGeometry(opts.geometry);
+  const cardW = G.cardW;
+  const cardH = G.cardH;
+  const colPitch = cardW + G.colGap;
+  const rowPitch = cardH + G.rowGap;
+  const pad = G.pad;
+  const edgeHW = cardW / 2 + G.edgePad;
+  const edgeHH = cardH / 2 + G.edgePad;
+  const obHW = cardW / 2 + G.obstaclePad;
+  const obHH = cardH / 2 + G.obstaclePad;
 
   /** Среднее или медиана массива чисел (медиана устойчивее к выбросам-«дальним» соседям). */
   const central = (vals: number[], mode: 'mean' | 'median'): number => {
@@ -260,10 +278,10 @@ function computeLayoutOnce(
   colKeys.forEach((c) => {
     const g = groups.get(c)!;
     const ci = colIndex.get(c)!;
-    const x = PAD + ci * COL_PITCH + CARD_W / 2;
-    const total = g.length * ROW_PITCH;
-    const y0 = -total / 2 + ROW_PITCH / 2;
-    g.forEach((o, i) => { pos[o.id] = [x, y0 + i * ROW_PITCH]; });
+    const x = pad + ci * colPitch + cardW / 2;
+    const total = g.length * rowPitch;
+    const y0 = -total / 2 + rowPitch / 2;
+    g.forEach((o, i) => { pos[o.id] = [x, y0 + i * rowPitch]; });
   });
 
   // ── локальные улучшения по счётчику качества ──
@@ -273,6 +291,7 @@ function computeLayoutOnce(
   if (localPasses > 0 && ops.length > 1 && edges.length) {
     cost = improveLocally(ops, edges, preds, succs, colKeys, groups, pos, {
       localPasses, pullStep, moveWindow, maxEvals, crossWeight, hitWeight, overlapWeight, pullMode,
+      cardW, cardH, rowPitch, edgeHW, edgeHH, obHW, obHH,
     });
   }
 
@@ -281,8 +300,8 @@ function computeLayoutOnce(
     const g = groups.get(c)!;
     const arr = g.slice().sort((p, q) => (pos[p.id][1] - pos[q.id][1]) || (orderY[p.id] - orderY[q.id]));
     for (let i = 1; i < arr.length; i++) {
-      if (pos[arr[i].id][1] - pos[arr[i - 1].id][1] < ROW_PITCH) {
-        pos[arr[i].id][1] = pos[arr[i - 1].id][1] + ROW_PITCH;
+      if (pos[arr[i].id][1] - pos[arr[i - 1].id][1] < rowPitch) {
+        pos[arr[i].id][1] = pos[arr[i - 1].id][1] + rowPitch;
       }
     }
   });
@@ -293,17 +312,17 @@ function computeLayoutOnce(
   let maxY = -Infinity;
   Object.keys(pos).forEach((id) => {
     const [x, y] = pos[id];
-    if (x - CARD_W / 2 < minX) minX = x - CARD_W / 2;
-    if (x + CARD_W / 2 > maxX) maxX = x + CARD_W / 2;
-    if (y - CARD_H / 2 < minY) minY = y - CARD_H / 2;
-    if (y + CARD_H / 2 > maxY) maxY = y + CARD_H / 2;
+    if (x - cardW / 2 < minX) minX = x - cardW / 2;
+    if (x + cardW / 2 > maxX) maxX = x + cardW / 2;
+    if (y - cardH / 2 < minY) minY = y - cardH / 2;
+    if (y + cardH / 2 > maxY) maxY = y + cardH / 2;
   });
   if (!ops.length) { minX = 0; maxX = 100; minY = 0; maxY = 100; }
 
   return {
     layout: {
       pos, minX, maxX, minY, maxY,
-      pxPerDay: COL_PITCH / (mode === 'byDate' ? bucketDays : 1),
+      pxPerDay: colPitch / (mode === 'byDate' ? bucketDays : 1),
       bucketDays,
       minEs,
     },
@@ -341,6 +360,17 @@ interface SearchOpts {
   hitWeight: number;
   overlapWeight: number;
   pullMode: 'mean' | 'median';
+  /** Размер карточки узла текущей геометрии (для подсчёта наложений). */
+  cardW: number;
+  cardH: number;
+  /** Шаг ряда текущей геометрии (cardH + rowGap). */
+  rowPitch: number;
+  /** Полуширина/полувысота узла с отступом линии (как при отрисовке). */
+  edgeHW: number;
+  edgeHH: number;
+  /** Полуширина/полувысота препятствия (узел + зазор обхода). */
+  obHW: number;
+  obHH: number;
 }
 
 /**
@@ -404,8 +434,8 @@ function improveLocally(
       let dy = by - ay;
       if (dx === 0 && dy === 0) { sx[k] = ax; sy[k] = ay; ex[k] = bx; ey[k] = by; }
       else {
-        let tx = dx === 0 ? Infinity : EDGE_HW / Math.abs(dx);
-        let ty = dy === 0 ? Infinity : EDGE_HH / Math.abs(dy);
+        let tx = dx === 0 ? Infinity : o.edgeHW / Math.abs(dx);
+        let ty = dy === 0 ? Infinity : o.edgeHH / Math.abs(dy);
         const t1 = tx < ty ? tx : ty;
         sx[k] = ax + dx * t1;
         sy[k] = ay + dy * t1;
@@ -413,8 +443,8 @@ function improveLocally(
         dy = ay - by;
         if (dx === 0 && dy === 0) { ex[k] = bx; ey[k] = by; }
         else {
-          tx = dx === 0 ? Infinity : EDGE_HW / Math.abs(dx);
-          ty = dy === 0 ? Infinity : EDGE_HH / Math.abs(dy);
+          tx = dx === 0 ? Infinity : o.edgeHW / Math.abs(dx);
+          ty = dy === 0 ? Infinity : o.edgeHH / Math.abs(dy);
           const t2 = tx < ty ? tx : ty;
           ex[k] = bx + dx * t2;
           ey[k] = by + dy * t2;
@@ -439,7 +469,7 @@ function improveLocally(
       const axi = px[i];
       const ayi = py[i];
       for (let j = i + 1; j < n; j++) {
-        if (Math.abs(axi - px[j]) < CARD_W && Math.abs(ayi - py[j]) < CARD_H) overlaps++;
+        if (Math.abs(axi - px[j]) < o.cardW && Math.abs(ayi - py[j]) < o.cardH) overlaps++;
       }
     }
     let hits = 0;
@@ -450,16 +480,16 @@ function improveLocally(
       const y1 = sy[k];
       const x2 = ex[k];
       const y2 = ey[k];
-      const lox = bx0[k] - OB_HW;
-      const hix = bx1[k] + OB_HW;
-      const loy = by0[k] - OB_HH;
-      const hiy = by1[k] + OB_HH;
+      const lox = bx0[k] - o.obHW;
+      const hix = bx1[k] + o.obHW;
+      const loy = by0[k] - o.obHH;
+      const hiy = by1[k] + o.obHH;
       for (let i = 0; i < n; i++) {
         if (i === a || i === b) continue;
         const nx = px[i];
         const ny = py[i];
         if (nx < lox || nx > hix || ny < loy || ny > hiy) continue;
-        if (segRectHit(x1, y1, x2, y2, nx, ny, OB_HW, OB_HH)) hits++;
+        if (segRectHit(x1, y1, x2, y2, nx, ny, o.obHW, o.obHH)) hits++;
       }
     }
     let crossings = 0;
@@ -485,7 +515,7 @@ function improveLocally(
     const nodes = colNodes[ci];
     const arr = nodes.slice().sort((a, b) => py[a] - py[b]);
     for (let i = 1; i < arr.length; i++) {
-      if (py[arr[i]] - py[arr[i - 1]] < ROW_PITCH) py[arr[i]] = py[arr[i - 1]] + ROW_PITCH;
+      if (py[arr[i]] - py[arr[i - 1]] < o.rowPitch) py[arr[i]] = py[arr[i - 1]] + o.rowPitch;
     }
   };
 

@@ -13,7 +13,7 @@
  *   • density       — суммарная площадь узлов к площади полотна, в процентах.
  */
 
-/** Размер карточки узла в мировых координатах. */
+/** Размер карточки узла в мировых координатах (базовый, «Обычно»). */
 export const CARD_W = 208;
 export const CARD_H = 60;
 
@@ -23,6 +23,66 @@ export const EDGE_PAD = 3;
 export const OBSTACLE_PAD = 6;
 /** Число точек выборки кривой при проверке прохода сквозь узлы (метрика и отрисовка). */
 export const PATH_SAMPLES = 16;
+
+/** Базовые (для раскладки «Обычно») зазоры между узлами и внешний отступ полотна. */
+export const BASE_COL_GAP = 34;
+export const BASE_ROW_GAP = 22;
+export const BASE_PAD = 70;
+
+/**
+ * Геометрия раскладки — рамочная, но настраиваемая часть вида сети: размер
+ * карточки узла, зазоры между колонками/рядами и внешний отступ полотна.
+ *
+ * Одна и та же геометрия применяется и к метрикам качества (пересечения,
+ * наложения, плотность — всё в мировых координатах), и к раскладке, и к
+ * отрисовке. Благодаря этому переключатель раскладки («Плотно» / «Обычно» /
+ * «Для печати» / «Без пересечений») реально меняет и вид, и числа, а не только
+ * внутренние проходы оптимизации.
+ */
+export interface LayoutGeometry {
+  /** Ширина карточки узла в мировых координатах. */
+  cardW: number;
+  /** Высота карточки узла в мировых координатах. */
+  cardH: number;
+  /** Зазор между колонками (COL_PITCH = cardW + colGap). */
+  colGap: number;
+  /** Зазор между рядами (ROW_PITCH = cardH + rowGap). */
+  rowGap: number;
+  /** Внешний отступ полотна от крайних узлов. */
+  pad: number;
+  /** Отступ линии от границы своего узла (по умолчанию EDGE_PAD). */
+  edgePad?: number;
+  /** Дополнительный зазор препятствий при обходе (по умолчанию OBSTACLE_PAD). */
+  obstaclePad?: number;
+  /** Множитель базовых кеглей подписей узлов (1 — как в «Обычно»). */
+  labelScale?: number;
+}
+
+/** Геометрия по умолчанию — состояние «Обычно» (совпадает с прежними константами). */
+export const DEFAULT_GEOMETRY: Required<LayoutGeometry> = {
+  cardW: CARD_W,
+  cardH: CARD_H,
+  colGap: BASE_COL_GAP,
+  rowGap: BASE_ROW_GAP,
+  pad: BASE_PAD,
+  edgePad: EDGE_PAD,
+  obstaclePad: OBSTACLE_PAD,
+  labelScale: 1,
+};
+
+/** Достраивает частичную геометрию до полной значениями по умолчанию. */
+export function resolveGeometry(g?: LayoutGeometry): Required<LayoutGeometry> {
+  return {
+    cardW: g?.cardW ?? DEFAULT_GEOMETRY.cardW,
+    cardH: g?.cardH ?? DEFAULT_GEOMETRY.cardH,
+    colGap: g?.colGap ?? DEFAULT_GEOMETRY.colGap,
+    rowGap: g?.rowGap ?? DEFAULT_GEOMETRY.rowGap,
+    pad: g?.pad ?? DEFAULT_GEOMETRY.pad,
+    edgePad: g?.edgePad ?? DEFAULT_GEOMETRY.edgePad,
+    obstaclePad: g?.obstaclePad ?? DEFAULT_GEOMETRY.obstaclePad,
+    labelScale: g?.labelScale ?? DEFAULT_GEOMETRY.labelScale,
+  };
+}
 
 export interface Rect { x: number; y: number; hw: number; hh: number }
 
@@ -211,13 +271,19 @@ export function computeLayoutMetrics(
   nodes: MetricNode[],
   deps: [string, string][],
   critOnly: boolean,
+  geometry?: LayoutGeometry,
 ): LayoutMetrics {
+  const G = resolveGeometry(geometry);
+  const cw = G.cardW;
+  const ch = G.cardH;
+  const ep = G.edgePad;
+  const op = G.obstaclePad;
   const vis = nodes.filter((n) => layout.pos[n.id] && (!critOnly || n.crit));
   const visIds = new Set(vis.map((n) => n.id));
 
   const rects: (Rect & { id: string })[] = vis.map((n) => {
     const p = layout.pos[n.id];
-    return { id: n.id, x: p[0], y: p[1], hw: CARD_W / 2, hh: CARD_H / 2 };
+    return { id: n.id, x: p[0], y: p[1], hw: cw / 2, hh: ch / 2 };
   });
 
   // ── наложения узлов ──
@@ -240,11 +306,11 @@ export function computeLayoutMetrics(
     seen.add(key);
     const pa = layout.pos[aId];
     const pb = layout.pos[bId];
-    const s = borderPoint(pa[0], pa[1], CARD_W / 2 + EDGE_PAD, CARD_H / 2 + EDGE_PAD, pb[0], pb[1]);
-    const e = borderPoint(pb[0], pb[1], CARD_W / 2 + EDGE_PAD, CARD_H / 2 + EDGE_PAD, pa[0], pa[1]);
+    const s = borderPoint(pa[0], pa[1], cw / 2 + ep, ch / 2 + ep, pb[0], pb[1]);
+    const e = borderPoint(pb[0], pb[1], cw / 2 + ep, ch / 2 + ep, pa[0], pa[1]);
     const obstacles = rects
       .filter((r) => r.id !== aId && r.id !== bId)
-      .map((r) => ({ x: r.x, y: r.y, hw: r.hw + OBSTACLE_PAD, hh: r.hh + OBSTACLE_PAD }));
+      .map((r) => ({ x: r.x, y: r.y, hw: r.hw + op, hh: r.hh + op }));
     const c = edgeControl(s[0], s[1], e[0], e[1], obstacles);
     edges.push({ a: aId, b: bId, s, e, c });
   }
@@ -278,15 +344,15 @@ export function computeLayoutMetrics(
   for (const n of nodes) {
     const p = layout.pos[n.id];
     if (!p) continue;
-    if (p[0] - CARD_W / 2 < bMinX) bMinX = p[0] - CARD_W / 2;
-    if (p[0] + CARD_W / 2 > bMaxX) bMaxX = p[0] + CARD_W / 2;
-    if (p[1] - CARD_H / 2 < bMinY) bMinY = p[1] - CARD_H / 2;
-    if (p[1] + CARD_H / 2 > bMaxY) bMaxY = p[1] + CARD_H / 2;
+    if (p[0] - cw / 2 < bMinX) bMinX = p[0] - cw / 2;
+    if (p[0] + cw / 2 > bMaxX) bMaxX = p[0] + cw / 2;
+    if (p[1] - ch / 2 < bMinY) bMinY = p[1] - ch / 2;
+    if (p[1] + ch / 2 > bMaxY) bMaxY = p[1] + ch / 2;
   }
   const bboxW = Number.isFinite(bMinX) ? bMaxX - bMinX : layout.maxX - layout.minX;
   const bboxH = Number.isFinite(bMinY) ? bMaxY - bMinY : layout.maxY - layout.minY;
   const bboxArea = Math.max(1, bboxW) * Math.max(1, bboxH);
-  const nodeArea = rects.length * CARD_W * CARD_H;
+  const nodeArea = rects.length * cw * ch;
   const density = round1((nodeArea / bboxArea) * 100);
 
   return { crossings, edgeNodeHits, nodeOverlaps, density, nodes: vis.length, edges: edges.length };
