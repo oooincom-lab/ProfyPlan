@@ -429,3 +429,22 @@ export function getProjectDependencies(projectId: string) {
     `/v1/projects/${projectId}/operations/dependencies-map`,
   );
 }
+
+/**
+ * Типы связей операций проекта (FS / SS / FF / SF) — для буквенной метки
+ * неосновных типов на сетевом графе. Возвращает карту «предшественник>последователь».
+ * Запрос вспомогательный: при любой ошибке граф строится без меток типов.
+ */
+export function getProjectDependencyTypes(projectId: string): Promise<Record<string, string>> {
+  return request<{ predecessor_id: string; successor_id: string; dependency_type: string }[]>(
+    `/v1/projects/${projectId}/operation-dependencies`,
+  ).then((rows) => {
+    const map: Record<string, string> = {};
+    (Array.isArray(rows) ? rows : []).forEach((d) => {
+      if (d && d.predecessor_id && d.successor_id) {
+        map[String(d.predecessor_id) + '>' + String(d.successor_id)] = String(d.dependency_type || 'FS');
+      }
+    });
+    return map;
+  });
+}

@@ -18,7 +18,7 @@
  *   как модальное окно:     <CpmGraphModal open cpmResult={netData} onClose={...} />
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getProjectDependencies } from '@/lib/api';
+import { getProjectDependencies, getProjectDependencyTypes } from '@/lib/api';
 import { getPalette } from '@/lib/graph-styles';
 import {
   CARD_W, CARD_H, borderPoint, quadPt, pathHits, DETOUR_OFFSETS, edgeControl,
@@ -87,6 +87,19 @@ interface VirtualEdge {
   color: string;
 }
 
+/** Данные связи для подсказки при наведении (полное описание связи). */
+interface EdgeTip {
+  fromId: string;
+  toId: string;
+  from: string;
+  to: string;
+  /** Ожидание между работами в днях (0 — связи без ожидания). */
+  wait: number;
+  crit: boolean;
+  /** Тип связи (FS/SS/FF/SF), если он известен из данных. */
+  type: string | null;
+}
+
 /* ─────────────────────────── константы ─────────────────────────── */
 
 const MIN_GAP = 12;                       // минимальный зазор между узлами по обеим осям
@@ -112,6 +125,23 @@ const FONT_SCALES = { sm: 1.18, md: 1.39, lg: 1.73 } as const;
 type FontSize = keyof typeof FONT_SCALES;
 const FONT_SIZE_KEY = 'cpm.network.fontSize';
 
+/**
+ * Штрих-пунктир «длинный штрих + точка» — узор связей без ожидания.
+ * Крупный: сохраняет различимость даже при масштабе ~50 % (вид открывается на нём).
+ */
+function dashLogical(S: number): number[] {
+  return [Math.max(10, 12 * S), Math.max(4, 5 * S), Math.max(2, 2.5 * S), Math.max(4, 5 * S)];
+}
+/** Буквенные метки типов связи; основной тип ФС на схеме не подписывается. */
+const DEP_TYPE_LABEL: Record<string, string> = { FS: 'ФС', SS: 'СС', FF: 'ФФ', SF: 'СФ' };
+/** Полное описание типа связи — для подсказки при наведении на связь. */
+const DEP_TYPE_HINT: Record<string, string> = {
+  FS: 'Тип связи «Финиш → Старт»: следующая работа начинается после окончания предыдущей',
+  SS: 'Тип связи «Старт → Старт»: следующая работа начинается вместе с предыдущей',
+  FF: 'Тип связи «Финиш → Финиш»: следующая работа заканчивается вместе с предыдущей',
+  SF: 'Тип связи «Старт → Финиш»: следующая работа заканчивается после старта предыдущей',
+};
+
 /** Классы панели управления сетью CPM — единый тёмный стиль проекта. */
 const PANEL_CSS = [
   '.cpmui-btn{font-family:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;',
@@ -129,6 +159,8 @@ const PANEL_CSS = [
   '.cpmui-lbl{display:flex;align-items:center;gap:5px;color:#8FA3BD;cursor:pointer;font-size:12px}',
   '.cpmui-num{background:#0F1E36;color:#E8EEF5;border:1px solid #2A4060;border-radius:6px;padding:3px 5px;font-size:11.5px;width:56px;font-family:inherit}',
   '.cpmui-num:focus{outline:none;border-color:#3B82F6}',
+  '.cpmui-link{font-family:inherit;font-size:11.5px;font-weight:600;background:none;border:none;padding:0;cursor:pointer;color:#60A5FA;}',
+  '.cpmui-link:hover{color:#93C5FD;text-decoration:underline;}',
 ].join('');
 /**
  * Радиус окружности в компактном режиме. Верхняя граница привязывает радиус к
@@ -327,6 +359,8 @@ export default function CpmGraph(props: CpmGraphProps) {
   const finishColor = '#F472B6';
   const START_EDGE = 'rgba(52,211,153,0.62)';
   const FINISH_EDGE = 'rgba(244,114,182,0.62)';
+  // Связи без ожидания — широкий штрих-пунктир спокойным стальным цветом.
+  const LOGICAL_EDGE = 'rgba(148,163,184,0.85)';
 
   /* ── раскладка качества (единственный видимый орган управления) ──
      Плотно / Обычно / Для печати. Веса, число проходов, цели и порог
@@ -350,14 +384,17 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [mode, setMode] = useState<Mode>('byDate');
   const [unit, setUnit] = useState<'d' | 'h' | 'm'>('d');
   const [critOnly, setCritOnly] = useState(false);
-  const [showEdgeDays, setShowEdgeDays] = useState(false);
+  const [showEdgeDays, setShowEdgeDays] = useState(true);
+  // «Показывать логические связи»: по умолчанию включено, выключение временно
+  // упрощает плотный участок (прячет связи без ожидания и служебные «Старт»/«Финиш»).
+  const [showLogical, setShowLogical] = useState(true);
   // Блок условных обозначений внизу рабочей области: по умолчанию свёрнут,
   // разворачивается кликом по ссылке «Условные обозначения».
   const [legendOpen, setLegendOpen] = useState(false);
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
   const [zoomPct, setZoomPct] = useState(80);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; op?: GOp; virt?: VirtualNode } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; op?: GOp; virt?: VirtualNode; edge?: EdgeTip } | null>(null);
   const [canvasErr, setCanvasErr] = useState<string | null>(null);
   const [fontSize, setFontSize] = useState<FontSize>('md');
   const [resetNonce, setResetNonce] = useState(0);
@@ -382,6 +419,8 @@ export default function CpmGraph(props: CpmGraphProps) {
   const ids = useMemo(() => new Set(mappedOps.map((o) => o.id)), [mappedOps]);
   const propDeps = useMemo(() => mapDeps(props, ids), [props.cpmResult, props.deps, ids]);
   const [fetchedDeps, setFetchedDeps] = useState<[string, string][]>([]);
+  // Типы связей (FS/SS/FF/SF) — вспомогательный запрос: при ошибке граф строится без меток.
+  const [depTypes, setDepTypes] = useState<Record<string, string>>({});
   const projectId = props.cpmResult && props.cpmResult.project_id;
   useEffect(() => {
     if (propDeps.length || !projectId) { if (propDeps.length) setFetchedDeps([]); return; }
@@ -397,6 +436,15 @@ export default function CpmGraph(props: CpmGraphProps) {
   }, [projectId, propDeps.length]);
 
   const allDeps = propDeps.length ? propDeps : fetchedDeps;
+
+  useEffect(() => {
+    if (!projectId) { setDepTypes({}); return; }
+    let alive = true;
+    getProjectDependencyTypes(String(projectId))
+      .then((m) => { if (alive) setDepTypes(m); })
+      .catch(() => { if (alive) setDepTypes({}); });
+    return () => { alive = false; };
+  }, [projectId]);
 
   const startDate = useMemo<Date | null>(() => {
     const s = props.cpmResult && (props.cpmResult.project_start_date || props.cpmResult.project_start);
@@ -642,6 +690,8 @@ export default function CpmGraph(props: CpmGraphProps) {
     { active: false, sx: 0, sy: 0, px: 0, py: 0 },
   );
   const hoverIdRef = useRef<string | null>(null);
+  // Геометрия нарисованных связей (экранные координаты) — для подсказки при наведении.
+  const edgesRef = useRef<{ pts: number[]; tip: EdgeTip }[]>([]);
 
   const fontScale: number = FONT_SCALES[fontSize];
   stateRef.current = {
@@ -652,7 +702,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     layout: layoutFull,
     virtuals: virtualInfo.virtuals,
     vEdges: virtualInfo.vEdges,
-    mode, unit, critOnly, showEdgeDays,
+    mode, unit, critOnly, showEdgeDays, showLogical, depTypes,
     startDate, dayToDate,
     reserveColor, branchColor, critColor, stretchColor,
     fontScale,
@@ -877,6 +927,7 @@ export default function CpmGraph(props: CpmGraphProps) {
       allRects.push({ id: v.id, x: v.x, y: v.y, hw: CW / 2 + 6, hh: CH / 2 + 6 });
     });
 
+    edgesRef.current = [];
     edgesToDraw.forEach(({ a, b, bothCrit, anyBranch }) => {
       const pa = st.layout.pos[a.id];
       const pb = st.layout.pos[b.id];
@@ -919,23 +970,28 @@ export default function CpmGraph(props: CpmGraphProps) {
       const ang = curve ? Math.atan2(by - ccy, bx - ccx) : Math.atan2(by - ay, bx - ax);
       const hl = clamp(9 * S + 3, 6, 12);
 
-      // Оформление связи. Задержка связи (лаг) = b.es − a.ef:
-      //   • пунктиром рисуются ТОЛЬКО логические связи с нулевой задержкой;
-      //   • критический путь — всегда сплошная линия и заметно толще обычных связей.
-      // Эти два случая не смешиваются: критическая связь не становится пунктирной
-      // даже при нулевом лаге.
-      const lagW = Math.max(0, b.es - a.ef);
-      const zeroLag = lagW < 0.02;
-      const dashedW = zeroLag && !bothCrit;
+      // Оформление связи. Ожидание связи = b.es − a.ef (сколько дней ждёт
+      // следующая работа после окончания предыдущей):
+      //   • ожидание > 0 — сплошная линия, у середины — число дней;
+      //   • ожидания нет — широкая штрих-пунктирная (длинный штрих + точка)
+      //     стальная связь, крупный узор — различим и на мелком масштабе;
+      //   • критический путь — всегда сплошная, заметно толще и красная;
+      //   • служебные связи «Старта»/«Финиша» — отдельный тонкий пунктир (ниже).
+      const waitDays = Math.max(0, b.es - a.ef);
+      const hasWait = waitDays >= 0.02;
+      const logical = !hasWait && !bothCrit;      // связь без ожидания (логическая)
+      if (logical && !st.showLogical) return;     // переключатель прячет плотную паутину связей
+      const depType = (st.depTypes && st.depTypes[a.id + '>' + b.id]) || null;
+
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       if (curve) ctx.quadraticCurveTo(ccx, ccy, bx, by);
       else ctx.lineTo(bx, by);
-      ctx.setLineDash(dashedW ? [Math.max(4, 5 * S), Math.max(3, 4 * S)] : []);
+      ctx.setLineDash(logical ? dashLogical(S) : []);
       ctx.strokeStyle = bothCrit
         ? 'rgba(239,68,68,0.72)'
-        : (anyBranch ? 'rgba(245,158,11,0.45)' : 'rgba(96,165,250,0.38)');
-      ctx.lineWidth = bothCrit ? 3 : (dashedW ? 1.15 : 1.5);
+        : (logical ? LOGICAL_EDGE : (anyBranch ? 'rgba(245,158,11,0.5)' : 'rgba(96,165,250,0.42)'));
+      ctx.lineWidth = bothCrit ? 3 : (logical ? 2.1 : 1.7);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -945,16 +1001,18 @@ export default function CpmGraph(props: CpmGraphProps) {
       ctx.lineTo(bx - hl * Math.cos(ang - 0.45), by - hl * Math.sin(ang - 0.45));
       ctx.lineTo(bx - hl * Math.cos(ang + 0.45), by - hl * Math.sin(ang + 0.45));
       ctx.closePath();
-      ctx.fillStyle = bothCrit ? 'rgba(239,68,68,0.85)' : (anyBranch ? 'rgba(245,158,11,0.75)' : 'rgba(96,165,250,0.6)');
+      ctx.fillStyle = bothCrit
+        ? 'rgba(239,68,68,0.85)'
+        : (logical ? 'rgba(148,163,184,0.9)' : (anyBranch ? 'rgba(245,158,11,0.75)' : 'rgba(96,165,250,0.6)'));
       ctx.fill();
 
-      // «Дни на связях»: величина задержки связи (лаг) в текущих единицах
-      if (st.showEdgeDays) {
-        const [lxw, lyw] = curve ? quadPt(s[0], s[1], cxw, cyw, e[0], e[1], 0.5) : [mxw, myw];
-        const lmx = sx(lxw);
-        const lmy = sy(lyw);
-        const lagDays = Math.max(0, b.es - a.ef);
-        const lbl = fmtDur(lagDays, st.unit, a.hpd);
+      const [lxw, lyw] = curve ? quadPt(s[0], s[1], cxw, cyw, e[0], e[1], 0.5) : [mxw, myw];
+      const lmx = sx(lxw);
+      const lmy = sy(lyw);
+
+      // Число на связи — только когда ожидание больше нуля (ноль не подписываем).
+      if (st.showEdgeDays && hasWait) {
+        const lbl = fmtDur(waitDays, st.unit, a.hpd);
         ctx.font = 'bold ' + fsz(clamp(Math.round(9 * S + 2), 8, 12)) + 'px ' + FONT_MONO;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -966,12 +1024,50 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.fillStyle = bothCrit ? 'rgba(252,165,165,0.95)' : 'rgba(176,196,222,0.9)';
         ctx.fillText(lbl, lmx, lmy + 0.5);
       }
+
+      // Буквенная метка неосновных типов связи у середины стрелки (ФС не подписываем).
+      if (depType && depType !== 'FS' && DEP_TYPE_LABEL[depType]) {
+        const lt = DEP_TYPE_LABEL[depType];
+        ctx.font = 'bold ' + fsz(clamp(Math.round(8.5 * S + 2), 8, 12)) + 'px ' + FONT_MONO;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tw2 = ctx.measureText(lt).width + 7;
+        const th2 = Math.max(12, fsz(10) + 3);
+        const offY = (st.showEdgeDays && hasWait) ? -(th2 + 4) : 0;
+        ctx.fillStyle = 'rgba(10,22,40,0.8)';
+        rrect(ctx, lmx - tw2 / 2, lmy + offY - th2 / 2, tw2, th2, 3);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(125,211,252,0.95)';
+        ctx.fillText(lt, lmx, lmy + offY + 0.5);
+      }
+
+      // Геометрия связи для подсказки при наведении (полное описание связи).
+      const samples = 18;
+      const pts: number[] = [];
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        if (curve) {
+          const q = quadPt(s[0], s[1], cxw, cyw, e[0], e[1], t);
+          pts.push(sx(q[0]), sy(q[1]));
+        } else {
+          pts.push(ax + (bx - ax) * t, ay + (by - ay) * t);
+        }
+      }
+      edgesRef.current.push({
+        pts,
+        tip: {
+          fromId: a.id, toId: b.id,
+          from: '№' + String(a.num) + ' ' + a.code,
+          to: '№' + String(b.num) + ' ' + b.code,
+          wait: waitDays, crit: bothCrit, type: depType,
+        },
+      });
     });
 
     /* ── связи со «Стартом»/«Финишем» — пунктир, нулевая длительность ──
        Геометрия учитывает все узлы (реальные и виртуальные): обход минимальным
        отклонением. В счётчик качества эти связи не входят. */
-    ((st.vEdges || []) as VirtualEdge[]).forEach((ve) => {
+    ((st.showLogical ? (st.vEdges || []) : []) as VirtualEdge[]).forEach((ve) => {
       const pa = st.layout.pos[ve.from];
       const pb = st.layout.pos[ve.to];
       if (!pa || !pb) return;
@@ -1148,7 +1244,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     });
 
     /* ── виртуальные события «Старт»/«Финиш» — отдельная форма (капсула) и цвет ── */
-    ((st.virtuals || []) as VirtualNode[]).forEach((v) => {
+    ((st.showLogical ? (st.virtuals || []) : []) as VirtualNode[]).forEach((v) => {
       const cx = sx(v.x);
       const cy = sy(v.y);
       if (cx < -CW * S - 20 || cx > W + CW * S + 20 || cy < -CH * S - 20 || cy > H + CH * S + 20) return;
@@ -1351,6 +1447,27 @@ export default function CpmGraph(props: CpmGraphProps) {
     return null;
   }, []);
 
+  /* ── попадание в связь (подсказка с полным описанием связи) ── */
+  const hitEdge = useCallback((mx: number, my: number): EdgeTip | null => {
+    const list = edgesRef.current;
+    let best: EdgeTip | null = null;
+    let bestD = 64;   // порог ~8px
+    for (let i = 0; i < list.length; i++) {
+      const pts = list[i].pts;
+      for (let j = 0; j + 3 < pts.length; j += 2) {
+        const x1 = pts[j], y1 = pts[j + 1], x2 = pts[j + 2], y2 = pts[j + 3];
+        const vx = x2 - x1, vy = y2 - y1;
+        const len2 = vx * vx + vy * vy || 1;
+        let t = ((mx - x1) * vx + (my - y1) * vy) / len2;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const dx = mx - (x1 + vx * t), dy = my - (y1 + vy * t);
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = list[i].tip; }
+      }
+    }
+    return best;
+  }, []);
+
   /* ── мышь ── */
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     const wrap = wrapRef.current;
@@ -1401,12 +1518,14 @@ export default function CpmGraph(props: CpmGraphProps) {
 
     const hit = hitTest(mx, my);
     const vhit = hit ? null : hitVirtual(mx, my);
+    const ehit = (hit || vhit) ? null : hitEdge(mx, my);
     const newHover = hit ? hit.id : (vhit ? vhit.id : null);
     if (hoverIdRef.current !== newHover) { hoverIdRef.current = newHover; draw(); }
     if (hit) setTooltip({ x: mx, y: my, op: hit });
     else if (vhit) setTooltip({ x: mx, y: my, virt: vhit });
+    else if (ehit) setTooltip({ x: mx, y: my, edge: ehit });
     else setTooltip(null);
-  }, [draw, hitTest, hitVirtual]);
+  }, [draw, hitTest, hitVirtual, hitEdge]);
 
   const onMouseUp = useCallback(() => {
     const drag = dragRef.current;
@@ -1477,7 +1596,9 @@ export default function CpmGraph(props: CpmGraphProps) {
     setPeriodFrom(planRange?.from || '');
     setPeriodTo(planRange?.to || '');
     setCritOnly(false);
-    setShowEdgeDays(false);
+    setShowEdgeDays(true);
+    setShowLogical(true);
+    setLegendOpen(false);
     setPosNonce((n) => n + 1);
     setResetNonce((n) => n + 1);
   }, [planRange]);
@@ -1486,7 +1607,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     try { draw(); } catch (e: any) { setCanvasErr(String((e && e.message) || e)); }
     // layoutFull — перерисовка при пересчёте раскладки/виртуальных событий/ручных позициях.
     // Порог напряжённости (STRETCH_K) — внутреннее значение, в интерфейсе не меняется.
-  }, [draw, visibleOps, allDeps, mode, unit, critOnly, showEdgeDays, fontSize, layoutFull, STRETCH_K]);
+  }, [draw, visibleOps, allDeps, mode, unit, critOnly, showEdgeDays, showLogical, depTypes, fontSize, layoutFull, STRETCH_K]);
 
   // Явная высота (число/строка) → фиксированное полотно; иначе полотно занимает всю
   // доступную высоту родителя (вид рабочего поля), без пустых полос внизу.
@@ -1551,6 +1672,10 @@ export default function CpmGraph(props: CpmGraphProps) {
         <label className="cpmui-lbl">
           <input className="cpmui-chk" type="checkbox" checked={showEdgeDays} onChange={(e) => setShowEdgeDays(e.target.checked)} />
           Дни на связях
+        </label>
+        <label className="cpmui-lbl" title="Выключите, чтобы временно упростить плотный участок: останутся только связи с ожиданием и критический путь">
+          <input className="cpmui-chk" type="checkbox" checked={showLogical} onChange={(e) => setShowLogical(e.target.checked)} />
+          Показывать логические связи
         </label>
         <label className="cpmui-lbl">
           Шрифт:
@@ -1732,6 +1857,20 @@ export default function CpmGraph(props: CpmGraphProps) {
                   {tooltip.op.crit ? '⚠ Критический путь' : (tooltip.op.branch ? '◆ Ветвь критического пути' : 'С резервом')}
                 </div>
               </>
+            ) : tooltip.edge ? (
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  {'Связь: ' + tooltip.edge.from + ' → ' + tooltip.edge.to}
+                </div>
+                <div style={{ color: '#8FA3BD' }}>{DEP_TYPE_HINT[tooltip.edge.type || 'FS']}</div>
+                <div style={{ marginTop: 6, color: tooltip.edge.crit ? '#FCA5A5' : (tooltip.edge.wait > 0.02 ? '#FCD34D' : '#93C5FD') }}>
+                  {tooltip.edge.crit
+                    ? '⚠ Критическая связь'
+                    : (tooltip.edge.wait > 0.02
+                        ? 'Ожидание ' + fmtDur(tooltip.edge.wait, unit, 8) + ' — следующая работа ждёт'
+                        : 'Без ожидания — следующая работа начинается сразу')}
+                </div>
+              </>
             ) : null}
           </div>
         )}
@@ -1760,28 +1899,63 @@ export default function CpmGraph(props: CpmGraphProps) {
           <div
             data-cpm-legend="body"
             style={{
-              marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '9px 20px',
-              alignItems: 'center', fontSize: Math.round(11 * fontScale), color: '#8FA3BD',
+              marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))',
+              gap: '12px 26px', fontSize: 12, lineHeight: 1.45, color: '#B0C4DE',
+              maxHeight: 220, overflowY: 'auto', paddingRight: 4,
             }}
           >
-            {/* связи — образцы линий ровно в том же стиле, что и на схеме */}
-            <LegendItem sample={<LegendLine variant="solid" />} caption="Сплошная — работа" />
-            <LegendItem sample={<LegendLine variant="dashed" />} caption="Пунктир — логическая связь без задержки" />
-            <LegendItem sample={<LegendLine variant="endpoints" />} caption="Тонкий пунктир — связи «Старта» / «Финиша»" />
-            <LegendItem sample={<LegendLine variant="critical" />} caption="Толще — критический путь" />
-
-            {/* события сети — той же формы и цвета, что и на полотне */}
-            <LegendPill color={startColor} label="Старт" kind="start" />
-            <LegendPill color={finishColor} label="Финиш" kind="finish" />
+            <LegendItem
+              sample={
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <LegendLine variant="wait" />
+                  <span style={{ fontFamily: FONT_MONO, fontSize: 10.5, fontWeight: 700, color: '#B0C4DE', background: 'rgba(10,22,40,0.85)', border: '1px solid #2A4060', borderRadius: 4, padding: '1px 4px' }}>3 д</span>
+                </span>
+              }
+              caption="Связь с ожиданием — сплошная линия с числом"
+              desc="Число на линии — сколько дней следующая работа ждёт после окончания предыдущей. Если числа нет, ожидания нет."
+            />
+            <LegendItem
+              sample={<LegendLine variant="logical" />}
+              caption="Связь без ожидания — широкая штрих-пунктирная"
+              desc="Следующая работа начинается сразу после предыдущей — паузы между ними нет. Это и есть логическая связь."
+            />
+            <LegendItem
+              sample={<LegendLine variant="endpoints" />}
+              caption="Связи «Старта» и «Финиша» — тонкий пунктир"
+              desc="Идут от значка «Старт» к первым работам и от последних работ к значку «Финиш». Времени не занимают — просто показывают начало и конец схемы."
+            />
+            <LegendItem
+              sample={<LegendLine variant="critical" />}
+              caption="Критический путь — толстая красная линия"
+              desc="Цепочка работ, от которой зависит срок сдачи. Если любая красная работа задержится — сдвинется весь проект. Поэтому она красная и толстая."
+            />
+            <LegendItem
+              sample={<span style={{ display: 'inline-flex', gap: 6 }}><LegendPill color={startColor} label="Старт" kind="start" /><LegendPill color={finishColor} label="Финиш" kind="finish" /></span>}
+              caption="Значки «Старт» и «Финиш»"
+              desc="«Старт» — начало схемы (от него идут первые работы), «Финиш» — конец (к нему сходятся последние работы)."
+            />
+            <LegendItem
+              sample={<LegendNode />}
+              caption="Что написано на работе"
+              desc="В кружке — номер работы, далее код и название. Внизу слева — сколько работа длится, справа жёлтое «+N д» — резерв (запас дней) или красное «крит» — запаса нет."
+            />
+            <LegendItem
+              sample={<b style={{ fontFamily: FONT_MONO, color: '#93C5FD', fontSize: 11 }}>СС</b>}
+              caption="Буква у связи — особый тип связи"
+              desc="ФС — обычная связь (не подписывается); СС, ФФ, СФ — особые типы. Наведите курсор на связь или на работу — появится подробная подсказка."
+            />
 
             {/* работы — категории узлов (как на полотне) */}
-            <LegendDot color={critColor} label="Критический путь" />
-            <LegendDot color={branchColor} label="Ветвь крит. пути" />
-            <LegendDot color={reserveColor} label="С резервом" />
-            <LegendDot color={stretchColor} label={'Напряжённые (K>' + String(STRETCH_K).replace('.', ',') + ')'} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', alignItems: 'center', gridColumn: '1 / -1', color: '#8FA3BD', fontSize: Math.round(11 * fontScale) }}>
+              <span style={{ color: '#5A7090' }}>Цвет работы:</span>
+              <LegendDot color={critColor} label="критическая" />
+              <LegendDot color={branchColor} label="ветвь крит. пути" />
+              <LegendDot color={reserveColor} label="с резервом" />
+              <LegendDot color={stretchColor} label={'напряжённая (K>' + String(STRETCH_K).replace('.', ',') + ')'} />
+            </div>
 
             {/* управление — компактно, рядом с образцами */}
-            <span style={{ color: '#5A7090', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: '#5A7090', display: 'inline-flex', alignItems: 'center', gap: 6, gridColumn: '1 / -1' }}>
               <span aria-hidden="true">🖱</span>
               Колесо — масштаб · Наведение — подсказка · Перетаскивание — сдвиг узла
             </span>
@@ -1823,34 +1997,53 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 }
 
 /** Образец линии связи: рисуется тем же стилем, что и соответствующая связь на полотне. */
-function LegendLine({ variant }: { variant: 'solid' | 'dashed' | 'critical' | 'endpoints' }) {
+function LegendLine({ variant }: { variant: 'wait' | 'logical' | 'critical' | 'endpoints' }) {
   if (variant === 'endpoints') {
     // связи начального («Старт») и завершающего («Финиш») события — тонкий пунктир.
     return (
-      <svg width="30" height="16" viewBox="0 0 30 16" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
-        <line x1="1" y1="5" x2="29" y2="5" stroke="#34D399" strokeWidth={1.4} strokeDasharray="5 4" strokeLinecap="round" />
-        <line x1="1" y1="11" x2="29" y2="11" stroke="#F472B6" strokeWidth={1.4} strokeDasharray="5 4" strokeLinecap="round" />
+      <svg width="58" height="16" viewBox="0 0 58 16" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+        <line x1="1" y1="5" x2="57" y2="5" stroke="#34D399" strokeWidth={1.3} strokeDasharray="5 4" />
+        <line x1="1" y1="11" x2="57" y2="11" stroke="#F472B6" strokeWidth={1.3} strokeDasharray="5 4" />
       </svg>
     );
   }
   const style =
-    variant === 'solid' ? { color: '#60A5FA', w: 1.5, dash: undefined as string | undefined }
-    : variant === 'dashed' ? { color: '#60A5FA', w: 1.15, dash: '5 4' }
-    : { color: '#EF4444', w: 3, dash: undefined as string | undefined };
+    variant === 'wait' ? { color: 'rgba(96,165,250,0.78)', w: 1.7, dash: undefined as string | undefined, arrow: '#60A5FA' }
+    : variant === 'logical' ? { color: 'rgba(148,163,184,0.9)', w: 2.1, dash: '12 5 2 5', arrow: '#94A3B8' }
+    : { color: '#EF4444', w: 3, dash: undefined as string | undefined, arrow: '#EF4444' };
   return (
-    <svg width="30" height="12" viewBox="0 0 30 12" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
-      <line x1="1" y1="6" x2="29" y2="6" stroke={style.color} strokeWidth={style.w} strokeDasharray={style.dash} strokeLinecap="round" />
+    <svg width="64" height="14" viewBox="0 0 64 14" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      <line x1="1" y1="7" x2="54" y2="7" stroke={style.color} strokeWidth={style.w} strokeDasharray={style.dash} />
+      <polygon points="54,2 63,7 54,12" fill={style.arrow} />
     </svg>
   );
 }
 
-/** Подпись к образцу связи: слева — образец, справа — текст. */
-function LegendItem({ sample, caption }: { sample: React.ReactNode; caption: string }) {
+/** Мини-образец карточки работы: номер, код, продолжительность и резерв. */
+function LegendNode() {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-      {sample}
-      <span>{caption}</span>
-    </span>
+    <svg width="104" height="40" viewBox="0 0 104 40" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="1" y="1" width="102" height="38" rx="7" fill="rgba(15,30,54,0.96)" stroke="rgba(96,165,250,0.7)" strokeWidth="1.2" />
+      <circle cx="13" cy="12" r="6" fill="rgba(96,165,250,0.18)" stroke="#3B82F6" strokeWidth="1" />
+      <text x="13" y="15" textAnchor="middle" fill="#E8EEF5" fontSize="7" fontFamily="monospace">7</text>
+      <text x="23" y="11" fill="#E8EEF5" fontSize="7.5" fontWeight="700" fontFamily="sans-serif">СВАРКА СТЫКОВ</text>
+      <text x="23" y="20" fill="rgba(176,196,222,0.8)" fontSize="6.5" fontFamily="sans-serif">секция 3</text>
+      <text x="7" y="34" fill="rgba(176,196,222,0.9)" fontSize="8" fontFamily="monospace">4 д</text>
+      <text x="97" y="34" textAnchor="end" fill="#F59E0B" fontSize="8" fontFamily="monospace">+2 д</text>
+    </svg>
+  );
+}
+
+/** Подпись к образцу: слева — образец, справа — короткое название и пояснение. */
+function LegendItem({ sample, caption, desc }: { sample: React.ReactNode; caption: string; desc?: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', minHeight: 18, paddingTop: 1 }}>{sample}</span>
+      <div>
+        <b style={{ color: '#E8EEF5' }}>{caption}</b>
+        {desc ? <div style={{ color: '#8FA3BD', marginTop: 1 }}>{desc}</div> : null}
+      </div>
+    </div>
   );
 }
 
