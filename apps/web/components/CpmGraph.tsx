@@ -351,6 +351,9 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [unit, setUnit] = useState<'d' | 'h' | 'm'>('d');
   const [critOnly, setCritOnly] = useState(false);
   const [showEdgeDays, setShowEdgeDays] = useState(false);
+  // Блок условных обозначений внизу рабочей области: по умолчанию свёрнут,
+  // разворачивается кликом по ссылке «Условные обозначения».
+  const [legendOpen, setLegendOpen] = useState(false);
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
   const [zoomPct, setZoomPct] = useState(80);
@@ -1636,16 +1639,7 @@ export default function CpmGraph(props: CpmGraphProps) {
         </div>
       )}
 
-      {/* легенда */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: Math.round(11 * fontScale), color: '#8FA3BD' }}>
-        <LegendDot color={critColor} label="Критический путь" />
-        <LegendDot color={branchColor} label="Ветвь крит. пути" />
-        <LegendDot color={reserveColor} label="С резервом" />
-        <LegendDot color={stretchColor} label={'Напряжённые (K>' + String(STRETCH_K).replace('.', ',') + ')'} />
-        <LegendPill color={startColor} label="Старт" />
-        <LegendPill color={finishColor} label="Финиш" />
-        <span style={{ color: '#5A7090' }}>· сплошная — работа · пунктир — логическая связь без задержки · тонкий пунктир со «Старта»/на «Финиш» — связи начального/завершающего события · толще — критический путь · колесо — масштаб · наведение — подсказка</span>
-      </div>
+      {/* условные обозначения перенесены вниз рабочей области (см. блок ниже полотна) */}
 
       {/* предупреждения структуры сети (по методичке) — отрисовку не блокируют */}
       {structureIssues.length > 0 && (
@@ -1742,6 +1736,58 @@ export default function CpmGraph(props: CpmGraphProps) {
           </div>
         )}
       </div>
+
+      {/* ── условные обозначения: внизу рабочей области, свёрнуты по умолчанию ── */}
+      <div data-cpm-legend="panel" style={{ borderTop: '1px solid ' + pal.frame, paddingTop: 6 }}>
+        <button
+          type="button"
+          data-cpm-legend="toggle"
+          aria-expanded={legendOpen}
+          onClick={() => setLegendOpen((v) => !v)}
+          className="cpmui-btn"
+          style={{
+            background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+            color: legendOpen ? '#93C5FD' : '#8FA3BD',
+            fontSize: Math.round(11.5 * fontScale), fontWeight: 600,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: legendOpen ? '#60A5FA' : '#5A7090' }}>{legendOpen ? '▾' : '▸'}</span>
+          Условные обозначения
+        </button>
+
+        {legendOpen && (
+          <div
+            data-cpm-legend="body"
+            style={{
+              marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '9px 20px',
+              alignItems: 'center', fontSize: Math.round(11 * fontScale), color: '#8FA3BD',
+            }}
+          >
+            {/* связи — образцы линий ровно в том же стиле, что и на схеме */}
+            <LegendItem sample={<LegendLine variant="solid" />} caption="Сплошная — работа" />
+            <LegendItem sample={<LegendLine variant="dashed" />} caption="Пунктир — логическая связь без задержки" />
+            <LegendItem sample={<LegendLine variant="endpoints" />} caption="Тонкий пунктир — связи «Старта» / «Финиша»" />
+            <LegendItem sample={<LegendLine variant="critical" />} caption="Толще — критический путь" />
+
+            {/* события сети — той же формы и цвета, что и на полотне */}
+            <LegendPill color={startColor} label="Старт" kind="start" />
+            <LegendPill color={finishColor} label="Финиш" kind="finish" />
+
+            {/* работы — категории узлов (как на полотне) */}
+            <LegendDot color={critColor} label="Критический путь" />
+            <LegendDot color={branchColor} label="Ветвь крит. пути" />
+            <LegendDot color={reserveColor} label="С резервом" />
+            <LegendDot color={stretchColor} label={'Напряжённые (K>' + String(STRETCH_K).replace('.', ',') + ')'} />
+
+            {/* управление — компактно, рядом с образцами */}
+            <span style={{ color: '#5A7090', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span aria-hidden="true">🖱</span>
+              Колесо — масштаб · Наведение — подсказка · Перетаскивание — сдвиг узла
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1776,12 +1822,50 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-/** Метка виртуального события «Старт»/«Финиш» — форма-капсула, как на полотне. */
-function LegendPill({ color, label }: { color: string; label: string }) {
+/** Образец линии связи: рисуется тем же стилем, что и соответствующая связь на полотне. */
+function LegendLine({ variant }: { variant: 'solid' | 'dashed' | 'critical' | 'endpoints' }) {
+  if (variant === 'endpoints') {
+    // связи начального («Старт») и завершающего («Финиш») события — тонкий пунктир.
+    return (
+      <svg width="30" height="16" viewBox="0 0 30 16" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+        <line x1="1" y1="5" x2="29" y2="5" stroke="#34D399" strokeWidth={1.4} strokeDasharray="5 4" strokeLinecap="round" />
+        <line x1="1" y1="11" x2="29" y2="11" stroke="#F472B6" strokeWidth={1.4} strokeDasharray="5 4" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  const style =
+    variant === 'solid' ? { color: '#60A5FA', w: 1.5, dash: undefined as string | undefined }
+    : variant === 'dashed' ? { color: '#60A5FA', w: 1.15, dash: '5 4' }
+    : { color: '#EF4444', w: 3, dash: undefined as string | undefined };
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-      <span style={{ width: 18, height: 10, borderRadius: 6, border: '2px solid ' + color, background: 'rgba(255,255,255,0.04)', display: 'inline-block', boxShadow: '0 0 6px ' + color + '66' }} />
-      {label}
+    <svg width="30" height="12" viewBox="0 0 30 12" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      <line x1="1" y1="6" x2="29" y2="6" stroke={style.color} strokeWidth={style.w} strokeDasharray={style.dash} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Подпись к образцу связи: слева — образец, справа — текст. */
+function LegendItem({ sample, caption }: { sample: React.ReactNode; caption: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+      {sample}
+      <span>{caption}</span>
+    </span>
+  );
+}
+
+/** Метка виртуального события «Старт»/«Финиш» — та же форма и цвет, что и на полотне. */
+function LegendPill({ color, label, kind }: { color: string; label: string; kind: 'start' | 'finish' }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, height: 18, padding: '0 8px',
+        borderRadius: 9, border: '2.4px solid ' + color, background: 'rgba(12,26,44,0.98)',
+        boxShadow: '0 0 6px ' + color + '66',
+      }}
+    >
+      <span style={{ fontSize: 9.5, lineHeight: 1, color }} aria-hidden="true">{kind === 'start' ? '▶' : '■'}</span>
+      <span style={{ fontSize: 9.5, lineHeight: 1, fontWeight: 700, color: '#E8EEF5', fontFamily: FONT_UI }}>{label}</span>
     </span>
   );
 }
