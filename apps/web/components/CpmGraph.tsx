@@ -125,12 +125,52 @@ const FONT_SCALES = { sm: 1.18, md: 1.39, lg: 1.73 } as const;
 type FontSize = keyof typeof FONT_SCALES;
 const FONT_SIZE_KEY = 'cpm.network.fontSize';
 
+/* ───────── единые стили связей: холст и образцы легенды берут их отсюда ─────────
+   Цвет, толщина и узор каждой категории связи заданы ОДИН раз в EDGE_STYLE ниже.
+   И отрисовка на полотне, и образцы в блоке условных обозначений берут значения
+   отсюда — так образцы не разъедутся с холстом при будущих правках. */
+/** Цвета узлов-событий «Старт»/«Финиш» (капсулы, не связи). */
+const START_COLOR = '#34D399';
+const FINISH_COLOR = '#F472B6';
+/** Цвета служебных связей от «Старта» и к «Финишу» (тонированные под событие). */
+const START_EDGE = 'rgba(52,211,153,0.62)';
+const FINISH_EDGE = 'rgba(244,114,182,0.62)';
 /**
- * Штрих-пунктир «длинный штрих + точка» — узор связей без ожидания.
- * Крупный: сохраняет различимость даже при масштабе ~50 % (вид открывается на нём).
+ * Узор связи без ожидания («логической»): крупный штрих-пунктир — длинный штрих,
+ * пробел, точка, пробел. Крупный базовый шаг сохраняет различимость при масштабе
+ * ~50 % (вид открывается именно на нём).
  */
+const LOGICAL_DASH_BASE = [12, 5, 2.5, 5] as const;
+/** Узор служебных связей «Старт»/«Финиш»: короткий тонкий пунктир. */
+const ENDPOINT_DASH_BASE = [5, 4] as const;
+/** Стили линий связи: цвет, толщина и цвет наконечника. */
+export const EDGE_STYLE = {
+  /** Связь операций с ожиданием — сплошная синяя. */
+  wait: { color: 'rgba(96,165,250,0.42)', width: 1.7, arrow: 'rgba(96,165,250,0.6)' },
+  /** Связь с ожиданием в ветви критического пути — сплошная янтарная. */
+  branch: { color: 'rgba(245,158,11,0.5)', width: 1.7, arrow: 'rgba(245,158,11,0.75)' },
+  /** Связь без ожидания — широкий штрих-пунктир спокойным стальным цветом. */
+  logical: { color: 'rgba(148,163,184,0.85)', width: 2.1, arrow: 'rgba(148,163,184,0.9)' },
+  /** Критическая связь — сплошная толстая красная. */
+  critical: { color: 'rgba(239,68,68,0.72)', width: 3, arrow: 'rgba(239,68,68,0.85)' },
+  /** Служебная связь «Старт»/«Финиш» — тонкий пунктир (цвет — по узлу-событию). */
+  endpoint: { color: START_EDGE, width: 1.4 },
+} as const;
+/** Масштабированный узор: шаг не опускается ниже минимума (иначе штрих слипается). */
+function scaledDash(base: readonly number[], S: number, mins: readonly number[]): number[] {
+  return base.map((v, i) => Math.max(mins[i] ?? 1, v * S));
+}
+/** Штрих-пунктир «длинный штрих + точка» — узор связей без ожидания. */
 function dashLogical(S: number): number[] {
-  return [Math.max(10, 12 * S), Math.max(4, 5 * S), Math.max(2, 2.5 * S), Math.max(4, 5 * S)];
+  return scaledDash(LOGICAL_DASH_BASE, S, [10, 4, 2, 4]);
+}
+/** Короткий пунктир служебных связей «Старт»/«Финиш». */
+function dashEndpoint(S: number): number[] {
+  return scaledDash(ENDPOINT_DASH_BASE, S, [4, 3]);
+}
+/** Узор для SVG-образца легенды (в базовом размере, без масштаба полотна). */
+function dashAttr(base: readonly number[]): string {
+  return base.join(' ');
 }
 /** Буквенные метки типов связи; основной тип ФС на схеме не подписывается. */
 const DEP_TYPE_LABEL: Record<string, string> = { FS: 'ФС', SS: 'СС', FF: 'ФФ', SF: 'СФ' };
@@ -355,12 +395,10 @@ export default function CpmGraph(props: CpmGraphProps) {
   // Напряжённые работы (коэффициент напряжённости выше порога) — отдельный цвет.
   const stretchColor = '#A78BFA';
   // Начальное («Старт») и завершающее («Финиш») события — отдельный цвет и форма.
-  const startColor = '#34D399';
-  const finishColor = '#F472B6';
-  const START_EDGE = 'rgba(52,211,153,0.62)';
-  const FINISH_EDGE = 'rgba(244,114,182,0.62)';
-  // Связи без ожидания — широкий штрих-пунктир спокойным стальным цветом.
-  const LOGICAL_EDGE = 'rgba(148,163,184,0.85)';
+  // Цвета и стили связей берём из общих констант EDGE_STYLE/START_EDGE/FINISH_EDGE,
+  // чтобы холст и образцы легенды рисовались одинаково.
+  const startColor = START_COLOR;
+  const finishColor = FINISH_COLOR;
 
   /* ── раскладка качества (единственный видимый орган управления) ──
      Плотно / Обычно / Для печати. Веса, число проходов, цели и порог
@@ -989,9 +1027,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       else ctx.lineTo(bx, by);
       ctx.setLineDash(logical ? dashLogical(S) : []);
       ctx.strokeStyle = bothCrit
-        ? 'rgba(239,68,68,0.72)'
-        : (logical ? LOGICAL_EDGE : (anyBranch ? 'rgba(245,158,11,0.5)' : 'rgba(96,165,250,0.42)'));
-      ctx.lineWidth = bothCrit ? 3 : (logical ? 2.1 : 1.7);
+        ? EDGE_STYLE.critical.color
+        : (logical ? EDGE_STYLE.logical.color : (anyBranch ? EDGE_STYLE.branch.color : EDGE_STYLE.wait.color));
+      ctx.lineWidth = bothCrit ? EDGE_STYLE.critical.width : (logical ? EDGE_STYLE.logical.width : EDGE_STYLE.wait.width);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -1002,8 +1040,8 @@ export default function CpmGraph(props: CpmGraphProps) {
       ctx.lineTo(bx - hl * Math.cos(ang + 0.45), by - hl * Math.sin(ang + 0.45));
       ctx.closePath();
       ctx.fillStyle = bothCrit
-        ? 'rgba(239,68,68,0.85)'
-        : (logical ? 'rgba(148,163,184,0.9)' : (anyBranch ? 'rgba(245,158,11,0.75)' : 'rgba(96,165,250,0.6)'));
+        ? EDGE_STYLE.critical.arrow
+        : (logical ? EDGE_STYLE.logical.arrow : (anyBranch ? EDGE_STYLE.branch.arrow : EDGE_STYLE.wait.arrow));
       ctx.fill();
 
       const [lxw, lyw] = curve ? quadPt(s[0], s[1], cxw, cyw, e[0], e[1], 0.5) : [mxw, myw];
@@ -1089,9 +1127,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       ctx.moveTo(ax, ay);
       if (curve) ctx.quadraticCurveTo(ccx, ccy, bx, by);
       else ctx.lineTo(bx, by);
-      ctx.setLineDash([Math.max(4, 5 * S), Math.max(3, 4 * S)]);
+      ctx.setLineDash(dashEndpoint(S));
       ctx.strokeStyle = ve.color;
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = EDGE_STYLE.endpoint.width;
       ctx.stroke();
       ctx.setLineDash([]);
       // наконечник
@@ -2002,15 +2040,16 @@ function LegendLine({ variant }: { variant: 'wait' | 'logical' | 'critical' | 'e
     // связи начального («Старт») и завершающего («Финиш») события — тонкий пунктир.
     return (
       <svg width="58" height="16" viewBox="0 0 58 16" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
-        <line x1="1" y1="5" x2="57" y2="5" stroke="#34D399" strokeWidth={1.3} strokeDasharray="5 4" />
-        <line x1="1" y1="11" x2="57" y2="11" stroke="#F472B6" strokeWidth={1.3} strokeDasharray="5 4" />
+        <line x1="1" y1="5" x2="57" y2="5" stroke={START_EDGE} strokeWidth={EDGE_STYLE.endpoint.width} strokeDasharray={dashAttr(ENDPOINT_DASH_BASE)} />
+        <line x1="1" y1="11" x2="57" y2="11" stroke={FINISH_EDGE} strokeWidth={EDGE_STYLE.endpoint.width} strokeDasharray={dashAttr(ENDPOINT_DASH_BASE)} />
       </svg>
     );
   }
+  // Образцы рисуются ровно теми же цветом, толщиной и узором, что и связи на холсте.
   const style =
-    variant === 'wait' ? { color: 'rgba(96,165,250,0.78)', w: 1.7, dash: undefined as string | undefined, arrow: '#60A5FA' }
-    : variant === 'logical' ? { color: 'rgba(148,163,184,0.9)', w: 2.1, dash: '12 5 2 5', arrow: '#94A3B8' }
-    : { color: '#EF4444', w: 3, dash: undefined as string | undefined, arrow: '#EF4444' };
+    variant === 'wait' ? { color: EDGE_STYLE.wait.color, w: EDGE_STYLE.wait.width, dash: undefined as string | undefined, arrow: EDGE_STYLE.wait.arrow }
+    : variant === 'logical' ? { color: EDGE_STYLE.logical.color, w: EDGE_STYLE.logical.width, dash: dashAttr(LOGICAL_DASH_BASE), arrow: EDGE_STYLE.logical.arrow }
+    : { color: EDGE_STYLE.critical.color, w: EDGE_STYLE.critical.width, dash: undefined as string | undefined, arrow: EDGE_STYLE.critical.arrow };
   return (
     <svg width="64" height="14" viewBox="0 0 64 14" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
       <line x1="1" y1="7" x2="54" y2="7" stroke={style.color} strokeWidth={style.w} strokeDasharray={style.dash} />
