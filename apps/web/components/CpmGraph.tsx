@@ -1122,11 +1122,24 @@ export default function CpmGraph(props: CpmGraphProps) {
           const lbl = fitText(ctx, o.code, CW * 0.9);
           ctx.fillText(lbl, cx, cy - r - 3);
         }
-        if (o.tf > 0.0001 && r >= 9) {
-          ctx.fillStyle = '#F59E0B';
+        // Продолжительность операции — в компактном режиме тоже, у всех узлов,
+        // включая критические (иначе у красных узлов подписи длительности нет).
+        // Резерв, если он есть, выводится рядом справа тем же кеглем.
+        if (r >= 9) {
+          const durTxt = fmtDur(o.durDays, st.unit, o.hpd);
+          const resTxt = o.tf > 0.0001 ? '  +' + fmtReserve(o.tf, st.unit, o.hpd) : '';
           ctx.font = 'bold ' + fszL(clamp(Math.round(9 * S + 2), 7, 11)) + 'px ' + FONT_MONO;
           ctx.textBaseline = 'top';
-          ctx.fillText('+' + fmtReserve(o.tf, st.unit, o.hpd), cx, cy + r + 2);
+          ctx.textAlign = 'left';
+          const durW = ctx.measureText(durTxt).width;
+          const resW = resTxt ? ctx.measureText(resTxt).width : 0;
+          const lx = cx - (durW + resW) / 2;
+          ctx.fillStyle = o.crit ? 'rgba(252,165,165,0.95)' : 'rgba(176,196,222,0.9)';
+          ctx.fillText(durTxt, lx, cy + r + 2);
+          if (resTxt) {
+            ctx.fillStyle = '#F59E0B';
+            ctx.fillText(resTxt, lx + durW, cy + r + 2);
+          }
         }
       }
     });
