@@ -25,7 +25,7 @@ import {
   computeLayoutMetrics, DEFAULT_GEOMETRY, type LayoutMetrics, type Rect,
 } from '@/lib/cpm-metrics';
 import { computeLayout as buildCpmLayout } from '@/lib/cpm-layout';
-import { checkCpmStructure, detectEndpoints, intensityK, type StructureIssue } from '@/lib/cpm-structure';
+import { checkCpmStructure, detectVisibleEndpoints, intensityK, type StructureIssue } from '@/lib/cpm-structure';
 import { checkPlanarity, type PlanarityResult } from '@/lib/cpm-planarity';
 import {
   settingsToLayoutOptions, getLayoutPreset, loadLayoutPreset, saveLayoutPreset,
@@ -74,9 +74,11 @@ interface GOp {
 
 type Mode = 'byDate' | 'byLayer';
 
-/** Виртуальное событие сети: начальное «Старт» или завершающее «Финиш». */
+/** Виртуальное событие сети: начальное «Старт» или завершающее «Финиш».
+ *  id уникален: при одной цепочке — 'start'/'finish', при нескольких независимых —
+ *  'start#N'/'finish#N' (у каждой своей пары). */
 interface VirtualNode {
-  id: 'start' | 'finish';
+  id: string;
   kind: 'start' | 'finish';
   label: string;
   x: number;
@@ -88,6 +90,16 @@ interface VirtualNode {
 interface VirtualEdge {
   from: string;
   to: string;
+  color: string;
+}
+
+/** Маркер обрезки периода: у видимой крайней операции цепочка продолжается
+ *  вне периода. Рисуется коротким обрубком со стрелкой в сторону продолжения
+ *  вместо значка «Старт»/«Финиш». Позиция считается при отрисовке от узла операции
+ *  (opId), так что маркер следует за узлом при перетаскивании и смене масштаба LOD. */
+interface CutMarker {
+  opId: string;
+  kind: 'start' | 'finish';
   color: string;
 }
 
@@ -136,6 +148,8 @@ const FONT_SIZE_KEY = 'cpm.network.fontSize';
 /** Цвета узлов-событий «Старт»/«Финиш» (капсулы, не связи). */
 const START_COLOR = '#34D399';
 const FINISH_COLOR = '#F472B6';
+/** Цвет маркеров обрезки периода (нейтральный стальной — не путать со «Стартом»/«Финишем»). */
+const CUT_COLOR = 'rgba(148,163,184,0.95)';
 /** Цвета служебных связей от «Старта» и к «Финишу» (тонированные под событие). */
 const START_EDGE = 'rgba(52,211,153,0.62)';
 const FINISH_EDGE = 'rgba(244,114,182,0.62)';
@@ -466,7 +480,7 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
   const [zoomPct, setZoomPct] = useState(80);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; op?: GOp; virt?: VirtualNode; edge?: EdgeTip } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; op?: GOp; virt?: VirtualNode; cut?: CutMarker; edge?: EdgeTip } | null>(null);
   const [canvasErr, setCanvasErr] = useState<string | null>(null);
   const [fontSize, setFontSize] = useState<FontSize>('md');
   const [resetNonce, setResetNonce] = useState(0);
@@ -680,47 +694,83 @@ export default function CpmGraph(props: CpmGraphProps) {
     return L;
   }, [rawLayout, labelNudge, mode, posNonce, geom]);
 
-  /* ── виртуальные события «Старт» и «Финиш» ──
-     Начальные — операции без предшественников, завершающие — без последующих.
-     Если в данных уже есть явная операция начала/завершения (например «Начало»
-     или «Сдача»), соответствующее виртуальное событие не добавляется.
-     «Старт» ставится на колонку левее самой ранней начальной операции, «Финиш» —
-     правее самой поздней завершающей; связь идёт от «Старта» ко всем начальным
-     и от всех завершающих к «Финишу» (пунктир, нулевая длительность). */
+  /* ── служебные события «Старт»/«Финиш» и маркеры обрезки периода ──
+     Считаются по ВИДИМОМУ набору операций (после периода, фильтра заказа/куста и
+     «только крит. путь»). Операция — видимое начало/завершение, если у неё нет
+     предшественников/последователей СРЕДИ ВИДИМЫХ. Значок ставится только к
+     истинным началам/завершениям (без связей за пределы видимого); крайние
+     операции с продолжением вне периода получают вместо значка маркер обрезки.
+     • Видимая часть = вся сеть → одна пара «Старт»/«Финиш» (поведение как было).
+     • После фильтрации несколько независимых цепочек → у каждой своя пара,
+       соединённая тонким пунктиром со своими видимыми началами/завершениями.
+     • Если начал/завершений нет вовсе — значков нет, только маркеры обрезки. */
   const virtualInfo = useMemo(() => {
-    if (!layoutOps.length) return { virtuals: [] as VirtualNode[], vEdges: [] as VirtualEdge[] };
-    const ep = detectEndpoints(
-      layoutOps.map((o) => ({ id: o.id, num: o.num, name: o.name, code: o.code })),
-      allDeps,
-    );
+    const empty = { virtuals: [] as VirtualNode[], vEdges: [] as VirtualEdge[], cutMarkers: [] as CutMarker[] };
+    if (!layoutOps.length) return empty;
     const pos = layout.pos;
-    let minCx = Infinity;
-    let maxCx = -Infinity;
-    layoutOps.forEach((o) => {
-      const p = pos[o.id];
-      if (!p) return;
-      if (p[0] < minCx) minCx = p[0];
-      if (p[0] > maxCx) maxCx = p[0];
-    });
-    if (!Number.isFinite(minCx)) return { virtuals: [] as VirtualNode[], vEdges: [] as VirtualEdge[] };
+    const net = detectVisibleEndpoints(
+      layoutOps.map((o) => o.id),
+      allDeps,
+      layoutOps.map((o) => ({ id: o.id, num: o.num, name: o.name, code: o.code })),
+    );
     const meanY = (idds: string[]): number => {
       let s = 0;
       let n = 0;
       for (const id of idds) { const p = pos[id]; if (p) { s += p[1]; n++; } }
       return n ? s / n : 0;
     };
+    // Крайний x по группе операций (dir = -1 — самый левый, +1 — самый правый).
+    const boundCx = (idds: string[], dir: 1 | -1): number => {
+      let best = dir < 0 ? Infinity : -Infinity;
+      for (const id of idds) {
+        const p = pos[id];
+        if (!p) continue;
+        if (dir < 0 ? p[0] < best : p[0] > best) best = p[0];
+      }
+      return best;
+    };
     const virtuals: VirtualNode[] = [];
     const vEdges: VirtualEdge[] = [];
-    if (!ep.hasExplicitStart) {
-      virtuals.push({ id: 'start', kind: 'start', label: 'Старт', x: minCx - colPitch, y: meanY(ep.initialIds), color: startColor });
-      ep.initialIds.forEach((id) => { if (pos[id]) vEdges.push({ from: 'start', to: id, color: startColor }); });
+    const cutMarkers: CutMarker[] = [];
+
+    // Видима ли вся сеть целиком: тогда (как прежде) одна пара событий на всю схему.
+    // Выбор заказа/куста — это уже не «вся сеть», у его цепочки своя разметка.
+    const orderScoped = !!(props.cpmResult && props.cpmResult.order_id);
+    const wholeNetwork = !orderScoped && layoutOps.length === mappedOps.length;
+
+    const attachStart = (sid: string, ids: string[]): void => {
+      const x = boundCx(ids, -1);
+      if (!Number.isFinite(x)) return;
+      virtuals.push({ id: sid, kind: 'start', label: 'Старт', x: x - colPitch, y: meanY(ids), color: startColor });
+      ids.forEach((id) => { if (pos[id]) vEdges.push({ from: sid, to: id, color: startColor }); });
+    };
+    const attachFinish = (fid: string, ids: string[]): void => {
+      const x = boundCx(ids, 1);
+      if (!Number.isFinite(x)) return;
+      virtuals.push({ id: fid, kind: 'finish', label: 'Финиш', x: x + colPitch, y: meanY(ids), color: finishColor });
+      ids.forEach((id) => { if (pos[id]) vEdges.push({ from: id, to: fid, color: finishColor }); });
+    };
+
+    if (wholeNetwork) {
+      // Вся сеть: «Старт» — ко всем истинным началам, «Финиш» — от всех истинных завершений.
+      if (!net.hasExplicitStart && net.trueStartIds.length) attachStart('start', net.trueStartIds);
+      if (!net.hasExplicitFinish && net.trueFinishIds.length) attachFinish('finish', net.trueFinishIds);
+    } else {
+      // Фильтрация активна: у каждой независимой цепочки (компоненты) своя пара.
+      net.components.forEach((group, ci) => {
+        const starts = group.filter((id) => net.trueStartIds.indexOf(id) >= 0);
+        const finishes = group.filter((id) => net.trueFinishIds.indexOf(id) >= 0);
+        if (starts.length && !net.hasExplicitStart) attachStart('start#' + ci, starts);
+        if (finishes.length && !net.hasExplicitFinish) attachFinish('finish#' + ci, finishes);
+      });
     }
-    if (!ep.hasExplicitFinish) {
-      virtuals.push({ id: 'finish', kind: 'finish', label: 'Финиш', x: maxCx + colPitch, y: meanY(ep.finalIds), color: finishColor });
-      ep.finalIds.forEach((id) => { if (pos[id]) vEdges.push({ from: id, to: 'finish', color: finishColor }); });
-    }
-    return { virtuals, vEdges };
-  }, [layout, layoutOps, allDeps, startColor, finishColor, colPitch]);
+
+    // Маркеры обрезки — для крайних видимых операций с продолжением вне периода.
+    net.cutStartIds.forEach((id) => { if (pos[id]) cutMarkers.push({ opId: id, kind: 'start', color: CUT_COLOR }); });
+    net.cutFinishIds.forEach((id) => { if (pos[id]) cutMarkers.push({ opId: id, kind: 'finish', color: CUT_COLOR }); });
+
+    return { virtuals, vEdges, cutMarkers };
+  }, [layout, layoutOps, mappedOps, allDeps, startColor, finishColor, colPitch, props.cpmResult]);
 
   /* Раскладка с учётом виртуальных событий: их позиции добавляются в pos, а габарит
      полотна расширяется, чтобы «Старт»/«Финиш» попадали в подгонку «По размеру».
@@ -862,6 +912,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     layout: layoutFull,
     virtuals: virtualInfo.virtuals,
     vEdges: virtualInfo.vEdges,
+    cutMarkers: virtualInfo.cutMarkers,
     mode, unit, critOnly, showEdgeDays, showEndpoints, depTypes,
     startDate, dayToDate,
     reserveColor, branchColor, critColor, stretchColor,
@@ -1499,6 +1550,46 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.fillText(v.kind === 'start' ? '▶' : '■', cx, cy + 0.5);
       }
     });
+
+    /* ── маркеры обрезки периода — короткий обрубок со стрелкой в сторону продолжения ──
+       Рисуются вместо значка «Старт»/«Финиш» у крайних видимых операций, чья
+       цепочка продолжается вне выбранного периода. Скрываются тем же тумблером
+       «Старт и Финиш», что и сами события. В счётчик качества не входят. */
+    ((st.showEndpoints ? (st.cutMarkers || []) : []) as CutMarker[]).forEach((m) => {
+      const p = st.layout.pos[m.opId];
+      if (!p) return;
+      const cx = sx(p[0]);
+      const cy = sy(p[1]);
+      const hw = (cardMode ? CW / 2 : CIRC_WORLD_R) * S;
+      const dir = m.kind === 'start' ? -1 : 1;   // start → продолжение влево (раньше), finish → вправо
+      const x0 = cx + dir * (hw + 4);
+      const x1 = x0 + dir * Math.max(14, 22 * S);
+      if (x1 < -40 || x0 > W + 40 || cy < -60 || cy > H + 60) return;
+      ctx.save();
+      ctx.setLineDash(dashEndpoint(S));
+      ctx.strokeStyle = m.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x0, cy);
+      ctx.lineTo(x1, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // наконечник — в сторону продолжения (вне периода)
+      const hl = clamp(8 * S + 3, 6, 11);
+      const ang = dir < 0 ? Math.PI : 0;
+      ctx.beginPath();
+      ctx.moveTo(x1, cy);
+      ctx.lineTo(x1 - hl * Math.cos(ang - 0.5), cy - hl * Math.sin(ang - 0.5));
+      ctx.lineTo(x1 - hl * Math.cos(ang + 0.5), cy - hl * Math.sin(ang + 0.5));
+      ctx.closePath();
+      ctx.fillStyle = m.color;
+      ctx.fill();
+      // точка-ограничитель у основания обрубка (чтобы читалось как граница обрезки)
+      ctx.beginPath();
+      ctx.arc(x0, cy, Math.max(1.6, 2.2 * S), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
   }, []);
 
   /**
@@ -1644,6 +1735,33 @@ export default function CpmGraph(props: CpmGraphProps) {
     return null;
   }, []);
 
+  /* ── попадание в маркер обрезки периода ── */
+  const hitCut = useCallback((mx: number, my: number): CutMarker | null => {
+    const st = stateRef.current;
+    if (!st.showEndpoints) return null;
+    const S: number = st.scale;
+    const cardMode = S >= LOD_CARD_MIN_SCALE;
+    const CWv: number = st.cardW || CARD_W;
+    const sxv = (x: number) => x * S + st.panX;
+    const syv = (y: number) => y * S + st.panY;
+    const list: CutMarker[] = st.cutMarkers || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      const p = st.layout.pos[m.opId];
+      if (!p) continue;
+      const cx = sxv(p[0]);
+      const cy = syv(p[1]);
+      const hw = (cardMode ? CWv / 2 : CIRC_WORLD_R) * S;
+      const dir = m.kind === 'start' ? -1 : 1;
+      const x0 = cx + dir * (hw + 4);
+      const x1 = x0 + dir * Math.max(14, 22 * S);
+      const lo = Math.min(x0, x1);
+      const hi = Math.max(x0, x1);
+      if (mx >= lo - 6 && mx <= hi + 6 && Math.abs(my - cy) <= 12) return m;
+    }
+    return null;
+  }, []);
+
   /* ── попадание в связь (подсказка с полным описанием связи) ── */
   const hitEdge = useCallback((mx: number, my: number): EdgeTip | null => {
     const list = edgesRef.current;
@@ -1715,14 +1833,16 @@ export default function CpmGraph(props: CpmGraphProps) {
 
     const hit = hitTest(mx, my);
     const vhit = hit ? null : hitVirtual(mx, my);
-    const ehit = (hit || vhit) ? null : hitEdge(mx, my);
+    const chit = (hit || vhit) ? null : hitCut(mx, my);
+    const ehit = (hit || vhit || chit) ? null : hitEdge(mx, my);
     const newHover = hit ? hit.id : (vhit ? vhit.id : null);
     if (hoverIdRef.current !== newHover) { hoverIdRef.current = newHover; draw(); }
     if (hit) setTooltip({ x: mx, y: my, op: hit });
     else if (vhit) setTooltip({ x: mx, y: my, virt: vhit });
+    else if (chit) setTooltip({ x: mx, y: my, cut: chit });
     else if (ehit) setTooltip({ x: mx, y: my, edge: ehit });
     else setTooltip(null);
-  }, [draw, hitTest, hitVirtual, hitEdge]);
+  }, [draw, hitTest, hitVirtual, hitCut, hitEdge]);
 
   const onMouseUp = useCallback(() => {
     const drag = dragRef.current;
@@ -2034,6 +2154,20 @@ export default function CpmGraph(props: CpmGraphProps) {
                     : 'Логические связи нулевой длительности от всех завершающих операций.'}
                 </div>
               </>
+            ) : tooltip.cut ? (
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: tooltip.cut.color }}>
+                  {tooltip.cut.kind === 'start' ? '⇤ ' : '⇥ '}Обрезка периода
+                </div>
+                <div style={{ color: '#8FA3BD' }}>
+                  {tooltip.cut.kind === 'start'
+                    ? 'Продолжение вне периода — цепочка начинается раньше выбранной даты «с».'
+                    : 'Продолжение вне периода — цепочка длится позже выбранной даты «по».'}
+                </div>
+                <div style={{ color: '#8FA3BD', marginTop: 6 }}>
+                  Стрелка показывает сторону продолжения. Значки «Старт»/«Финиш» к обрезанным краям не ставятся.
+                </div>
+              </>
             ) : tooltip.op ? (
               <>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>
@@ -2141,7 +2275,18 @@ export default function CpmGraph(props: CpmGraphProps) {
             <LegendItem
               sample={<LegendLine variant="endpoints" />}
               caption="Тумблер «Старт и Финиш» скрывает события, а не связи"
-              desc="Выключенный тумблер убирает только служебные события «Старт»/«Финиш» и их тонкий пунктир. Обычные связи, связи без ожидания и критический путь остаются на схеме всегда."
+              desc="Выключенный тумблер убирает только служебные события «Старт»/«Финиш», их тонкий пунктир и маркеры обрезки. Обычные связи, связи без ожидания и критический путь остаются на схеме всегда."
+            />
+            <LegendItem
+              sample={
+                <svg width="58" height="14" aria-hidden="true">
+                  <line x1="4" y1="7" x2="38" y2="7" stroke={CUT_COLOR} strokeWidth="2" strokeDasharray="5 4" />
+                  <circle cx="4" cy="7" r="2.2" fill={CUT_COLOR} />
+                  <path d="M38 3 L46 7 L38 11 Z" fill={CUT_COLOR} />
+                </svg>
+              }
+              caption="Маркеры обрезки периода"
+              desc="Крайняя видимая операция, у которой цепочка продолжается вне периода, получает вместо значка «Старт»/«Финиш» короткий обрубок со стрелкой в сторону продолжения."
             />
             <LegendItem
               sample={<LegendNode />}

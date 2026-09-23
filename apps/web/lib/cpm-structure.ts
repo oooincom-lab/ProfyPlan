@@ -84,6 +84,132 @@ export function detectEndpoints(nodes: StructureNode[], deps: [string, string][]
   };
 }
 
+/**
+ * Разбор ВИДИМОГО подграфа для служебных событий «Старт»/«Финиш».
+ *
+ * В отличие от detectEndpoints (который считает один набор начал/завершений на
+ * переданный список узлов), здесь дополнительно разделяются:
+ *   • истинные начала/завершения — у операции нет соответственно предшественников
+ *     или последователей вообще (и среди видимых, и за пределами видимого);
+ *   • начала/завершения с «обрезкой» — у видимой крайней операции есть связи за
+ *     пределы видимого, то есть цепочка продолжается вне выбранного периода.
+ * Такие крайние операции не должны получать значок «Старт»/«Финиш» — вместо него
+ * рисуется маркер обрезки (решение принимает отрисовка, здесь — только разметка).
+ *
+ * Видимый подграф дополнительно разбивается на слабо связные компоненты: у каждой
+ * независимой цепочки своя пара служебных событий.
+ */
+export interface VisibleNetwork {
+  /** Видимые операции без предшественников СРЕДИ ВИДИМЫХ. */
+  initialIds: string[];
+  /** Видимые операции без последователей СРЕДИ ВИДИМЫХ. */
+  finalIds: string[];
+  /** Истинные начала: у операции нет предшественников и за пределами видимого. */
+  trueStartIds: string[];
+  /** Истинные завершения: у операции нет последователей и за пределами видимого. */
+  trueFinishIds: string[];
+  /** Видимые начала с продолжением вне периода — вместо «Старта» маркер обрезки. */
+  cutStartIds: string[];
+  /** Видимые завершения с продолжением вне периода — вместо «Финиша» маркер обрезки. */
+  cutFinishIds: string[];
+  /** Слабо связные компоненты видимого подграфа (по связям между видимыми). */
+  components: string[][];
+  /** В видимом есть операция с именем/кодом «Начало»/«Старт» — значок не добавляем. */
+  hasExplicitStart: boolean;
+  /** В видимом есть операция с именем/кодом «Финиш»/«Сдача» — значок не добавляем. */
+  hasExplicitFinish: boolean;
+}
+
+/**
+ * Разбирает видимый набор операций: начала, завершения, обрезки и компоненты.
+ *
+ * @param visibleIds ids видимых операций (порядок сохраняется в result.initialIds
+ *                    и result.components — для детерминированной отрисовки).
+ * @param deps       все связи проекта; связи, где хотя бы один конец виден,
+ *                    участвуют в разметке (вторая сторона может быть вне видимого).
+ * @param nodes      при необходимости — операции (для распознавания «Начало»/«Сдача»).
+ */
+export function detectVisibleEndpoints(
+  visibleIds: Iterable<string>,
+  deps: [string, string][],
+  nodes?: StructureNode[],
+): VisibleNetwork {
+  const vis = new Set<string>();
+  for (const id of visibleIds) vis.add(id);
+
+  const byId = new Map<string, StructureNode>();
+  if (nodes) nodes.forEach((n) => byId.set(n.id, n));
+
+  const predIn = new Set<string>();
+  const succIn = new Set<string>();
+  const predOut = new Set<string>();
+  const succOut = new Set<string>();
+  const neighbors = new Map<string, string[]>();
+  vis.forEach((id) => neighbors.set(id, []));
+
+  const seen = new Set<string>();
+  for (const [a, b] of deps) {
+    if (a === b) continue;
+    const av = vis.has(a);
+    const bv = vis.has(b);
+    if (!av && !bv) continue;
+    if (av && bv) {
+      const key = a + '\u0001' + b;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      succIn.add(a); predIn.add(b);
+      neighbors.get(a)!.push(b);
+      neighbors.get(b)!.push(a);
+    } else if (bv) {
+      predOut.add(b);            // продолжение цепочки до видимого — обрезка начала
+    } else {
+      succOut.add(a);            // продолжение цепочки после видимого — обрезка завершения
+    }
+  }
+
+  const initialIds: string[] = [];
+  const finalIds: string[] = [];
+  vis.forEach((id) => {
+    if (!predIn.has(id)) initialIds.push(id);
+    if (!succIn.has(id)) finalIds.push(id);
+  });
+  const trueStartIds = initialIds.filter((id) => !predOut.has(id));
+  const trueFinishIds = finalIds.filter((id) => !succOut.has(id));
+  const cutStartIds = initialIds.filter((id) => predOut.has(id));
+  const cutFinishIds = finalIds.filter((id) => succOut.has(id));
+
+  // Слабо связные компоненты видимого подграфа (обход в глубину по видимым связям).
+  const components: string[][] = [];
+  const visited = new Set<string>();
+  for (const id of vis) {
+    if (visited.has(id)) continue;
+    const stack = [id];
+    visited.add(id);
+    const group: string[] = [];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      group.push(cur);
+      for (const nb of neighbors.get(cur) || []) {
+        if (!visited.has(nb)) { visited.add(nb); stack.push(nb); }
+      }
+    }
+    components.push(group);
+  }
+
+  const looks = (id: string, re: RegExp): boolean => {
+    const n = byId.get(id);
+    if (!n) return false;
+    return re.test(String(n.name || '')) || re.test(String(n.code || ''));
+  };
+
+  return {
+    initialIds, finalIds, trueStartIds, trueFinishIds, cutStartIds, cutFinishIds,
+    components,
+    hasExplicitStart: trueStartIds.some((id) => looks(id, START_NAME_RE)),
+    hasExplicitFinish: trueFinishIds.some((id) => looks(id, FINISH_NAME_RE)),
+  };
+}
+
 export type StructureIssueKind = 'cycle' | 'noPred' | 'noSucc' | 'dupEdge';
 
 export interface StructureIssue {
