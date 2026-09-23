@@ -30,7 +30,7 @@
  */
 import {
   borderPoint, computeLayoutMetrics, edgeControl, quadPt, resolveGeometry,
-  segCross, segRectHit, rectsOverlap,
+  segCross, segRectHit, rectsOverlap, PATH_SAMPLES, DRAWN_EDGE_DETOUR_SAMPLES,
   type LayoutGeometry, type MetricNode, type Rect,
 } from './cpm-metrics';
 
@@ -357,6 +357,13 @@ export interface NudgeOptions {
    * проходов связей сквозь узлы.
    */
   restoreAfterDeconflict?: boolean;
+  /**
+   * Не двигать узлы вообще (режим «Без пересечений»). Укладка в этом режиме
+   * строится ПОСЛЕДНЕЙ и не должна пересобираться: наложения подписей снимаются
+   * не сдвигом узлов, а подбором свободного места для самой подписи
+   * (см. `placeLabelsFree`). Позиции узлов возвращаются без изменений.
+   */
+  freezeNodes?: boolean;
 }
 
 export interface NudgeResult {
@@ -366,6 +373,8 @@ export interface NudgeResult {
   dyById: Record<string, number>;
   /** Узлы, сдвинутые дальше порога (для линии-поводка). */
   leaders: string[];
+  /** Смещения рамок подписей от их канонического места (мировые единицы). */
+  labelOffsets: Record<string, [number, number]>;
   /** Число пересечений связей после разведения — то же, что видит панель. */
   crossings: number;
   /** Качество подписей после разведения (наложения подписей друг на друга и на узлы). */
@@ -462,6 +471,30 @@ export function nudgeForLabels(
   opts: NudgeOptions,
 ): NudgeResult {
   const metricNodes: MetricNode[] = nodeIds.map((id) => ({ id, crit: false }));
+
+  /* ── режим «Без пересечений»: узлы НЕ двигаем ──
+     Укладка этого режима строится последней, поэтому ни доводка порядка,
+     ни разведение подписей не имеют права её пересобрать. Наложения подписей
+     снимаются подбором свободного места для самой подписи. */
+  if (opts.freezeNodes) {
+    const items0: LabelItem[] = boxes.map((b) => ({ id: b.id, nodeId: b.nodeId, kind: b.kind, text: '', w: b.w, h: b.h }));
+    const nodes0: LabelNodeBox[] = [];
+    for (const id of nodeIds) { const p = pos[id]; if (p) nodes0.push({ id, x: p[0], y: p[1], hw: opts.radius, hh: opts.radius }); }
+    const gap0 = opts.gap ?? LABEL_GAP;
+    const statsBefore0 = countOverlaps(fixedPlacements(items0, nodes0, gap0), nodes0, [], 0);
+    const free = placeLabelsFree(items0, nodes0, { gap: gap0 });
+    const kept: Record<string, [number, number]> = {};
+    for (const id in pos) kept[id] = [pos[id][0], pos[id][1]];
+    return {
+      pos: kept,
+      dyById: {},
+      leaders: [],
+      crossings: fastCrossings(kept, deps, geometry),
+      stats: free.stats,
+      statsBefore: statsBefore0,
+      labelOffsets: free.offsets,
+    };
+  }
 
   const cur: Record<string, [number, number]> = {};
   for (const id in pos) cur[id] = [pos[id][0], pos[id][1]];
@@ -588,7 +621,102 @@ export function nudgeForLabels(
   }
   leaders.sort();
 
-  return { pos: out, dyById, leaders, crossings, stats: de.stats, statsBefore };
+  return { pos: out, dyById, leaders, crossings, stats: de.stats, statsBefore, labelOffsets: {} };
+}
+
+/**
+ * Кандидаты свободного места для подписи — в порядке от ближайшего:
+ * каноническое место (имя над узлом, числа под узлом), затем смещения по
+ * горизонтали (в пределах половины ширины рамки — узел остаётся под рамкой,
+ * привязка подписи к узлу не теряется), затем те же смещения с отходом от узла
+ * по вертикали. Подбор места НЕ сдвигает сам узел.
+ */
+function labelCandidates(it: LabelItem, n: LabelNodeBox, side: LabelSide, gap: number): [number, number][] {
+  const canon = anchorCenter(n, side, it.w, it.h, gap);
+  const hStep = Math.max(6, Math.round(it.w * 0.06));
+  const maxH = Math.max(0, Math.floor((it.w / 2 - 6) / hStep) * hStep);
+  const vStep = it.h + gap;
+  const dys: number[] = [];
+  for (let k = 1; k <= 3; k++) { dys.push(-k * vStep, k * vStep); }
+  const cands: { dx: number; dy: number; d: number }[] = [];
+  for (let i = 0; i * hStep <= maxH; i++) {
+    const xs = i === 0 ? [0] : [i * hStep, -i * hStep];
+    for (const dx of xs) {
+      for (const dy of dys) {
+        if (dx === 0 && dy === 0) continue;
+        cands.push({ dx, dy, d: Math.abs(dx) + Math.abs(dy) * 1.4 });
+      }
+    }
+  }
+  cands.sort((a, b) => (a.d - b.d) || (a.dx - b.dx) || (a.dy - b.dy));
+  const out: [number, number][] = [[canon[0], canon[1]]];
+  for (const c of cands) out.push([canon[0] + c.dx, canon[1] + c.dy]);
+  return out;
+}
+
+/**
+ * Подбор СВОБОДНОГО МЕСТА для подписей без сдвига узлов (режим «Без пересечений»).
+ * Обход — тот же фиксированный (слой по x, затем позиция по y); для каждой подписи
+ * перебираются кандидаты (`labelCandidates`) и берётся первый, который не перекрывает
+ * ни уже расставленные подписи, ни любой узел. Если ни один не подошёл, подпись
+ * остаётся на каноническом месте (наложение будет видно в статистике).
+ * Детерминирован и не зависит от зума.
+ */
+export function placeLabelsFree(
+  items: LabelItem[],
+  nodes: LabelNodeBox[],
+  opts: { gap?: number; margin?: number } = {},
+): {
+  placements: LabelPlacement[];
+  byItem: Record<string, LabelPlacement>;
+  offsets: Record<string, [number, number]>;
+  stats: LabelStats;
+} {
+  const gap = opts.gap ?? LABEL_GAP;
+  const margin = opts.margin ?? 0;
+  const nodeById = new Map<string, LabelNodeBox>();
+  nodes.forEach((n) => nodeById.set(n.id, n));
+
+  const own = new Map<string, LabelItem[]>();
+  for (const it of items) {
+    if (!nodeById.has(it.nodeId) || it.w <= 0 || it.h <= 0) continue;
+    if (!own.has(it.nodeId)) own.set(it.nodeId, []);
+    own.get(it.nodeId)!.push(it);
+  }
+  const order = [...own.keys()].sort((a, b) => {
+    const na = nodeById.get(a)!;
+    const nb = nodeById.get(b)!;
+    return (na.x - nb.x) || (na.y - nb.y) || (a < b ? -1 : a > b ? 1 : 0);
+  });
+
+  const placed: Rect[] = [];
+  const placements: LabelPlacement[] = [];
+  const byItem: Record<string, LabelPlacement> = {};
+  const offsets: Record<string, [number, number]> = {};
+  const nodeRects: Rect[] = nodes.map((n) => ({ x: n.x, y: n.y, hw: n.hw + margin, hh: n.hh + margin }));
+
+  for (const id of order) {
+    const nb = nodeById.get(id)!;
+    for (const it of own.get(id)!) {
+      const side = sideOf(it);
+      const canon = canonicalPlacement(it, nb, side, gap);
+      let cx = canon.x;
+      let cy = canon.y;
+      for (const c of labelCandidates(it, nb, side, gap)) {
+        const r: Rect = { x: c[0], y: c[1], hw: it.w / 2 + margin, hh: it.h / 2 + margin };
+        let bad = false;
+        for (const p of placed) if (rectsOverlap(r, p)) { bad = true; break; }
+        if (!bad) for (const n of nodeRects) if (rectsOverlap(r, n)) { bad = true; break; }
+        if (!bad) { cx = c[0]; cy = c[1]; break; }
+      }
+      const pl: LabelPlacement = { id: it.id, nodeId: it.nodeId, kind: it.kind, side, x: cx, y: cy, w: it.w, h: it.h };
+      placements.push(pl);
+      byItem[it.id] = pl;
+      offsets[it.id] = [cx - canon.x, cy - canon.y];
+      placed.push({ x: cx, y: cy, hw: it.w / 2 + margin, hh: it.h / 2 + margin });
+    }
+  }
+  return { placements, byItem, offsets, stats: countOverlaps(placements, nodes, [], margin) };
 }
 
 const CLEANUP_DEFAULT_ROUNDS = 60;
@@ -773,13 +901,164 @@ export interface DrawnCutMarker {
   dir: 1 | -1;
   /** Длина обрубка в мировых единицах (считает вызывающий, зная масштаб). */
   len: number;
+  /** Операция-владелец обрубка: касание её собственных связей пересечением не считается. */
+  opId?: string;
 }
 
-/** Разбивка пересечений итоговой геометрии: всего, только операционные, со служебными. */
+/** Линия-поводок подписи (вертикальный пунктир от сдвинутого узла к исходному месту). */
+export interface DrawnLeader {
+  x: number;
+  from: number;
+  to: number;
+  /** Узел-владелец поводка: касание его собственных связей пересечением не считается. */
+  nodeId?: string;
+}
+
+/** Класс линии на итоговой схеме. */
+export type DrawnLineKind = 'op' | 'service' | 'cut' | 'leader';
+
+/** Одна линия итоговой схемы: тот же путь, что рисуется на полотне. */
+export interface DrawnLine {
+  /** Идентификатор узла-начала (для обрубков/поводков — синтетический). */
+  a: string;
+  /** Идентификатор узла-конца (для обрубков/поводков — синтетический). */
+  b: string;
+  /** Класс линии. */
+  kind: DrawnLineKind;
+  /** Узлы, к которым линия «привязана» (общий конец — не пересечение). */
+  ends: string[];
+  /** Ломаная [x0,y0,x1,y1,…] в мировых координатах. */
+  pts: number[];
+}
+
+/** Параметры построения итоговой геометрии — совпадают с отрисовкой полотна. */
+export interface DrawnGeometryOptions {
+  /** Компактный режим: узлы — окружности (иначе — карточки). */
+  compact?: boolean;
+  /** Мировой радиус окружности узла в компактном режиме. */
+  radius?: number;
+  /** Маркеры обрезки периода (обрубки у крайних видимых операций). */
+  cutMarkers?: DrawnCutMarker[];
+  /** Линии-поводки узлов, сдвинутых при разведении подписей. */
+  leaders?: DrawnLeader[];
+  /** Число сэмплов кривой при построении ломаной (точность подсчёта). */
+  samples?: number;
+}
+
+/**
+ * Строит ломаные ВСЕХ линий итоговой схемы — ровно те пути, что рисует полотно:
+ *   • операционные связи — точки выхода на границе узлов + минимальное отклонение
+ *     вбок для обхода посторонних узлов (квадратичная кривая Безье);
+ *   • служебные связи «Старт»/«Финиш» — тот же обход (`edgeControl`);
+ *   • маркеры обрезки периода — горизонтальные обрубки;
+ *   • линии-поводки подписей, сдвинутых при разведении.
+ *
+ * Геометрия строится теми же вызовами, что и отрисовка (`borderPoint` +
+ * `edgeControl` с тем же числом сэмплов), поэтому счёт пересечений физически не
+ * может разойтись с нарисованным.
+ */
+export function buildDrawnLines(
+  pos: Record<string, [number, number]>,
+  idList: string[],
+  deps: [string, string][],
+  serviceEdges: [string, string][],
+  geometry: LayoutGeometry,
+  opts: DrawnGeometryOptions = {},
+): DrawnLine[] {
+  const G = resolveGeometry(geometry);
+  const compact = !!opts.compact;
+  const ahw = compact ? (opts.radius ?? Math.min(G.cardW, G.cardH) / 2) : G.cardW / 2;
+  const ahh = compact ? (opts.radius ?? Math.min(G.cardW, G.cardH) / 2) : G.cardH / 2;
+  const ehw = ahw + G.edgePad;
+  const ehh = ahh + G.edgePad;
+  const ohw = ahw + G.obstaclePad;
+  const ohh = ahh + G.obstaclePad;
+  const samples = Math.max(4, opts.samples ?? 16);
+
+  const rectById: Record<string, Rect> = {};
+  const rects: Rect[] = [];
+  for (const id of idList) {
+    const p = pos[id];
+    if (!p) continue;
+    const r: Rect = { x: p[0], y: p[1], hw: ahw, hh: ahh };
+    rectById[id] = r;
+    rects.push(r);
+  }
+
+  const out: DrawnLine[] = [];
+  const seen = new Set<string>();
+
+  /** Путь связи a→b: точки выхода на границе узлов + обход посторонних узлов. */
+  const edgePath = (a: string, b: string, svc: boolean): DrawnLine | null => {
+    const ra = rectById[a];
+    const rb = rectById[b];
+    if (!ra || !rb) return null;
+    const s = borderPoint(ra.x, ra.y, ehw, ehh, rb.x, rb.y);
+    const e = borderPoint(rb.x, rb.y, ehw, ehh, ra.x, ra.y);
+    const obstacles = rects
+      .filter((r) => r !== ra && r !== rb)
+      .map((r) => ({ x: r.x, y: r.y, hw: ohw, hh: ohh }));
+    // Сэмплы выбора обхода — ровно как при отрисовке: операционные 14, служебные 16.
+    const c = edgeControl(s[0], s[1], e[0], e[1], obstacles, svc ? PATH_SAMPLES : DRAWN_EDGE_DETOUR_SAMPLES);
+    return { a, b, kind: svc ? 'service' : 'op', ends: [a, b], pts: pathPolyline(s, e, c, samples) };
+  };
+
+  for (const [a, b] of deps) {
+    if (a === b || !rectById[a] || !rectById[b]) continue;
+    const k = a + '\u0001' + b;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const ln = edgePath(a, b, false);
+    if (ln) out.push(ln);
+  }
+  const seenS = new Set<string>();
+  for (const [a, b] of serviceEdges) {
+    if (a === b || !rectById[a] || !rectById[b]) continue;
+    const k = a + '\u0001' + b;
+    if (seenS.has(k)) continue;
+    seenS.add(k);
+    const ln = edgePath(a, b, true);
+    if (ln) out.push(ln);
+  }
+  // Обрубки обрезки периода — горизонтальные, от узла в сторону продолжения.
+  (opts.cutMarkers || []).forEach((m, i) => {
+    if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || !Number.isFinite(m.len)) return;
+    const x0 = m.x + m.dir * (ahw + 4);
+    const x1 = x0 + m.dir * m.len;
+    out.push({
+      a: '\u0001cut' + i, b: '\u0001cut' + i + '#', kind: 'cut',
+      ends: m.opId ? [m.opId] : [],
+      pts: [x0, m.y, x1, m.y],
+    });
+  });
+  // Линии-поводки подписей — вертикальный пунктир в исходное место узла.
+  (opts.leaders || []).forEach((ld, i) => {
+    if (!Number.isFinite(ld.x) || !Number.isFinite(ld.from) || !Number.isFinite(ld.to)) return;
+    out.push({
+      a: '\u0001lead' + i, b: '\u0001lead' + i + '#', kind: 'leader',
+      ends: ld.nodeId ? [ld.nodeId] : [],
+      pts: [ld.x, ld.from, ld.x, ld.to],
+    });
+  });
+  return out;
+}
+
+/** Ломаная отрезка/квадратичной кривой Безье (та же математика, что при отрисовке). */
+function pathPolyline(s: [number, number], e: [number, number], c: [number, number], samples: number): number[] {
+  if (c[0] === (s[0] + e[0]) / 2 && c[1] === (s[1] + e[1]) / 2) return [s[0], s[1], e[0], e[1]];
+  const pts: number[] = [s[0], s[1]];
+  for (let i = 1; i <= samples; i++) {
+    const q = quadPt(s[0], s[1], c[0], c[1], e[0], e[1], i / samples);
+    pts.push(q[0], q[1]);
+  }
+  return pts;
+}
+
+/** Разбивка пересечений итоговой геометрии: всего и по классам линий. */
 export interface DrawnCrossingReport {
   /** Всего пересечений линий на итоговой схеме (как рисуется). */
   total: number;
-  /** Пересечения, где участвует хотя бы одна служебная линия (связь «Старт»/«Финиш» или маркер обрезки). */
+  /** Пересечения, где участвует хотя бы одна служебная линия (связь «Старт»/«Финиш», обрубок или поводок). */
   service: number;
   /** Операционная связь × операционная связь. */
   opOp: number;
@@ -787,17 +1066,17 @@ export interface DrawnCrossingReport {
   opSvc: number;
   /** Служебная линия × служебная линия. */
   svcSvc: number;
+  /** Пересечения с участием маркеров обрезки периода. */
+  cut: number;
+  /** Пересечения с участием линий-поводков подписей. */
+  leader: number;
 }
 
 /**
- * Считает пересечения ИТОГОВОЙ геометрии — той, что рисуется: операционные
- * связи, служебные связи «Старт»/«Финиш» и (по желанию) маркеры обрезки.
- *
- * Считаем ТЕМ ЖЕ способом, что и счётчик качества панели: точки выхода на
- * границе узлов, пересечение отрезков между ними; общий конец пересечением не
- * считается. Так число операционной части совпадает со счётчиком панели, а
- * итог — тот же плюс пересечения со служебными линиями, которые в прежний
- * счётчик не входили. Маркеры обрезки — короткие горизонтальные обрубки.
+ * Считает пересечения ИТОГОВОЙ, реально нарисованной геометрии: пути строятся
+ * тем же построителем, что и полотно (`buildDrawnLines`), и сравниваются как
+ * ломаные. Пары линий с общим узлом-концом пересечением не считаются (как и в
+ * счётчике качества), касание обрубка/поводка со связями своего узла — тоже.
  */
 export function countDrawnCrossings(
   pos: Record<string, [number, number]>,
@@ -805,69 +1084,42 @@ export function countDrawnCrossings(
   deps: [string, string][],
   serviceEdges: [string, string][],
   geometry: LayoutGeometry,
-  opts: { radius?: number; compact?: boolean; cutMarkers?: DrawnCutMarker[] } = {},
+  opts: DrawnGeometryOptions = {},
 ): DrawnCrossingReport {
-  const G = resolveGeometry(geometry);
-  const compact = !!opts.compact;
-  const ahw = compact ? (opts.radius ?? Math.min(G.cardW, G.cardH) / 2) : G.cardW / 2;
-  const ahh = compact ? (opts.radius ?? Math.min(G.cardW, G.cardH) / 2) : G.cardH / 2;
-
-  const rectById: Record<string, Rect> = {};
-  for (const id of idList) { const p = pos[id]; if (p) rectById[id] = { x: p[0], y: p[1], hw: ahw, hh: ahh }; }
-
-  interface Line { a: string; b: string; s: [number, number]; e: [number, number]; svc: boolean }
-  const lines: Line[] = [];
-
-  const build = (a: string, b: string, svc: boolean): Line | null => {
-    const ra = rectById[a];
-    const rb = rectById[b];
-    if (!ra || !rb) return null;
-    const s = borderPoint(ra.x, ra.y, ahw + 3, ahh + 3, rb.x, rb.y);
-    const e = borderPoint(rb.x, rb.y, ahw + 3, ahh + 3, ra.x, ra.y);
-    return { a, b, s, e, svc };
-  };
-
-  // операционные связи — как в счётчике качества (без повторов)
-  const seen = new Set<string>();
-  for (const [a, b] of deps) {
-    if (a === b || !rectById[a] || !rectById[b]) continue;
-    const k = a + '\u0001' + b;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    const ln = build(a, b, false);
-    if (ln) lines.push(ln);
-  }
-  // служебные связи «Старт»/«Финиш»
-  const seenS = new Set<string>();
-  for (const [a, b] of serviceEdges) {
-    if (a === b || !rectById[a] || !rectById[b]) continue;
-    const k = a + '\u0001' + b;
-    if (seenS.has(k)) continue;
-    seenS.add(k);
-    const ln = build(a, b, true);
-    if (ln) lines.push(ln);
-  }
-  // маркеры обрезки периода — горизонтальные обрубки от узла в сторону продолжения
-  const cutMarkers = opts.cutMarkers || [];
-  for (const m of cutMarkers) {
-    if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || !Number.isFinite(m.len)) continue;
-    const x0 = m.x + m.dir * (ahw + 4);
-    const xEnd = x0 + m.dir * m.len;
-    const id = '\u0001cut' + lines.length;
-    lines.push({ a: id, b: id + '#', s: [x0, m.y], e: [xEnd, m.y], svc: true });
-  }
-
-  let opOp = 0, opSvc = 0, svcSvc = 0;
+  const lines = buildDrawnLines(pos, idList, deps, serviceEdges, geometry, opts);
+  let opOp = 0, opSvc = 0, svcSvc = 0, cut = 0, leader = 0;
   for (let i = 0; i < lines.length; i++) {
+    const A = lines[i];
     for (let j = i + 1; j < lines.length; j++) {
-      const A = lines[i];
       const B = lines[j];
-      if (A.a === B.a || A.a === B.b || A.b === B.a || A.b === B.b) continue;
-      if (!segCross(A.s[0], A.s[1], A.e[0], A.e[1], B.s[0], B.s[1], B.e[0], B.e[1])) continue;
-      if (!A.svc && !B.svc) opOp++;
-      else if (A.svc && B.svc) svcSvc++;
+      if (shareNode(A, B)) continue;
+      if (!polylinesCross(A.pts, B.pts)) continue;
+      const aSvc = A.kind !== 'op';
+      const bSvc = B.kind !== 'op';
+      if (!aSvc && !bSvc) opOp++;
+      else if (aSvc && bSvc) svcSvc++;
       else opSvc++;
+      if (A.kind === 'cut' || B.kind === 'cut') cut++;
+      if (A.kind === 'leader' || B.kind === 'leader') leader++;
     }
   }
-  return { total: opOp + opSvc + svcSvc, service: opSvc + svcSvc, opOp, opSvc, svcSvc };
+  const service = opSvc + svcSvc;
+  return { total: opOp + service, service, opOp, opSvc, svcSvc, cut, leader };
+}
+
+/** Есть ли у двух линий общий узел-конец (общий конец — не пересечение). */
+function shareNode(a: DrawnLine, b: DrawnLine): boolean {
+  if (!a.ends.length || !b.ends.length) return false;
+  for (const x of a.ends) if (b.ends.indexOf(x) >= 0) return true;
+  return false;
+}
+
+/** Пересекаются ли две ломаные (все пары отрезков, до первого попадания). */
+function polylinesCross(a: number[], b: number[]): boolean {
+  for (let i = 0; i + 3 < a.length; i += 2) {
+    for (let j = 0; j + 3 < b.length; j += 2) {
+      if (segCross(a[i], a[i + 1], a[i + 2], a[i + 3], b[j], b[j + 1], b[j + 2], b[j + 3])) return true;
+    }
+  }
+  return false;
 }

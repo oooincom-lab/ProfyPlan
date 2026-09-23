@@ -240,6 +240,8 @@ export function rectsOverlap(a: Rect, b: Rect): boolean {
 export function edgeControl(
   sxw: number, syw: number, exw: number, eyw: number,
   obstacles: Rect[],
+  /** Число сэмплов кривой при выборе обхода (по умолчанию — как в счётчике метрик). */
+  samples: number = PATH_SAMPLES,
 ): [number, number] {
   const dxw = exw - sxw;
   const dyw = eyw - syw;
@@ -249,18 +251,27 @@ export function edgeControl(
   const mxw = (sxw + exw) / 2;
   const myw = (syw + eyw) / 2;
   let bestOff = 0;
-  let bestHits = pathHits(sxw, syw, mxw, myw, exw, eyw, obstacles, PATH_SAMPLES);
+  let bestHits = pathHits(sxw, syw, mxw, myw, exw, eyw, obstacles, samples);
   if (bestHits > 0) {
     for (const off of DETOUR_OFFSETS) {
       const cxx = mxw + pxw * off * 2;
       const cyy = myw + pyw * off * 2;
-      const hits = pathHits(sxw, syw, cxx, cyy, exw, eyw, obstacles, PATH_SAMPLES);
+      const hits = pathHits(sxw, syw, cxx, cyy, exw, eyw, obstacles, samples);
       if (hits === 0) { bestOff = off; bestHits = 0; break; }
       if (hits < bestHits) { bestHits = hits; bestOff = off; }
     }
   }
   return [mxw + pxw * bestOff * 2, myw + pyw * bestOff * 2];
 }
+
+/**
+ * Число сэмплов кривой при выборе обхода/построении пути ОПЕРАЦИОННЫХ связей
+ * на полотне. Именно это значение передаёт отрисовка (`CpmGraph`) в
+ * `edgeControl`, поэтому и построитель итоговой геометрии обязан использовать
+ * его же — иначе выбранное отклонение (а значит, и путь связи) разойдётся с
+ * нарисованным, и счётчик пересечений снова «разъедется» с картинкой.
+ */
+export const DRAWN_EDGE_DETOUR_SAMPLES = 14;
 
 /**
  * Считает метрики текущей раскладки. Работает в мировых координатах,
