@@ -21,7 +21,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getProjectDependencies, getProjectDependencyTypes } from '@/lib/api';
 import { getPalette } from '@/lib/graph-styles';
 import {
-  CARD_W, CARD_H, borderPoint, quadPt, pathHits, DETOUR_OFFSETS, edgeControl,
+  CARD_W, CARD_H, borderPoint, quadPt, pathHits, DETOUR_OFFSETS, edgeControl, DRAWN_EDGE_DETOUR_SAMPLES,
   computeLayoutMetrics, DEFAULT_GEOMETRY, type LayoutMetrics, type Rect,
 } from '@/lib/cpm-metrics';
 import { computeLayout as buildCpmLayout } from '@/lib/cpm-layout';
@@ -39,6 +39,27 @@ import {
 import CpmReadability from '@/components/CpmReadability';
 
 export type { LayoutMetrics } from '@/lib/cpm-metrics';
+
+
+/**
+ * Отладочная панель графа.
+ *
+ * По умолчанию никакого отладочного вывода в интерфейсе нет — он не считается и
+ * не рисуется. Для разработки его можно включить ТОЛЬКО вручную одним из двух
+ * способов и он выключен по умолчанию:
+ *   • добавить к адресу параметр `?cpmDiag=1`;
+ *   • выполнить в консоли браузера `localStorage.setItem('cpmDiag','1')`.
+ * Чтобы снова выключить — убрать параметр и выполнить `localStorage.removeItem('cpmDiag')`.
+ */
+function cpmDiagEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (/(?:^\?|&)cpmDiag=1(?:&|$)/.test(window.location.search)) return true;
+    return window.localStorage.getItem('cpmDiag') === '1';
+  } catch {
+    return false;
+  }
+}
 
 /* ─────────────────────────── модель данных ─────────────────────────── */
 
@@ -496,6 +517,25 @@ export default function CpmGraph(props: CpmGraphProps) {
   // posNonce заставляет пересчитать раскладку/метрики после отпускания мыши.
   const manualRef = useRef<Record<Mode, Record<string, [number, number]>>>({ byDate: {}, byLayer: {} });
   const [posNonce, setPosNonce] = useState(0);
+  // Отладочный вывод включён? (по умолчанию нет — см. cpmDiagEnabled)
+  const diagOn = useMemo(() => cpmDiagEnabled(), []);
+  // Объяснение, если раскладку «Без пересечений» пришлось откатить (см. эффект ниже).
+  const [presetNotice, setPresetNotice] = useState<string | null>(null);
+
+  /* Раскладка «Без пересечений» осмысленна только в структурной укладке «По слоям»:
+     в «По датам» горизонталь задаётся календарём, а не раскладкой. Если этот пресет
+     выбран, а режим — «По датам» (переключились из «По слоям» или пресет сохранён с
+     прошлого раза), честно откатываемся на раскладку по умолчанию и объясняем это
+     вместо молчаливого «выбрано, но не применено». */
+  useEffect(() => {
+    if (mode !== 'byDate' || layoutPreset !== 'noplan') return;
+    const fallback = getLayoutPreset(DEFAULT_LAYOUT_PRESET);
+    applyLayoutPreset(DEFAULT_LAYOUT_PRESET);
+    setPresetNotice(
+      'Укладка без пересечений неприменима в режиме «По датам»: горизонталь здесь задаётся календарём, а не раскладкой. ' +
+      'Возвращена раскладка «' + fallback.label + '». Выбрать «Без пересечений» можно в структурной укладке «По слоям».',
+    );
+  }, [mode, layoutPreset, applyLayoutPreset]);
 
   /* размер шрифта: восстановление/сохранение пользовательской настройки */
   useEffect(() => {
@@ -673,7 +713,7 @@ export default function CpmGraph(props: CpmGraphProps) {
       labelBoxes,
       allDeps,
       geom,
-      { radius: labelGeom.radius, restoreAfterDeconflict: noplanActive },
+      { radius: labelGeom.radius, restoreAfterDeconflict: noplanActive, freezeNodes: noplanActive },
     ),
     [rawLayout, labelBoxes, allDeps, geom, visibleOps, critOnly, labelGeom, noplanActive],
   );
@@ -808,25 +848,46 @@ export default function CpmGraph(props: CpmGraphProps) {
   }, [layout, virtualInfo, geom]);
 
   /* ── пересечения ИТОГОВОЙ геометрии (включая служебные связи) ──
-     Счётчик качества считает только операционные связи — именно поэтому он мог
-     показывать ноль, когда на картинке линии пересекались (служебные связи
-     «Старт»/«Финиш» и маркеры обрезки в него не входят). Здесь те же пути
-     строятся как при отрисовке, вместе со служебными, и пересечения считаются
-     по ломаным — это число и есть честный итог по нарисованному. Подписи о
-     качестве и текст укладки «Без пересечений» опираются на него. */
+     Считаем ровно те пути, что рисует полотно (`buildDrawnLines` зовёт те же
+     `borderPoint`/`edgeControl` с теми же сэмплами), включая:
+       • обходы посторонних узлов (кривые) — прежний счётчик считал прямые отрезки;
+       • служебные связи «Старт»/«Финиш»;
+       • маркеры обрезки периода и линии-поводки подписей.
+     Геометрия зависит от уровня детализации полотна (на мелком масштабе узлы —
+     окружности), поэтому счёт ведётся в том же виде, что нарисован: по текущему
+     масштабу вида. Это и есть честный итог по нарисованному; на него опираются
+     подписи о качестве и текст укладки «Без пересечений». */
+  const viewScale = Math.max(0.05, (zoomPct || 80) / 100);
+  const drawnCompact = viewScale < LOD_CARD_MIN_SCALE;
   const drawnCrossings = useMemo<DrawnCrossingReport>(
     () => {
       const idList = [...layoutOps.map((o) => o.id), ...virtualInfo.virtuals.map((v) => v.id)];
       const svc = showEndpoints ? virtualInfo.vEdges.map((e) => [e.from, e.to] as [string, string]) : [];
+      const S = viewScale;
       const cut = showEndpoints
         ? virtualInfo.cutMarkers.map((m) => {
             const p = layoutFull.pos[m.opId];
-            return p ? { x: p[0], y: p[1], dir: (m.kind === 'start' ? -1 : 1) as 1 | -1, len: 28 } : null;
-          }).filter(Boolean) as { x: number; y: number; dir: 1 | -1; len: number }[]
+            return p
+              ? {
+                  x: p[0], y: p[1],
+                  dir: (m.kind === 'start' ? -1 : 1) as 1 | -1,
+                  // Длина обрубка — как в отрисовке: max(14, 22·S) экранных пикселей.
+                  len: Math.max(14, 22 * S) / S,
+                  opId: m.opId,
+                }
+              : null;
+          }).filter(Boolean) as { x: number; y: number; dir: 1 | -1; len: number; opId: string }[]
         : [];
-      return countDrawnCrossings(layoutFull.pos, idList, allDeps, svc, geom, { cutMarkers: cut });
+      const leaders = leaderLines.map((ld) => ({ x: ld.x, from: ld.from, to: ld.to, nodeId: ld.id }));
+      return countDrawnCrossings(layoutFull.pos, idList, allDeps, svc, geom, {
+        compact: drawnCompact,
+        radius: CIRC_WORLD_R,
+        cutMarkers: cut,
+        leaders,
+        samples: 16,
+      });
     },
-    [layoutFull, layoutOps, allDeps, virtualInfo, geom, showEndpoints],
+    [layoutFull, layoutOps, allDeps, virtualInfo, geom, showEndpoints, leaderLines, viewScale, drawnCompact],
   );
 
   /* ── метрики качества раскладки (пересечения, наложения, плотность) ──
@@ -965,6 +1026,9 @@ export default function CpmGraph(props: CpmGraphProps) {
     // Узлы, сдвинутые далеко при разведении подписей, — под отрисовку
     // тонкой линии-поводка (мировые координаты).
     leaders: leaderLines,
+    // Смещения рамок подписей от канонического места (режим «Без пересечений»:
+    // узел не двигается, свободное место подбирает сама подпись).
+    labelOffsets: labelNudge.labelOffsets,
   };
 
   /* ── рисование ── */
@@ -1188,35 +1252,18 @@ export default function CpmGraph(props: CpmGraphProps) {
 
       // Обход посторонних узлов: если прямая проходит сквозь чужой узел,
       // изгибаем связь минимальным отклонением (квадратичная кривая Безье).
+      // Путь считается ЕДИНЫМ помощником `edgeControl` с тем же числом сэмплов,
+      // что и у счётчика пересечений итоговой геометрии (`countDrawnCrossings`),
+      // — картинка и число не могут разъехаться.
       const obstacles = allRects.filter((r) => r.id !== a.id && r.id !== b.id);
-      const dxw = e[0] - s[0];
-      const dyw = e[1] - s[1];
-      const lenw = Math.hypot(dxw, dyw) || 1;
-      const pxw = -dyw / lenw;
-      const pyw = dxw / lenw;
-      const mxw = (s[0] + e[0]) / 2;
-      const myw = (s[1] + e[1]) / 2;
-      let bestOff = 0;
-      let bestHits = pathHits(s[0], s[1], mxw, myw, e[0], e[1], obstacles, 14);
-      if (bestHits > 0) {
-        for (const off of DETOUR_OFFSETS) {
-          const cxx = mxw + pxw * off * 2;
-          const cyy = myw + pyw * off * 2;
-          const hits = pathHits(s[0], s[1], cxx, cyy, e[0], e[1], obstacles, 14);
-          if (hits === 0) { bestOff = off; bestHits = 0; break; }
-          if (hits < bestHits) { bestHits = hits; bestOff = off; }
-        }
-      }
-
-      const cxw = mxw + pxw * bestOff * 2;
-      const cyw = myw + pyw * bestOff * 2;
+      const [cxw, cyw] = edgeControl(s[0], s[1], e[0], e[1], obstacles, DRAWN_EDGE_DETOUR_SAMPLES);
       const ax = sx(s[0]);
       const ay = sy(s[1]);
       const bx = sx(e[0]);
       const by = sy(e[1]);
       const ccx = sx(cxw);
       const ccy = sy(cyw);
-      const curve = bestOff !== 0;
+      const curve = !(cxw === (s[0] + e[0]) / 2 && cyw === (s[1] + e[1]) / 2);
       // наконечник: направление — касательная в конце (для кривой это E − C)
       const ang = curve ? Math.atan2(by - ccy, bx - ccx) : Math.atan2(by - ay, bx - ax);
       const hl = clamp(9 * S + 3, 6, 12);
@@ -1258,7 +1305,9 @@ export default function CpmGraph(props: CpmGraphProps) {
         : (logical ? EDGE_STYLE.logical.arrow : (anyBranch ? EDGE_STYLE.branch.arrow : EDGE_STYLE.wait.arrow));
       ctx.fill();
 
-      const [lxw, lyw] = curve ? quadPt(s[0], s[1], cxw, cyw, e[0], e[1], 0.5) : [mxw, myw];
+      const [lxw, lyw] = curve
+        ? quadPt(s[0], s[1], cxw, cyw, e[0], e[1], 0.5)
+        : [(s[0] + e[0]) / 2, (s[1] + e[1]) / 2];
       const lmx = sx(lxw);
       const lmy = sy(lyw);
 
@@ -1490,6 +1539,11 @@ export default function CpmGraph(props: CpmGraphProps) {
         // подписями мог быть сдвинут вниз при разведении наложений (st.layout),
         // поэтому подпись и узел двигаются как одно целое и не разъезжаются.
         const GAPW = LABEL_GAP;   // мировой зазор между окружностью и подписью (единый с проверкой)
+        // Смещение рамки подписи, подобранное под свободное место (режим
+        // «Без пересечений»: узел не сдвигается — двигается сама подпись).
+        const off = ((st.labelOffsets || {}) as Record<string, [number, number]>);
+        const offCode = off[o.id + ':code'] || [0, 0];
+        const offDur = off[o.id + ':dur'] || [0, 0];
         if (r >= 11) {
           const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
           ctx.fillStyle = o.crit ? '#E8EEF5' : 'rgba(176,196,222,0.8)';
@@ -1498,7 +1552,7 @@ export default function CpmGraph(props: CpmGraphProps) {
           ctx.textBaseline = 'middle';
           const lbl = fitText(ctx, o.code, CW * 0.9);
           const ly = cy - (r + GAPW * S + codeFp * 1.2 / 2);
-          ctx.fillText(lbl, cx, ly + 0.5);
+          ctx.fillText(lbl, cx + offCode[0] * S, ly + offCode[1] * S + 0.5);
         }
         // Продолжительность операции — в компактном режиме тоже, у всех узлов,
         // включая критические (иначе у красных узлов подписи длительности нет).
@@ -1514,11 +1568,13 @@ export default function CpmGraph(props: CpmGraphProps) {
           const resW = resTxt ? ctx.measureText(resTxt).width : 0;
           const by = cy + (r + GAPW * S + durFp * 1.2 / 2);
           const lx = cx - (durW + resW) / 2;
+          const dOx = offDur[0] * S;
+          const dOy = offDur[1] * S;
           ctx.fillStyle = o.crit ? 'rgba(252,165,165,0.95)' : 'rgba(176,196,222,0.9)';
-          ctx.fillText(durTxt, lx, by + 0.5);
+          ctx.fillText(durTxt, lx + dOx, by + dOy + 0.5);
           if (resTxt) {
             ctx.fillStyle = '#F59E0B';
-            ctx.fillText(resTxt, lx + durW, by + 0.5);
+            ctx.fillText(resTxt, lx + durW + dOx, by + dOy + 0.5);
           }
         }
       }
@@ -1982,15 +2038,22 @@ export default function CpmGraph(props: CpmGraphProps) {
      той, что рисуется, со всеми связями (операционными и служебными). Иначе
      показываем фактическое число и что именно пересекается. */
   const noplanZero = drawnCrossings.total === 0;
+  // Что именно пересекается — по классам линий итоговой геометрии.
+  const crossWhere = [
+    drawnCrossings.opOp > 0 ? 'операционные связи между собой — ' + drawnCrossings.opOp : '',
+    drawnCrossings.opSvc > 0 ? 'операционные со служебными «Старт»/«Финиш» — ' + drawnCrossings.opSvc : '',
+    drawnCrossings.svcSvc > 0 ? 'служебные между собой — ' + drawnCrossings.svcSvc : '',
+    drawnCrossings.cut > 0 ? 'маркеры обрезки периода — ' + drawnCrossings.cut : '',
+    drawnCrossings.leader > 0 ? 'поводки подписей — ' + drawnCrossings.leader : '',
+  ].filter(Boolean).join('; ');
   const noplanBanner = noplanZero
-    ? 'Раскладка «Без пересечений»: на итоговой схеме пересечений линий нет — ноль подтверждён по всем связям' +
-      (showEndpoints ? ' (включая служебные «Старт»/«Финиш»)' : '') +
+    ? 'Раскладка «Без пересечений»: на итоговой схеме пересечений линий нет — ноль подтверждён по всем линиям' +
+      (showEndpoints ? ' (операционные связи, служебные «Старт»/«Финиш», маркеры обрезки периода)' : '') +
       '. Хронология (даты) в этой укладке не показывается.'
     : 'Раскладка «Без пересечений»: ' +
-      (noPlanReachable ? 'ноль не подтверждён на итоговой схеме' : 'ноль для этой схемы недостижим') +
-      ' — на схеме ' + drawnCrossings.total + ' ' + crossingsWord(drawnCrossings.total) + ' линий' +
-      ' (между операционными связями ' + drawnCrossings.opOp +
-      (drawnCrossings.service > 0 ? ', с участием служебных — ' + drawnCrossings.service : '') + ')' +
+      (noPlanReachable ? 'ноль на итоговой схеме не подтверждён' : 'ноль пересечений недостижим для этого графа') +
+      ' — фактически ' + drawnCrossings.total + ' ' + crossingsWord(drawnCrossings.total) + ' линий' +
+      (crossWhere ? ' (' + crossWhere + ')' : '') +
       '. Хронология (даты) в этой укладке не показывается.';
 
   return (
@@ -2020,7 +2083,7 @@ export default function CpmGraph(props: CpmGraphProps) {
           {(['byDate', 'byLayer'] as Mode[]).map((m) => (
             <button
               key={m}
-              onClick={() => setMode(m)}
+              onClick={() => { setPresetNotice(null); setMode(m); }}
               style={{
                 padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
                 background: mode === m ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : 'transparent',
@@ -2094,7 +2157,7 @@ export default function CpmGraph(props: CpmGraphProps) {
                   key={p.id}
                   type="button"
                   disabled={disabled}
-                  onClick={() => applyLayoutPreset(p.id)}
+                  onClick={() => { setPresetNotice(null); applyLayoutPreset(p.id); }}
                   title={title}
                   data-cpm-layout={p.id}
                   style={{
@@ -2139,6 +2202,38 @@ export default function CpmGraph(props: CpmGraphProps) {
           <span aria-hidden="true">🕸</span>
           <span>{noplanBanner}</span>
         </div>
+      )}
+
+      {/* Пояснение к «Без пересечений», если укладку пришлось откатить (не «молча не применено»). */}
+      {presetNotice && (
+        <div
+          data-cpm-preset-notice="shown"
+          style={{
+            display: 'flex', gap: 6, alignItems: 'center', padding: '5px 10px', borderRadius: 8, fontSize: 11.5,
+            background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)', color: '#FCD34D',
+          }}
+        >
+          <span aria-hidden="true">⚠</span>
+          <span>{presetNotice}</span>
+        </div>
+      )}
+
+      {/* отладочная панель — только по явному ручному флагу (?cpmDiag=1 / localStorage), по умолчанию выключена */}
+      {diagOn && (
+        <pre
+          data-cpm-diag="panel"
+          style={{
+            margin: 0, padding: '6px 9px', borderRadius: 8, fontSize: 10.5, lineHeight: 1.35,
+            background: 'rgba(148,163,184,0.08)', border: '1px dashed rgba(148,163,184,0.35)',
+            color: '#94A3B8', fontFamily: FONT_MONO, whiteSpace: 'pre-wrap', overflow: 'hidden',
+          }}
+        >
+          {[
+            'mode=' + mode + ' preset=' + layoutPreset + ' noplanActive=' + noplanActive + ' reachable=' + noPlanReachable + ' planarLayout=' + planarLayout,
+            'ops all/visible/layout=' + mappedOps.length + '/' + visibleOps.length + '/' + layoutOps.length + ' deps all/visible=' + allDeps.length + '/' + structureIssues.length,
+            'drawn total/opOp/svc=' + drawnCrossings.total + '/' + drawnCrossings.opOp + '/' + drawnCrossings.service + ' overlaps=' + labelNudge.stats.labelOverlaps,
+          ].join('\n')}
+        </pre>
       )}
 
       {/* условные обозначения перенесены вниз рабочей области (см. блок ниже полотна) */}
