@@ -46,6 +46,10 @@ export interface CpmReadabilityProps {
   crossingsByLayer?: number;
   /** Итог честной проверки планарности сети (по значку «i»). */
   planarity?: PlanarityResult;
+  /** Наложения подписей узлов после авторасстановки (компактный режим). */
+  labelOverlaps?: number;
+  /** Наложения подписей при прежнем фиксированном размещении — для сравнения. */
+  labelOverlapsFixed?: number;
   /** Сторона прижатия всплывающих подробностей. */
   align?: 'left' | 'right';
 }
@@ -59,7 +63,7 @@ function DetailRow({ k, v, accent }: { k: string; v: string; accent?: boolean })
   );
 }
 
-export default function CpmReadability({ metrics, crossingsByDate, crossingsByLayer, planarity, align = 'left' }: CpmReadabilityProps) {
+export default function CpmReadability({ metrics, crossingsByDate, crossingsByLayer, planarity, labelOverlaps, labelOverlapsFixed, align = 'left' }: CpmReadabilityProps) {
   const [open, setOpen] = useState(false);
   const score = readabilityScore(metrics);
   const band = readabilityBand(score);
@@ -68,7 +72,12 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
   const byLayer = crossingsByLayer != null ? crossingsByLayer : metrics.crossings;
 
   return (
-    <span data-cpm-quality="indicator" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <span
+      data-cpm-quality="indicator"
+      data-cpm-label-overlaps={labelOverlaps != null ? String(labelOverlaps) : undefined}
+      data-cpm-label-overlaps-fixed={labelOverlapsFixed != null ? String(labelOverlapsFixed) : undefined}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+    >
       <span
         aria-hidden="true"
         title={'Читаемость: ' + BAND_LABEL[band]}
@@ -113,6 +122,15 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
           <DetailRow k="Проходы линий сквозь узлы" v={String(metrics.edgeNodeHits)} />
           <DetailRow k="Наложения узлов" v={String(metrics.nodeOverlaps)} />
           <DetailRow k="Плотность" v={metrics.density + ' %'} />
+          {labelOverlaps != null && (
+            <DetailRow
+              k="Наложения подписей"
+              accent={labelOverlaps > 0}
+              v={labelOverlapsFixed != null && labelOverlapsFixed !== labelOverlaps
+                ? 'авто: ' + labelOverlaps + ' · было: ' + labelOverlapsFixed
+                : String(labelOverlaps)}
+            />
+          )}
           <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid #26364F', color: '#8FA3BD' }}>
             Пересечения приведены для обеих укладок — «По датам» держит время работ, «По слоям» подбирает порядок.
           </div>

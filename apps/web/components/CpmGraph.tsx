@@ -32,6 +32,10 @@ import {
   sanitizeLayoutPreset, LAYOUT_PRESETS, DEFAULT_LAYOUT_PRESET, STRETCH_K,
   type LayoutPreset,
 } from '@/lib/cpm-settings';
+import {
+  placeLabels, fixedPlacements, countOverlaps, buildEdgePolylines, buildNodeBoxes,
+  type LabelItem, type LabelPlacement, type LabelStats,
+} from '@/lib/cpm-labels';
 import CpmReadability from '@/components/CpmReadability';
 
 export type { LayoutMetrics } from '@/lib/cpm-metrics';
@@ -212,6 +216,30 @@ function circleRadius(S: number, rowPitch: number = ROW_PITCH): number {
 }
 const FONT_MONO = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 const FONT_UI = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+/* ── автоподбор положения подписей узлов ──────────────────────────────
+   В компактном режиме у каждого узла две подписи: имя работы и «продолжительность
+   + резерв». Они размещаются вокруг окружности узла детерминированным перебором
+   позиций (снизу, сверху, справа, слева, по диагоналям), чтобы не накладываться
+   друг на друга, на соседние узлы и на линии связей. Размеры подписей берутся в
+   «эталонном» масштабе раскладки «Обычно» (вид открывается именно на нём),
+   поэтому расстановка воспроизводима и не зависит от зума. */
+const LABEL_REF_SCALE = 0.5;              // эталонный масштаб вида «Обычно»
+const LABEL_REF_FONT = FONT_SCALES.md;    // эталонный кегль подписей (настройка по умолчанию)
+let labelMeasureCtx: CanvasRenderingContext2D | null = null;
+/** Контекст для измерения текста подписей (offscreen canvas), ленивый и общий. */
+function getLabelMeasureCtx(): CanvasRenderingContext2D | null {
+  if (labelMeasureCtx) return labelMeasureCtx;
+  if (typeof document === 'undefined') return null;
+  try { labelMeasureCtx = document.createElement('canvas').getContext('2d'); } catch { labelMeasureCtx = null; }
+  return labelMeasureCtx;
+}
+interface LabelLayout {
+  byItem: Record<string, LabelPlacement>;
+  auto: LabelStats;
+  fixed: LabelStats;
+  fixedById: Record<string, LabelPlacement>;
+}
 
 /** Праздники РФ (непроизводственные дни), достаточные для тестового стенда. */
 const HOLIDAYS = new Set<string>([
@@ -732,6 +760,80 @@ export default function CpmGraph(props: CpmGraphProps) {
   const edgesRef = useRef<{ pts: number[]; tip: EdgeTip }[]>([]);
 
   const fontScale: number = FONT_SCALES[fontSize];
+
+  /* ── авторасстановка подписей узлов ──
+     Считается в мировых координатах в эталонном масштабе «Обычно», поэтому
+     одинакова при любом зуме и воспроизводима. Заодно считаем, сколько наложений
+     подписей дало бы прежнее фиксированное размещение — для сравнения в панели
+     качества и в отчёте (в отрисовке оно не применяется). */
+  const labelLayout = useMemo<LabelLayout>(() => {
+    const empty: LabelLayout = {
+      byItem: {},
+      auto: { labelOverlaps: 0, labelNodeHits: 0, labelEdgeHits: 0, unplaced: 0 },
+      fixed: { labelOverlaps: 0, labelNodeHits: 0, labelEdgeHits: 0, unplaced: 0 },
+      fixedById: {},
+    };
+    const mtx = getLabelMeasureCtx();
+    if (!mtx || !layoutOps.length) return empty;
+
+    const S = LABEL_REF_SCALE;
+    const FS = LABEL_REF_FONT;
+    const LBL = geom.labelScale ?? 1;
+    const fszL = (px: number) => Math.max(6, Math.round(px * FS * LBL));
+    const CW = geom.cardW;
+    const CH = geom.cardH;
+    const worldR = circleRadius(S, CH + geom.rowGap) / S;   // мировой радиус окружности узла
+
+    // Узлы-препятствия: видимые операции (окружности) и «Старт»/«Финиш» (капсулы).
+    const nodeIds: string[] = [];
+    visibleOps.forEach((o) => { if (!critOnly || o.crit) nodeIds.push(o.id); });
+    const nodeBoxes = buildNodeBoxes(layoutFull.pos, nodeIds, geom, { radius: worldR, compact: true });
+    (virtualInfo.virtuals || []).forEach((v) => {
+      if (layoutFull.pos[v.id]) nodeBoxes.push({ id: v.id, x: v.x, y: v.y, hw: CW / 2, hh: CH / 2 });
+    });
+
+    // Ломаные связей — препятствия (реальные связи + служебные «Старт»/«Финиш»).
+    const vDeps: [string, string][] = (virtualInfo.vEdges || []).map((ve) => [ve.from, ve.to] as [string, string]);
+    const virtualIds: string[] = [];
+    (virtualInfo.virtuals || []).forEach((v) => { if (layoutFull.pos[v.id]) virtualIds.push(v.id); });
+    const edges = buildEdgePolylines(
+      layoutFull.pos, nodeIds.concat(virtualIds), allDeps.concat(vDeps), geom,
+      { radius: worldR, compact: true, samples: 10 },
+    );
+
+    // Подписи в эталонном масштабе: имя — предпочтительно сверху, числа — снизу.
+    const items: LabelItem[] = [];
+    visibleOps.forEach((o) => {
+      if (critOnly && !o.crit) return;
+      if (!layoutFull.pos[o.id]) return;
+      const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
+      mtx.font = codeFp + 'px ' + FONT_UI;
+      const codeText = fitText(mtx, o.code, CW * 0.9);
+      if (codeText) {
+        items.push({
+          id: o.id + ':code', nodeId: o.id, kind: 'code', text: codeText, prefer: 'top',
+          w: mtx.measureText(codeText).width / S, h: (codeFp * 1.2) / S,
+        });
+      }
+      const durTxt = fmtDur(o.durDays, unit, o.hpd);
+      const resTxt = o.tf > 0.0001 ? '  +' + fmtReserve(o.tf, unit, o.hpd) : '';
+      const durFp = fszL(clamp(Math.round(9 * S + 2), 7, 11));
+      mtx.font = 'bold ' + durFp + 'px ' + FONT_MONO;
+      const durW = mtx.measureText(durTxt).width + (resTxt ? mtx.measureText(resTxt).width : 0);
+      items.push({
+        id: o.id + ':dur', nodeId: o.id, kind: 'dur', text: durTxt + resTxt, prefer: 'bottom',
+        w: durW / S, h: (durFp * 1.2) / S,
+      });
+    });
+
+    const auto = placeLabels(items, nodeBoxes, edges);
+    const fixedList = fixedPlacements(items, nodeBoxes);
+    const fixedById: Record<string, LabelPlacement> = {};
+    fixedList.forEach((p) => { fixedById[p.id] = p; });
+    const fixed = countOverlaps(fixedList, nodeBoxes, edges, 0);
+    return { byItem: auto.byItem, auto: auto.stats, fixed, fixedById };
+  }, [layoutFull, layoutOps, visibleOps, allDeps, virtualInfo, geom, unit, critOnly]);
+
   stateRef.current = {
     ...stateRef.current,   // сохраняем масштаб/смещение между рендерами (иначе canvas остаётся пустым)
     ops: visibleOps,
@@ -753,6 +855,8 @@ export default function CpmGraph(props: CpmGraphProps) {
     colPitch,
     rowPitch,
     labelScale: geom.labelScale ?? 1,
+    // Расстановка подписей узлов (мировые координаты) — читается отрисовкой.
+    labelPlace: labelLayout.byItem,
   };
 
   /* ── рисование ── */
@@ -1252,12 +1356,22 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.textBaseline = 'middle';
         ctx.fillText(String(o.num), cx, cy + 0.5);
 
+        // Подписи узла: имя работы и «продолжительность + резерв». Положение
+        // берётся из авторасстановки (мировые координаты) — так на плотных
+        // участках подписи не налезают друг на друга, на соседние узлы и на
+        // связи. При отсутствии расстановки — прежнее фиксированное место.
+        const place = (st.labelPlace || {}) as Record<string, LabelPlacement>;
         if (r >= 11) {
+          const pl = place[o.id + ':code'];
+          const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
           ctx.fillStyle = o.crit ? '#E8EEF5' : 'rgba(176,196,222,0.8)';
-          ctx.font = fszL(clamp(Math.round(9.5 * S + 3), 8, 12)) + 'px ' + FONT_UI;
-          ctx.textBaseline = 'bottom';
+          ctx.font = codeFp + 'px ' + FONT_UI;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
           const lbl = fitText(ctx, o.code, CW * 0.9);
-          ctx.fillText(lbl, cx, cy - r - 3);
+          const lx = pl ? sx(pl.x) : cx;
+          const ly = pl ? sy(pl.y) : cy - r - 3 - codeFp * 0.6;
+          ctx.fillText(lbl, lx, ly + 0.5);
         }
         // Продолжительность операции — в компактном режиме тоже, у всех узлов,
         // включая критические (иначе у красных узлов подписи длительности нет).
@@ -1265,17 +1379,21 @@ export default function CpmGraph(props: CpmGraphProps) {
         if (r >= 9) {
           const durTxt = fmtDur(o.durDays, st.unit, o.hpd);
           const resTxt = o.tf > 0.0001 ? '  +' + fmtReserve(o.tf, st.unit, o.hpd) : '';
-          ctx.font = 'bold ' + fszL(clamp(Math.round(9 * S + 2), 7, 11)) + 'px ' + FONT_MONO;
-          ctx.textBaseline = 'top';
+          const durFp = fszL(clamp(Math.round(9 * S + 2), 7, 11));
+          ctx.font = 'bold ' + durFp + 'px ' + FONT_MONO;
+          ctx.textBaseline = 'middle';
           ctx.textAlign = 'left';
           const durW = ctx.measureText(durTxt).width;
           const resW = resTxt ? ctx.measureText(resTxt).width : 0;
-          const lx = cx - (durW + resW) / 2;
+          const pl = place[o.id + ':dur'];
+          const bx = pl ? sx(pl.x) : cx;
+          const by = pl ? sy(pl.y) : cy + r + 2 + durFp * 0.6;
+          const lx = bx - (durW + resW) / 2;
           ctx.fillStyle = o.crit ? 'rgba(252,165,165,0.95)' : 'rgba(176,196,222,0.9)';
-          ctx.fillText(durTxt, lx, cy + r + 2);
+          ctx.fillText(durTxt, lx, by + 0.5);
           if (resTxt) {
             ctx.fillStyle = '#F59E0B';
-            ctx.fillText(resTxt, lx + durW, cy + r + 2);
+            ctx.fillText(resTxt, lx + durW, by + 0.5);
           }
         }
       }
@@ -1673,7 +1791,14 @@ export default function CpmGraph(props: CpmGraphProps) {
         <Badge>Операций: {shown}{shown !== total ? ' / ' + total : ''}</Badge>
         <Badge tone="crit">Критических: {critCount}</Badge>
         <Badge>Масштаб: {zoomPct}%</Badge>
-        <CpmReadability metrics={metricsForPanel} crossingsByDate={layoutCrossings.byDate} crossingsByLayer={layoutCrossings.byLayer} planarity={planarity} />
+        <CpmReadability
+          metrics={metricsForPanel}
+          crossingsByDate={layoutCrossings.byDate}
+          crossingsByLayer={layoutCrossings.byLayer}
+          planarity={planarity}
+          labelOverlaps={labelLayout.auto.labelOverlaps}
+          labelOverlapsFixed={labelLayout.fixed.labelOverlaps}
+        />
         <Badge>Режим: {mode === 'byDate' ? 'по датам' : 'по слоям'}</Badge>
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 0, border: '1px solid #26364F', borderRadius: 7, overflow: 'hidden' }}>
