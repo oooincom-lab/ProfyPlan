@@ -75,6 +75,19 @@ export interface LayoutOptions {
    * меняет вид и числа, а не только внутренние проходы оптимизации.
    */
   geometry?: LayoutGeometry;
+  /**
+   * Нижняя граница вертикального шага ряда (мировые единицы). В компактном режиме
+   * узел вместе с подписями (имя сверху, «продолжительность + резерв» снизу) выше
+   * карточки, поэтому раскладка должна раздвигать узлы столбца так, чтобы подписи
+   * помещались. 0/undefined — обычный шаг (cardH + rowGap).
+   */
+  minRowPitch?: number;
+  /**
+   * Добавлять старты оптимизации «по топологической глубине столбцов» (структурная
+   * укладка «по связям»), когда стартов больше одного. false — только старты «по
+   * раннему старту» (сохраняет слоистость по времени/раннему старту).
+   */
+  topologicalStarts?: boolean;
 }
 
 /** Минимальный зазор между узлами по обеим осям. */
@@ -116,9 +129,12 @@ export function computeLayout(
   // «по связям», без времени) — у каждой укладки свои сильные стороны, берём лучшую
   // по счётчику панели.
   const multi = mode === 'byLayer' && restarts > 1;
-  const total = multi ? restarts * 2 : restarts;
+  const topoStarts = opts.topologicalStarts !== false;
+  // Для «по датам» старты идентичны (детерминированный порядок) — достаточно одного;
+  // для «по слоям» перебираем старты «по раннему старту» и (если разрешено) «по связям».
+  const total = multi ? restarts * (topoStarts ? 2 : 1) : 1;
   for (let s = 0; s < total; s++) {
-    const colKind: ColKind = multi && s >= restarts ? 'topo' : 'es';
+    const colKind: ColKind = multi && topoStarts && s >= restarts ? 'topo' : 'es';
     const seed = multi ? (s % restarts) : null;
     const r = computeLayoutOnce(ops, deps, mode, opts, seed, colKind);
     // Выбор лучшего старта — по тому же счётчику, что видит панель (пересечения +
@@ -163,7 +179,8 @@ function computeLayoutOnce(
   const cardW = G.cardW;
   const cardH = G.cardH;
   const colPitch = cardW + G.colGap;
-  const rowPitch = cardH + G.rowGap;
+  // Шаг ряда: не меньше обычного и не меньше минимума под подписи (компактный режим).
+  const rowPitch = Math.max(cardH + G.rowGap, opts.minRowPitch ?? 0);
   const pad = G.pad;
   const edgeHW = cardW / 2 + G.edgePad;
   const edgeHH = cardH / 2 + G.edgePad;

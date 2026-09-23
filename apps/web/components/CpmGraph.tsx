@@ -33,8 +33,8 @@ import {
   type LayoutPreset,
 } from '@/lib/cpm-settings';
 import {
-  placeLabels, fixedPlacements, countOverlaps, buildEdgePolylines, buildNodeBoxes,
-  type LabelItem, type LabelPlacement, type LabelStats,
+  nudgeForLabels, requiredRowPitch, LABEL_GAP,
+  type LabelBox, type CompactLabelGeom,
 } from '@/lib/cpm-labels';
 import CpmReadability from '@/components/CpmReadability';
 
@@ -234,12 +234,9 @@ function getLabelMeasureCtx(): CanvasRenderingContext2D | null {
   try { labelMeasureCtx = document.createElement('canvas').getContext('2d'); } catch { labelMeasureCtx = null; }
   return labelMeasureCtx;
 }
-interface LabelLayout {
-  byItem: Record<string, LabelPlacement>;
-  auto: LabelStats;
-  fixed: LabelStats;
-  fixedById: Record<string, LabelPlacement>;
-}
+/* Подписи узлов теперь не перебирают позиции вокруг узла, а всегда стоят в
+   фиксированном месте (имя сверху, числа снизу); наложения разрешает модуль
+   lib/cpm-labels вертикальным сдвигом самих узлов. */
 
 /** Праздники РФ (непроизводственные дни), достаточные для тестового стенда. */
 const HOLIDAYS = new Set<string>([
@@ -412,6 +409,13 @@ function computeLayout(ops: GOp[], deps: [string, string][], mode: Mode, opts?: 
    пересечений, поэтому перебираем несколько детерминированных стартов и берём
    лучший результат. Для непланарного графа старт один (ноль недостижим). */
 const PLANAR_RESTARTS = 8;
+/* Число стартов раскладки для компактного режима с разведёнными подписями: нужен
+   запас, чтобы укладка «по слоям» устойчиво разошлась под увеличенный шаг ряда
+   (только старты «по раннему старту» — слоистость по времени сохраняется). */
+const LABEL_RESTARTS = 4;
+/* Запас к минимальному шагу ряда под подписи (мировые единицы): даёт укладке
+   немного свободы на доводку порядка, чтобы разведение не ломало пересечения. */
+const LABEL_PITCH_EXTRA = 4;
 
 export default function CpmGraph(props: CpmGraphProps) {
   // height не задан → полотно занимает всю доступную высоту родителя (вид рабочего поля).
@@ -556,36 +560,123 @@ export default function CpmGraph(props: CpmGraphProps) {
   // в режиме «По слоям»), либо планарный подграф (тогда ноль пересечений
   // достижим и в «Обычно»/«Плотно»/«Для печати»). Для прочих — один старт.
   const noplanActive = layoutPreset === 'noplan' && mode === 'byLayer';
+  /* ── геометрия подписей узла и нижняя граница шага ряда под них ──
+     В компактном режиме имя работы стоит над узлом, «продолжительность + резерв»
+     — под ним. Соседние узлы столбца должны стоять не ближе суммарной высоты этих
+     подписей, иначе они налезут друг на друга (при одинаковом x столбца
+     горизонтально они совпадают). Значение считается по кеглям подписей и радиусу
+     узла при эталонном масштабе, т.е. не зависит от зума. */
+  const labelGeom = useMemo<CompactLabelGeom>(() => {
+    const S = LABEL_REF_SCALE;
+    const FS = LABEL_REF_FONT;
+    const LBL = geom.labelScale ?? 1;
+    const fszL = (px: number) => Math.max(6, Math.round(px * FS * LBL));
+    const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
+    const durFp = fszL(clamp(Math.round(9 * S + 2), 7, 11));
+    const radius = circleRadius(S, geom.cardH + geom.rowGap) / S;
+    return { radius, gap: LABEL_GAP, codeH: (codeFp * 1.2) / S, durH: (durFp * 1.2) / S };
+  }, [geom]);
+  // Минимальный шаг ряда, при котором подписи не налезают, + небольшой запас.
+  const labelPitch = Math.ceil(requiredRowPitch(labelGeom)) + LABEL_PITCH_EXTRA;
+
+  // Планарному (под)графу нужен ноль пересечений — перебираем старты, включая
+  // структурные «по связям». Непланарному достаточно нескольких стартов «по раннему
+  // старту»: они устойчиво разводят узлы под увеличенный шаг ряда.
+  const planarLayout = noplanActive || layoutPlanarity.state === 'confirmed';
   const layoutOpts = useMemo(
     () => ({
       ...settingsToLayoutOptions(activePreset.settings),
-      restarts: (noplanActive || layoutPlanarity.state === 'confirmed') ? PLANAR_RESTARTS : 1,
+      restarts: planarLayout ? PLANAR_RESTARTS : LABEL_RESTARTS,
+      topologicalStarts: planarLayout,
+      minRowPitch: labelPitch,
       geometry: geom,
     }),
-    [activePreset, layoutPlanarity, geom, noplanActive],
+    [activePreset, planarLayout, geom, labelPitch],
+  );
+
+  /* ── базовая раскладка узлов без ручных сдвигов ──
+     Считается отдельно от ручных позиций (перетаскивания), чтобы разведение
+     подписей не пересчитывалось на каждый кадр перетаскивания. */
+  const rawLayout = useMemo(
+    () => computeLayout(layoutOps, allDeps, mode, layoutOpts),
+    [layoutOps, allDeps, mode, layoutOpts],
+  );
+
+  /* ── подписи узлов в мировых единицах (эталонный масштаб вида «Обычно») ──
+     Ширины измеряются тем же способом, что и при отрисовке, чтобы проверка
+     наложений совпадала с картинкой. */
+  const labelBoxes = useMemo<LabelBox[]>(() => {
+    const out: LabelBox[] = [];
+    const mtx = getLabelMeasureCtx();
+    if (!mtx) return out;
+    const S = LABEL_REF_SCALE;
+    const FS = LABEL_REF_FONT;
+    const LBL = geom.labelScale ?? 1;
+    const fszL = (px: number) => Math.max(6, Math.round(px * FS * LBL));
+    const CW = geom.cardW;
+    visibleOps.forEach((o) => {
+      if (critOnly && !o.crit) return;
+      const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
+      mtx.font = codeFp + 'px ' + FONT_UI;
+      const codeText = fitText(mtx, o.code, CW * 0.9);
+      if (codeText) {
+        out.push({ id: o.id + ':code', nodeId: o.id, kind: 'code', w: mtx.measureText(codeText).width / S, h: (codeFp * 1.2) / S });
+      }
+      const durTxt = fmtDur(o.durDays, unit, o.hpd);
+      const resTxt = o.tf > 0.0001 ? '  +' + fmtReserve(o.tf, unit, o.hpd) : '';
+      const durFp = fszL(clamp(Math.round(9 * S + 2), 7, 11));
+      mtx.font = 'bold ' + durFp + 'px ' + FONT_MONO;
+      const durW = mtx.measureText(durTxt).width + (resTxt ? mtx.measureText(resTxt).width : 0);
+      out.push({ id: o.id + ':dur', nodeId: o.id, kind: 'dur', w: durW / S, h: (durFp * 1.2) / S });
+    });
+    return out;
+  }, [visibleOps, critOnly, geom, unit]);
+
+  /* ── разведение подписей вертикальным сдвигом узлов ──
+     Детерминированно: фиксированный порядок обхода (колонка, затем позиция) и
+     фиксированный шаг. Позиции — в мировых координатах, поэтому результат
+     одинаков при любом зуме и воспроизводим. */
+  const labelNudge = useMemo(
+    () => nudgeForLabels(
+      rawLayout.pos,
+      visibleOps.filter((o) => !critOnly || o.crit).map((o) => o.id),
+      labelBoxes,
+      allDeps,
+      geom,
+      { radius: labelGeom.radius },
+    ),
+    [rawLayout, labelBoxes, allDeps, geom, visibleOps, critOnly, labelGeom],
+  );
+
+  /* ── линия-поводок для узлов, сдвинутых далеко (страховка) ── */
+  const leaderLines = useMemo(
+    () => labelNudge.leaders.map((id) => ({
+      id,
+      x: labelNudge.pos[id][0],
+      from: labelNudge.pos[id][1] - (labelNudge.dyById[id] || 0),
+      to: labelNudge.pos[id][1],
+    })),
+    [labelNudge],
   );
 
   const layout = useMemo(() => {
-    const L: Layout = computeLayout(layoutOps, allDeps, mode, layoutOpts);
-    // Возврат сохранённых вручную позиций (держатся до «Сброса») + пересчёт габаритов.
+    const L: Layout = { ...rawLayout, pos: { ...rawLayout.pos } };
+    // Позиции узлов после разведения подписей (подписи всегда при своих узлах).
+    for (const id in L.pos) { if (labelNudge.pos[id]) L.pos[id] = labelNudge.pos[id]; }
+    // Возврат сохранённых вручную позиций (держатся до «Сброса») поверх разведения.
     const man = manualRef.current[mode];
-    let touched = false;
-    for (const id in man) {
-      if (L.pos[id]) { L.pos[id] = [man[id][0], man[id][1]]; touched = true; }
+    for (const id in man) { if (L.pos[id]) L.pos[id] = [man[id][0], man[id][1]]; }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const id in L.pos) {
+      const [x, y] = L.pos[id];
+      if (x - geom.cardW / 2 < minX) minX = x - geom.cardW / 2;
+      if (x + geom.cardW / 2 > maxX) maxX = x + geom.cardW / 2;
+      if (y - geom.cardH / 2 < minY) minY = y - geom.cardH / 2;
+      if (y + geom.cardH / 2 > maxY) maxY = y + geom.cardH / 2;
     }
-    if (touched) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (const id in L.pos) {
-        const [x, y] = L.pos[id];
-        if (x - geom.cardW / 2 < minX) minX = x - geom.cardW / 2;
-        if (x + geom.cardW / 2 > maxX) maxX = x + geom.cardW / 2;
-        if (y - geom.cardH / 2 < minY) minY = y - geom.cardH / 2;
-        if (y + geom.cardH / 2 > maxY) maxY = y + geom.cardH / 2;
-      }
-      L.minX = minX; L.maxX = maxX; L.minY = minY; L.maxY = maxY;
-    }
+    if (Number.isFinite(minX)) { L.minX = minX; L.maxX = maxX; L.minY = minY; L.maxY = maxY; }
     return L;
-  }, [layoutOps, allDeps, mode, layoutOpts, posNonce, geom]);
+  }, [rawLayout, labelNudge, mode, posNonce, geom]);
 
   /* ── виртуальные события «Старт» и «Финиш» ──
      Начальные — операции без предшественников, завершающие — без последующих.
@@ -673,17 +764,13 @@ export default function CpmGraph(props: CpmGraphProps) {
      факты по текущим укладкам; вывод о планарности делает отдельная проверка ниже. */
   const layoutCrossings = useMemo(() => {
     if (!layoutOps.length) return { byDate: 0, byLayer: 0 };
-    const mops = mappedOps.map((o) => ({ id: o.id, crit: o.crit }));
-    const count = (m: Mode) =>
-      computeLayoutMetrics(
-        computeLayout(layoutOps, allDeps, m, layoutOpts),
-        mops,
-        allDeps,
-        critOnly,
-        geom,
-      ).crossings;
+    const ids = visibleOps.filter((o) => !critOnly || o.crit).map((o) => o.id);
+    const count = (m: Mode) => {
+      const base = computeLayout(layoutOps, allDeps, m, layoutOpts);
+      return nudgeForLabels(base.pos, ids, labelBoxes, allDeps, geom, { radius: labelGeom.radius }).crossings;
+    };
     return { byDate: count('byDate'), byLayer: count('byLayer') };
-  }, [layoutOps, allDeps, layoutOpts, mappedOps, critOnly, geom]);
+  }, [layoutOps, allDeps, layoutOpts, critOnly, geom, labelBoxes, visibleOps, labelGeom]);
 
   /* ── вердикт о планарности сети ──
      Отдельная проверка, не путать с метриками раскладки: те лишь считают
@@ -761,78 +848,9 @@ export default function CpmGraph(props: CpmGraphProps) {
 
   const fontScale: number = FONT_SCALES[fontSize];
 
-  /* ── авторасстановка подписей узлов ──
-     Считается в мировых координатах в эталонном масштабе «Обычно», поэтому
-     одинакова при любом зуме и воспроизводима. Заодно считаем, сколько наложений
-     подписей дало бы прежнее фиксированное размещение — для сравнения в панели
-     качества и в отчёте (в отрисовке оно не применяется). */
-  const labelLayout = useMemo<LabelLayout>(() => {
-    const empty: LabelLayout = {
-      byItem: {},
-      auto: { labelOverlaps: 0, labelNodeHits: 0, labelEdgeHits: 0, unplaced: 0 },
-      fixed: { labelOverlaps: 0, labelNodeHits: 0, labelEdgeHits: 0, unplaced: 0 },
-      fixedById: {},
-    };
-    const mtx = getLabelMeasureCtx();
-    if (!mtx || !layoutOps.length) return empty;
-
-    const S = LABEL_REF_SCALE;
-    const FS = LABEL_REF_FONT;
-    const LBL = geom.labelScale ?? 1;
-    const fszL = (px: number) => Math.max(6, Math.round(px * FS * LBL));
-    const CW = geom.cardW;
-    const CH = geom.cardH;
-    const worldR = circleRadius(S, CH + geom.rowGap) / S;   // мировой радиус окружности узла
-
-    // Узлы-препятствия: видимые операции (окружности) и «Старт»/«Финиш» (капсулы).
-    const nodeIds: string[] = [];
-    visibleOps.forEach((o) => { if (!critOnly || o.crit) nodeIds.push(o.id); });
-    const nodeBoxes = buildNodeBoxes(layoutFull.pos, nodeIds, geom, { radius: worldR, compact: true });
-    (virtualInfo.virtuals || []).forEach((v) => {
-      if (layoutFull.pos[v.id]) nodeBoxes.push({ id: v.id, x: v.x, y: v.y, hw: CW / 2, hh: CH / 2 });
-    });
-
-    // Ломаные связей — препятствия (реальные связи + служебные «Старт»/«Финиш»).
-    const vDeps: [string, string][] = (virtualInfo.vEdges || []).map((ve) => [ve.from, ve.to] as [string, string]);
-    const virtualIds: string[] = [];
-    (virtualInfo.virtuals || []).forEach((v) => { if (layoutFull.pos[v.id]) virtualIds.push(v.id); });
-    const edges = buildEdgePolylines(
-      layoutFull.pos, nodeIds.concat(virtualIds), allDeps.concat(vDeps), geom,
-      { radius: worldR, compact: true, samples: 10 },
-    );
-
-    // Подписи в эталонном масштабе: имя — предпочтительно сверху, числа — снизу.
-    const items: LabelItem[] = [];
-    visibleOps.forEach((o) => {
-      if (critOnly && !o.crit) return;
-      if (!layoutFull.pos[o.id]) return;
-      const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
-      mtx.font = codeFp + 'px ' + FONT_UI;
-      const codeText = fitText(mtx, o.code, CW * 0.9);
-      if (codeText) {
-        items.push({
-          id: o.id + ':code', nodeId: o.id, kind: 'code', text: codeText, prefer: 'top',
-          w: mtx.measureText(codeText).width / S, h: (codeFp * 1.2) / S,
-        });
-      }
-      const durTxt = fmtDur(o.durDays, unit, o.hpd);
-      const resTxt = o.tf > 0.0001 ? '  +' + fmtReserve(o.tf, unit, o.hpd) : '';
-      const durFp = fszL(clamp(Math.round(9 * S + 2), 7, 11));
-      mtx.font = 'bold ' + durFp + 'px ' + FONT_MONO;
-      const durW = mtx.measureText(durTxt).width + (resTxt ? mtx.measureText(resTxt).width : 0);
-      items.push({
-        id: o.id + ':dur', nodeId: o.id, kind: 'dur', text: durTxt + resTxt, prefer: 'bottom',
-        w: durW / S, h: (durFp * 1.2) / S,
-      });
-    });
-
-    const auto = placeLabels(items, nodeBoxes, edges);
-    const fixedList = fixedPlacements(items, nodeBoxes);
-    const fixedById: Record<string, LabelPlacement> = {};
-    fixedList.forEach((p) => { fixedById[p.id] = p; });
-    const fixed = countOverlaps(fixedList, nodeBoxes, edges, 0);
-    return { byItem: auto.byItem, auto: auto.stats, fixed, fixedById };
-  }, [layoutFull, layoutOps, visibleOps, allDeps, virtualInfo, geom, unit, critOnly]);
+  /* Подписи узлов теперь привязаны к своим узлам и разводятся вертикальным
+     сдвигом узлов (см. labelBoxes / labelNudge выше); прежний перебор позиций
+     подписи вокруг узла удалён. */
 
   stateRef.current = {
     ...stateRef.current,   // сохраняем масштаб/смещение между рендерами (иначе canvas остаётся пустым)
@@ -855,8 +873,9 @@ export default function CpmGraph(props: CpmGraphProps) {
     colPitch,
     rowPitch,
     labelScale: geom.labelScale ?? 1,
-    // Расстановка подписей узлов (мировые координаты) — читается отрисовкой.
-    labelPlace: labelLayout.byItem,
+    // Узлы, сдвинутые далеко при разведении подписей, — под отрисовку
+    // тонкой линии-поводка (мировые координаты).
+    leaders: leaderLines,
   };
 
   /* ── рисование ── */
@@ -1246,6 +1265,24 @@ export default function CpmGraph(props: CpmGraphProps) {
       ctx.fill();
     });
 
+    /* ── линии-поводки узлов, сдвинутых далеко при разведении подписей ──
+       Страховка: узел, уехавший больше чем на две высоты узла, тонкой
+       пунктирной линией связывается со своим исходным местом в раскладке. */
+    const leaders = (st.leaders || []) as { x: number; from: number; to: number }[];
+    if (leaders.length) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      for (const ld of leaders) {
+        ctx.beginPath();
+        ctx.moveTo(sx(ld.x), sy(ld.from));
+        ctx.lineTo(sx(ld.x), sy(ld.to));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     /* ── узлы ── */
     st.ops.forEach((o: GOp) => {
       if (st.critOnly && !o.crit) return;
@@ -1356,22 +1393,20 @@ export default function CpmGraph(props: CpmGraphProps) {
         ctx.textBaseline = 'middle';
         ctx.fillText(String(o.num), cx, cy + 0.5);
 
-        // Подписи узла: имя работы и «продолжительность + резерв». Положение
-        // берётся из авторасстановки (мировые координаты) — так на плотных
-        // участках подписи не налезают друг на друга, на соседние узлы и на
-        // связи. При отсутствии расстановки — прежнее фиксированное место.
-        const place = (st.labelPlace || {}) as Record<string, LabelPlacement>;
+        // Подписи узла — всегда в ФИКСИРОВАННОМ месте относительно СВОЕГО узла:
+        // имя работы сверху, «продолжительность + резерв» снизу. Узел вместе с
+        // подписями мог быть сдвинут вниз при разведении наложений (st.layout),
+        // поэтому подпись и узел двигаются как одно целое и не разъезжаются.
+        const GAPW = LABEL_GAP;   // мировой зазор между окружностью и подписью (единый с проверкой)
         if (r >= 11) {
-          const pl = place[o.id + ':code'];
           const codeFp = fszL(clamp(Math.round(9.5 * S + 3), 8, 12));
           ctx.fillStyle = o.crit ? '#E8EEF5' : 'rgba(176,196,222,0.8)';
           ctx.font = codeFp + 'px ' + FONT_UI;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           const lbl = fitText(ctx, o.code, CW * 0.9);
-          const lx = pl ? sx(pl.x) : cx;
-          const ly = pl ? sy(pl.y) : cy - r - 3 - codeFp * 0.6;
-          ctx.fillText(lbl, lx, ly + 0.5);
+          const ly = cy - (r + GAPW * S + codeFp * 1.2 / 2);
+          ctx.fillText(lbl, cx, ly + 0.5);
         }
         // Продолжительность операции — в компактном режиме тоже, у всех узлов,
         // включая критические (иначе у красных узлов подписи длительности нет).
@@ -1385,10 +1420,8 @@ export default function CpmGraph(props: CpmGraphProps) {
           ctx.textAlign = 'left';
           const durW = ctx.measureText(durTxt).width;
           const resW = resTxt ? ctx.measureText(resTxt).width : 0;
-          const pl = place[o.id + ':dur'];
-          const bx = pl ? sx(pl.x) : cx;
-          const by = pl ? sy(pl.y) : cy + r + 2 + durFp * 0.6;
-          const lx = bx - (durW + resW) / 2;
+          const by = cy + (r + GAPW * S + durFp * 1.2 / 2);
+          const lx = cx - (durW + resW) / 2;
           ctx.fillStyle = o.crit ? 'rgba(252,165,165,0.95)' : 'rgba(176,196,222,0.9)';
           ctx.fillText(durTxt, lx, by + 0.5);
           if (resTxt) {
@@ -1796,8 +1829,8 @@ export default function CpmGraph(props: CpmGraphProps) {
           crossingsByDate={layoutCrossings.byDate}
           crossingsByLayer={layoutCrossings.byLayer}
           planarity={planarity}
-          labelOverlaps={labelLayout.auto.labelOverlaps}
-          labelOverlapsFixed={labelLayout.fixed.labelOverlaps}
+          labelOverlaps={labelNudge.stats.labelOverlaps}
+          labelOverlapsFixed={labelNudge.statsBefore.labelOverlaps}
         />
         <Badge>Режим: {mode === 'byDate' ? 'по датам' : 'по слоям'}</Badge>
         <span style={{ flex: 1 }} />
