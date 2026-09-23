@@ -455,10 +455,11 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [unit, setUnit] = useState<'d' | 'h' | 'm'>('d');
   const [critOnly, setCritOnly] = useState(false);
   const [showEdgeDays, setShowEdgeDays] = useState(true);
-  // «Показывать логические связи»: по умолчанию включено. Выключение скрывает
-  // ТОЛЬКО связи между операциями без ожидания (плотную паутину). Критический путь
-  // и служебные связи «Старт»/«Финиш» переключатель не затрагивает — они видны всегда.
-  const [showLogical, setShowLogical] = useState(true);
+  // «Старт и Финиш»: по умолчанию включено — служебные события «Старт»/«Финиш»
+  // и их тонкие пунктирные связи показаны. Выключение скрывает ТОЛЬКО эти два
+  // служебных события и их связи. Обычные связи (с ожиданием и без), критический
+  // путь и операционные связи остаются на схеме всегда.
+  const [showEndpoints, setShowEndpoints] = useState(true);
   // Блок условных обозначений внизу рабочей области: по умолчанию свёрнут,
   // разворачивается кликом по ссылке «Условные обозначения».
   const [legendOpen, setLegendOpen] = useState(false);
@@ -861,7 +862,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     layout: layoutFull,
     virtuals: virtualInfo.virtuals,
     vEdges: virtualInfo.vEdges,
-    mode, unit, critOnly, showEdgeDays, showLogical, depTypes,
+    mode, unit, critOnly, showEdgeDays, showEndpoints, depTypes,
     startDate, dayToDate,
     reserveColor, branchColor, critColor, stretchColor,
     fontScale,
@@ -1085,7 +1086,8 @@ export default function CpmGraph(props: CpmGraphProps) {
     });
     // Виртуальные события входят в геометрию как препятствия, чтобы связи
     // реальных операций их не задевали (в счётчик качества они не входят).
-    ((st.virtuals || []) as VirtualNode[]).forEach((v) => {
+    // При выключенном «Старт и Финиш» служебных событий нет — и препятствий тоже.
+    ((st.showEndpoints ? (st.virtuals || []) : []) as VirtualNode[]).forEach((v) => {
       allRects.push({ id: v.id, x: v.x, y: v.y, hw: CW / 2 + 6, hh: CH / 2 + 6 });
     });
 
@@ -1141,8 +1143,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       //   • служебные связи «Старта»/«Финиша» — отдельный тонкий пунктир (ниже).
       const waitDays = Math.max(0, b.es - a.ef);
       const hasWait = waitDays >= 0.02;
-      const logical = !hasWait && !bothCrit;      // связь без ожидания (логическая)
-      if (logical && !st.showLogical) return;     // переключатель прячет плотную паутину связей
+      // связь без ожидания (логическая) — рисуется ВСЕГДА широким штрих-пунктиром,
+      // скрыть её нельзя (прежний переключатель логических связей удалён).
+      const logical = !hasWait && !bothCrit;
       const depType = (st.depTypes && st.depTypes[a.id + '>' + b.id]) || null;
 
       ctx.beginPath();
@@ -1229,8 +1232,8 @@ export default function CpmGraph(props: CpmGraphProps) {
     /* ── связи со «Стартом»/«Финишем» — пунктир, нулевая длительность ──
        Геометрия учитывает все узлы (реальные и виртуальные): обход минимальным
        отклонением. В счётчик качества эти связи не входят. Служебные связи
-       рисуются ВСЕГДА и переключателем логических связей не скрываются. */
-    ((st.vEdges || []) as VirtualEdge[]).forEach((ve) => {
+       скрываются только тумблером «Старт и Финиш» — вместе с самими событиями. */
+    ((st.showEndpoints ? (st.vEdges || []) : []) as VirtualEdge[]).forEach((ve) => {
       const pa = st.layout.pos[ve.from];
       const pb = st.layout.pos[ve.to];
       if (!pa || !pb) return;
@@ -1435,8 +1438,9 @@ export default function CpmGraph(props: CpmGraphProps) {
     });
 
     /* ── виртуальные события «Старт»/«Финиш» — отдельная форма (капсула) и цвет ──
-       События рисуются ВСЕГДА (переключатель логических связей их не затрагивает). */
-    ((st.virtuals || []) as VirtualNode[]).forEach((v) => {
+       Показываются, пока включён тумблер «Старт и Финиш» (по умолчанию включён).
+       Обычные связи и критический путь от этого тумблера не зависят. */
+    ((st.showEndpoints ? (st.virtuals || []) : []) as VirtualNode[]).forEach((v) => {
       const cx = sx(v.x);
       const cy = sy(v.y);
       if (cx < -CW * S - 20 || cx > W + CW * S + 20 || cy < -CH * S - 20 || cy > H + CH * S + 20) return;
@@ -1624,6 +1628,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     const ROWPv: number = st.rowPitch || ROW_PITCH;
     const sxv = (x: number) => x * S + st.panX;
     const syv = (y: number) => y * S + st.panY;
+    if (!st.showEndpoints) return null;   // события скрыты тумблером — и подсказка не нужна
     const vs: VirtualNode[] = st.virtuals || [];
     for (let i = vs.length - 1; i >= 0; i--) {
       const v = vs[i];
@@ -1789,7 +1794,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     setPeriodTo(planRange?.to || '');
     setCritOnly(false);
     setShowEdgeDays(true);
-    setShowLogical(true);
+    setShowEndpoints(true);
     setLegendOpen(false);
     setPosNonce((n) => n + 1);
     setResetNonce((n) => n + 1);
@@ -1799,7 +1804,7 @@ export default function CpmGraph(props: CpmGraphProps) {
     try { draw(); } catch (e: any) { setCanvasErr(String((e && e.message) || e)); }
     // layoutFull — перерисовка при пересчёте раскладки/виртуальных событий/ручных позициях.
     // Порог напряжённости (STRETCH_K) — внутреннее значение, в интерфейсе не меняется.
-  }, [draw, visibleOps, allDeps, mode, unit, critOnly, showEdgeDays, showLogical, depTypes, fontSize, layoutFull, STRETCH_K]);
+  }, [draw, visibleOps, allDeps, mode, unit, critOnly, showEdgeDays, showEndpoints, depTypes, fontSize, layoutFull, STRETCH_K]);
 
   // Явная высота (число/строка) → фиксированное полотно; иначе полотно занимает всю
   // доступную высоту родителя (вид рабочего поля), без пустых полос внизу.
@@ -1872,9 +1877,9 @@ export default function CpmGraph(props: CpmGraphProps) {
           <input className="cpmui-chk" type="checkbox" checked={showEdgeDays} onChange={(e) => setShowEdgeDays(e.target.checked)} />
           Дни на связях
         </label>
-        <label className="cpmui-lbl" title="Выключите, чтобы убрать только связи между работами без ожидания (плотную паутину). Критический путь и связи «Старт»/«Финиш» остаются всегда">
-          <input className="cpmui-chk" type="checkbox" checked={showLogical} onChange={(e) => setShowLogical(e.target.checked)} />
-          Показывать логические связи
+        <label className="cpmui-lbl" title="Выключите, чтобы скрыть только служебные события «Старт» и «Финиш» и их тонкие пунктирные связи. Обычные связи и критический путь остаются на схеме всегда">
+          <input className="cpmui-chk" type="checkbox" checked={showEndpoints} onChange={(e) => setShowEndpoints(e.target.checked)} />
+          Старт и Финиш
         </label>
         <label className="cpmui-lbl">
           Шрифт:
@@ -2132,6 +2137,11 @@ export default function CpmGraph(props: CpmGraphProps) {
               sample={<span style={{ display: 'inline-flex', gap: 6 }}><LegendPill color={startColor} label="Старт" kind="start" /><LegendPill color={finishColor} label="Финиш" kind="finish" /></span>}
               caption="Значки «Старт» и «Финиш»"
               desc="«Старт» — начало схемы (от него идут первые работы), «Финиш» — конец (к нему сходятся последние работы)."
+            />
+            <LegendItem
+              sample={<LegendLine variant="endpoints" />}
+              caption="Тумблер «Старт и Финиш» скрывает события, а не связи"
+              desc="Выключенный тумблер убирает только служебные события «Старт»/«Финиш» и их тонкий пунктир. Обычные связи, связи без ожидания и критический путь остаются на схеме всегда."
             />
             <LegendItem
               sample={<LegendNode />}
