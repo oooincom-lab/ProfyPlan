@@ -348,6 +348,15 @@ export interface NudgeOptions {
   leaderHeights?: number;
   /** Доводить порядок внутри столбца по счётчику пересечений (по умолчанию да). */
   cleanup?: boolean;
+  /**
+   * После разведения подписей ещё раз довести порядок по счётчику пересечений.
+   * Нужно режиму «Без пересечений»: его укладка считается «последней», и
+   * вертикальный сдвиг узлов при разведении подписей не должен пересобирать
+   * достигнутый результат. Изменение принимается только при строгом уменьшении
+   * числа пересечений и только если не появилось наложений подписей/узлов и
+   * проходов связей сквозь узлы.
+   */
+  restoreAfterDeconflict?: boolean;
 }
 
 export interface NudgeResult {
@@ -533,6 +542,29 @@ export function nudgeForLabels(
         }
       }
       if (!improved) break;   // больше улучшить нельзя — выходим
+    }
+  }
+
+  /* ── доводка «последней» (режим «Без пересечений») ──
+     Разведение подписей сдвигает узлы по вертикали и потому может пересобрать
+     достигнутую укладку. Здесь порядок внутри столбцов ещё раз доводится по
+     счётчику пересечений УЖЕ ПОСЛЕ разведения; изменение принимается только
+     при строгом уменьшении числа пересечений и при чистой картинке (нет
+     наложений подписей/узлов и проходов связей сквозь узлы). Так результат
+     укладки без пересечений не теряется на последующих проходах. */
+  if (opts.restoreAfterDeconflict) {
+    const gapR = opts.gap ?? LABEL_GAP;
+    const beforeCross = fastCrossings(out, deps, geometry);
+    const cleaned = cleanupColumnOrder(out, metricNodes, deps, geometry);
+    if (cleaned.crossings < beforeCross) {
+      const lab = labelStatsAt(cleaned.pos, nodeIds, items, opts.radius, gapR);
+      const mm = computeLayoutMetrics(
+        { pos: cleaned.pos, ...boundsOf(cleaned.pos, geometry) },
+        metricNodes, deps, false, geometry,
+      );
+      if (lab.overlaps === 0 && lab.nodeHits === 0 && mm.edgeNodeHits === 0 && mm.nodeOverlaps === 0) {
+        for (const id in cleaned.pos) { if (out[id]) out[id] = cleaned.pos[id]; }
+      }
     }
   }
 
@@ -732,4 +764,110 @@ export function buildNodeBoxes(
     });
   }
   return out;
+}
+
+/** Маркер обрезки периода в мировых единицах (для подсчёта на итоговой геометрии). */
+export interface DrawnCutMarker {
+  x: number;
+  y: number;
+  dir: 1 | -1;
+  /** Длина обрубка в мировых единицах (считает вызывающий, зная масштаб). */
+  len: number;
+}
+
+/** Разбивка пересечений итоговой геометрии: всего, только операционные, со служебными. */
+export interface DrawnCrossingReport {
+  /** Всего пересечений линий на итоговой схеме (как рисуется). */
+  total: number;
+  /** Пересечения, где участвует хотя бы одна служебная линия (связь «Старт»/«Финиш» или маркер обрезки). */
+  service: number;
+  /** Операционная связь × операционная связь. */
+  opOp: number;
+  /** Операционная связь × служебная линия. */
+  opSvc: number;
+  /** Служебная линия × служебная линия. */
+  svcSvc: number;
+}
+
+/**
+ * Считает пересечения ИТОГОВОЙ геометрии — той, что рисуется: операционные
+ * связи, служебные связи «Старт»/«Финиш» и (по желанию) маркеры обрезки.
+ *
+ * Считаем ТЕМ ЖЕ способом, что и счётчик качества панели: точки выхода на
+ * границе узлов, пересечение отрезков между ними; общий конец пересечением не
+ * считается. Так число операционной части совпадает со счётчиком панели, а
+ * итог — тот же плюс пересечения со служебными линиями, которые в прежний
+ * счётчик не входили. Маркеры обрезки — короткие горизонтальные обрубки.
+ */
+export function countDrawnCrossings(
+  pos: Record<string, [number, number]>,
+  idList: string[],
+  deps: [string, string][],
+  serviceEdges: [string, string][],
+  geometry: LayoutGeometry,
+  opts: { radius?: number; compact?: boolean; cutMarkers?: DrawnCutMarker[] } = {},
+): DrawnCrossingReport {
+  const G = resolveGeometry(geometry);
+  const compact = !!opts.compact;
+  const ahw = compact ? (opts.radius ?? Math.min(G.cardW, G.cardH) / 2) : G.cardW / 2;
+  const ahh = compact ? (opts.radius ?? Math.min(G.cardW, G.cardH) / 2) : G.cardH / 2;
+
+  const rectById: Record<string, Rect> = {};
+  for (const id of idList) { const p = pos[id]; if (p) rectById[id] = { x: p[0], y: p[1], hw: ahw, hh: ahh }; }
+
+  interface Line { a: string; b: string; s: [number, number]; e: [number, number]; svc: boolean }
+  const lines: Line[] = [];
+
+  const build = (a: string, b: string, svc: boolean): Line | null => {
+    const ra = rectById[a];
+    const rb = rectById[b];
+    if (!ra || !rb) return null;
+    const s = borderPoint(ra.x, ra.y, ahw + 3, ahh + 3, rb.x, rb.y);
+    const e = borderPoint(rb.x, rb.y, ahw + 3, ahh + 3, ra.x, ra.y);
+    return { a, b, s, e, svc };
+  };
+
+  // операционные связи — как в счётчике качества (без повторов)
+  const seen = new Set<string>();
+  for (const [a, b] of deps) {
+    if (a === b || !rectById[a] || !rectById[b]) continue;
+    const k = a + '\u0001' + b;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const ln = build(a, b, false);
+    if (ln) lines.push(ln);
+  }
+  // служебные связи «Старт»/«Финиш»
+  const seenS = new Set<string>();
+  for (const [a, b] of serviceEdges) {
+    if (a === b || !rectById[a] || !rectById[b]) continue;
+    const k = a + '\u0001' + b;
+    if (seenS.has(k)) continue;
+    seenS.add(k);
+    const ln = build(a, b, true);
+    if (ln) lines.push(ln);
+  }
+  // маркеры обрезки периода — горизонтальные обрубки от узла в сторону продолжения
+  const cutMarkers = opts.cutMarkers || [];
+  for (const m of cutMarkers) {
+    if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || !Number.isFinite(m.len)) continue;
+    const x0 = m.x + m.dir * (ahw + 4);
+    const xEnd = x0 + m.dir * m.len;
+    const id = '\u0001cut' + lines.length;
+    lines.push({ a: id, b: id + '#', s: [x0, m.y], e: [xEnd, m.y], svc: true });
+  }
+
+  let opOp = 0, opSvc = 0, svcSvc = 0;
+  for (let i = 0; i < lines.length; i++) {
+    for (let j = i + 1; j < lines.length; j++) {
+      const A = lines[i];
+      const B = lines[j];
+      if (A.a === B.a || A.a === B.b || A.b === B.a || A.b === B.b) continue;
+      if (!segCross(A.s[0], A.s[1], A.e[0], A.e[1], B.s[0], B.s[1], B.e[0], B.e[1])) continue;
+      if (!A.svc && !B.svc) opOp++;
+      else if (A.svc && B.svc) svcSvc++;
+      else opSvc++;
+    }
+  }
+  return { total: opOp + opSvc + svcSvc, service: opSvc + svcSvc, opOp, opSvc, svcSvc };
 }

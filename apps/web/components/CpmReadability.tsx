@@ -46,6 +46,15 @@ export interface CpmReadabilityProps {
   crossingsByLayer?: number;
   /** Итог честной проверки планарности сети (по значку «i»). */
   planarity?: PlanarityResult;
+  /**
+   * Пересечения линий на ИТОГОВОЙ геометрии — как рисуется, со всеми связями
+   * (операционными и служебными «Старт»/«Финиш», маркеры обрезки). Это честное
+   * число для сообщений; счётчик пересечений ниже считается только по
+   * операционным связям и по укладкам.
+   */
+  drawnCrossings?: number;
+  /** Из пересечений итоговой геометрии — сколько с участием служебных линий. */
+  drawnService?: number;
   /** Наложения подписей узлов после авторасстановки (компактный режим). */
   labelOverlaps?: number;
   /** Наложения подписей при прежнем фиксированном размещении — для сравнения. */
@@ -63,7 +72,7 @@ function DetailRow({ k, v, accent }: { k: string; v: string; accent?: boolean })
   );
 }
 
-export default function CpmReadability({ metrics, crossingsByDate, crossingsByLayer, planarity, labelOverlaps, labelOverlapsFixed, align = 'left' }: CpmReadabilityProps) {
+export default function CpmReadability({ metrics, crossingsByDate, crossingsByLayer, planarity, drawnCrossings, drawnService, labelOverlaps, labelOverlapsFixed, align = 'left' }: CpmReadabilityProps) {
   const [open, setOpen] = useState(false);
   const score = readabilityScore(metrics);
   const band = readabilityBand(score);
@@ -76,6 +85,8 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
       data-cpm-quality="indicator"
       data-cpm-label-overlaps={labelOverlaps != null ? String(labelOverlaps) : undefined}
       data-cpm-label-overlaps-fixed={labelOverlapsFixed != null ? String(labelOverlapsFixed) : undefined}
+      data-cpm-crossings-drawn={drawnCrossings != null ? String(drawnCrossings) : undefined}
+      data-cpm-crossings-drawn-service={drawnService != null ? String(drawnService) : undefined}
       style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}
     >
       <span
@@ -118,7 +129,14 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
           <div style={{ fontWeight: 700, marginBottom: 6, color: '#93C5FD' }}>
             Качество раскладки
           </div>
-          <DetailRow k="Пересечения связей" v={'по датам: ' + byDate + ' · по слоям: ' + byLayer} />
+          {drawnCrossings != null && (
+            <DetailRow
+              k="Пересечения линий на схеме"
+              accent={drawnCrossings > 0}
+              v={String(drawnCrossings) + (drawnService ? ' (служебных — ' + drawnService + ')' : '')}
+            />
+          )}
+          <DetailRow k="Пересечения связей (по укладкам)" v={'по датам: ' + byDate + ' · по слоям: ' + byLayer} />
           <DetailRow k="Проходы линий сквозь узлы" v={String(metrics.edgeNodeHits)} />
           <DetailRow k="Наложения узлов" v={String(metrics.nodeOverlaps)} />
           <DetailRow k="Плотность" v={metrics.density + ' %'} />

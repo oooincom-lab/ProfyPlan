@@ -33,8 +33,8 @@ import {
   type LayoutPreset,
 } from '@/lib/cpm-settings';
 import {
-  nudgeForLabels, requiredRowPitch, LABEL_GAP,
-  type LabelBox, type CompactLabelGeom,
+  nudgeForLabels, requiredRowPitch, LABEL_GAP, countDrawnCrossings,
+  type LabelBox, type CompactLabelGeom, type DrawnCrossingReport,
 } from '@/lib/cpm-labels';
 import CpmReadability from '@/components/CpmReadability';
 
@@ -317,6 +317,14 @@ function fmtDur(days: number, unit: string, hpd: number): string {
   if (unit === 'm') return Math.round(days * hpd * 60) + ' мин';
   return round1(days) + ' д';
 }
+/** Склонение слова «пересечение» по числу (для честных сообщений панели). */
+function crossingsWord(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'пересечение';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'пересечения';
+  return 'пересечений';
+}
 
 /** Обрезка строки по пикселям с многоточием. */
 function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
@@ -598,7 +606,13 @@ export default function CpmGraph(props: CpmGraphProps) {
   // Планарному (под)графу нужен ноль пересечений — перебираем старты, включая
   // структурные «по связям». Непланарному достаточно нескольких стартов «по раннему
   // старту»: они устойчиво разводят узлы под увеличенный шаг ряда.
-  const planarLayout = noplanActive || layoutPlanarity.state === 'confirmed';
+  //
+  // Важно: на НЕПЛАНАРНОМ (под)графе ноль недостижим, и перебор стартов «по связям»
+  // там не помогает, а уводит укладку от лучшего результата (проверено на «Полигоне A»:
+  // 14 пересечений и 2 прохода против 6 и 0 у обычной укладки). Поэтому режим «Без
+  // пересечений» гонится за нулём только там, где ноль достижим; иначе он использует
+  // ту же оптимизацию, что и «Обычно», и не может оказаться хуже неё.
+  const planarLayout = layoutPlanarity.state === 'confirmed';
   const layoutOpts = useMemo(
     () => ({
       ...settingsToLayoutOptions(activePreset.settings),
@@ -659,9 +673,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       labelBoxes,
       allDeps,
       geom,
-      { radius: labelGeom.radius },
+      { radius: labelGeom.radius, restoreAfterDeconflict: noplanActive },
     ),
-    [rawLayout, labelBoxes, allDeps, geom, visibleOps, critOnly, labelGeom],
+    [rawLayout, labelBoxes, allDeps, geom, visibleOps, critOnly, labelGeom, noplanActive],
   );
 
   /* ── линия-поводок для узлов, сдвинутых далеко (страховка) ── */
@@ -792,6 +806,28 @@ export default function CpmGraph(props: CpmGraphProps) {
     }
     return { ...layout, pos, minX, maxX, minY, maxY };
   }, [layout, virtualInfo, geom]);
+
+  /* ── пересечения ИТОГОВОЙ геометрии (включая служебные связи) ──
+     Счётчик качества считает только операционные связи — именно поэтому он мог
+     показывать ноль, когда на картинке линии пересекались (служебные связи
+     «Старт»/«Финиш» и маркеры обрезки в него не входят). Здесь те же пути
+     строятся как при отрисовке, вместе со служебными, и пересечения считаются
+     по ломаным — это число и есть честный итог по нарисованному. Подписи о
+     качестве и текст укладки «Без пересечений» опираются на него. */
+  const drawnCrossings = useMemo<DrawnCrossingReport>(
+    () => {
+      const idList = [...layoutOps.map((o) => o.id), ...virtualInfo.virtuals.map((v) => v.id)];
+      const svc = showEndpoints ? virtualInfo.vEdges.map((e) => [e.from, e.to] as [string, string]) : [];
+      const cut = showEndpoints
+        ? virtualInfo.cutMarkers.map((m) => {
+            const p = layoutFull.pos[m.opId];
+            return p ? { x: p[0], y: p[1], dir: (m.kind === 'start' ? -1 : 1) as 1 | -1, len: 28 } : null;
+          }).filter(Boolean) as { x: number; y: number; dir: 1 | -1; len: number }[]
+        : [];
+      return countDrawnCrossings(layoutFull.pos, idList, allDeps, svc, geom, { cutMarkers: cut });
+    },
+    [layoutFull, layoutOps, allDeps, virtualInfo, geom, showEndpoints],
+  );
 
   /* ── метрики качества раскладки (пересечения, наложения, плотность) ──
      Считаются только по реальным операциям и связям; виртуальные «Старт»/«Финиш»
@@ -1941,6 +1977,22 @@ export default function CpmGraph(props: CpmGraphProps) {
     );
   }
 
+  /* ── честный итог режима «Без пересечений» ──
+     Ноль пересечений объявляем ТОЛЬКО если он подтверждён на ИТОГОВОЙ геометрии —
+     той, что рисуется, со всеми связями (операционными и служебными). Иначе
+     показываем фактическое число и что именно пересекается. */
+  const noplanZero = drawnCrossings.total === 0;
+  const noplanBanner = noplanZero
+    ? 'Раскладка «Без пересечений»: на итоговой схеме пересечений линий нет — ноль подтверждён по всем связям' +
+      (showEndpoints ? ' (включая служебные «Старт»/«Финиш»)' : '') +
+      '. Хронология (даты) в этой укладке не показывается.'
+    : 'Раскладка «Без пересечений»: ' +
+      (noPlanReachable ? 'ноль не подтверждён на итоговой схеме' : 'ноль для этой схемы недостижим') +
+      ' — на схеме ' + drawnCrossings.total + ' ' + crossingsWord(drawnCrossings.total) + ' линий' +
+      ' (между операционными связями ' + drawnCrossings.opOp +
+      (drawnCrossings.service > 0 ? ', с участием служебных — ' + drawnCrossings.service : '') + ')' +
+      '. Хронология (даты) в этой укладке не показывается.';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, height: '100%', border: '1px solid ' + pal.frame, borderRadius: 10, padding: 10, background: '#0B1626' }}>
       {/* единый тёмный стиль элементов панели (кнопки, селекторы, чекбоксы, даты) */}
@@ -1957,6 +2009,8 @@ export default function CpmGraph(props: CpmGraphProps) {
           crossingsByDate={layoutCrossings.byDate}
           crossingsByLayer={layoutCrossings.byLayer}
           planarity={planarity}
+          drawnCrossings={drawnCrossings.total}
+          drawnService={drawnCrossings.service}
           labelOverlaps={labelNudge.stats.labelOverlaps}
           labelOverlapsFixed={labelNudge.statsBefore.labelOverlaps}
         />
@@ -2071,20 +2125,19 @@ export default function CpmGraph(props: CpmGraphProps) {
          при непланарном — прямо сказано, что ноль недостижим для этой схемы. */}
       {layoutPreset === 'noplan' && mode === 'byLayer' && (
         <div
-          data-cpm-noplan={noPlanReachable ? 'achieved' : 'unreachable'}
+          data-cpm-noplan={noplanZero ? 'achieved' : 'unreachable'}
+          data-cpm-crossings-drawn={drawnCrossings.total}
+          data-cpm-crossings-op={drawnCrossings.opOp}
+          data-cpm-crossings-service={drawnCrossings.service}
           style={{
             display: 'flex', gap: 6, alignItems: 'center', padding: '5px 10px', borderRadius: 8, fontSize: 11.5,
-            background: noPlanReachable ? 'rgba(16,185,129,0.10)' : 'rgba(245,158,11,0.10)',
-            border: '1px solid ' + (noPlanReachable ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'),
-            color: noPlanReachable ? '#6EE7B7' : '#FCD34D',
+            background: noplanZero ? 'rgba(16,185,129,0.10)' : 'rgba(245,158,11,0.10)',
+            border: '1px solid ' + (noplanZero ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'),
+            color: noplanZero ? '#6EE7B7' : '#FCD34D',
           }}
         >
           <span aria-hidden="true">🕸</span>
-          <span>
-            {noPlanReachable
-              ? 'Раскладка «Без пересечений»: построена укладка без пересечений связей. Хронология (даты) в этой укладке не показывается.'
-              : 'Раскладка «Без пересечений»: ноль недостижим для этой схемы — показан достигнутый минимум пересечений.'}
-          </span>
+          <span>{noplanBanner}</span>
         </div>
       )}
 
