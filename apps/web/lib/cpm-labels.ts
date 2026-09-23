@@ -30,7 +30,7 @@
  */
 import {
   borderPoint, computeLayoutMetrics, edgeControl, quadPt, resolveGeometry,
-  segRectHit, rectsOverlap,
+  segCross, segRectHit, rectsOverlap,
   type LayoutGeometry, type MetricNode, type Rect,
 } from './cpm-metrics';
 
@@ -181,7 +181,18 @@ export function deconflictLabels(
   nodes: LabelNodeBox[],
   opts: DeconflictOptions = {},
 ): DeconflictResult {
-  const o = { ...DECONFLICT_DEFAULTS, ...opts };
+  // Значения по умолчанию подставляем ПОФАЙЛОВО через ?? — иначе явно переданный
+  // `undefined` перетёр бы значение по умолчанию (спред копирует ключ как есть) и
+  // шаг разведения стал бы undefined: `y += undefined` даёт NaN и узел «улетает»
+  // в бесконечность — его связи рисуются вне полотна и пропадают.
+  const D = DECONFLICT_DEFAULTS;
+  const o: Required<DeconflictOptions> = {
+    gap: opts.gap ?? D.gap,
+    step: opts.step ?? D.step,
+    maxShift: opts.maxShift ?? D.maxShift,
+    margin: opts.margin ?? D.margin,
+    leaderHeights: opts.leaderHeights ?? D.leaderHeights,
+  };
   const nodeById = new Map<string, LabelNodeBox>();
   nodes.forEach((n) => nodeById.set(n.id, n));
 
@@ -230,6 +241,8 @@ export function deconflictLabels(
       if (!bad) break;
       if (y - nb.y >= o.maxShift) break;
       y += o.step;
+      // Страховка: узел никогда не должен получить нечисловую позицию.
+      if (!Number.isFinite(y)) { y = nb.y; break; }
     }
 
     pos[id] = [nb.x, y];
@@ -352,6 +365,61 @@ export interface NudgeResult {
   statsBefore: LabelStats;
 }
 
+/** Рамки узлов по готовым позициям (мировые единицы). */
+function boxesAt(pos: Record<string, [number, number]>, idList: string[], radius: number): LabelNodeBox[] {
+  const out: LabelNodeBox[] = [];
+  for (const id of idList) { const p = pos[id]; if (p) out.push({ id, x: p[0], y: p[1], hw: radius, hh: radius }); }
+  return out;
+}
+
+/** Число наложений подписей друг на друга и на посторонние узлы при данных позициях. */
+function labelStatsAt(
+  pos: Record<string, [number, number]>,
+  idList: string[],
+  items: LabelItem[],
+  radius: number,
+  gap: number,
+): { overlaps: number; nodeHits: number } {
+  const nodes = boxesAt(pos, idList, radius);
+  const st = countOverlaps(fixedPlacements(items, nodes, gap), nodes, [], 0);
+  return { overlaps: st.labelOverlaps, nodeHits: st.labelNodeHits };
+}
+
+/** Быстрый счётчик пересечений связей по геометрии граничных точек (как в панели). */
+function fastCrossings(
+  pos: Record<string, [number, number]>,
+  deps: ReadonlyArray<[string, string]>,
+  geometry: LayoutGeometry,
+): number {
+  const G = resolveGeometry(geometry);
+  const cw = G.cardW;
+  const ch = G.cardH;
+  const ep = G.edgePad;
+  const edges: { a: string; b: string; s: [number, number]; e: [number, number] }[] = [];
+  const seen = new Set<string>();
+  for (const [a, b] of deps) {
+    if (a === b || !pos[a] || !pos[b]) continue;
+    const key = a + '\u0001' + b;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const pa = pos[a];
+    const pb = pos[b];
+    const s = borderPoint(pa[0], pa[1], cw / 2 + ep, ch / 2 + ep, pb[0], pb[1]);
+    const e = borderPoint(pb[0], pb[1], cw / 2 + ep, ch / 2 + ep, pa[0], pa[1]);
+    edges.push({ a, b, s, e });
+  }
+  let c = 0;
+  for (let i = 0; i < edges.length; i++) {
+    for (let j = i + 1; j < edges.length; j++) {
+      const A = edges[i];
+      const B = edges[j];
+      if (A.a === B.a || A.a === B.b || A.b === B.a || A.b === B.b) continue;
+      if (segCross(A.s[0], A.s[1], A.e[0], A.e[1], B.s[0], B.s[1], B.e[0], B.e[1])) c++;
+    }
+  }
+  return c;
+}
+
 /** Габарит полотна по позициям узлов (для счётчика пересечений). */
 function boundsOf(pos: Record<string, [number, number]>, geometry: LayoutGeometry) {
   const G = resolveGeometry(geometry);
@@ -408,15 +476,65 @@ export function nudgeForLabels(
   }
   const statsBefore = countOverlaps(fixedPlacements(items, baseBoxes, opts.gap ?? LABEL_GAP), baseBoxes, [], 0);
 
-  const de = deconflictLabels(items, nodeBoxes, {
-    gap: opts.gap ?? LABEL_GAP,
-    step: opts.step,
-    maxShift: opts.maxShift,
-    leaderHeights: opts.leaderHeights,
-  });
+  // Передаём только заданные опции: ключ со значением `undefined` перетёр бы
+  // значение по умолчанию внутри deconflictLabels.
+  const deOpts: DeconflictOptions = { gap: opts.gap ?? LABEL_GAP };
+  if (opts.step != null) deOpts.step = opts.step;
+  if (opts.maxShift != null) deOpts.maxShift = opts.maxShift;
+  if (opts.leaderHeights != null) deOpts.leaderHeights = opts.leaderHeights;
+  const de = deconflictLabels(items, nodeBoxes, deOpts);
 
   const out: Record<string, [number, number]> = {};
   for (const id in cur) out[id] = de.pos[id] ? de.pos[id] : cur[id];
+
+  /* ── выравнивание колонок по счётчику пересечений ──
+     Разведение подписей сдвигает узлы по вертикали и может добавить пересечений
+     связей. Колонки (по x) обходятся в фиксированном порядке; для каждой
+     подбирается одинаковый сдвиг ВСЕЙ колонки, который уменьшает число
+     пересечений и не возвращает наложений подписей/узлов и проходов линии
+     сквозь узлы. Сдвиг колонки не меняет зазоры внутри неё, поэтому подписи
+     остаются при своих узлах. Порядок обхода, набор шагов и правило выбора
+     фиксированы — результат воспроизводим. */
+  const RELIEF_STEP = 12;
+  const RELIEF_MAX = 240;
+  const RELIEF_PASSES = 3;
+  if (opts.cleanup !== false) {
+    const colIds: Record<string, string[]> = {};
+    for (const id of nodeIds) { if (!out[id]) continue; const x = out[id][0]; if (!colIds[x]) colIds[x] = []; colIds[x].push(id); }
+    const xs = Object.keys(colIds).sort((a, b) => Number(a) - Number(b));
+    const gap = opts.gap ?? LABEL_GAP;
+    let curCross = fastCrossings(out, deps, geometry);
+    for (let pass = 0; pass < RELIEF_PASSES; pass++) {
+      let improved = false;
+      for (const x of xs) {
+        const list = colIds[x];
+        const base: Record<string, [number, number]> = {};
+        for (const id in out) base[id] = [out[id][0], out[id][1]];
+        let bestD = 0;
+        let bestCross = curCross;
+        for (let k = RELIEF_STEP; k <= RELIEF_MAX; k += RELIEF_STEP) {
+          for (const d of [k, -k]) {
+            for (const id of list) out[id] = [base[id][0], base[id][1] + d];
+            const v = fastCrossings(out, deps, geometry);
+            if (v < bestCross) { bestCross = v; bestD = d; }
+          }
+        }
+        for (const id of list) out[id] = [base[id][0], base[id][1]];
+        if (bestD !== 0) {
+          for (const id of list) out[id] = [base[id][0], base[id][1] + bestD];
+          const mm = computeLayoutMetrics({ pos: out, ...boundsOf(out, geometry) }, metricNodes, deps, false, geometry);
+          const lab = labelStatsAt(out, nodeIds, items, opts.radius, gap);
+          if (mm.edgeNodeHits === 0 && mm.nodeOverlaps === 0 && lab.overlaps === 0 && lab.nodeHits === 0) {
+            curCross = bestCross;
+            improved = true;
+          } else {
+            for (const id of list) out[id] = [base[id][0], base[id][1]];
+          }
+        }
+      }
+      if (!improved) break;   // больше улучшить нельзя — выходим
+    }
+  }
 
   const crossings = computeLayoutMetrics(
     { pos: out, ...boundsOf(out, geometry) },
@@ -426,7 +544,19 @@ export function nudgeForLabels(
     geometry,
   ).crossings;
 
-  return { pos: out, dyById: { ...de.shift }, leaders: de.leaders, crossings, stats: de.stats, statsBefore };
+  // Итоговый сдвиг и линии-поводки — по суммарному смещению от исходных позиций.
+  const dyById: Record<string, number> = {};
+  const leaders: string[] = [];
+  const leaderLimit = (opts.leaderHeights ?? DECONFLICT_DEFAULTS.leaderHeights) * 2 * opts.radius;
+  for (const id in out) {
+    const orig = pos[id];
+    const d = orig ? out[id][1] - orig[1] : 0;
+    if (Math.abs(d) > 0.01) dyById[id] = d;
+    if (Math.abs(d) > leaderLimit) leaders.push(id);
+  }
+  leaders.sort();
+
+  return { pos: out, dyById, leaders, crossings, stats: de.stats, statsBefore };
 }
 
 const CLEANUP_DEFAULT_ROUNDS = 60;

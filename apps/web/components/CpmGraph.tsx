@@ -455,8 +455,9 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [unit, setUnit] = useState<'d' | 'h' | 'm'>('d');
   const [critOnly, setCritOnly] = useState(false);
   const [showEdgeDays, setShowEdgeDays] = useState(true);
-  // «Показывать логические связи»: по умолчанию включено, выключение временно
-  // упрощает плотный участок (прячет связи без ожидания и служебные «Старт»/«Финиш»).
+  // «Показывать логические связи»: по умолчанию включено. Выключение скрывает
+  // ТОЛЬКО связи между операциями без ожидания (плотную паутину). Критический путь
+  // и служебные связи «Старт»/«Финиш» переключатель не затрагивает — они видны всегда.
   const [showLogical, setShowLogical] = useState(true);
   // Блок условных обозначений внизу рабочей области: по умолчанию свёрнут,
   // разворачивается кликом по ссылке «Условные обозначения».
@@ -1227,8 +1228,9 @@ export default function CpmGraph(props: CpmGraphProps) {
 
     /* ── связи со «Стартом»/«Финишем» — пунктир, нулевая длительность ──
        Геометрия учитывает все узлы (реальные и виртуальные): обход минимальным
-       отклонением. В счётчик качества эти связи не входят. */
-    ((st.showLogical ? (st.vEdges || []) : []) as VirtualEdge[]).forEach((ve) => {
+       отклонением. В счётчик качества эти связи не входят. Служебные связи
+       рисуются ВСЕГДА и переключателем логических связей не скрываются. */
+    ((st.vEdges || []) as VirtualEdge[]).forEach((ve) => {
       const pa = st.layout.pos[ve.from];
       const pb = st.layout.pos[ve.to];
       if (!pa || !pb) return;
@@ -1432,8 +1434,9 @@ export default function CpmGraph(props: CpmGraphProps) {
       }
     });
 
-    /* ── виртуальные события «Старт»/«Финиш» — отдельная форма (капсула) и цвет ── */
-    ((st.showLogical ? (st.virtuals || []) : []) as VirtualNode[]).forEach((v) => {
+    /* ── виртуальные события «Старт»/«Финиш» — отдельная форма (капсула) и цвет ──
+       События рисуются ВСЕГДА (переключатель логических связей их не затрагивает). */
+    ((st.virtuals || []) as VirtualNode[]).forEach((v) => {
       const cx = sx(v.x);
       const cy = sy(v.y);
       if (cx < -CW * S - 20 || cx > W + CW * S + 20 || cy < -CH * S - 20 || cy > H + CH * S + 20) return;
@@ -1869,7 +1872,7 @@ export default function CpmGraph(props: CpmGraphProps) {
           <input className="cpmui-chk" type="checkbox" checked={showEdgeDays} onChange={(e) => setShowEdgeDays(e.target.checked)} />
           Дни на связях
         </label>
-        <label className="cpmui-lbl" title="Выключите, чтобы временно упростить плотный участок: останутся только связи с ожиданием и критический путь">
+        <label className="cpmui-lbl" title="Выключите, чтобы убрать только связи между работами без ожидания (плотную паутину). Критический путь и связи «Старт»/«Финиш» остаются всегда">
           <input className="cpmui-chk" type="checkbox" checked={showLogical} onChange={(e) => setShowLogical(e.target.checked)} />
           Показывать логические связи
         </label>
