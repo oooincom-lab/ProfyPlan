@@ -512,6 +512,11 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [legendOpen, setLegendOpen] = useState(false);
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
+  // «Выравнивать обрезки периода»: компановка маркеров обрезки периода по общим
+  // вертикалям слева/справа (см. cpm-layout.compactPeriodCuts). Доступно только в
+  // структурной укладке «По слоям»; по умолчанию выключено — вид ровно как без
+  // компановки. Раскладка «Для печати» компановкой не затрагивается.
+  const [alignCutEnds, setAlignCutEnds] = useState(false);
   const [zoomPct, setZoomPct] = useState(80);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; op?: GOp; virt?: VirtualNode; cut?: CutMarker; edge?: EdgeTip } | null>(null);
   const [canvasErr, setCanvasErr] = useState<string | null>(null);
@@ -663,6 +668,9 @@ export default function CpmGraph(props: CpmGraphProps) {
   // (ноль недостижим) и только уводит вбок от прежнего результата — потому там
   // вертикальная раскладка остаётся классической (без переноса).
   const planarLayout = layoutPlanarity.state === 'confirmed';
+  /* Компановка обрезок периода: доступна в структурной укладке «По слоям» и не
+     применяется к раскладке «Для печати» (её построение остаётся прежним). */
+  const alignCutEndsActive = alignCutEnds && mode === 'byLayer' && layoutPreset !== 'print';
   const layoutOpts = useMemo(
     () => ({
       ...settingsToLayoutOptions(activePreset.settings),
@@ -671,10 +679,12 @@ export default function CpmGraph(props: CpmGraphProps) {
       // Свобода вертикального переноса — только на планарном (под)графе, где
       // укладка без пересечений вообще достижима.
       translateRange: planarLayout ? PLANAR_TRANSLATE_RANGE : 0,
+      // Компановка обрезок периода — только по явному крыжику «По слоям».
+      ...(alignCutEndsActive ? { alignCutEnds: true } : {}),
       minRowPitch: labelPitch,
       geometry: geom,
     }),
-    [activePreset, planarLayout, geom, labelPitch],
+    [activePreset, planarLayout, geom, labelPitch, alignCutEndsActive],
   );
 
   /* ── базовая раскладка узлов без ручных сдвигов ──
@@ -2187,6 +2197,25 @@ export default function CpmGraph(props: CpmGraphProps) {
             })}
           </div>
         </span>
+        {mode === 'byLayer' && (
+          <label
+            className="cpmui-lbl"
+            data-cpm-align-cut={alignCutEnds ? 'on' : 'off'}
+            title={layoutPreset === 'print'
+              ? 'Раскладка «Для печати» не меняется компановкой — крыжик доступен в «Обычно», «Плотно» и «Без пересечений»'
+              : 'Выстроить маркеры обрезки периода по одной вертикали слева и справа, чтобы видимое окно читалось прямоугольником. Раскладка «Для печати» не затрагивается'}
+            style={layoutPreset === 'print' ? { opacity: 0.5 } : undefined}
+          >
+            <input
+              className="cpmui-chk"
+              type="checkbox"
+              checked={alignCutEnds}
+              disabled={layoutPreset === 'print'}
+              onChange={(e) => setAlignCutEnds(e.target.checked)}
+            />
+            Выравнивать обрезки периода
+          </label>
+        )}
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 4 }}>
           <button className="cpmui-btn sq" onClick={() => zoomBy(1.2)} title="Приблизить">＋</button>

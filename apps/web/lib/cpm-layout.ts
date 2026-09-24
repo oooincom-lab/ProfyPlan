@@ -9,6 +9,7 @@ import {
   CARD_W, CARD_H, segRectHit, segCross, borderPoint, quadPt, edgeControl, DRAWN_EDGE_DETOUR_SAMPLES,
   BASE_COL_GAP, BASE_ROW_GAP, BASE_PAD, resolveGeometry, type Rect, type LayoutGeometry,
 } from './cpm-metrics';
+import { detectVisibleEndpoints } from './cpm-structure';
 
 export type Mode = 'byDate' | 'byLayer';
 
@@ -58,6 +59,17 @@ export interface LayoutOptions {
    * укладку вручную: сдвиг узла в его колонке и сдвиг колонки целиком. 0 — выкл.
    */
   translateRange?: number;
+  /**
+   * Компановка обрезок периода (только структурная укладка «По слоям»).
+   * Крайние видимые операции цепочек, чьё продолжение осталось за периодом,
+   * получают в раскладке маркеры обрезки. Если включено, их узлы выносятся на
+   * общую вертикаль слева и справа (по одной на каждую сторону), а горизонталь
+   * слоёв внутри окна пересчитывается так, чтобы это выравнивание получилось без
+   * наложения узлов: видимое окно читается прямоугольником, а цепочки сохраняют
+   * свой вертикальный порядок, подписи остаются при своих узлах. По умолчанию
+   * выключено — поведение ровно как без компановки.
+   */
+  alignCutEnds?: boolean;
   /** Вес простого пересечения связей в критерии. */
   crossWeight?: number;
   /** Вес «прохода связи сквозь посторонний узел» в критерии (наложение узлов весит больше). */
@@ -166,6 +178,20 @@ export function computeLayout(
     const cost = drawnCrossingCost(candidates[i].pos, ops, selEdges, opts);
     if (cost < bestCost) { bestCost = cost; result = candidates[i]; }
   }
+
+  // Компановка обрезок периода (только структурная укладка «По слоям» и только
+  // по явному флагу): узлы с маркерами обрезки выносятся на общие вертикали
+  // слева/справа, а слои внутри окна пересобираются так, чтобы выравнивание
+  // получилось без наложения узлов. Результат принимается, только если число
+  // пересечений итоговой геометрии (включая наложения узлов) не выросло —
+  // компановка не может сделать укладку хуже, чем без неё.
+  if (opts.alignCutEnds) {
+    const aligned = compactPeriodCuts(result, ops, deps, mode, opts);
+    if (aligned) {
+      const alignCost = drawnCrossingCost(aligned.pos, ops, selEdges, opts);
+      if (alignCost <= bestCost + 1e-9) { bestCost = alignCost; result = aligned; }
+    }
+  }
   if (layoutCache.size >= LAYOUT_CACHE_MAX) {
     const oldest = layoutCache.keys().next().value as string | undefined;
     if (oldest !== undefined) layoutCache.delete(oldest);
@@ -270,6 +296,92 @@ function drawnCrossingCost(
   }
 
   return crossings + overlapWeight * overlaps;
+}
+
+/**
+ * Компановка обрезок периода для структурной укладки «По слоям».
+ *
+ * Обрезки периода — это маркеры у крайних видимых операций цепочки, чьё
+ * продолжение осталось за окном (до или после периода). После фильтрации разные
+ * цепочки заканчиваются в разных слоях, поэтому маркеры стоят на разных
+ * вертикалях и окно выглядит «рвано».
+ *
+ * Компановка выносит узлы-обрезки на общую вертикаль: все левые (продолжение
+ * раньше окна) — на самый левый слой среди них, все правые (продолжение позже
+ * окна) — на самый правый. Затем затронутые слои (колонки по x) переупаковываются по
+ * вертикали с сохранением шага ряда и взаимного порядка — так выравнивание
+ * выходит без наложения узлов, цепочки сохраняют свой вертикальный порядок, а
+ * подписи остаются при своих узлах (узел и его подписи двигаются как одно целое).
+ *
+ * Возвращает новую укладку или null, если обрезок нет / они уже на одной
+ * вертикали (тогда трогать укладку незачем).
+ */
+function compactPeriodCuts(
+  layout: Layout,
+  ops: GOp[],
+  deps: [string, string][],
+  mode: Mode,
+  opts: LayoutOptions,
+): Layout | null {
+  // Компановка осмысленна только в структурной укладке «По слоям»: в «По датам»
+  // горизонталь задаётся календарём и сдвигать узлы по x нельзя.
+  if (mode !== 'byLayer' || !ops.length) return null;
+
+  const net = detectVisibleEndpoints(ops.map((o) => o.id), deps);
+  const pos = layout.pos;
+  const cutStart = net.cutStartIds.filter((id) => pos[id]);
+  const cutFinish = net.cutFinishIds.filter((id) => pos[id]);
+  if (!cutStart.length && !cutFinish.length) return null;
+
+  const LX = cutStart.length ? Math.min(...cutStart.map((id) => pos[id][0])) : null;
+  const RX = cutFinish.length ? Math.max(...cutFinish.map((id) => pos[id][0])) : null;
+  const onLine = (ids: string[], x: number | null): boolean =>
+    x == null || ids.every((id) => Math.abs(pos[id][0] - x) < 1e-6);
+  if (onLine(cutStart, LX) && onLine(cutFinish, RX)) return null;   // уже выровнено
+
+  const G = resolveGeometry(opts.geometry);
+  const rowPitch = Math.max(G.cardH + G.rowGap, opts.minRowPitch ?? 0);
+
+  const np: Record<string, [number, number]> = {};
+  for (const id in pos) np[id] = [pos[id][0], pos[id][1]];
+  if (LX != null) cutStart.forEach((id) => { np[id][0] = LX; });
+  if (RX != null) cutFinish.forEach((id) => { np[id][0] = RX; });
+
+  // Переупаковка затронутых слоёв по вертикали: сдвиг внутрь слоя сохраняет
+  // взаимный порядок (цепочки сохраняют вертикальный порядок), а шаг ряда — зазор.
+  // Пересобираем только те слои, которые реально приняли узлы-обрезки (LX/RX):
+  // остальные слои не изменились и уже удовлетворяют шагу ряда, поэтому их
+  // трогать незачем — так компановка меняет картинку минимально.
+  const affected = new Set<number>();
+  if (LX != null) affected.add(LX);
+  if (RX != null) affected.add(RX);
+  const cols = new Map<number, string[]>();
+  for (const id in np) {
+    const x = np[id][0];
+    if (!affected.has(x)) continue;
+    if (!cols.has(x)) cols.set(x, []);
+    cols.get(x)!.push(id);
+  }
+  cols.forEach((list) => {
+    list.sort((a, b) => (np[a][1] - np[b][1]) || (a < b ? -1 : a > b ? 1 : 0));
+    for (let i = 1; i < list.length; i++) {
+      if (np[list[i]][1] - np[list[i - 1]][1] < rowPitch) {
+        np[list[i]][1] = np[list[i - 1]][1] + rowPitch;
+      }
+    }
+  });
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const id in np) {
+    const [x, y] = np[id];
+    if (x - G.cardW / 2 < minX) minX = x - G.cardW / 2;
+    if (x + G.cardW / 2 > maxX) maxX = x + G.cardW / 2;
+    if (y - G.cardH / 2 < minY) minY = y - G.cardH / 2;
+    if (y + G.cardH / 2 > maxY) maxY = y + G.cardH / 2;
+  }
+  if (!Number.isFinite(minX)) return null;
+
+  return { ...layout, pos: np, minX, maxX, minY, maxY };
 }
 
 /** Один старт раскладки: возвращает укладку и её числовой критерий. */
