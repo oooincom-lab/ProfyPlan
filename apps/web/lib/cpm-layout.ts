@@ -291,11 +291,37 @@ function computeLayoutOnce(
   }
 
   // ── стартовая раскладка: внутри колонки равномерная укладка с центрированием ──
+  // Горизонталь колонки:
+  //   • «по датам» — по КАЛЕНДАРЮ: x пропорционален дате колонки (средний ранний
+  //     старт её операций) относительно начала отсчёта (minEs). Это тот же
+  //     линейный масштаб, что и у шкалы времени (`pxPerDay`), поэтому картинка и
+  //     шкала совпадают. Раньше x считался по ПОРЯДКОВОМУ номеру непустой колонки,
+  //     из-за чего пустые дни «сжимались» и, особенно после фильтра по периоду,
+  //     узлы уезжали от своих дат. Минимальный шаг colPitch не даёт тесным по датам
+  //     колонкам наложиться (допускается небольшой сдвиг вправо плотных колонок).
+  //   • «по слоям» — по порядковому номеру слоя (хронология не показывается).
   const pos: Record<string, [number, number]> = {};
+  const colX = new Map<number, number>();
+  if (mode === 'byDate') {
+    const ppd = colPitch / bucketDays;
+    let prevX = -Infinity;
+    colKeys.forEach((c) => {
+      const g = groups.get(c)!;
+      const colDay = g.reduce((s, o) => s + o.es, 0) / g.length;
+      let x = pad + (colDay - minEs) * ppd + cardW / 2;
+      if (x < prevX + colPitch) x = prevX + colPitch;
+      prevX = x;
+      colX.set(c, x);
+    });
+  } else {
+    colKeys.forEach((c) => {
+      const ci = colIndex.get(c)!;
+      colX.set(c, pad + ci * colPitch + cardW / 2);
+    });
+  }
   colKeys.forEach((c) => {
     const g = groups.get(c)!;
-    const ci = colIndex.get(c)!;
-    const x = pad + ci * colPitch + cardW / 2;
+    const x = colX.get(c)!;
     const total = g.length * rowPitch;
     const y0 = -total / 2 + rowPitch / 2;
     g.forEach((o, i) => { pos[o.id] = [x, y0 + i * rowPitch]; });
