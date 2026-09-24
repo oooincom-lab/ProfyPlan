@@ -25,6 +25,7 @@ from app.models.work_schedule import WorkSchedule, WorkScheduleSlot  # noqa: F40
 from app.models.resource_event import ResourceEvent  # noqa: F401
 from app.models.resource_department_quota import ResourceDepartmentQuota  # noqa: F401
 from app.models.planning_settings import PlanningSettings  # noqa: F401
+from app.models.saved_view import SavedView, SavedViewLog  # noqa: F401
 from app.models.operation_pin import OperationPin  # noqa: F401
 from app.models.group_flow import GroupFlow, GroupFlowOperation  # noqa: F401
 from app.models.group_shift_log import GroupShiftLog  # noqa: F401

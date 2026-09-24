@@ -21,6 +21,7 @@ from app.models.operation import Operation, OperationDependency, OperationResour
 from app.models.product_structure import ProductStructure  # noqa: F401
 from app.models.routing import Routing, RoutingOperation  # noqa: F401
 from app.models.plan_version import PlanBaseline, ActualExecution, InterProjectDependency  # noqa: F401
+from app.models.saved_view import SavedView, SavedViewLog  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
