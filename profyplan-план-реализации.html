@@ -324,6 +324,20 @@ a:hover{text-decoration:underline}
 </div>
 </div>
 
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">Next</span> 6.13 Сохранённые виды и реестр сохранений (25.09.2026)</div>
+<div class="task-list">
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Спецификация видов закреплена</div><div class="detail">Промт (Дополнение 8) и план: личный вид, лимит числа сохранений с наследованием, общий вид (не более одного на пользователя), статусы «чтение»/«изменение» с журналом, реестр, экспорт/импорт JSON, серверное хранение с кэшем в браузере.</div></div><span class="status green">готово</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Хранение: таблица видов и журнала изменений</div><div class="detail">Серверная таблица с привязкой к арендатору, проекту и пользователю; содержимое вида — JSON-конверт с версией схемы; рядом — журнал изменений общего вида (кто и когда). Миграция добавляет таблицы, данные не трогает.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">API видов</div><div class="detail">Список видов, создание и сохранение, получение, переименование, смена статуса и шаринг, удаление (с подтверждением), экспорт и импорт.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Лимит из общих настроек</div><div class="detail">Параметр <code>views.saved_limit</code> (по умолчанию 10) читается через существующий механизм наследования: система → рабочий стол → проект → группа → пул. При упоре — отказ с пояснением и предложением удалить лишнее или выгрузить в файл; молчаливой перезаписи нет.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Общий вид и его статусы</div><div class="detail">Не более одного общего вида на пользователя; «чтение» — применяют все, пишет только владелец; «изменение» — пишут все участники проекта, ведётся журнал изменений; «Сохранить как свой» ответвляет личную копию.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Экспорт и импорт файла</div><div class="detail">JSON с версией схемы; экспорт одного вида или всех сразу; импорт добавляет вид в список, при совпадении имени предлагает переименовать; импортированные виды подчиняются лимиту.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Тесты серверной части</div><div class="detail">Создание вида; упор в лимит; шаринг (не более одного общего вида на пользователя); доступ на чтение и на изменение; экспорт, затем импорт — содержимое совпадает.</div></div><span class="status">в плане</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Интерфейс: реестр видов и панель сохранения</div><div class="detail">Следующий этап после сервера: список видов с именем, автором и статусом, операции реестра, применение вида к рабочему полю, сохранение ручных позиций узлов.</div></div><span class="status">в плане</span></div>
+</div>
+</div>
+
 <!-- Timeline -->
 <h2>Хронология поставок</h2>
 <div class="timeline">
