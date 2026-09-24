@@ -681,10 +681,15 @@ export default function CpmGraph(props: CpmGraphProps) {
       translateRange: planarLayout ? PLANAR_TRANSLATE_RANGE : 0,
       // Компановка обрезок периода — только по явному крыжику «По слоям».
       ...(alignCutEndsActive ? { alignCutEnds: true } : {}),
+      // В «Без пересечений» обещан ноль — компановка принимается, только если
+      // пересечений не стало больше. В «Обычно»/«Плотно» она применяется по
+      // выбору пользователя без такой страховки (иначе, как было раньше, уже нулевая
+      // укладка откатывала любое выравнивание и крыжик ничего не менял).
+      ...(alignCutEndsActive ? { alignCutEndsGuard: layoutPreset === 'noplan' } : {}),
       minRowPitch: labelPitch,
       geometry: geom,
     }),
-    [activePreset, planarLayout, geom, labelPitch, alignCutEndsActive],
+    [activePreset, planarLayout, geom, labelPitch, alignCutEndsActive, layoutPreset],
   );
 
   /* ── базовая раскладка узлов без ручных сдвигов ──
