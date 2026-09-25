@@ -53,7 +53,7 @@ a:hover{text-decoration:underline}
 <body>
 
 <h1>ProfyPlan — План реализации</h1>
-<p class="meta">Обновлено 25.09.2026 · <b>Ревизия статусов — 25.09.2026</b> · Основание: <a href="https://profyplan.ru">promt-ccm-multiproject.md</a> (в т.ч. Дополнение 8, Дополнение 9, Дополнение 10)</p>
+<p class="meta">Обновлено 26.09.2026 · <b>Ревизия статусов — 25.09.2026</b> · Основание: <a href="https://profyplan.ru">promt-ccm-multiproject.md</a> (в т.ч. Дополнение 8, Дополнение 9, Дополнение 10 и Дополнение 11)</p>
 
 <div class="note-box" style="background:rgba(52,152,219,.08);border-color:rgba(52,152,219,.3)">
 <strong style="color:var(--blue)">Единая шкала статусов (введена 25.09.2026).</strong> Статус меняется только по фактическому прохождению ступеней <b>«реализовано → проверено на локальном стенде → выложено на прод и проверено»</b>. «Сделано в коде» без локальной проверки — это «в работе»; готовое только локально, но не выложенное — это «готово локально, проверено», и не выше. Дата ревизии указывается рядом со статусом; процент допустим только рядом с перечнем того, что не сделано.
@@ -75,7 +75,7 @@ a:hover{text-decoration:underline}
 <div class="stat"><div class="num green">6</div><div class="lbl">Блоков 6.x на проде</div></div>
 <div class="stat"><div class="num amber">4</div><div class="lbl">Готово частично</div></div>
 <div class="stat"><div class="num blue">1</div><div class="lbl">Готово локально</div></div>
-<div class="stat"><div class="num" style="color:var(--muted)">5</div><div class="lbl">Не начато</div></div>
+<div class="stat"><div class="num" style="color:var(--muted)">16</div><div class="lbl">Не начато</div></div>
 <div class="stat"><div class="num green">5/5</div><div class="lbl">Контейнеров VPS</div></div>
 <div class="stat"><div class="num blue">18</div><div class="lbl">Операций CPM</div></div>
 </div>
@@ -83,9 +83,9 @@ a:hover{text-decoration:underline}
 <div class="progress-wrap">
 <div style="display:flex;justify-content:space-between;align-items:baseline">
 <span style="font-weight:600">Блоки 6.x: выложено на прод, проверено</span>
-<span style="font-size:1.3rem;font-weight:700;color:var(--green)">6 / 16</span>
+<span style="font-size:1.3rem;font-weight:700;color:var(--green)">6 / 27</span>
 </div>
-<div class="progress-bar"><div class="fill" style="width:37.5%;background:linear-gradient(90deg,var(--green),var(--blue))"></div></div>
+<div class="progress-bar"><div class="fill" style="width:22.2%;background:linear-gradient(90deg,var(--green),var(--blue))"></div></div>
 <div class="progress-labels"><span>Ревизия статусов: 25.09.2026</span><span>Граница выкладки: origin/master 356b9d1 (17.09.2026)</span></div>
 </div>
 
@@ -114,7 +114,18 @@ a:hover{text-decoration:underline}
 <tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.14а</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Режим цели: цель в данных и расчёте</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>2 · Ядро: маркеры и закрепления</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато (только спецификация)</td></tr>
 <tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.14б</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Режим цели: показ цели на сетевом графике и Ганте</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>4 · Диаграммы и оконный режим</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
 <tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.14в</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Режим цели: значок в дереве, экран «Цели», плитки (с дашбордами)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>5 · Дашборд объекта и полировка</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.14г</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Режим цели: даты обосновываются вероятностями (26.09.2026)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>2 · Ядро: маркеры и закрепления</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
 <tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.15</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Сквозные требования (условное форматирование и контекстная справка) (25.09.2026) · ретрофит графика, коммит 31b7ccf</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>сквозное — на каждой ступени с графиком/дашбордом/панелью</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)" class="amber">Готово частично — правило закреплено; ретрофит сетевого графика готов локально (на прод не выложен); остальные графики, дашборды и панели — нет</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.16</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Раздел «Расчёты»: каркас — хаб, вкладки, единая полоса контекста, настройки расчёта проекта (26.09.2026)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>4 · Диаграммы и оконный режим</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.17</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Ввод тройных оценок и экспертная таблица (выгрузка и загрузка)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>2 · Ядро: маркеры и закрепления</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.18</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Страница PERT: интервалы 68 % / 95 %, торнадо, таблица оценок</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>4 · Диаграммы и оконный режим</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.19</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Страница Монте-Карло: прогоны и зерно, гистограмма и S-кривая, процентили</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>4 · Диаграммы и оконный режим</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.20</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>CCM как метод планирования (межпроектное объединение, критическая цепь)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>3 · Пулы и межпроектные сценарии</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.21</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Актуальность расчётов и пересчёт при смене контекста (отпечаток входных данных)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>2 · Ядро: маркеры и закрепления</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.22</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Запуски, сравнение методов и итоговый отчёт с выгрузкой</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>4 · Диаграммы и оконный режим</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.23</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Дашборд проекта (вместе со значком в дереве, экраном «Цели» и плитками — остаток 6.14в)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>5 · Дашборд объекта и полировка</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.24</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>Калибровка по историческим данным</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>4 · Диаграммы и оконный режим</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
+<tr><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>6.25</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>ИИ-заполнение оценок (раздел ИИ-помощника; после готовности формы экспертной таблицы 6.17)</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)"><b>отдельная линия ИИ-помощника — после 6.17</b></td><td style="padding:.35rem .5rem;border-bottom:1px solid var(--border)">Не начато</td></tr>
 <tr><td style="padding:.35rem .5rem">6.12</td><td style="padding:.35rem .5rem">Финальная уборка служебных артефактов — выполняется последней</td><td style="padding:.35rem .5rem">7 · Приёмка</td><td style="padding:.35rem .5rem">Не начато</td></tr>
 </tbody></table>
 
@@ -412,8 +423,9 @@ a:hover{text-decoration:underline}
 </div>
 
 <div class="note-box">
-<strong>Очередь (обновлено 25.09.2026):</strong> (1) <b>6.11</b> — сетевой график; (2) <b>6.13а</b> — реестр сохранённых видов; (3) <b>6.14а</b> — цель в данных и расчёте; (4) <b>6.14б</b> — показ цели на графиках; (5) <b>6.13б</b> — подключение видов к графикам (начиная с сетевого); (6) <b>6.14в</b> — значок в дереве, экран «Цели», плитки — вместе с дашбордами; (7) <b>6.15</b> — сквозные требования, применяются попутно; (8) <b>6.12</b> — финальная уборка.<br>
-<strong>Обоснование.</strong> Новые задачи не отменяются и не сливаются — каждая часть встаёт на свою ступень, чтобы не перепрыгивать лестницу «от простого к сложному». Сначала доводятся до конца уже начатые блоки: 6.11, затем 6.13а — самая простая часть сохранённых видов (реестр и хранение, уже готовые на сервере). Только после этого — цель в данных и расчёте (6.14а), затем показ цели на графиках (6.14б); подключение видов к конкретному графику (6.13б) делается, когда настройки этого вида устоялись. Значок в дереве, экран «Цели» и плитки (6.14в) идут вместе с дашбордами. Сквозные требования (6.15) — критерий готовности, применяемый к каждому графику, дашборду и панели, которые трогаем; отдельной задачей «на потом» он не выносится. Финальная уборка (6.12) — в самом конце проекта.<br>
+<strong>Очередь (обновлено 26.09.2026):</strong> (1) <b>6.13а</b> — реестр сохранённых видов; (2) <b>6.16</b> — каркас раздела «Расчёты»; (3) <b>6.17</b> — ввод тройных оценок и экспертная таблица; (4) <b>6.18</b> — страница PERT; (5) <b>6.19</b> — страница Монте-Карло; (6) <b>6.20</b> — CCM как метод; (7) <b>6.21</b> — актуальность расчётов и пересчёт при смене контекста; (8) <b>6.22</b> — запуски, сравнение методов, итоговый отчёт с выгрузкой; (9) <b>6.14г</b> — режим цели (даты обосновываются вероятностями); (10) <b>6.23</b> — дашборд проекта; (11) <b>6.24</b> — калибровка по историческим данным; (12) <b>6.25</b> — ИИ-заполнение оценок в разделе ИИ-помощника; (13) <b>6.14б + 6.13б + 6.12</b> — показ цели на графиках, подключение видов, финальная уборка.<br>
+<strong>Обоснование.</strong> Сначала каркас и ввод данных: без ввода тройных оценок (6.17) страницы PERT и Монте-Карло показывают пустоту, поэтому они идут после ввода; каркас (6.16) — раньше страниц, потому что задаёт их общий вид, вкладки и полосу контекста. Затем страницы расчётов (6.18, 6.19), затем обобщение (6.20 — CCM как равноправный метод, 6.21 — актуальность и пересчёт, 6.22 — запуски, сравнение и итоговый отчёт), затем цели с опорой на вероятности (6.14г — после того, как распределения считаются). Дашборд проекта (6.23) идёт вместе со значком в дереве, экраном «Цели» и плитками — этим закрывается остаток блока 6.14в. Калибровка (6.24) — после накопления истории запусков (6.22). ИИ-заполнение оценок (6.25) — в разделе ИИ-помощника и только после готовности формы экспертной таблицы (6.17): ИИ должен предлагать оценки в ту же форму, где их подтверждает человек. Разрезание блоков сохранено: 6.13а/6.13б, 6.14а/б/в, 6.15.<br>
+Предварительные блоки не отменены: цель в данных и расчёте (6.14а) — шаг перед 6.14г; показ цели на графиках (6.14б), подключение видов к графикам (6.13б) и финальная уборка (6.12) — пункт 13 очереди. Сквозные требования (6.15) применяются попутно на каждой ступени, где трогаем график, дашборд или панель. Сетевой график (6.11) в новой очереди не значится: он готов и проверен локально, его остаток — выкладка на прод, которая идёт отдельным действием и порядок работ не занимает.<br>
 Ретрофит сетевого графика (блок 6.15) выполнен 25.09.2026 (коммит 31b7ccf) попутно — он не создаёт блока-дубликата, а достраивает уже сделанный график до сквозного definition of done (Дополнение 10).
 </div>
 
@@ -461,6 +473,137 @@ a:hover{text-decoration:underline}
 </div>
 </div>
 
+<h2>Раздел «Расчёты» (Дополнение 11, 26.09.2026)</h2>
+<p class="meta">Спецификация — в промте, раздел «Дополнение 11. Раздел «Расчёты»: методы, запуски, оценки и актуальность». Блоки 6.16–6.25 и 6.14г. Все блоки — новые, статус у всех «Не начато» (кода нет, есть только спецификация). Ступени — в сводной таблице выше.</p>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.14г Режим цели: даты обосновываются вероятностями · <span style="color:var(--muted);font-weight:500">Ступень 2 · Ядро: маркеры и закрепления</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Вероятностное основание назначенных дат</div><div class="detail">Рядом с рабочей и договорной датами видно, какой вероятности достижения соответствует дата; без распределения обоснование не показывается.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Опора на PERT или Монте-Карло</div><div class="detail">Дата обосновывается распределением (p50 / p80 / p95), а не одной детерминированной цифрой. Опирается на цель в данных и расчёте (6.14а) и на страницы 6.18, 6.19.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Сигнал недостижимости</div><div class="detail">Отдельный сигнал: договорная дата, ставшая недостижимой в составе кластера.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Цели при пересчёте не сбрасываются</div><div class="detail">Совместно с 6.21: договорная и рабочая — назначения; пересчитываются оперативная дата, разрыв и сигналы.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на каждой странице и панели блока — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.16 Раздел «Расчёты»: каркас (26.09.2026) · <span style="color:var(--muted);font-weight:500">Ступень 4 · Диаграммы и оконный режим</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">📄</span><div class="body"><div class="title">Спецификация закреплена (промт Дополнение 11 + этот план)</div><div class="detail">Модель методов на двух независимых осях, запуск расчёта как объект, хаб вкладок, неактивные вкладки выключенных методов, единая полоса контекста, настройки расчёта проекта, общий каркас страниц.</div></div><span class="status">спецификация</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Модель методов: две независимые оси</div><div class="detail">Логика планирования — CPM (критический путь в проекте или кусте) либо CCM (межпроектное объединение: слияние в пул и критическая цепь); анализ неопределённости — без анализа, PERT либо Монте-Карло. CCM — равноправный метод, не надстройка над CPM; допустимы любые сочетания; каждый расчёт хранит обе оси.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Запуск расчёта как объект</div><div class="detail">Область (проект / куст / группа / пул), методы (обе оси), параметры, дата и версия входных данных, результат; основание сравнения методов, истории и прослеживаемости («на какую дату и по какой версии данных получена цифра»).</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Пункт меню «Диаграмма Ганта» → «Расчёты» и хаб вкладок</div><div class="detail">Вкладки: Обзор · Гант · Сеть CPM · PERT · Монте-Карло · CCM · Сравнение · Запуски.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Неактивные вкладки выключенных методов</div><div class="detail">Вкладки, чьи методы выключены в настройках проекта, не скрываются: показываются неактивными с пояснением причины и кнопкой «включить», ведущей в настройки расчёта.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Единая полоса контекста</div><div class="detail">Область (проект / куст / группа / пул), активные методы, дата и версия данных расчёта, кнопка «Пересчитать», индикатор «есть несохранённые изменения» — одинаково на всех страницах раздела.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Настройки расчёта проекта</div><div class="detail">«Проект → Настройки», раздел «Расчёты»: доступные методы планирования (CPM, CCM), включённый анализ (PERT, Монте-Карло), параметры Монте-Карло по умолчанию, доверительный уровень по умолчанию, переключатель «использовать исторические данные» (по умолчанию выключен, включается только решением пользователя). Сегодня выбора метода у проекта в коде нет — фиксируется как отсутствующее.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Общий каркас страниц</div><div class="detail">Сверху параметры, в центре главное представление, снизу детали и таблицы; пустых страниц нет — при отсутствии данных показывается объяснение, чего не хватает, и кнопка перехода к устранению.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Гант и Сеть CPM как вкладки</div><div class="detail">Существующие диаграмма Ганта и сетевой график встраиваются вкладками в хаб; отдельные входы не дублируются.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на каждой странице раздела — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.17 Ввод тройных оценок и экспертная таблица · <span style="color:var(--muted);font-weight:500">Ступень 2 · Ядро: маркеры и закрепления</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Ввод тройных оценок в карточке операции</div><div class="detail">Поля оптимистичной, наиболее вероятной и пессимистичной оценок; мгновенный показ ожидаемой длительности и разброса; проверка: оптимистичная ≤ наиболее вероятная ≤ пессимистичная. Обязателен до страницы PERT (6.18): без оценок страницы PERT и Монте-Карло показывают пустоту. Сегодня поля есть в модели операции и используются расчётом, но заполнить их в интерфейсе негде — зафиксировано как отсутствующее звено.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Источник каждой оценки</div><div class="detail">Каждая оценка хранится с указанием источника: факт (история), эксперт, оценка ИИ; приоритет источников — факт выше эксперта, эксперт выше предложения ИИ.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Выгрузка экспертной таблицы в Excel</div><div class="detail">Код и наименование операции, единица измерения, текущая длительность, три оценки, комментарий-обоснование; в шапке — проект и область, дата выгрузки и версия данных (свежий файл отличается от устаревшего); правила проверки написаны прямо в листе.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Загрузка с сухим прогоном и предпросмотром</div><div class="detail">Что изменится, какие строки не проходят проверку, какие операции не найдены; до подтверждения ничего не записывается; сводка в стиле мастера массового удаления («обновлено · пропущено · ошибок»); сопоставление по идентификатору операции — повторная загрузка того же файла не ломает данные; фиксируется, кто и когда загрузил.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на форме ввода и в мастере загрузки — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.18 Страница PERT · <span style="color:var(--muted);font-weight:500">Ступень 4 · Диаграммы и оконный режим</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Интервалы 68 % и 95 %</div><div class="detail">На шкале времени показываются интервалы ±1σ и ±2σ вокруг ожидаемого срока.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Диаграмма-торнадо</div><div class="detail">Вклад операций в разброс — отсортированная диаграмма влияния.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Таблица операций с тремя оценками</div><div class="detail">Оптимистичная, наиболее вероятная, пессимистичная; ожидаемая длительность и разброс.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Блок предупреждений по операциям без оценок</div><div class="detail">Отдельный список того, у чего оценки не заполнены, с кнопкой перехода к вводу (6.17).</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на странице — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.19 Страница Монте-Карло · <span style="color:var(--muted);font-weight:500">Ступень 4 · Диаграммы и оконный режим</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Число прогонов и зерно генератора наверху</div><div class="detail">Без указанного зерна результат невоспроизводим — это видно в интерфейсе.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Гистограмма и S-кривая с подбором даты по вероятности</div><div class="detail">Дата подбирается по заданной вероятности прямо на кривой.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Таблица процентилей</div><div class="detail">p50 / p80 / p95 и остальные квантили.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Сравнение с детерминированным расчётом и с PERT</div><div class="detail">Показывается расхождение сроков.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на странице — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.20 CCM как метод планирования · <span style="color:var(--muted);font-weight:500">Ступень 3 · Пулы и межпроектные сценарии</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">CCM как равноправный метод</div><div class="detail">Межпроектное объединение, слияние в пул, критическая цепь; сочетается с CPM, может применяться без него.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Объединённый график по пулу или группе</div><div class="detail">Вклад каждого куста виден отдельно.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Конфликтующие места</div><div class="detail">Где и на чём конфликтуют кусты.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Сочетание с осями анализа</div><div class="detail">CCM хранит обе оси расчёта: логику планирования и анализ неопределённости (PERT / Монте-Карло).</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на странице — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.21 Актуальность расчётов и пересчёт при смене контекста · <span style="color:var(--muted);font-weight:500">Ступень 2 · Ядро: маркеры и закрепления</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Отпечаток входных данных расчёта</div><div class="detail">Длительности и тройные оценки, зависимости, календари, состав кластера и пула, закрепления старта, назначения ресурсов.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Автопометка неактуальности</div><div class="detail">При изменении входов расчёты с изменившимся отпечатком автоматически помечаются неактуальными, со списком того, что изменилось.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Результаты не удаляются</div><div class="detail">Прежний расчёт сохраняется в истории и помечается неактуальным; в интерфейсе — актуальное число, прошлое — по клику для сравнения «было / стало». Показывать устаревшее число как действующее запрещено.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Диалог при размещении куста в кластер</div><div class="detail">Последствия («куст будет рассчитан в составе кластера по выбранному методу; прежние результаты сохранятся в истории и будут помечены неактуальными; цели и сигналы пересчитаются») и две кнопки: «Пересчитать сейчас» (по умолчанию) и «Отложить». После «Отложить» куст и кластер получают признак «требует пересчёта», а отчёты показывают предупреждение вместо голых цифр.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Обратный случай</div><div class="detail">Вывод куста из кластера — такой же пересчёт.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Цели при пересчёте не сбрасываются</div><div class="detail">Договорная и рабочая даты — назначения; пересчитываются оперативная дата, разрыв и сигналы. Отдельный сигнал — договорная дата, ставшая недостижимой в составе кластера.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Правило распространяется на всё, что меняет исходные данные</div><div class="detail">Любое изменение входов ведёт себя одинаково: пометка неактуальности, сохранение истории, пересчёт по решению пользователя.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на всех индикаторах актуальности и в диалогах — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.22 Запуски, сравнение методов и итоговый отчёт · <span style="color:var(--muted);font-weight:500">Ступень 4 · Диаграммы и оконный режим</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Страница «Обзор»</div><div class="detail">Итоговый отчёт и аналитика по проекту; сюда переносится шкала куста.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Плитки KPI</div><div class="detail">Детерминированный срок, p50/p80/p95, разрыв к цели, конфликты, узкие места.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Таблица кустов и операций с отклонениями</div><div class="detail">Отклонения от плана и от цели — по кустам и операциям.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Страница «Сравнение»</div><div class="detail">Наложение распределений и сроков; таблица методов с разницей в днях.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Страница «Запуски»</div><div class="detail">Список запусков (когда, метод, область, данные), сравнение двух выбранных, экспорт и импорт; механика реестра переиспользуется от сохранённых видов (6.13а) — второй похожий реестр не делается.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Выгрузка отчёта</div><div class="detail">Итоговый отчёт выгружается в файл.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на страницах и в таблицах — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.23 Дашборд проекта · <span style="color:var(--muted);font-weight:500">Ступень 5 · Дашборд объекта и полировка</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Дашборд проекта</div><div class="detail">Плитки и значки по цели, состоянию расчёта и отклонениям.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Значок в дереве, экран «Цели», плитки цели</div><div class="detail">Идут вместе с дашбордом и закрывают остаток блока 6.14в.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на дашборде и плитках — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.24 Калибровка по историческим данным · <span style="color:var(--muted);font-weight:500">Ступень 4 · Диаграммы и оконный режим</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Сбор факта по завершённым операциям</div><div class="detail">Сопоставление факта с оценками.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Коэффициенты калибровки</div><div class="detail">Подсказки по оценкам на основе истории.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Управляется переключателем «использовать исторические данные»</div><div class="detail">По умолчанию выключен; включается только решением пользователя (6.16.7). Делается после накопления истории запусков (6.22).</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на странице — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
+<div class="phase">
+<div class="phase-header"><span class="tag tag-next">План</span> 6.25 ИИ-заполнение оценок (раздел ИИ-помощника) · <span style="color:var(--muted);font-weight:500">отдельная линия ИИ-помощника — после 6.17</span></div>
+<div class="task-list">
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Предложение тройных оценок</div><div class="detail">По наименованию, типу, ресурсу, единице измерения, похожим операциям и, когда есть, фактической истории.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Жёсткие правила</div><div class="detail">Оценка ИИ всегда помечена как оценка ИИ и не смешивается молча с экспертной или фактической; предложение с обоснованием; обязательное подтверждение человеком (по строке или пакетом) до попадания в расчёт; показ «было → предложено»; проверка оптимистичная ≤ наиболее вероятная ≤ пессимистичная.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Риск «слепого доверия»</div><div class="detail">В отчётах всегда видно долю оценок от ИИ, от эксперта и из истории — иначе разброс превращается в одно мнение модели.</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">□</span><div class="body"><div class="title">Области максимальной ценности</div><div class="detail">«Холодный старт», массовые однотипные операции, проверка явно нереалистичных оценок. Делается после готовности формы экспертной таблицы (6.17).</div></div><span class="status">Не начато</span></div>
+<div class="task"><span class="icon">✅</span><div class="body"><div class="title">Сквозные требования (условное форматирование и контекстная справка)</div><div class="detail">Применяются на форме подтверждения и в отчёте по источникам — по блоку 6.15.</div></div><span class="status">правило (сквозное)</span></div>
+</div>
+</div>
+
 <div class="phase">
 <div class="phase-header"><span class="tag tag-next">План</span> 6.12 Финальная уборка служебных артефактов — выполняется последней</div>
 <div class="task-list">
@@ -482,6 +625,7 @@ a:hover{text-decoration:underline}
 <!-- Gap summary -->
 <h2>Что добавлено в этой версии плана</h2>
 <div class="task-list" style="border-radius:8px">
+<div class="task"><span class="icon">🧭</span><div class="body"><div class="title">Раздел «Расчёты»: две оси методов, запуски, оценки и актуальность (Дополнение 11 / блоки 6.16–6.25 и 6.14г)</div><div class="detail">Раздел «Расчёты» собирается как хаб с вкладками; методы планирования (CPM/CCM) и анализ неопределённости (PERT/Монте-Карло) разведены по независимым осям; каждый расчёт хранится как объект с версией входных данных; ввод тройных оценок и экспертная таблица становятся обязательным звеном до страницы PERT; устаревшее число никогда не показывается как действующее. Все новые блоки — «Не начато».</div></div></div>
 <div class="task"><span class="icon">🧭</span><div class="body"><div class="title">Статусы приведены к единой шкале (ревизия 25.09.2026)</div><div class="detail">Сняты завышенные проценты (100 % / 94 % / 17-17). Статус ставится по факту прохождения ступеней: реализовано → проверено на локальном стенде → выложено на прод и проверено. Часть блоков готова только локально и на прод не выкладывалась — они больше не помечены завершёнными.</div></div></div>
 <div class="task"><span class="icon">✅</span><div class="body"><div class="title">Excel-экспорт: Ганта + CPM + Ресурсы + PERT</div><div class="detail">GET /v1/ccm/projects/{id}/export-excel. 4 листа, цветовое кодирование, автофильтры.</div></div></div>
 <div class="task"><span class="icon">➕</span><div class="body"><div class="title">18 расхождений устранено</div><div class="detail">Сверка выписки обсуждения с промтом и планом. Все пропущенные темы зафиксированы в promt-ccm-multiproject.md v2.0 и данном плане v2.0.</div></div></div>
@@ -518,7 +662,7 @@ a:hover{text-decoration:underline}
 <p class="meta"><b>Сколько реально выложено на прод (полностью):</b> блоки 6.3, 6.4, 6.5, 6.7, 6.8, 6.10 (справочники, CPM и Гант, приоритетный расчёт заказа, якорь старта, конфликты-ядро, переплетение) и фазы 0.1–0.3, 1.1–1.5, 2.1–2.9. Частично выложены: 6.6, 6.9. <b>Не выложены (готовы локально или не начаты):</b> 6.11, 6.13а, 6.13б, 6.14а/б/в, 6.15 (ретрофит), 6.12.</p>
 
 <div class="footer">
-ProfyPlan v0.1 · План реализации v3.3 · <a href="https://profyplan.ru">profyplan.ru</a> · <a href="/report.html">Delivery Report</a> · Статусы: <strong style="color:var(--green)">единая шкала</strong> · Ревизия: <strong>25.09.2026</strong>
+ProfyPlan v0.1 · План реализации v3.4 · <a href="https://profyplan.ru">profyplan.ru</a> · <a href="/report.html">Delivery Report</a> · Обновлено: <strong>26.09.2026</strong> · Статусы: <strong style="color:var(--green)">единая шкала</strong> · Ревизия: <strong>25.09.2026</strong>
 </div>
 
 </body>
