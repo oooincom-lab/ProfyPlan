@@ -30,6 +30,7 @@ import { checkPlanarity, type PlanarityResult } from '@/lib/cpm-planarity';
 import {
   settingsToLayoutOptions, getLayoutPreset, loadLayoutPreset, saveLayoutPreset,
   sanitizeLayoutPreset, LAYOUT_PRESETS, DEFAULT_LAYOUT_PRESET, STRETCH_K,
+  loadAlignCutEnds, saveAlignCutEnds, DEFAULT_ALIGN_CUT,
   type LayoutPreset,
 } from '@/lib/cpm-settings';
 import {
@@ -512,11 +513,13 @@ export default function CpmGraph(props: CpmGraphProps) {
   const [legendOpen, setLegendOpen] = useState(false);
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
-  // «Выравнивать обрезки периода»: компановка маркеров обрезки периода по общим
-  // вертикалям слева/справа (см. cpm-layout.compactPeriodCuts). Доступно только в
-  // структурной укладке «По слоям»; по умолчанию выключено — вид ровно как без
-  // компановки. Раскладка «Для печати» компановкой не затрагивается.
-  const [alignCutEnds, setAlignCutEnds] = useState(false);
+  // «Выравнивать по границам периода»: компановка маркеров обрезки периода по
+  // общим вертикалям слева/справа (см. cpm-layout.compactPeriodCuts). Доступно в
+  // структурной укладке «По слоям» для ВСЕХ раскладок, включая «Для печати».
+  // По умолчанию включено; явное выключение пользователем сохраняется и уважается
+  // (см. cpm-settings.loadAlignCutEnds/saveAlignCutEnds и версионированный ключ).
+  const [alignCutEnds, setAlignCutEnds] = useState<boolean>(DEFAULT_ALIGN_CUT);
+  useEffect(() => { setAlignCutEnds(loadAlignCutEnds()); }, []);
   const [zoomPct, setZoomPct] = useState(80);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; op?: GOp; virt?: VirtualNode; cut?: CutMarker; edge?: EdgeTip } | null>(null);
   const [canvasErr, setCanvasErr] = useState<string | null>(null);
@@ -668,9 +671,9 @@ export default function CpmGraph(props: CpmGraphProps) {
   // (ноль недостижим) и только уводит вбок от прежнего результата — потому там
   // вертикальная раскладка остаётся классической (без переноса).
   const planarLayout = layoutPlanarity.state === 'confirmed';
-  /* Компановка обрезок периода: доступна в структурной укладке «По слоям» и не
-     применяется к раскладке «Для печати» (её построение остаётся прежним). */
-  const alignCutEndsActive = alignCutEnds && mode === 'byLayer' && layoutPreset !== 'print';
+  /* Компановка обрезок периода: доступна в структурной укладке «По слоям» для
+     всех раскладок, включая «Для печати» (её построение теперь тоже выравнивается). */
+  const alignCutEndsActive = alignCutEnds && mode === 'byLayer';
   const layoutOpts = useMemo(
     () => ({
       ...settingsToLayoutOptions(activePreset.settings),
@@ -2206,19 +2209,15 @@ export default function CpmGraph(props: CpmGraphProps) {
           <label
             className="cpmui-lbl"
             data-cpm-align-cut={alignCutEnds ? 'on' : 'off'}
-            title={layoutPreset === 'print'
-              ? 'Раскладка «Для печати» не меняется компановкой — крыжик доступен в «Обычно», «Плотно» и «Без пересечений»'
-              : 'Выстроить маркеры обрезки периода по одной вертикали слева и справа, чтобы видимое окно читалось прямоугольником. Раскладка «Для печати» не затрагивается'}
-            style={layoutPreset === 'print' ? { opacity: 0.5 } : undefined}
+            title={'Выстроить маркеры обрезки периода по одной вертикали слева и справа, чтобы видимое окно читалось прямоугольником'}
           >
             <input
               className="cpmui-chk"
               type="checkbox"
               checked={alignCutEnds}
-              disabled={layoutPreset === 'print'}
-              onChange={(e) => setAlignCutEnds(e.target.checked)}
+              onChange={(e) => { const v = e.target.checked; setAlignCutEnds(v); saveAlignCutEnds(v); }}
             />
-            Выравнивать обрезки периода
+            Выравнивать по границам периода
           </label>
         )}
         <span style={{ flex: 1 }} />
