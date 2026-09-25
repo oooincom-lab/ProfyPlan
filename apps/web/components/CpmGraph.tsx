@@ -38,6 +38,7 @@ import {
   type LabelBox, type CompactLabelGeom, type DrawnCrossingReport,
 } from '@/lib/cpm-labels';
 import CpmReadability from '@/components/CpmReadability';
+import { CPM_GRAPH_HINTS, CPM_INDICATOR_HINTS } from '@/lib/cpm-hints';
 
 export type { LayoutMetrics } from '@/lib/cpm-metrics';
 
@@ -2115,6 +2116,7 @@ export default function CpmGraph(props: CpmGraphProps) {
             <button
               key={m}
               onClick={() => { setPresetNotice(null); setMode(m); }}
+              title={CPM_GRAPH_HINTS.mode}
               style={{
                 padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
                 background: mode === m ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : 'transparent',
@@ -2129,7 +2131,7 @@ export default function CpmGraph(props: CpmGraphProps) {
 
       {/* управление */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
-        <label className="cpmui-lbl">
+        <label className="cpmui-lbl" title={CPM_GRAPH_HINTS.units}>
           Единицы:
           <select className="cpmui-sel" value={unit} onChange={(e) => setUnit(e.target.value as any)}>
             <option value="d">дни</option>
@@ -2137,19 +2139,19 @@ export default function CpmGraph(props: CpmGraphProps) {
             <option value="m">минуты</option>
           </select>
         </label>
-        <label className="cpmui-lbl">
+        <label className="cpmui-lbl" title={CPM_GRAPH_HINTS.critOnly}>
           <input className="cpmui-chk" type="checkbox" checked={critOnly} onChange={(e) => setCritOnly(e.target.checked)} />
           Только крит. путь
         </label>
-        <label className="cpmui-lbl">
+        <label className="cpmui-lbl" title={CPM_GRAPH_HINTS.showEdgeDays}>
           <input className="cpmui-chk" type="checkbox" checked={showEdgeDays} onChange={(e) => setShowEdgeDays(e.target.checked)} />
           Дни на связях
         </label>
-        <label className="cpmui-lbl" title="Выключите, чтобы скрыть только служебные события «Старт» и «Финиш» и их тонкие пунктирные связи. Обычные связи и критический путь остаются на схеме всегда">
+        <label className="cpmui-lbl" title={CPM_GRAPH_HINTS.showEndpoints}>
           <input className="cpmui-chk" type="checkbox" checked={showEndpoints} onChange={(e) => setShowEndpoints(e.target.checked)} />
           Старт и Финиш
         </label>
-        <label className="cpmui-lbl">
+        <label className="cpmui-lbl" title={CPM_GRAPH_HINTS.fontSize}>
           Шрифт:
           <select className="cpmui-sel" value={fontSize} onChange={(e) => setFontSize(e.target.value as FontSize)}>
             <option value="sm">мелкий</option>
@@ -2159,13 +2161,13 @@ export default function CpmGraph(props: CpmGraphProps) {
         </label>
         {/* Резерв под будущее управление «Разброс» (согласуется с заказчиком) */}
         <span data-reserve="spread" aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', minWidth: 96, height: 22 }} />
-        <span style={{ color: '#5A7090' }}>Период:</span>
-        <input className="cpmui-date" type="date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
+        <span style={{ color: '#5A7090' }} title={CPM_GRAPH_HINTS.period}>Период:</span>
+        <input className="cpmui-date" type="date" title={CPM_GRAPH_HINTS.period} value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
         <span style={{ color: '#5A7090' }}>—</span>
-        <input className="cpmui-date" type="date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
-        <button className="cpmui-btn" onClick={() => { setPeriodFrom(planRange?.from || ''); setPeriodTo(planRange?.to || ''); }}>Весь проект</button>
+        <input className="cpmui-date" type="date" title={CPM_GRAPH_HINTS.period} value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
+        <button className="cpmui-btn" title={CPM_GRAPH_HINTS.periodAll} onClick={() => { setPeriodFrom(planRange?.from || ''); setPeriodTo(planRange?.to || ''); }}>Весь проект</button>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ color: '#5A7090' }}>Раскладка:</span>
+          <span style={{ color: '#5A7090' }} title={CPM_GRAPH_HINTS.layout}>Раскладка:</span>
           <div style={{ display: 'flex', gap: 0, border: '1px solid #26364F', borderRadius: 7, overflow: 'hidden' }}>
             {LAYOUT_PRESETS.map((p) => {
               const isNoPlan = p.id === 'noplan';
@@ -2209,7 +2211,7 @@ export default function CpmGraph(props: CpmGraphProps) {
           <label
             className="cpmui-lbl"
             data-cpm-align-cut={alignCutEnds ? 'on' : 'off'}
-            title={'Выстроить маркеры обрезки периода по одной вертикали слева и справа, чтобы видимое окно читалось прямоугольником'}
+            title={CPM_GRAPH_HINTS.alignCutEnds}
           >
             <input
               className="cpmui-chk"
@@ -2222,10 +2224,10 @@ export default function CpmGraph(props: CpmGraphProps) {
         )}
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 4 }}>
-          <button className="cpmui-btn sq" onClick={() => zoomBy(1.2)} title="Приблизить">＋</button>
-          <button className="cpmui-btn sq" onClick={() => zoomBy(1 / 1.2)} title="Отдалить">－</button>
-          <button className="cpmui-btn" onClick={() => fitToContent()}>По размеру</button>
-          <button className="cpmui-btn" onClick={resetView}>Сброс</button>
+          <button className="cpmui-btn sq" onClick={() => zoomBy(1.2)} title={CPM_GRAPH_HINTS.zoomIn}>＋</button>
+          <button className="cpmui-btn sq" onClick={() => zoomBy(1 / 1.2)} title={CPM_GRAPH_HINTS.zoomOut}>－</button>
+          <button className="cpmui-btn" onClick={() => fitToContent()} title={CPM_GRAPH_HINTS.fit}>По размеру</button>
+          <button className="cpmui-btn" onClick={resetView} title={CPM_GRAPH_HINTS.reset}>Сброс</button>
         </div>
       </div>
 
@@ -2235,6 +2237,7 @@ export default function CpmGraph(props: CpmGraphProps) {
       {layoutPreset === 'noplan' && mode === 'byLayer' && (
         <div
           data-cpm-noplan={noplanZero ? 'achieved' : 'unreachable'}
+          title={noplanZero ? CPM_INDICATOR_HINTS.noplanZero : CPM_INDICATOR_HINTS.noplanUnreachable}
           data-cpm-crossings-drawn={drawnCrossings.total}
           data-cpm-crossings-op={drawnCrossings.opOp}
           data-cpm-crossings-service={drawnCrossings.service}
@@ -2254,6 +2257,7 @@ export default function CpmGraph(props: CpmGraphProps) {
       {presetNotice && (
         <div
           data-cpm-preset-notice="shown"
+          title={CPM_INDICATOR_HINTS.presetNotice}
           style={{
             display: 'flex', gap: 6, alignItems: 'center', padding: '5px 10px', borderRadius: 8, fontSize: 11.5,
             background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)', color: '#FCD34D',
@@ -2464,6 +2468,7 @@ export default function CpmGraph(props: CpmGraphProps) {
             <LegendItem
               sample={<span style={{ display: 'inline-flex', gap: 6 }}><LegendPill color={startColor} label="Старт" kind="start" /><LegendPill color={finishColor} label="Финиш" kind="finish" /></span>}
               caption="Значки «Старт» и «Финиш»"
+              title={CPM_INDICATOR_HINTS.serviceEvents}
               desc="«Старт» — начало схемы (от него идут первые работы), «Финиш» — конец (к нему сходятся последние работы)."
             />
             <LegendItem
@@ -2480,6 +2485,7 @@ export default function CpmGraph(props: CpmGraphProps) {
                 </svg>
               }
               caption="Маркеры обрезки периода"
+              title={CPM_INDICATOR_HINTS.cutMarker}
               desc="Крайняя видимая операция, у которой цепочка продолжается вне периода, получает вместо значка «Старт»/«Финиш» короткий обрубок со стрелкой в сторону продолжения."
             />
             <LegendItem
@@ -2584,9 +2590,9 @@ function LegendNode() {
 }
 
 /** Подпись к образцу: слева — образец, справа — короткое название и пояснение. */
-function LegendItem({ sample, caption, desc }: { sample: React.ReactNode; caption: string; desc?: string }) {
+function LegendItem({ sample, caption, desc, title }: { sample: React.ReactNode; caption: string; desc?: string; title?: string }) {
   return (
-    <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }} title={title}>
       <span style={{ display: 'inline-flex', alignItems: 'center', minHeight: 18, paddingTop: 1 }}>{sample}</span>
       <div>
         <b style={{ color: '#E8EEF5' }}>{caption}</b>

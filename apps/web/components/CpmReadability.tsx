@@ -18,6 +18,7 @@ import {
   type LayoutMetrics, type ReadabilityBand,
 } from '@/lib/cpm-metrics';
 import type { PlanarityResult, PlanarityState } from '@/lib/cpm-planarity';
+import { CPM_INDICATOR_HINTS } from '@/lib/cpm-hints';
 
 const BAND_COLOR: Record<ReadabilityBand, string> = {
   good: '#10B981',
@@ -91,7 +92,7 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
     >
       <span
         aria-hidden="true"
-        title={'Читаемость: ' + BAND_LABEL[band]}
+        title={CPM_INDICATOR_HINTS.readability}
         style={{
           width: 9, height: 9, borderRadius: 50, flexShrink: 0,
           background: color, boxShadow: '0 0 7px ' + color,
@@ -127,7 +128,7 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 6, color: '#93C5FD' }}>
-            Качество раскладки
+            Качество раскладки · {BAND_LABEL[band]}
           </div>
           {drawnCrossings != null && (
             <DetailRow
@@ -150,6 +151,9 @@ export default function CpmReadability({ metrics, crossingsByDate, crossingsByLa
             />
           )}
           <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid #26364F', color: '#8FA3BD' }}>
+            Цвет точки — условное форматирование: зелёный — 90 % и выше, жёлтый — 70…89 %, красный — ниже 70 %.
+          </div>
+          <div style={{ marginTop: 5, color: '#8FA3BD' }}>
             Пересечения приведены для обеих укладок — «По датам» держит время работ, «По слоям» подбирает порядок.
           </div>
           {planarity && (
