@@ -40,3 +40,11 @@ dev = [
 [build-system]
 requires = ["setuptools>=69.0"]
 build-backend = "setuptools.build_meta"
+
+# Плоская раскладка каталогов (app, alembic, scripts, tests) — setuptools
+# без явного указания пакетов отказывается собирать проект («multiple
+# top-level packages discovered in a flat-layout»). Пакетом объявляется
+# только app, остальные каталоги — данные и утилиты.
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["tests*", "alembic*", "scripts*"]
