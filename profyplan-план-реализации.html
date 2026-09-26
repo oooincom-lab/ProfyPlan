@@ -86,7 +86,11 @@ a:hover{text-decoration:underline}
 <span style="font-size:1.3rem;font-weight:700;color:var(--green)">6 / 27</span>
 </div>
 <div class="progress-bar"><div class="fill" style="width:22.2%;background:linear-gradient(90deg,var(--green),var(--blue))"></div></div>
-<div class="progress-labels"><span>Ревизия статусов: 25.09.2026</span><span>Граница выкладки: origin/master 356b9d1 (17.09.2026)</span></div>
+<div class="progress-labels"><span>Ревизия статусов: 25.09.2026</span><span>Граница выкладки: origin/master 6c236d7 (27.09.2026)</span></div>
+</div>
+
+<div class="note-box">
+<strong>Обновление 27.09.2026 — локальные наработки выложены (закрывает метки «готово локально» ниже).</strong> Выкладка от 27.09.2026 (коммит <code>6c236d7</code>) унесла на прод всё, что лежало локально: сетевое график (6.11), серверную часть реестра видов (6.13а), ретрофит сквозных требований (6.15), а также защиту от сбоя 502 и перенаправление прежних адресов входа. Локальная ветка основную больше не опережает (дефекты R16 и C11 реестра сверки закрыты). Проверено снаружи: главная — 200, рабочая область — 200 (15 371 Б), живость сервиса — 200, прежние адреса входа — 307. Таблицы ниже датированы ревизией 25.09.2026 и описывают состояние <b>до</b> этой выкладки.
 </div>
 
 <!-- ===== Блоки журнала работ 6.x и ступени ===== -->
@@ -700,6 +704,7 @@ a:hover{text-decoration:underline}
 <div class="task-list" style="border-radius:8px">
 <div class="task"><span class="icon">✅</span><div class="body"><div class="title">Перенаправление прежних адресов входа</div><div class="detail">Прежние адреса входа (<code>/login</code>, <code>/auth/login</code>, <code>/signin</code>, <code>/sign-in</code>, <code>/authorize</code>) ведут в рабочую область; отдельного экрана входа не создаётся. Выложено на прод 27.09.2026 (коммит <code>bad9c9a</code>), проверено снаружи: прежние адреса — 307, рабочая область и сервис — 200.</div></div><span class="status">Выложено на прод, проверено</span></div>
 <div class="task"><span class="icon">✅</span><div class="body"><div class="title">Удаление нерабочего сценария выкладки</div><div class="detail"><code>.github/workflows/ci-cd.yml</code> (ветка <code>main</code>, которой в репозитории нет) удалён; копия — в архиве документов. В репозитории остались <code>deploy.yml</code> и <code>ci.yml</code>.</div></div><span class="status">Выполнено (коммит 254f23c)</span></div>
+<div class="task"><span class="icon">🔧</span><div class="body"><div class="title">Починка проверок в репозитории (кит ci.yml)</div><div class="detail">Проверки были красными на каждом пуше как минимум с 17.09.2026. Фронтенд: не было настройки линтера, <code>next lint</code> в проверке задавал вопрос настройки и падал — добавлена настройка и зависимости. Бэкенд: установка пакета падала из-за плоской раскладки каталогов — пакеты указаны явно. Итог: фронтенд-проверка зелёная; прогон тестов бэкенда продолжает падать — тесты рассчитаны на подготовленную базу, а проверка её не создаёт. Требует решения (реестр сверки, R19).</div></div><span class="status">Выполнено (коммит 6c236d7)</span></div>
 </div>
 
 <div class="footer">
