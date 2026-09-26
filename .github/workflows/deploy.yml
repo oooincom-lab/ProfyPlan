@@ -42,6 +42,25 @@ jobs:
             # миграции базы — обязательный шаг, иначе новый код падает на новой схеме
             docker compose exec -T api alembic upgrade head
             docker compose exec -T api alembic current
+            # ОБЯЗАТЕЛЬНО: пересоздание api/web выдаёт им новые внутренние адреса.
+            # Прокси держит разрешённые имена в памяти с момента запуска, поэтому
+            # после пересоздания приложения и сервиса расчётов отдаёт 502 на всё
+            # проксируемое. Перезапускаем прокси ПОСЛЕ пересоздания.
+            docker compose restart nginx
             sleep 5
-            curl -s -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:80/workspace
           '
+
+      - name: Verify from outside (public address)
+        run: |
+          set -e
+          # Проверка снаружи по публичному адресу (не изнутри сервера):
+          # главная страница, рабочая область приложения, живость сервиса расчётов.
+          for path in "/" "/workspace" "/api/v1/health"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://profyplan.ru${path}")
+            echo "  ${path} -> ${code}"
+            if [ "$code" != "200" ]; then
+              echo "FAILED: ${path} вернул ${code}"
+              exit 1
+            fi
+          done
+          echo "Проверка снаружи по публичному адресу пройдена"

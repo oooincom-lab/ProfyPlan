@@ -77,7 +77,23 @@ cd /opt/profyplan
 git pull
 docker compose build
 docker compose up -d
+
+# ОБЯЗАТЕЛЬНО после пересоздания api/web — перезапустить прокси.
+# Пересоздание контейнеров меняет их внутренние адреса; nginx без перезапуска
+# держит старые адреса в памяти и отдаёт 502 на всё проксируемое.
+docker compose restart nginx
 ```
+
+Проверка после выкладки — **снаружи по публичному адресу** (не изнутри сервера):
+
+```bash
+for p in / /workspace /api/v1/health; do
+  curl -s -o /dev/null -w "$p -> %{http_code}\n" "https://profyplan.ru$p"
+done
+```
+
+> В автоматической выкладке (`.github/workflows/deploy.yml`) перезапуск прокси и
+> внешняя проверка по публичному адресу выполняются штатными шагами.
 
 ## Требуются учётные данные
 
