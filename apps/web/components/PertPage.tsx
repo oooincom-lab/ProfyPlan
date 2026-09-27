@@ -110,7 +110,7 @@ function localCpm(
   return { length, aggressive, sigma: Math.sqrt(variance), criticalIds, slack };
 }
 
-export default function PertPage({ operations, dependencies = [], resources = [], orders = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[]; orders?: PertOrder[] }) {
+export default function PertPage({ operations, dependencies = [], resources = [], orders = [], onAreaChange }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[]; orders?: PertOrder[]; onAreaChange?: (orderId: string, label: string) => void }) {
   const [bufferK, setBufferK] = useState(2);
   const [areaOrderId, setAreaOrderId] = useState('');
 
@@ -163,6 +163,11 @@ export default function PertPage({ operations, dependencies = [], resources = []
     [operations, areaSubtree],
   );
   const areaLabel = areaOrderId ? orderTree.find((o) => o.id === areaOrderId)?.label || 'выбранная ветка' : 'весь проект';
+
+  // Выбранная область сообщается наружу: её показывают в полосе контекста и записывают в запуск расчёта
+  React.useEffect(() => {
+    onAreaChange?.(areaOrderId, areaLabel);
+  }, [areaOrderId, areaLabel, onAreaChange]);
 
   const areaCpm = useMemo(() => {
     if (!areaOrderId) return null;

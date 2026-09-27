@@ -235,7 +235,7 @@ export default function AppShell() {
       setMsg('Расчёт запущен…');
       const run: any = await apiF(`/projects/${selectedProject.id}/calculation-runs`, {
         method: 'POST',
-        body: JSON.stringify({ area: 'project' }),
+        body: JSON.stringify({ area: calcAreaId ? 'cluster' : 'project', area_ref: calcAreaId || null }),
       });
       await loadCalcRuns(selectedProject.id);
       setMsg(run?.status === 'failed' ? `Расчёт не выполнен: ${run?.error || ''}` : 'Расчёт сохранён в реестр запусков');
@@ -275,6 +275,8 @@ export default function AppShell() {
       setAreaOrders([]);
     }
   };
+  const [calcAreaId, setCalcAreaId] = useState('');
+  const [calcAreaLabel, setCalcAreaLabel] = useState('');
   // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
   const [opResources, setOpResources] = useState<any[]>([]);
   const loadOpResources = async (projectId: string) => {
@@ -3677,8 +3679,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                 setCalcTab(t); setView('calculations');
               }}
               methods={calcMethods}
-              area="проект"
-              areaName={selectedProject?.name || null}
+              area={calcAreaId ? 'ветка заказов' : 'проект'}
+              areaName={calcAreaId ? calcAreaLabel : (selectedProject?.name || null)}
               dataDate={runDateText(lastCalcRun?.data_date)}
               dataVersion={lastCalcRun?.data_fingerprint || null}
               dirty={false}
@@ -3751,7 +3753,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
-              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} orders={areaOrders} />
+              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} orders={areaOrders} onAreaChange={(id, label) => { setCalcAreaId(id); setCalcAreaLabel(label); }} />
             ) : (
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
