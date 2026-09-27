@@ -5016,7 +5016,7 @@ const changeOrderStatus = async (o: any, status: string) => {
           Режим «Что это?»: щёлкните по элементу
           <span style={{ color: 'var(--fg-4)' }}>Esc — отмена</span>
         </div>
-      />
+      </div>
     ) : null}
 
     {/* Окна заказов + окна-списки (поверх рабочего стола) */}
