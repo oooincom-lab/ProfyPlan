@@ -372,7 +372,6 @@ export default function AppShell() {
         e.preventDefault();
         if (e.shiftKey) {
           setWhatIsMode(true);
-          setMsg('Режим «Что это?»: щёлкните по элементу, Esc — отмена');
         } else {
           win.setHelpArticle(viewHelpId);
         }
@@ -3398,18 +3397,12 @@ const changeOrderStatus = async (o: any, status: string) => {
             onClick={() => selectedProject && loadProjectGantt(selectedProject)}>▶ Рассчитать проект</button>
         )}
         <button onClick={onRefresh} className="btn btn-secondary btn-sm" title="Обновить данные" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></button>
-            {whatIsMode ? (
-              <span style={{ fontSize: 11.5, color: '#FBBF24', border: '1px solid #FBBF24', borderRadius: 10, padding: '2px 10px', whiteSpace: 'nowrap' }}>
-                Режим «Что это?»: щёлкните по элементу · Esc — отмена
-              </span>
-            ) : null}
             <button
               type="button"
               className="btn btn-secondary btn-sm"
               title="Режим «Что это?»: щёлкните по элементу — откроется справка по нему; Esc — отмена"
               onClick={() => {
                 setWhatIsMode((v) => !v);
-                setMsg(!whatIsMode ? 'Режим «Что это?»: щёлкните по элементу, Esc — отмена' : '');
               }}
             >
               {whatIsMode ? 'Что это? ✕' : 'Что это?'}
@@ -4997,7 +4990,32 @@ const changeOrderStatus = async (o: any, status: string) => {
         onMouseDown={pickHelpElement}
         onClick={pickHelpElement}
         title="Щёлкните по элементу — откроется справка. Esc — отмена"
-        style={{ position: 'fixed', inset: 0, zIndex: 5000, cursor: 'help', background: 'transparent' }}
+        style={{ position: 'fixed', inset: 0, zIndex: 5000, cursor: 'help', background: 'rgba(59,130,246,0.05)', outline: '2px solid rgba(59,130,246,0.5)', outlineOffset: -2 }}
+      >
+        {/* Подсказка режима — на самом слое, в правом верхнем углу: шапку не сдвигает */}
+        <div
+          style={{
+            position: 'fixed',
+            top: 10,
+            right: 24,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1px solid #3B82F6',
+            background: '#0B1B33',
+            color: 'var(--fg-2)',
+            fontSize: 12,
+            zIndex: 5001,
+            boxShadow: '0 6px 18px rgba(0,0,0,.4)',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Режим «Что это?»: щёлкните по элементу
+          <span style={{ color: 'var(--fg-4)' }}>Esc — отмена</span>
+        </div>
       />
     ) : null}
 
