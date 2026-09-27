@@ -249,6 +249,26 @@ export default function AppShell() {
   // F1 — статья текущего модуля; Shift+F1 — режим «Что это?»: следующий щёлчок по элементу
   // с пометкой data-help-id открывает его справку. Одна карта элементов — все входы.
   const [whatIsMode, setWhatIsMode] = useState(false);
+  const helpOverlayRef = useRef<HTMLDivElement | null>(null);
+
+  // Что это? — выбор элемента под прозрачным слоем.
+  // Слой лежит сверху, поэтому элемент под ним не получает нажатие: срабатывает только справка.
+  const pickHelpElement = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'click') return; // открываем один раз — на первом событии жеста
+    const layers = (document.elementsFromPoint(e.clientX, e.clientY) as HTMLElement[]) || [];
+    const target = layers.find((el) => el !== helpOverlayRef.current) || null;
+    const holder = target && target.closest ? (target.closest('[data-help-id]') as HTMLElement | null) : null;
+    const elementId = holder?.getAttribute('data-help-id') || null;
+    setWhatIsMode(false);
+    if (elementId) {
+      win.setHelpArticle(helpElement(elementId)?.article || 'help');
+      setMsg('');
+    } else {
+      setMsg('Справки по этому элементу пока нет — он ещё не отмечен в карте элементов');
+    }
+  };
   // Реестр запусков подгружается при входе в раздел «Расчёты»
   useEffect(() => {
     if (view === 'calculations' && selectedProject) loadCalcRuns(selectedProject.id);
@@ -362,37 +382,7 @@ export default function AppShell() {
       }
     };
     window.addEventListener('keydown', onKey);
-
-    // Режим «Что это?»: элемент не должен срабатывать — только справка.
-    // Перехватываем весь жест (pointerdown, mousedown, click, dblclick) на фазе захвата:
-    // многие элементы в приложении срабатывают уже на pointerdown, поэтому одного click недостаточно.
-    const onBlock = (e: Event) => {
-      if (!whatIsMode) return;
-      // Глушим событие всегда, чтобы элемент не выполнил своё действие
-      e.preventDefault();
-      e.stopPropagation();
-      const anyE = e as any;
-      if (typeof anyE.stopImmediatePropagation === 'function') anyE.stopImmediatePropagation();
-      // Справку открываем один раз — на первом событии жеста
-      if (e.type === 'click' || e.type === 'dblclick') return;
-      const target = e.target as HTMLElement | null;
-      const holder = target && target.closest ? (target.closest('[data-help-id]') as HTMLElement | null) : null;
-      const elementId = holder?.getAttribute('data-help-id') || null;
-      setWhatIsMode(false);
-      if (elementId) {
-        win.setHelpArticle(helpElement(elementId)?.article || 'help');
-        setMsg('');
-      } else {
-        setMsg('У этого элемента справки пока нет — отметьте его в карте элементов');
-      }
-    };
-    const blockEvents = ['pointerdown', 'mousedown', 'touchstart', 'click', 'dblclick'];
-    blockEvents.forEach((t) => window.addEventListener(t, onBlock, true));
-
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      blockEvents.forEach((t) => window.removeEventListener(t, onBlock, true));
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [win, viewHelpId, whatIsMode]);
   // Открытие окна правки записи справочника из панели справочника
   useEffect(() => {
@@ -3413,7 +3403,19 @@ const changeOrderStatus = async (o: any, status: string) => {
                 Режим «Что это?»: щёлкните по элементу · Esc — отмена
               </span>
             ) : null}
-            <HelpButton articleId={viewHelpId} title="Справка по разделу (F1; Shift+F1 — режим «Что это?»)" />
+            <HelpButton articleId={viewHelpId} title="Справка по разделу (F1)" />
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              title="Режим «Что это?»: щёлкните по элементу — откроется справка по нему; Esc — отмена"
+              onClick={() => {
+                setWhatIsMode((v) => !v);
+                setMsg(!whatIsMode ? 'Режим «Что это?»: щёлкните по элементу, Esc — отмена' : '');
+              }}
+              style={{ alignItems: 'center' }}
+            >
+              {whatIsMode ? 'Что это? ✕' : 'Что это?'}
+            </button>
           </div>
         </div>
 
@@ -4987,6 +4989,18 @@ const changeOrderStatus = async (o: any, status: string) => {
           )}
         </div>
       </div>
+
+    {/* Режим «Что это?»: прозрачный слой поверх всего — элемент под ним не активируется (блок 6.27) */}
+    {whatIsMode ? (
+      <div
+        ref={helpOverlayRef}
+        onPointerDown={pickHelpElement}
+        onMouseDown={pickHelpElement}
+        onClick={pickHelpElement}
+        title="Щёлкните по элементу — откроется справка. Esc — отмена"
+        style={{ position: 'fixed', inset: 0, zIndex: 5000, cursor: 'help', background: 'transparent' }}
+      />
+    ) : null}
 
     {/* Окна заказов + окна-списки (поверх рабочего стола) */}
     {win.wins.length > 0 && (
