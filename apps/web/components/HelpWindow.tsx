@@ -1,13 +1,12 @@
 'use client';
 /**
- * Окно справки (блок 6.27). Устройство — как у нормальных справочных сайтов:
- *   • поиск сверху (по заголовку, описанию, шагам, полям, расчёту и ограничениям);
- *   • дерево разделов слева, активная статья подсвечена;
- *   • хлебные крошки, ссылки внутри текста, переходы «назад / дальше по разделу»;
- *   • окно можно тащить за шапку — место работы не теряется.
- * Одно окно на всё приложение: содержимое переключается по модулю (см. lib/help.ts).
+ * Содержимое окна справки (блок 6.27). Само окно — обычное окно общего оконного менеджера
+ * (свернуть, развернуть, раскладка, закрыть, панель задач): здесь только содержимое.
+ *
+ * Устройство — как у справочных сайтов: поиск сверху, дерево разделов слева со вложенностью,
+ * хлебные крошки, ссылки внутри текста, переходы «назад» и «дальше по разделу».
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   HELP_ARTICLES,
   HELP_GROUPS,
@@ -60,15 +59,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** Текст со ссылками [[id]] / [[id|текст]] — чтобы читатель шёл по справке, а не искал статью. */
-function RichText({
-  text,
-  style,
-  onSelect,
-}: {
-  text: string;
-  style?: React.CSSProperties;
-  onSelect: (id: string) => void;
-}) {
+function RichText({ text, style, onSelect }: { text: string; style?: React.CSSProperties; onSelect: (id: string) => void }) {
   const parts = helpInline(text);
   return (
     <span style={style}>
@@ -89,20 +80,16 @@ function RichText({
   );
 }
 
-export default function HelpWindow({
+export default function HelpContent({
   articleId,
   onSelect,
-  onClose,
 }: {
   articleId: string;
   onSelect: (id: string) => void;
-  onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [history, setHistory] = useState<string[]>([]);
-  const [pos, setPos] = useState<{ left: number | null; top: number }>({ left: null, top: 72 });
-  const drag = useRef<{ dx: number; dy: number } | null>(null);
 
   const article = helpArticle(articleId) || HELP_ARTICLES[0];
   const results = useMemo(() => helpSearch(query), [query]);
@@ -111,41 +98,21 @@ export default function HelpWindow({
   const prev = idx > 0 ? helpArticle(order[idx - 1]) : null;
   const next = idx >= 0 && idx < order.length - 1 ? helpArticle(order[idx + 1]) : null;
 
+  useEffect(() => {
+    setQuery('');
+  }, [articleId]);
+
   const go = (id: string) => {
     if (!id || id === article.id) return;
     setHistory((h) => [...h, article.id]);
-    setQuery('');
     onSelect(id);
   };
   const back = () => {
     setHistory((h) => {
       if (!h.length) return h;
-      const last = h[h.length - 1];
-      onSelect(last);
+      onSelect(h[h.length - 1]);
       return h.slice(0, -1);
     });
-  };
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    drag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag.current) return;
-    setPos({ left: Math.max(8, e.clientX - drag.current.dx), top: Math.max(8, e.clientY - drag.current.dy) });
-  };
-  const onPointerUp = () => {
-    drag.current = null;
   };
 
   const bodyText: React.CSSProperties = { fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 };
@@ -161,36 +128,12 @@ export default function HelpWindow({
   };
 
   return (
-    <div
-      className="pp-win focus"
-      style={{
-        position: 'fixed',
-        left: pos.left == null ? undefined : pos.left,
-        right: pos.left == null ? 24 : undefined,
-        top: pos.top,
-        width: 880,
-        maxWidth: 'calc(100vw - 32px)',
-        height: 660,
-        maxHeight: 'calc(100vh - 96px)',
-        zIndex: 900,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <div
-        className="pp-win-title"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-      >
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
-        <span className="ttl">Справка</span>
-        <button className="pp-wbtn" title="Назад" onClick={back}>↩</button>
-        <button className="pp-wbtn close" title="Закрыть (Esc)" onClick={onClose}>✕</button>
-      </div>
-
-      {/* ─── Поиск и хлебные крошки ─── */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* ─── Поиск и возврат ─── */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <button className="pp-wbtn" title="Назад" onClick={back} disabled={!history.length} style={{ opacity: history.length ? 1 : 0.45 }}>
+          ↩
+        </button>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -208,7 +151,9 @@ export default function HelpWindow({
         <div style={{ width: 250, flexShrink: 0, borderRight: '1px solid var(--border)', overflow: 'auto', padding: '8px 6px' }}>
           {query.trim().length >= 2 ? (
             results.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--fg-4)', padding: '8px 6px' }}>Ничего не нашлось. Попробуйте другое слово — например, «резерв», «прогоны», «заказ».</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-4)', padding: '8px 6px' }}>
+                Ничего не нашлось. Попробуйте другое слово — например, «резерв», «прогоны», «заказ».
+              </div>
             ) : (
               results.map((a) => (
                 <button
@@ -281,7 +226,7 @@ export default function HelpWindow({
         {/* ─── Статья ─── */}
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: '12px 16px', display: 'grid', gap: 12, alignContent: 'start' }}>
           <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
-            Справка <span style={{ color: 'var(--fg-4)' }}>›</span> {helpGroupOf(article.id)} <span>›</span> <span style={{ color: 'var(--fg-3)' }}>{article.title}</span>
+            Справка › {helpGroupOf(article.id)} › <span style={{ color: 'var(--fg-3)' }}>{article.title}</span>
           </div>
 
           <div>

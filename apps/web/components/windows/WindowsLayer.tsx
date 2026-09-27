@@ -16,7 +16,7 @@ import BomTree from '@/components/bomtree';
 import ResourceForm from '@/components/ResourceForm';
 import DebugBadge from '@/components/DebugBadge';
 import AppModal from '@/components/AppModal';
-import { HelpButton } from '@/components/HelpWindow';
+import HelpContent, { HelpButton } from '@/components/HelpWindow';
 import { articleIdForWindow } from '@/lib/help';
 import { API_ORIGIN, API_V1 } from '@/lib/api';
 import { CatalogOpEditForm } from '@/components/CatalogOps';
@@ -287,6 +287,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const [warnDept, setWarnDept] = useState<string | null>(null); // чекбокс «показывать операции» (вкладка Состав)
   const orderById = (id: string) => orders.find((x: any) => x.id === id) || null;
   const winLabel = (w: WinRec) => {
+    if (w.kind === 'help') return w.title || 'Справка';
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
@@ -297,6 +298,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   };
 
   const winFullTitle = (w: WinRec) => {
+    if (w.kind === 'help') return w.title || 'Справка';
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
@@ -681,6 +683,26 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               </div>
             );
           }
+
+        // ── Окно справки (блок 6.27): обычное окно общего оконного менеджера ──
+        if (w.kind === 'help') {
+          const helpArticleId = (w.data && w.data.articleId) || 'calculations';
+          return (
+            <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+              style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+              onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+              <WinTitleBar w={w} dot="#22D3EE" title={w.title || 'Справка'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                <HelpContent
+                  articleId={helpArticleId}
+                  onSelect={(id: string) =>
+                    setWins((prev: WinRec[]) => prev.map((x: any) => (x.id === w.id ? { ...x, data: { ...(x.data || {}), articleId: id } } : x)))
+                  }
+                />
+              </div>
+            </div>
+          );
+        }
 
         // ── Окно «Добавить операцию в маршрут» (MDI): простое окно рабочего стола с формой ──
         if (w.kind === 'opadd') {

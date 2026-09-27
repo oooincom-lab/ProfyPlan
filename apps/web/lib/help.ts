@@ -41,7 +41,27 @@ export const HELP_STATE_COLOR: Record<HelpState, string> = {
   planned: 'var(--fg-4)',
 };
 
-export const HELP_ARTICLES: HelpArticle[] = [  {
+export const HELP_ARTICLES: HelpArticle[] = [
+  {
+    id: 'help',
+    title: 'Справка: как пользоваться',
+    summary: 'Поиск, дерево разделов, ссылки и кнопка «?»',
+    state: 'verified',
+    purpose:
+      'Справка открывается кнопкой «?» из любого окна и раздела — сразу на статье про то, что сейчас в рабочей области.',
+    steps: [
+      'Нужное слово — в поиск сверху: ищет по названиям, описаниям, шагам, полям, расчёту и ограничениям.',
+      'Разделы — в дереве слева; статьи внутри раздела сдвинуты вправо, активная подсвечена.',
+      'Ссылки внутри текста ведут в смежные статьи; кнопка «Назад» возвращает туда, где были.',
+      'Внизу статьи — переходы «предыдущая / следующая статья раздела».',
+    ],
+    fields: [
+      ['описано по коду, проверено', 'Содержание сверили с фактическим поведением.'],
+      ['описано, требует проверки', 'Текст есть, живой сверки ещё не было.'],
+      ['ещё не реализовано', 'Такого в программе пока нет — указано, в каком блоке появится.'],
+    ],
+    links: ['workspace', 'calculations', 'methods'],
+  },  {
     id: 'calc-overview',
     title: 'Расчёты — обзор',
     summary: 'Вкладка «Обзор» раздела «Расчёты»: что здесь показывается и почему часть плиток пуста',
@@ -386,7 +406,7 @@ export function helpArticle(id: string | null | undefined): HelpArticle | null {
 
 /** Разделы справки — дерево слева. Порядок статей в разделах = порядок перехода «дальше». */
 export const HELP_GROUPS: { title: string; ids: string[] }[] = [
-  { title: 'Начало', ids: ['workspace', 'calculations'] },
+  { title: 'Начало', ids: ['help', 'workspace', 'calculations'] },
   { title: 'Проект', ids: ['project-summary', 'orders', 'order-window', 'bom', 'groups', 'scale', 'new-project', 'archive'] },
   { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-gantt', 'calc-network', 'calc-pert', 'calc-mc', 'calc-runs'] },
   { title: 'Настройки', ids: ['project-settings', 'views', 'tools'] },
@@ -474,6 +494,7 @@ export function openHelp(articleId: string): void {
 
 /** Статья для окна рабочего стола: по виду окна, а не по его заголовку. */
 export function articleIdForWindow(kind: string, listKind?: string, entity?: string): string {
+  if (kind === 'help') return 'help';
   if (kind === 'order') return 'order-window';
   if (kind === 'bom') return 'bom';
   if (kind === 'resedit') return 'resource-window';

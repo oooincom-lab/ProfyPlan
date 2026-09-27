@@ -7,7 +7,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 export type WinRec = {
   id: string;
   kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'wsched-edit' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd'
-  | 'catoped';
+  | 'catoped' | 'help';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -605,10 +605,47 @@ export function useWindows(sidebarWidth: number = 260) {
     setLay(null);
   };
 
+  // ── Справка (блок 6.27): обычное окно общего оконного менеджера ──
+  // Окно справки одно на приложение: повторное нажатие «?» не плодит окна,
+  // а переключает статью уже открытого и поднимает его наверх.
+  const setHelpArticle = (articleId: string) => {
+    setWins((prev) => {
+      const existing = prev.find((w) => w.kind === 'help');
+      if (!existing) {
+        return [
+          ...prev,
+          {
+            id: 'help-win',
+            kind: 'help' as const,
+            orderId: '',
+            data: { articleId },
+            title: 'Справка',
+            x: Math.max(40, Math.round(sidebarWidth + 60)),
+            y: 72,
+            w: 900,
+            h: 620,
+            min: false,
+            z: ++winZ.current,
+            tab: 'order' as OrderTab,
+            editing: false,
+            form: {},
+          } as WinRec,
+        ];
+      }
+      return prev.map((w) =>
+        w.kind === 'help'
+          ? { ...w, data: { ...(w.data || {}), articleId }, min: false, z: ++winZ.current }
+          : w,
+      );
+    });
+  };
+
+  const openHelpWin = (articleId: string) => setHelpArticle(articleId);
+
   return {
     wins, setWins, lay, setLay, snapZone,
     openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
-    openWschedEdit,
+    openWschedEdit, openHelpWin, setHelpArticle,
     startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

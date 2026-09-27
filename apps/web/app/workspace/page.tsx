@@ -34,7 +34,7 @@ import BomExpand from '@/components/bomexpand';
 import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
-import HelpWindow, { HelpButton } from '@/components/HelpWindow';
+import { HelpButton } from '@/components/HelpWindow';
 import { HELP_EVENT, articleIdForView } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
@@ -242,18 +242,6 @@ export default function AppShell() {
   };
   const lastCalcRun = calcRuns[0] || null;
 
-  // ── Справка (блок 6.27): одно окно, статья по текущему модулю ──
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [helpArticleId, setHelpArticleId] = useState('calculations');
-  useEffect(() => {
-    const onHelp = (e: any) => {
-      const id = e?.detail?.articleId;
-      if (typeof id === 'string' && id) setHelpArticleId(id);
-      setHelpOpen(true);
-    };
-    window.addEventListener(HELP_EVENT, onHelp as any);
-    return () => window.removeEventListener(HELP_EVENT, onHelp as any);
-  }, []);
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
   // Реестр запусков подгружается при входе в раздел «Расчёты»
@@ -340,6 +328,17 @@ export default function AppShell() {
   const sidebarWidth = menuMode === 'auto' ? 0 : (sidebarCollapsed ? 64 : 260);
   const effCollapsed = menuMode === 'auto' ? (autoEnabled && sidebarCollapsed) : sidebarCollapsed;
   const win = useWindows(sidebarWidth);
+
+  // Событие «открой справку» ведёт в оконный менеджер: окно справки — обычное окно
+  // (свернуть, развернуть, раскладка, закрыть, панель задач), а не отдельный слой.
+  useEffect(() => {
+    const onHelp = (e: any) => {
+      const id = e?.detail?.articleId;
+      if (typeof id === 'string' && id) win.setHelpArticle(id);
+    };
+    window.addEventListener(HELP_EVENT, onHelp as any);
+    return () => window.removeEventListener(HELP_EVENT, onHelp as any);
+  }, [win]);
   // Открытие окна правки записи справочника из панели справочника
   useEffect(() => {
     const h = (e: any) => {
@@ -4928,11 +4927,6 @@ const changeOrderStatus = async (o: any, status: string) => {
           )}
         </div>
       </div>
-
-    {/* Справка: одно окно поверх рабочего экрана (блок 6.27) */}
-    {helpOpen && (
-      <HelpWindow articleId={helpArticleId} onSelect={setHelpArticleId} onClose={() => setHelpOpen(false)} />
-    )}
 
     {/* Окна заказов + окна-списки (поверх рабочего стола) */}
     {win.wins.length > 0 && (
