@@ -3414,13 +3414,14 @@ const changeOrderStatus = async (o: any, status: string) => {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              title="Режим «Что это?»: щёлкните по элементу — откроется справка по нему; Esc — отмена"
+              title="Режим «Что это?»: щёлкните по элементу — откроется справка по нему. Нажмите ещё раз или Esc — выключить"
               onClick={() => {
                 setWhatIsMode((v) => {
                   setHelpPickMsg('');
                   return !v;
                 });
               }}
+              style={{ position: 'relative', zIndex: 6000 }}
             >
               {whatIsMode ? 'Что это? ✕' : 'Что это?'}
             </button>
@@ -5014,7 +5015,7 @@ const changeOrderStatus = async (o: any, status: string) => {
           style={{
             position: 'fixed',
             top: 10,
-            right: 24,
+            right: 156,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
