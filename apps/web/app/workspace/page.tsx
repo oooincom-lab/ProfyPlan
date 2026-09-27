@@ -40,6 +40,7 @@ import PertPage from '@/components/PertPage';
 import McPage from '@/components/McPage';
 import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import { cpm as netCpm, scenario as netScenario } from '@/lib/network';
+import { CALC_MODES, modeRequirements, recommendMode, ModeContext } from '@/lib/calcModes';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
@@ -236,7 +237,7 @@ export default function AppShell() {
       setMsg('Расчёт запущен…');
       const run: any = await apiF(`/projects/${selectedProject.id}/calculation-runs`, {
         method: 'POST',
-        body: JSON.stringify({ area: calcAreaId ? 'cluster' : 'project', area_ref: calcAreaId || null }),
+        body: JSON.stringify({ area: calcAreaId ? 'cluster' : 'project', area_ref: calcAreaId || null, params: { mode: calcMode || modeHint.modeId } }),
       });
       await loadCalcRuns(selectedProject.id);
       setMsg(run?.status === 'failed' ? `Расчёт не выполнен: ${run?.error || ''}` : 'Расчёт сохранён в реестр запусков');
@@ -278,6 +279,28 @@ export default function AppShell() {
   };
   const [calcAreaId, setCalcAreaId] = useState('');
   const [calcAreaLabel, setCalcAreaLabel] = useState('');
+  // Конструктор расчёта (блок 6.29): выбранный режим и контекст данных проекта для проверок и рекомендации
+  const [calcMode, setCalcMode] = useState('');
+  const modeContext: ModeContext = useMemo(() => {
+    const withEstimates = estimateOps.filter((o) => o.to_optimistic !== null && o.to_optimistic !== undefined && o.tm_likely !== null && o.tp_pessimistic !== null).length;
+    const used = new Map<string, Set<string>>();
+    for (const r of opResources) {
+      const set = used.get(r.resource_id) || new Set<string>();
+      set.add(r.operation_id);
+      used.set(r.resource_id, set);
+    }
+    const shared = [...used.values()].filter((s) => s.size > 1).length;
+    return {
+      operations: estimateOps.length,
+      withEstimates,
+      dependencies: estimateDeps.length,
+      resources: opResources.length,
+      sharedResources: shared,
+      projectsWithSharedResources: 1,
+    };
+  }, [estimateOps, estimateDeps, opResources]);
+  const modeHint = useMemo(() => recommendMode(modeContext), [modeContext]);
+  const activeMode = CALC_MODES.find((m) => m.id === (calcMode || modeHint.modeId)) || CALC_MODES[0];
   // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
   const [opResources, setOpResources] = useState<any[]>([]);
   const loadOpResources = async (projectId: string) => {
@@ -298,6 +321,12 @@ export default function AppShell() {
       loadEstimates(selectedProject.id);
       if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
       if (calcTab === 'overview') loadDeps(selectedProject.id);
+    }
+    // Конструктор в настройках проекта: нужны те же данные для проверок и рекомендации
+    if (view === 'settings' && selectedProject) {
+      loadEstimates(selectedProject.id);
+      loadDeps(selectedProject.id);
+      loadOpResources(selectedProject.id);
     }
   }, [view, calcTab, selectedProject?.id]);
 
@@ -4896,6 +4925,53 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </label>
                     <div style={{ fontSize: 11.5, color: '#5A7090' }}>
                       Оси хранятся раздельно. Совместимая строка метода проекта держится в согласии с ними: {calcMethods.raw}. Параметры Монте-Карло и доверительный уровень начнут влиять на расчёт со страницей расчёта (блок 6.19).
+                    </div>
+                  </div>
+
+                  {/* ─── Конструктор расчёта (блок 6.29): режимы, требования, рекомендация ─── */}
+                  <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>🧮 Режим расчёта</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>
+                        Режим собирает нужные слои сам: структура → ограничения → анализ → защита срока. Выберите режим — его номер и название запишутся в запуск расчёта.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select
+                        value={activeMode.id}
+                        onChange={(e) => setCalcMode(e.target.value)}
+                        style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, minWidth: 320 }}
+                      >
+                        {CALC_MODES.map((m) => (
+                          <option key={m.id} value={m.id}>{m.title}</option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>
+                        рекомендовано: {CALC_MODES.find((m) => m.id === modeHint.modeId)?.title}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#5A7090' }}>Почему: {modeHint.reason}</div>
+
+                    <div style={{ border: '1px solid #1E3252', borderRadius: 8, background: '#0B1B33', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                      <div style={{ fontSize: 12.5, color: '#B0C4DE' }}><b>Что считает:</b> {activeMode.computes}</div>
+                      <div style={{ fontSize: 12.5, color: '#B0C4DE' }}>
+                        <b>Что получите:</b> {activeMode.gives.join(' · ')}
+                      </div>
+                      <div style={{ fontSize: 12.5, color: '#B0C4DE' }}>
+                        <b>Что нужно:</b>
+                        <ul style={{ margin: '4px 0 0 18px' }}>
+                          {modeRequirements(activeMode, modeContext).map((r, i) => (
+                            <li key={i} style={{ color: r.ok ? '#34D399' : '#FBBF24' }}>
+                              {r.ok ? '✓ ' : '! '}{r.text}
+                            </li>
+                          ))}
+                          {!modeRequirements(activeMode, modeContext).length ? <li style={{ color: '#5A7090' }}>особых данных не требуется</li> : null}
+                        </ul>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: '#8FA3BD' }}><b>Чего не будет:</b> {activeMode.limits.join('; ')}</div>
+                      <div style={{ fontSize: 12.5, color: '#8FA3BD' }}>
+                        <b>Время:</b> {activeMode.time} · <b>Когда выбирать:</b> {activeMode.when}
+                      </div>
                     </div>
                   </div>
 <div style={{ fontWeight: 600, fontSize: 14 }}>🧩 Этапы проекта</div>
