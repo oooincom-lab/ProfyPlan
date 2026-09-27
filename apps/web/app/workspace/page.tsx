@@ -203,8 +203,7 @@ export default function AppShell() {
   // Оси методов расчёта (блок 6.16.2/6.16.7): источник истины — поля проекта, строка default_method для совместимости.
   const calcMethods = parseCalcMethods(selectedProject?.default_method, selectedProject?.planning_logic, selectedProject?.uncertainty_analysis);
 
-  /** Сохранение настроек расчёта проекта (блок 6.16.7). */
-  const saveCalcSettings = async (patch: Record<string, any>) => {
+  /** Сохранение настроек расчёта проекта (блок 6.16.7). */  const saveCalcSettings = async (patch: Record<string, any>) => {
     if (!selectedProject) return;
     try {
       const updated: any = await apiF(`/projects/${selectedProject.id}`, { method: 'PUT', body: JSON.stringify(patch) });
@@ -213,6 +212,43 @@ export default function AppShell() {
     } catch (e: any) {
       setMsg('Не удалось сохранить настройки расчёта: ' + (e?.message || String(e)));
     }
+  };
+
+  // ── Запуски расчёта (блок 6.16.3): реестр расчётов проекта ──
+  const [calcRuns, setCalcRuns] = useState<any[]>([]);
+  const loadCalcRuns = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/projects/${projectId}/calculation-runs?limit=20`);
+      setCalcRuns(data?.items || []);
+    } catch {
+      setCalcRuns([]);
+    }
+  };
+  const createCalcRun = async () => {
+    if (!selectedProject) return;
+    try {
+      setMsg('Расчёт запущен…');
+      const run: any = await apiF(`/projects/${selectedProject.id}/calculation-runs`, {
+        method: 'POST',
+        body: JSON.stringify({ area: 'project' }),
+      });
+      await loadCalcRuns(selectedProject.id);
+      setMsg(run?.status === 'failed' ? `Расчёт не выполнен: ${run?.error || ''}` : 'Расчёт сохранён в реестр запусков');
+    } catch (e: any) {
+      setMsg('Не удалось запустить расчёт: ' + (e?.message || String(e)));
+    }
+  };
+  const lastCalcRun = calcRuns[0] || null;
+  // Реестр запусков подгружается при входе в раздел «Расчёты»
+  useEffect(() => {
+    if (view === 'calculations' && selectedProject) loadCalcRuns(selectedProject.id);
+  }, [view, selectedProject?.id]);
+  const runDateText = (value: any) => {
+    if (!value) return null;
+    try {
+      const d = new Date(value);
+      return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return null; }
   };
   const [orders, setOrders] = useState<any[]>([]);
   const [groups, setGroups] = useState<Record<string, any[]>>({});
@@ -1837,6 +1873,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     else if (view === 'project-pools') loadProjectPools(selectedProject);
     else if (view === 'project-groups') loadProjectGroups(selectedProject);
     else if (view === 'project-gantt') loadProjectGantt(selectedProject);
+    else if (view === 'calculations' && selectedProject) loadCalcRuns(selectedProject.id);
     else loadProjectDashboard(selectedProject);
   };
 
@@ -3455,10 +3492,10 @@ const changeOrderStatus = async (o: any, status: string) => {
               methods={calcMethods}
               area="проект"
               areaName={selectedProject?.name || null}
-              dataDate={null}
-              dataVersion={null}
+              dataDate={runDateText(lastCalcRun?.data_date)}
+              dataVersion={lastCalcRun?.data_fingerprint || null}
               dirty={false}
-              onRecalculate={selectedProject ? () => { setMsg('Пересчёт проекта…'); loadProjectGantt(selectedProject); } : undefined}
+              onRecalculate={selectedProject ? () => { createCalcRun(); } : undefined}
               onOpenSettings={() => setView('settings')}
             />
           )}
@@ -3496,9 +3533,59 @@ const changeOrderStatus = async (o: any, status: string) => {
                   </div>
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Последний расчёт</div>
+                  {lastCalcRun ? (
+                    <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                      {runDateText(lastCalcRun.data_date) || 'дата не указана'} · версия данных {lastCalcRun.data_fingerprint || 'нет'} · {lastCalcRun.planning_logic.toUpperCase()} + {lastCalcRun.uncertainty_analysis} · операций {lastCalcRun.result?.operations ?? '—'}
+                      {lastCalcRun.result?.project_duration_hours ? ` · срок ${Math.round(Number(lastCalcRun.result.project_duration_hours) / 24)} дн` : ''}
+                      {lastCalcRun.status === 'failed' ? ' · расчёт не выполнен' : ''}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>Расчётов ещё не было — нажмите «Пересчитать» в полосе выше; расчёт сохранится с датой и версией данных.</div>
+                  )}
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Что уже доступно в разделе</div>
                   <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант и Сеть CPM — вкладки существующих экранов. PERT, Монте-Карло, CCM, Сравнение и Запуски появятся по блокам 6.18–6.22; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
                 </div>
+              </div>
+            </div>
+          ) : calcTab === 'runs' ? (
+            <div className="panel">
+              <div className="panel-hdr">
+                <div>
+                  <span className="panel-title">Запуски расчёта</span>
+                  <span className="panel-sub">{selectedProject?.name || 'проект не выбран'}</span>
+                </div>
+              </div>
+              <div style={{ padding: '0 16px 14px' }}>
+                {calcRuns.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: 'var(--fg-3)', padding: '10px 0' }}>
+                    Запусков пока нет. Каждый расчёт сохраняется со своей датой и версией входных данных - нажмите «Пересчитать» в полосе выше, и он появится здесь. Сравнение двух запусков и выгрузка появятся в блоке 6.22.
+                  </div>
+                ) : (
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>Когда</th><th>Область</th><th>Метод</th><th>Данные</th><th>Операций</th><th>Срок, дн</th><th>Критических</th><th>Состояние</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calcRuns.map((r) => (
+                        <tr key={r.id}>
+                          <td className="t-mono">{runDateText(r.data_date) || '—'}</td>
+                          <td>{r.area === 'project' ? 'проект' : r.area}</td>
+                          <td>{r.planning_logic.toUpperCase()} + {r.uncertainty_analysis}</td>
+                          <td className="t-mono">{r.data_fingerprint || '—'}</td>
+                          <td>{r.result?.operations ?? '—'}</td>
+                          <td>{r.result?.project_duration_hours ? Math.round(Number(r.result.project_duration_hours) / 24) : '—'}</td>
+                          <td>{r.result?.critical_operations ?? '—'}</td>
+                          <td>{r.status === 'failed' ? 'не выполнен' : 'выполнен'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           ) : (

@@ -35,3 +35,4 @@ from app.models.plan_version import (
     ActualExecution,
     InterProjectDependency,
 )  # noqa: F401
+from app.models.calculation_run import CalculationRun  # noqa: F401

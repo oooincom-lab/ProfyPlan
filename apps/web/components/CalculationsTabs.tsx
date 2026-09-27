@@ -39,11 +39,11 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
   'monte-carlo': { block: '6.19', needs: 'Нужен ввод тройных оценок — блок 6.17' },
   ccm: { block: '6.20', needs: 'Нужен CCM как равноправный метод расчёта' },
   compare: { block: '6.22', needs: 'Появится вместе с запусками и сравнением методов' },
-  runs: { block: '6.22', needs: 'Механику реестра берём от сохранённых видов (блок 6.13а)' },
+  runs: { block: '6.16.3', needs: 'Сравнение двух запусков и выгрузка — блок 6.22' },
 };
 
 export function calcTabState(tab: CalcTab, methods: CalcMethods): CalcTabState {
-  if (tab === 'overview' || tab === 'gantt' || tab === 'network') return 'ready';
+  if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'runs') return 'ready';
   if (tab === 'pert') return methods.analysis === 'pert' ? 'planned' : 'method-off';
   if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'planned' : 'method-off';
   if (tab === 'ccm') return methods.logic === 'ccm' ? 'planned' : 'method-off';
