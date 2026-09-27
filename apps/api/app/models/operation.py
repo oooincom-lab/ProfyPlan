@@ -46,6 +46,9 @@ class Operation(BaseModel):
     tm_likely: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
     tp_pessimistic: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
 
+    # Источник оценок (блок 6.17): expert — ввёл человек, fact — из истории, ai — принято от советника
+    estimate_source: Mapped[str] = mapped_column(String(10), nullable=False, default="expert", server_default="expert")
+
     position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     catalog_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)
     is_critical: Mapped[bool] = mapped_column(Boolean, default=False)

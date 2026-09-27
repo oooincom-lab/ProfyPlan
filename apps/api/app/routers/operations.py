@@ -61,7 +61,7 @@ async def list_operations(
         )
         .order_by(Operation.position)
     )
-    items = []; [items.append(OperationOut(id=str(o.id), project_id=str(o.project_id), name=o.name, duration_base=o.duration_base, duration_unit=o.duration_unit, setup_time=o.setup_time, teardown_time=o.teardown_time, to_optimistic=o.to_optimistic, tm_likely=o.tm_likely, tp_pessimistic=o.tp_pessimistic, position=o.position, is_critical=o.is_critical)) for o in result.scalars().all()]; return items
+    items = []; [items.append(OperationOut(id=str(o.id), project_id=str(o.project_id), name=o.name, duration_base=o.duration_base, duration_unit=o.duration_unit, setup_time=o.setup_time, teardown_time=o.teardown_time, to_optimistic=o.to_optimistic, tm_likely=o.tm_likely, tp_pessimistic=o.tp_pessimistic, estimate_source=getattr(o, 'estimate_source', 'expert'), position=o.position, is_critical=o.is_critical)) for o in result.scalars().all()]; return items
 
 
 @router.get("/resources-map")

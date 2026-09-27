@@ -28,6 +28,7 @@ class OperationUpdate(BaseModel):
     to_optimistic: Optional[Decimal] = None
     tm_likely: Optional[Decimal] = None
     tp_pessimistic: Optional[Decimal] = None
+    estimate_source: Optional[str] = Field(default=None, pattern="^(expert|fact|ai)$")
     position: Optional[int] = None
 
 
@@ -42,6 +43,7 @@ class OperationOut(BaseModel):
     to_optimistic: Optional[Decimal] = None
     tm_likely: Optional[Decimal] = None
     tp_pessimistic: Optional[Decimal] = None
+    estimate_source: Optional[str] = None
     position: Optional[int] = None
     is_critical: bool = False
 

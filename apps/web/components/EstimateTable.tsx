@@ -19,6 +19,7 @@ export type EstimateOp = {
   to_optimistic?: number | string | null;
   tm_likely?: number | string | null;
   tp_pessimistic?: number | string | null;
+  estimate_source?: string | null;
 };
 
 /** Ожидаемая длительность и разброс по трём оценкам (PERT). */
@@ -41,7 +42,7 @@ export default function EstimateTable({
   operations: EstimateOp[];
   onSave: (id: string, patch: Record<string, number | null>) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string; src: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [note, setNote] = useState('');
 
@@ -60,8 +61,22 @@ export default function EstimateTable({
 
   const setCell = (id: string, key: 'to' | 'tm' | 'tp', value: string) => {
     setDraft((prev) => {
-      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp') };
+      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id) };
       return { ...prev, [id]: { ...cur, [key]: value } };
+    });
+  };
+
+  /** Источник оценок: эксперт — ввёл человек, факт — из истории, ИИ — принято от советника. */
+  const cellSource = (id: string): string => {
+    const d = draft[id];
+    if (d) return d.src;
+    const op = operations.find((o) => o.id === id);
+    return (op && op.estimate_source) || 'expert';
+  };
+  const setSource = (id: string, value: string) => {
+    setDraft((prev) => {
+      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id) };
+      return { ...prev, [id]: { ...cur, src: value } };
     });
   };
 
@@ -73,14 +88,15 @@ export default function EstimateTable({
 
   const saveRow = async (op: EstimateOp) => {
     const { to, tm, tp } = rowNumbers(op);
-    if (to === null && tm === null && tp === null) return;
+    const src = cellSource(op.id);
+    if (to === null && tm === null && tp === null && src === 'expert') return;
     if (to !== null && tm !== null && tp !== null && !(to <= tm && tm <= tp)) {
       setNote('Порядок оценок нарушен: должно быть оптимистичная ≤ вероятная ≤ пессимистичная');
       return;
     }
     setSavingId(op.id);
     try {
-      await onSave(op.id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp });
+      await onSave(op.id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: src } as any);
       setDraft((prev) => {
         const next = { ...prev };
         delete next[op.id];
@@ -289,6 +305,7 @@ export default function EstimateTable({
                 <th>Пессим.</th>
                 <th>Ожидаемая</th>
                 <th>Разброс σ</th>
+                <th>Источник</th>
                 <th />
               </tr>
             </thead>
@@ -307,6 +324,18 @@ export default function EstimateTable({
                     <td><input style={{ ...inputStyle, borderColor: badOrder ? '#F59E0B' : undefined }} value={cell(op.id, 'tp')} onChange={(e) => setCell(op.id, 'tp', e.target.value)} placeholder="—" /></td>
                     <td className="t-mono">{est ? est.mean.toFixed(2) : '—'}</td>
                     <td className="t-mono">{est ? est.sigma.toFixed(2) : '—'}</td>
+                    <td>
+                      <select
+                        value={cellSource(op.id)}
+                        onChange={(e) => setSource(op.id, e.target.value)}
+                        title="Откуда взяты оценки: ввёл человек, получено из истории или принято от ИИ-советника"
+                        style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '3px 6px', fontSize: 12 }}
+                      >
+                        <option value="expert">эксперт</option>
+                        <option value="fact">факт</option>
+                        <option value="ai">предложено ИИ</option>
+                      </select>
+                    </td>
                     <td>
                       {dirty ? (
                         <button className="btn btn-primary btn-sm" disabled={badOrder || savingId === op.id} onClick={() => saveRow(op)} title={badOrder ? 'Проверьте порядок оценок' : 'Сохранить строку'}>
