@@ -43,6 +43,73 @@ function hoursText(hours: number): string {
 
 export type PertOrder = { id: string; ext_id?: string | null; parent_order_id?: string | null; specification_name?: string | null; name?: string | null };
 
+/** Локальный расчёт сети по выбранной области: свой критический путь, свои резервы. */
+function localCpm(
+  ops: { id: string; te: number; tm: number; sigma: number }[],
+  deps: { predecessor_id: string; successor_id: string }[],
+): { length: number; aggressive: number; sigma: number; criticalIds: Set<string>; slack: Map<string, number> } {
+  const ids = new Set(ops.map((o) => o.id));
+  const byId = new Map(ops.map((o) => [o.id, o]));
+  const succ = new Map<string, string[]>();
+  const indeg = new Map<string, number>();
+  for (const o of ops) indeg.set(o.id, 0);
+  for (const d of deps) {
+    if (!ids.has(d.predecessor_id) || !ids.has(d.successor_id)) continue;
+    const list = succ.get(d.predecessor_id) || [];
+    list.push(d.successor_id);
+    succ.set(d.predecessor_id, list);
+    indeg.set(d.successor_id, (indeg.get(d.successor_id) || 0) + 1);
+  }
+  // Топологический порядок (защита от цикла: оставшиеся узлы считаем независящими)
+  const queue = ops.filter((o) => (indeg.get(o.id) || 0) === 0).map((o) => o.id);
+  const order: string[] = [];
+  const left = new Map(indeg);
+  while (queue.length) {
+    const cur = queue.shift() as string;
+    order.push(cur);
+    for (const s of succ.get(cur) || []) {
+      left.set(s, (left.get(s) || 0) - 1);
+      if ((left.get(s) || 0) === 0) queue.push(s);
+    }
+  }
+  for (const o of ops) if (!order.includes(o.id)) order.push(o.id);
+  // Прямой проход: ранние сроки
+  const es = new Map<string, number>();
+  const ef = new Map<string, number>();
+  const preds = new Map<string, string[]>();
+  for (const d of deps) {
+    if (!ids.has(d.predecessor_id) || !ids.has(d.successor_id)) continue;
+    const list = preds.get(d.successor_id) || [];
+    list.push(d.predecessor_id);
+    preds.set(d.successor_id, list);
+  }
+  for (const id of order) {
+    const own = byId.get(id);
+    if (!own) continue;
+    let start = 0;
+    for (const p of preds.get(id) || []) start = Math.max(start, ef.get(p) || 0);
+    es.set(id, start);
+    ef.set(id, start + own.te);
+  }
+  const length = Math.max(0, ...ops.map((o) => ef.get(o.id) || 0));
+  // Обратный проход: поздние сроки и резервы
+  const lf = new Map<string, number>();
+  const slack = new Map<string, number>();
+  for (const id of [...order].reverse()) {
+    const own = byId.get(id);
+    if (!own) continue;
+    let finish = length;
+    const followers = succ.get(id) || [];
+    if (followers.length) finish = Math.min(...followers.map((f) => (lf.get(f) ?? length) - ((byId.get(f) && byId.get(f)!.te) || 0)));
+    lf.set(id, finish);
+    slack.set(id, finish - own.te - (es.get(id) || 0));
+  }
+  const criticalIds = new Set(ops.filter((o) => Math.abs(slack.get(o.id) || 0) < 0.001).map((o) => o.id));
+  const variance = ops.filter((o) => criticalIds.has(o.id)).reduce((s, o) => s + o.sigma * o.sigma, 0);
+  const aggressive = ops.filter((o) => criticalIds.has(o.id)).reduce((s, o) => s + o.tm, 0);
+  return { length, aggressive, sigma: Math.sqrt(variance), criticalIds, slack };
+}
+
 export default function PertPage({ operations, dependencies = [], resources = [], orders = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[]; orders?: PertOrder[] }) {
   const [bufferK, setBufferK] = useState(2);
   const [areaOrderId, setAreaOrderId] = useState('');
@@ -96,6 +163,24 @@ export default function PertPage({ operations, dependencies = [], resources = []
     [operations, areaSubtree],
   );
   const areaLabel = areaOrderId ? orderTree.find((o) => o.id === areaOrderId)?.label || 'выбранная ветка' : 'весь проект';
+
+  const areaCpm = useMemo(() => {
+    if (!areaOrderId) return null;
+    const rows = areaOps
+      .map((o) => {
+        const to = num(o.to_optimistic);
+        const tm = num(o.tm_likely);
+        const tp = num(o.tp_pessimistic);
+        if (to === null || tm === null || tp === null) return null;
+        return { id: o.id, name: o.name, te: (to + 4 * tm + tp) / 6, tm, sigma: (tp - to) / 6 };
+      })
+      .filter(Boolean) as { id: string; name: string; te: number; tm: number; sigma: number }[];
+    const ids = new Set(rows.map((r) => r.id));
+    const deps = dependencies.filter((d) => ids.has(d.predecessor_id) && ids.has(d.successor_id));
+    const cpm = localCpm(rows, dependencies);
+    const cutEdges = dependencies.filter((d) => ids.has(d.successor_id) && !ids.has(d.predecessor_id)).length;
+    return { rows, cpm, cutEdges };
+  }, [areaOrderId, areaOps, dependencies]);
 
   /** Срез области из выполненного расчёта: состав и сумма ожидаемых — без критического пути и интервалов. */
   const areaSlice = useMemo(() => {
@@ -276,31 +361,48 @@ export default function PertPage({ operations, dependencies = [], resources = []
         ) : null}
       </div>
       <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
-        {areaOrderId ? (
-          <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Область: {areaLabel} — срез из выполненного расчёта проекта</div>
+        {areaOrderId && areaCpm ? (
+          <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '12px 14px', display: 'grid', gap: 10 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>Область: {areaLabel} — пересчёт по области</div>
             <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
-              Операций в области: {areaSlice.rows.length} из {operations.length} · сумма ожидаемых длительностей: {hoursText(areaSlice.sumTe)}
+              Операций в области: {areaCpm.rows.length} из {operations.length} · связей внутри области: {areaCpm.rows.length ? 'учтены' : '—'}
+              {areaCpm.cutEdges > 0 ? ` · отсечено связей на границе области: ${areaCpm.cutEdges}` : ''}
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
-              Это срез, а не свой расчёт: критический путь и интервалы НЕ подписываются областью, потому что посчитаны по проекту целиком.
-              Свои интервалы области появятся после пересчёта по ней (следующий шаг, пункт 6.18.1 плана).
-            </div>
-            {areaSlice.rows.length ? (
-              <table className="tbl">
-                <thead><tr><th>Операция</th><th>Ожидаемая</th><th>Разброс σ</th></tr></thead>
-                <tbody>
-                  {areaSlice.rows.slice(0, 25).map((r) => (
-                    <tr key={r.id}>
-                      <td style={{ maxWidth: 420 }}>{r.name}</td>
-                      <td className="t-mono">{r.te.toFixed(2)}</td>
-                      <td className="t-mono">{r.sigma.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {areaCpm.rows.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
+                В этой ветке нет операций с тройными оценками — заполните их на вкладке «Оценки».
+              </div>
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>У операций этой области нет тройных оценок — заполните их на вкладке «Оценки».</div>
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                  {tile('Срок области (ожидаемый)', hoursText(areaCpm.cpm.length), 'по критическому пути внутри области')}
+                  {tile('Разброс области σ', hoursText(areaCpm.cpm.sigma), 'накоплен по критическим операциям области')}
+                  {tile('Интервал 68 %', `${hoursText(areaCpm.cpm.length - areaCpm.cpm.sigma)} … ${hoursText(areaCpm.cpm.length + areaCpm.cpm.sigma)}`, '± один разброс σ области')}
+                  {tile('Интервал 95 %', `${hoursText(areaCpm.cpm.length - 2 * areaCpm.cpm.sigma)} … ${hoursText(areaCpm.cpm.length + 2 * areaCpm.cpm.sigma)}`, '± два разброса σ области')}
+                  {tile('Агрессивный срок области', hoursText(areaCpm.cpm.aggressive), 'по наиболее вероятным длительностям критических операций')}
+                  {tile('Буфер области', hoursText(bufferK * areaCpm.cpm.sigma), `запас ${bufferK}·σ области`)}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                  Это собственный расчёт области: критический путь построен только по её операциям, поэтому интервалы и буфер относятся
+                  именно к ветке, а не к проекту. Связи, выходящие за границу области, отсечены — их число показано выше.
+                </div>
+                <table className="tbl">
+                  <thead><tr><th>Операция области</th><th>Ожидаемая</th><th>Разброс σ</th><th>Резерв</th></tr></thead>
+                  <tbody>
+                    {areaCpm.rows.slice(0, 25).map((r) => (
+                      <tr key={r.id}>
+                        <td style={{ maxWidth: 380 }}>
+                          {r.name}
+                          {areaCpm.cpm.criticalIds.has(r.id) ? <span style={{ color: '#F87171', marginLeft: 6 }} title="Критическая операция области">●</span> : null}
+                        </td>
+                        <td className="t-mono">{r.te.toFixed(2)}</td>
+                        <td className="t-mono">{r.sigma.toFixed(2)}</td>
+                        <td className="t-mono">{(areaCpm.cpm.slack.get(r.id) || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             )}
           </div>
         ) : null}
