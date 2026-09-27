@@ -41,7 +41,7 @@ function hoursText(hours: number): string {
   return rest === 0 ? `${sign}${days} дн` : `${sign}${days} дн ${rest} ч`;
 }
 
-export default function PertPage({ operations, dependencies = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[] }) {
+export default function PertPage({ operations, dependencies = [], resources = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[] }) {
   const [bufferK, setBufferK] = useState(2);
   const data = useMemo(() => {
     const withEstimates = operations
@@ -114,6 +114,26 @@ export default function PertPage({ operations, dependencies = [] }: { operations
     }
     return out.sort((a, b) => b.sigma - a.sigma).slice(0, 8);
   }, [dependencies, data]);
+
+  // Разметка общих ресурсов: ресурс, задействованный в нескольких операциях, — кандидат на ресурсный буфер.
+  // Буфер ставится перед первой операцией цепи на этом ресурсе: защищаемся от ОЖИДАНИЯ ресурса, а не от своей неопределённости.
+  const sharedResources = useMemo(() => {
+    if (!resources.length) return [] as { name: string; operations: number; onChain: number }[];
+    const criticalIds = new Set(data.critical.map((r) => r.op.id));
+    const byResource = new Map<string, { name: string; ops: Set<string>; chain: Set<string> }>();
+    for (const r of resources) {
+      const key = r.resource_id;
+      const entry = byResource.get(key) || { name: r.resource_name || 'ресурс', ops: new Set<string>(), chain: new Set<string>() };
+      entry.ops.add(r.operation_id);
+      if (criticalIds.has(r.operation_id)) entry.chain.add(r.operation_id);
+      byResource.set(key, entry);
+    }
+    return [...byResource.values()]
+      .filter((e) => e.ops.size > 1)
+      .map((e) => ({ name: e.name, operations: e.ops.size, onChain: e.chain.size }))
+      .sort((a, b) => b.onChain - a.onChain || b.operations - a.operations)
+      .slice(0, 12);
+  }, [resources, data]);
 
   const tile = (title: string, value: string, sub: string) => (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
@@ -209,6 +229,33 @@ export default function PertPage({ operations, dependencies = [] }: { operations
                     </div>
                   );
                 })()}
+
+                {sharedResources.length ? (
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>
+                      Общие ресурсы — кандидаты на ресурсный буфер (задействованы более чем в одной операции)
+                    </div>
+                    <table className="tbl">
+                      <thead><tr><th>Ресурс</th><th>Операций</th><th>Из них в цепи</th><th>Что предлагается</th></tr></thead>
+                      <tbody>
+                        {sharedResources.map((r, i) => (
+                          <tr key={i}>
+                            <td>{r.name}</td>
+                            <td className="t-mono">{r.operations}</td>
+                            <td className="t-mono">{r.onChain}</td>
+                            <td style={{ color: 'var(--fg-3)' }}>
+                              {r.onChain > 0 ? 'буфер перед первой операцией цепи на этом ресурсе' : 'буфер пока не нужен: в цепи не участвует'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 4 }}>
+                      Это разметка, а не буфер: размер ресурсного буфера считается после — по ветви, которая ждёт этот ресурс
+                      (пункт 6.20.1 плана).
+                    </div>
+                  </div>
+                ) : null}
 
                 {feeding.length ? (
                   <div>

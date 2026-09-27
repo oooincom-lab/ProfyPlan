@@ -265,6 +265,16 @@ export default function AppShell() {
       setEstimateDeps([]);
     }
   };
+  // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
+  const [opResources, setOpResources] = useState<any[]>([]);
+  const loadOpResources = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/projects/${projectId}/operations/resources-map`);
+      setOpResources(Array.isArray(data) ? data : []);
+    } catch {
+      setOpResources([]);
+    }
+  };
   const saveEstimate = async (opId: string, patch: Record<string, number | null>) => {
     if (!selectedProject) return;
     const saved: any = await apiF(`/projects/${selectedProject.id}/operations/${opId}`, { method: 'PUT', body: JSON.stringify(patch) });
@@ -273,7 +283,7 @@ export default function AppShell() {
   useEffect(() => {
     if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert' || calcTab === 'monte-carlo') && selectedProject) {
       loadEstimates(selectedProject.id);
-      if (calcTab === 'pert') loadDeps(selectedProject.id);
+      if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); }
     }
   }, [view, calcTab, selectedProject?.id]);
 
@@ -3731,7 +3741,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
-              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} />
+              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} />
             ) : (
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
