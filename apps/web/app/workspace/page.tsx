@@ -3403,7 +3403,6 @@ const changeOrderStatus = async (o: any, status: string) => {
                 Режим «Что это?»: щёлкните по элементу · Esc — отмена
               </span>
             ) : null}
-            <HelpButton articleId={viewHelpId} title="Справка по разделу (F1)" />
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -3412,10 +3411,10 @@ const changeOrderStatus = async (o: any, status: string) => {
                 setWhatIsMode((v) => !v);
                 setMsg(!whatIsMode ? 'Режим «Что это?»: щёлкните по элементу, Esc — отмена' : '');
               }}
-              style={{ alignItems: 'center' }}
             >
               {whatIsMode ? 'Что это? ✕' : 'Что это?'}
             </button>
+            <HelpButton articleId={viewHelpId} title="Справка по разделу (F1; Shift+F1 — режим «Что это?»)" />
           </div>
         </div>
 
