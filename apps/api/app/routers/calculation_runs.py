@@ -39,6 +39,9 @@ class RunRequest(BaseModel):
     area: str = Field(default="project", pattern=AREA_PATTERN)
     area_ref: Optional[UUID] = None
     params: Optional[dict] = None
+    # Готовый результат расчёта: так записывается запуск Монте-Карло, который считается
+    # на своей странице (процентили, распределение, число прогонов и зерно).
+    result: Optional[dict] = None
 
 
 class RunOut(BaseModel):
@@ -152,6 +155,14 @@ async def create_run(
         "notes": notes,
     }
 
+    # Если страница расчёта уже получила результат (Монте-Карло), записываем именно его:
+    # в реестре должны лежать те числа, которые человек видел на экране.
+    provided = body.result if body else None
+    if provided:
+        summary.update(provided)
+        if provided.get("notes"):
+            summary["notes"] = list(notes) + list(provided.get("notes") or [])
+
     try:
         if len(operations) < 2:
             raise ValueError("Для расчёта нужно не меньше двух операций")
@@ -185,6 +196,17 @@ async def create_run(
     except ValueError as exc:
         run_status = "failed"
         error_text = str(exc)
+
+    # Результат, полученный на странице расчёта (Монте-Карло), главнее локальной сводки:
+    # на экране человек видел именно эти числа, они и должны лежать в реестре.
+    if provided:
+        summary.update(provided)
+        if provided.get("notes"):
+            summary["notes"] = list(notes) + list(provided.get("notes") or [])
+        if provided.get("iterations"):
+            summary["iterations"] = provided.get("iterations")
+    except StopIteration:
+        pass
 
     run = CalculationRun(
         tenant_id=tenant_id,

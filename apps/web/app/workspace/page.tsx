@@ -3830,10 +3830,18 @@ const changeOrderStatus = async (o: any, status: string) => {
                     },
                     {
                       k: 'p50 / p80 / p95',
-                      v: goalBasis
-                        ? `${hoursText(goalBasis.expected)} / ${hoursText(goalBasis.expected + 0.8416 * goalBasis.sigma)} / ${hoursText(goalBasis.expected + 1.645 * goalBasis.sigma)}`
-                        : 'нет данных',
-                      w: goalBasis ? 'по PERT: ожидаемый срок и разброс (точнее — Монте-Карло)' : 'нужны тройные оценки (вкладка «Оценки»)',
+                      v: (() => {
+                        const p = (lastCalcRun && lastCalcRun.result && lastCalcRun.result.percentiles) || null;
+                        if (p && p.p50 !== undefined) return `${hoursText(p.p50)} / ${hoursText(p.p80)} / ${hoursText(p.p95)}`;
+                        if (goalBasis) return `${hoursText(goalBasis.expected)} / ${hoursText(goalBasis.expected + 0.8416 * goalBasis.sigma)} / ${hoursText(goalBasis.expected + 1.645 * goalBasis.sigma)}`;
+                        return 'нет данных';
+                      })(),
+                      w: (() => {
+                        const p = (lastCalcRun && lastCalcRun.result && lastCalcRun.result.percentiles) || null;
+                        if (p && p.p50 !== undefined) return 'по Монте-Карло (последний запуск) — распределение и процентили';
+                        if (goalBasis) return 'по PERT: ожидаемый срок и разброс (точнее — Монте-Карло)';
+                        return 'нужны тройные оценки (вкладка «Оценки»)';
+                      })(),
                     },
                     {
                       k: 'Разрыв к цели',
@@ -3974,7 +3982,24 @@ const changeOrderStatus = async (o: any, status: string) => {
                 onRun={async (iterations, seed) => {
                   if (!selectedProject) return {};
                   const qs = `/ccm/projects/${selectedProject.id}/monte-carlo?iterations=${iterations}` + (seed !== null ? `&seed=${seed}` : '');
-                  return (await apiF(qs, { method: 'POST' })) as any;
+                  const res: any = await apiF(qs, { method: 'POST' });
+                  // Запуск Монте-Карло записываем в реестр: процентили и параметры должны быть видны в истории,
+                  // а плитки обзора берут их из последнего запуска, а не считают заново.
+                  try {
+                    await apiF(`/projects/${selectedProject.id}/calculation-runs`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        area: calcAreaId ? 'cluster' : 'project',
+                        area_ref: calcAreaId || null,
+                        params: { mode: 'monte-carlo', iterations, seed },
+                        result: { ...res, notes: res?.warnings || [] },
+                      }),
+                    });
+                    await loadCalcRuns(selectedProject.id);
+                  } catch {
+                    /* неудача записи в реестр не должна ломать сам расчёт */
+                  }
+                  return res;
                 }}
               />
             ) : (
