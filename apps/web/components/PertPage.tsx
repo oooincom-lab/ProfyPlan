@@ -118,22 +118,60 @@ export default function PertPage({ operations, dependencies = [], resources = []
   // Разметка общих ресурсов: ресурс, задействованный в нескольких операциях, — кандидат на ресурсный буфер.
   // Буфер ставится перед первой операцией цепи на этом ресурсе: защищаемся от ОЖИДАНИЯ ресурса, а не от своей неопределённости.
   const sharedResources = useMemo(() => {
-    if (!resources.length) return [] as { name: string; operations: number; onChain: number }[];
+    if (!resources.length) return [] as { name: string; operations: number; onChain: number; sigma: number }[];
     const criticalIds = new Set(data.critical.map((r) => r.op.id));
+    const byId = new Map(data.withEstimates.map((r) => [r.op.id, r]));
+    const preds = new Map<string, string[]>();
+    for (const d of dependencies) {
+      const list = preds.get(d.successor_id) || [];
+      list.push(d.predecessor_id);
+      preds.set(d.successor_id, list);
+    }
     const byResource = new Map<string, { name: string; ops: Set<string>; chain: Set<string> }>();
+    const opsByResource = new Map<string, Set<string>>();
     for (const r of resources) {
-      const key = r.resource_id;
-      const entry = byResource.get(key) || { name: r.resource_name || 'ресурс', ops: new Set<string>(), chain: new Set<string>() };
+      const entry = byResource.get(r.resource_id) || { name: r.resource_name || 'ресурс', ops: new Set<string>(), chain: new Set<string>() };
       entry.ops.add(r.operation_id);
       if (criticalIds.has(r.operation_id)) entry.chain.add(r.operation_id);
-      byResource.set(key, entry);
+      byResource.set(r.resource_id, entry);
+      const set = opsByResource.get(r.resource_id) || new Set<string>();
+      set.add(r.operation_id);
+      opsByResource.set(r.resource_id, set);
     }
-    return [...byResource.values()]
-      .filter((e) => e.ops.size > 1)
-      .map((e) => ({ name: e.name, operations: e.ops.size, onChain: e.chain.size }))
-      .sort((a, b) => b.onChain - a.onChain || b.operations - a.operations)
+    /** σ ожидания для ресурса: разброс некритических работ на этом ресурсе, которые идут перед работой цепи */
+    const waitSigma = (resourceId: string, chainOpId: string): number => {
+      const users = opsByResource.get(resourceId) || new Set<string>();
+      const memo = new Map<string, number>();
+      const busy = new Set<string>();
+      const walk = (id: string): number => {
+        const cached = memo.get(id);
+        if (cached !== undefined) return cached;
+        if (busy.has(id)) return 0;
+        busy.add(id);
+        let best = 0;
+        for (const p of preds.get(id) || []) {
+          const owner = byId.get(p);
+          if (!owner) continue;
+          const own = users.has(p) && !owner.critical ? owner.variance : 0;
+          const val = walk(p) + own;
+          if (val > best) best = val;
+        }
+        busy.delete(id);
+        memo.set(id, best);
+        return best;
+      };
+      return Math.sqrt(walk(chainOpId));
+    };
+    return [...byResource.entries()]
+      .filter(([, e]) => e.ops.size > 1)
+      .map(([rid, e]) => {
+        let sigma = 0;
+        for (const c of e.chain) sigma = Math.max(sigma, waitSigma(rid, c));
+        return { name: e.name, operations: e.ops.size, onChain: e.chain.size, sigma };
+      })
+      .sort((a, b) => b.sigma - a.sigma || b.onChain - a.onChain || b.operations - a.operations)
       .slice(0, 12);
-  }, [resources, data]);
+  }, [resources, data, dependencies]);
 
   const tile = (title: string, value: string, sub: string) => (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
@@ -236,23 +274,28 @@ export default function PertPage({ operations, dependencies = [], resources = []
                       Общие ресурсы — кандидаты на ресурсный буфер (задействованы более чем в одной операции)
                     </div>
                     <table className="tbl">
-                      <thead><tr><th>Ресурс</th><th>Операций</th><th>Из них в цепи</th><th>Что предлагается</th></tr></thead>
+                      <thead><tr><th>Ресурс</th><th>Операций</th><th>Из них в цепи</th><th>Ожидание, σ</th><th>Буфер</th><th>Что предлагается</th></tr></thead>
                       <tbody>
                         {sharedResources.map((r, i) => (
                           <tr key={i}>
                             <td>{r.name}</td>
                             <td className="t-mono">{r.operations}</td>
                             <td className="t-mono">{r.onChain}</td>
+                            <td className="t-mono">{r.onChain > 0 ? r.sigma.toFixed(2) : '—'}</td>
+                            <td className="t-mono">{r.onChain > 0 && r.sigma > 0 ? hoursText(bufferK * r.sigma) : '—'}</td>
                             <td style={{ color: 'var(--fg-3)' }}>
-                              {r.onChain > 0 ? 'буфер перед первой операцией цепи на этом ресурсе' : 'буфер пока не нужен: в цепи не участвует'}
+                              {r.onChain > 0
+                                ? (r.sigma > 0 ? 'буфер перед первой операцией цепи на этом ресурсе' : 'ожидания нет: некритические работы на этом ресурсе в цепь не входят')
+                                : 'буфер пока не нужен: в цепи не участвует'}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 4 }}>
-                      Это разметка, а не буфер: размер ресурсного буфера считается после — по ветви, которая ждёт этот ресурс
-                      (пункт 6.20.1 плана).
+                      Размер буфера считается по σ ожидания — разбросу некритических работ на этом ресурсе, которые идут перед
+                      работой цепи, с тем же запасом k, что и проектный буфер. Буфер ставится перед первой операцией цепи,
+                      использующей ресурс: он защищает от ОЖИДАНИЯ ресурса, а не от собственной неопределённости работ.
                     </div>
                   </div>
                 ) : null}
