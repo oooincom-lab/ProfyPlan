@@ -178,10 +178,37 @@ export default function PertPage({ operations, dependencies = [] }: { operations
                 <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
                   Смысл приёма: длительности операций берутся напряжённые (в половине случаев выполнимые), а весь риск собирается
                   в один буфер в конце — им и управляют, вместо того чтобы прятать запас в каждой операции.
-                  <br />
-                  Честная граница: здесь буфер считается по текущему критическому пути. Питающие буферы на входах в цепь и
-                  ресурсные буферы перед общими ресурсами появятся вместе с полной критической цепью и ресурсным выравниванием (блок 6.20 целиком).
                 </div>
+
+                {/* Буферная диаграмма: цепь + буфер = защищённый срок; отдельно отмечен обычный расчёт */}
+                {(() => {
+                  const aggressive = data.aggressive;
+                  const buffer = bufferK * data.sigma;
+                  const protectedTotal = aggressive + buffer;
+                  const expectedPos = protectedTotal > 0 ? Math.min(100, Math.max(0, (data.expected / protectedTotal) * 100)) : 0;
+                  const chainPct = protectedTotal > 0 ? (aggressive / protectedTotal) * 100 : 100;
+                  const bufPct = 100 - chainPct;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Буферная диаграмма</div>
+                      <div style={{ position: 'relative', display: 'flex', height: 30, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-2)' }}>
+                        <div style={{ width: chainPct + '%', background: 'linear-gradient(180deg,#3B82F6,#2563EB)', color: '#EAF2FF', fontSize: 11.5, display: 'flex', alignItems: 'center', paddingLeft: 8, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                          цепь · {hoursText(aggressive)}
+                        </div>
+                        <div style={{ width: bufPct + '%', background: 'repeating-linear-gradient(45deg,#F59E0B,#F59E0B 6px,#B45309 6px,#B45309 12px)', color: '#1F1300', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                          буфер · {hoursText(buffer)}
+                        </div>
+                        {expectedPos > 0 && expectedPos < 100 ? (
+                          <div title={'Обычный расчёт: ' + hoursText(data.expected)} style={{ position: 'absolute', left: expectedPos + '%', top: 0, bottom: 0, width: 2, background: '#E8EEF5' }} />
+                        ) : null}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 5 }}>
+                        Защищённый срок {hoursText(protectedTotal)} · полосатый участок — буфер, им и управляют при исполнении.
+                        {expectedPos > 0 && expectedPos < 100 ? ' Белая черта — обычный расчёт по ожидаемым длительностям (' + hoursText(data.expected) + '): видно, что агрессивный план напряжённее, а защита после буфера — надёжнее.' : ''}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {feeding.length ? (
                   <div>
@@ -202,6 +229,11 @@ export default function PertPage({ operations, dependencies = [] }: { operations
                     </table>
                     <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 4 }}>
                       Буфер ставится перед входом ветви в цепь: если ветвь начинает запаздывать, съедается сначала он, а не срок цели.
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 6 }}>
+                      Честная граница: проектный и питающие буферы считаются по текущему критическому пути. Ресурсные буферы перед
+                      общими ресурсами появятся вместе с полной критической цепью и ресурсным выравниванием (остаток блока 6.20), 
+                      а правило расхода буфера — вместе с фактом исполнения.
                     </div>
                   </div>
                 ) : null}
