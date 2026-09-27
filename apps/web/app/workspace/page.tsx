@@ -3877,6 +3877,10 @@ const changeOrderStatus = async (o: any, status: string) => {
                         );
                       })}
                       <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                        Основание расчёта: ожидаемый срок {Math.round(goalBasis.expected)} ч · разброс {Math.round(goalBasis.sigma)} ч ·
+                        от даты старта {selectedProject.start_date ? String(selectedProject.start_date).slice(0, 10) : 'сегодняшней (старт проекта не задан)'}.
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
                         Считано по ожидаемому сроку и разбросу (допущение PERT: состав критического пути не меняется).
                         Точнее — по S-кривой Монте-Карло; цели при пересчёте не сбрасываются.
                       </div>
