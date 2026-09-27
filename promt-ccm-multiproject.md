@@ -873,6 +873,8 @@ POST {erp_webhook_url}
 | POST | `/v1/operations/{id}/auto-close` | Автозакрытие |
 | POST | `/v1/operations/{id}/unclose` | Отмена автозакрытия |
 
+> **Сверка с кодом (27.09.2026).** Ниже — проектные эндпоинты; фактически в коде есть: BOM и маршруты (`/v1/bom`), заказы и разворот состава (`/v1/production-orders`, в т.ч. `/expand`), выгрузка для внешних систем (`export/mrp` в `bom.py`), анализ узких мест (`ccm.py`, `services/bottleneck.py`), этапы проекта (`project_stages.py`), подразделения и квоты (`departments.py`, `department_quotas.py`), группы (`planning_pins.py`), перемещение заказов (`/move` в `order_groups.py`). **Не реализовано:** пути `/v1/specifications…`, `detect-batches`, `apply-batch`, `detect-common-procurement`, `export/excel`, `webhooks/erp`. Пометку «проектируется» в заголовках §12.4–§12.10 читать по этой сверке; для сравнения, §12.11 и ниже уже помечены как реализованные.
+
 ### 12.4 ProductStructure + Routing (проектируется)
 | Метод | Путь | Назначение |
 |---|---|---|
