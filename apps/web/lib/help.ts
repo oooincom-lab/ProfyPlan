@@ -62,6 +62,31 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
     links: ['workspace', 'calculations', 'methods'],
   },  {
+    id: 'calc-estimates',
+    title: 'Расчёты — вкладка «Оценки»',
+    summary: 'Экспертная таблица тройных оценок: оптимистичная, вероятная, пессимистичная',
+    state: 'check',
+    purpose:
+      'Ввод тройных оценок по всем операциям проекта. Без них страницы PERT и Монте-Карло показывать нечего: считается одна детерминированная цифра.',
+    steps: [
+      'Заполните три оценки по строке: оптимистичная (не меньше чем), вероятная (как ожидается), пессимистичная.',
+      'Ожидаемая длительность и разброс считаются сразу, но данные не меняют — это показ.',
+      'Нажмите «Сохранить» в строке: сохраняется только строка с исправленным порядком оценок.',
+    ],
+    fields: [
+      ['Опт.', 'Оптимистичная оценка: если всё сложится хорошо.'],
+      ['Вероятн.', 'Наиболее вероятная: обычный ход работ.'],
+      ['Пессим.', 'Пессимистичная: если пойдёт не так.'],
+      ['Ожидаемая', 'Средневзвешенная длительность по трём оценкам (PERT): (опт. + 4·вероятн. + пессим.) / 6.'],
+      ['Разброс σ', 'Насколько велик разброс: (пессим. − опт.) / 6. Чем больше, тем менее надёжна оценка.'],
+    ],
+    limits: [
+      'Порядок обязателен: оптимистичная ≤ вероятная ≤ пессимистичная. При нарушении строка не сохраняется.',
+      'Пустая оценка остаётся пустой — правдоподобное число не подставляется.',
+    ],
+    links: ['calc-pert', 'calc-mc', 'methods'],
+  },
+  {
     id: 'calc-overview',
     title: 'Расчёты — обзор',
     summary: 'Вкладка «Обзор» раздела «Расчёты»: что здесь показывается и почему часть плиток пуста',
@@ -558,7 +583,7 @@ export function helpArticle(id: string | null | undefined): HelpArticle | null {
 export const HELP_GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Начало', ids: ['help', 'workspace', 'calculations'] },
   { title: 'Проект', ids: ['project-summary', 'orders', 'order-window', 'bom', 'groups', 'scale', 'new-project', 'archive'] },
-  { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-gantt', 'calc-network', 'calc-pert', 'calc-mc', 'calc-runs'] },
+  { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-gantt', 'calc-network', 'calc-estimates', 'calc-pert', 'calc-mc', 'calc-runs'] },
   { title: 'Настройки', ids: ['project-settings', 'views', 'tools'] },
   { title: 'Справочники и ресурсы', ids: ['directories', 'resource-window', 'calendar-window'] },
   { title: 'Аналитика', ids: ['ccm', 'reports'] },
@@ -661,6 +686,7 @@ export function articleIdForWindow(kind: string, listKind?: string, entity?: str
 export function articleIdForCalcTab(tab: string): string {
   if (tab === 'gantt') return 'calc-gantt';
   if (tab === 'network') return 'calc-network';
+  if (tab === 'estimates') return 'calc-estimates';
   if (tab === 'pert') return 'calc-pert';
   if (tab === 'monte-carlo') return 'calc-mc';
   if (tab === 'runs') return 'calc-runs';

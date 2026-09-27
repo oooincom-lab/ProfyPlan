@@ -35,6 +35,7 @@ import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
 import { HelpButton } from '@/components/HelpWindow';
+import EstimateTable from '@/components/EstimateTable';
 import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
@@ -241,6 +242,24 @@ export default function AppShell() {
     }
   };
   const lastCalcRun = calcRuns[0] || null;
+
+  // ── Экспертная таблица оценок (блок 6.17) ──
+  const [estimateOps, setEstimateOps] = useState<any[]>([]);
+  const loadEstimates = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/operations?project_id=${projectId}`);
+      setEstimateOps(Array.isArray(data) ? data : data?.items || []);
+    } catch {
+      setEstimateOps([]);
+    }
+  };
+  const saveEstimate = async (opId: string, patch: Record<string, number | null>) => {
+    const saved: any = await apiF(`/operations/${opId}`, { method: 'PUT', body: JSON.stringify(patch) });
+    setEstimateOps((prev) => prev.map((o) => (o.id === opId ? { ...o, ...(saved || patch) } : o)));
+  };
+  useEffect(() => {
+    if (view === 'calculations' && calcTab === 'estimates' && selectedProject) loadEstimates(selectedProject.id);
+  }, [view, calcTab, selectedProject?.id]);
 
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
@@ -3682,6 +3701,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
               </div>
             </div>
+          ) : calcTab === 'estimates' ? (
+            <EstimateTable operations={estimateOps} onSave={saveEstimate} />
           ) : calcTab === 'runs' ? (
             <div className="panel">
               <div className="panel-hdr">

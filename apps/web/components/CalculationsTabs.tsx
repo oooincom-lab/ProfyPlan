@@ -17,12 +17,13 @@ import { CalcMethods, MethodFill, METHOD_FILL_COLOR, METHOD_FILL_LABEL, analysis
 import { HelpButton } from '@/components/HelpWindow';
 import { articleIdForCalcTab } from '@/lib/help';
 
-export type CalcTab = 'overview' | 'gantt' | 'network' | 'pert' | 'monte-carlo' | 'ccm' | 'compare' | 'runs';
+export type CalcTab = 'overview' | 'gantt' | 'network' | 'estimates' | 'pert' | 'monte-carlo' | 'ccm' | 'compare' | 'runs';
 
 export const CALC_TABS: { id: CalcTab; label: string }[] = [
   { id: 'overview', label: 'Обзор' },
   { id: 'gantt', label: 'Гант' },
   { id: 'network', label: 'Сеть CPM' },
+  { id: 'estimates', label: 'Оценки' },
   { id: 'pert', label: 'PERT' },
   { id: 'monte-carlo', label: 'Монте-Карло' },
   { id: 'ccm', label: 'CCM' },
@@ -35,6 +36,7 @@ export type CalcTabState = 'ready' | 'method-off' | 'planned';
 /** В какой блок плана упирается вкладка и почему она ещё не готова. */
 export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> = {
   overview: { block: '6.16', needs: 'Обзор собирается на каркасе; плитки появятся вместе с расчётными страницами' },
+  estimates: { block: '6.17', needs: '' },
   gantt: { block: '6.16.9', needs: '' },
   network: { block: '6.16.9', needs: '' },
   pert: { block: '6.18', needs: 'Нужен ввод тройных оценок — блок 6.17' },
@@ -45,7 +47,7 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
 };
 
 export function calcTabState(tab: CalcTab, methods: CalcMethods): CalcTabState {
-  if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'runs') return 'ready';
+  if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'estimates' || tab === 'runs') return 'ready';
   if (tab === 'pert') return methods.analysis === 'pert' ? 'planned' : 'method-off';
   if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'planned' : 'method-off';
   if (tab === 'ccm') return methods.logic === 'ccm' ? 'planned' : 'method-off';
