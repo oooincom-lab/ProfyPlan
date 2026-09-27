@@ -41,7 +41,7 @@ function hoursText(hours: number): string {
   return rest === 0 ? `${sign}${days} дн` : `${sign}${days} дн ${rest} ч`;
 }
 
-export default function PertPage({ operations }: { operations: PertOp[] }) {
+export default function PertPage({ operations, dependencies = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[] }) {
   const [bufferK, setBufferK] = useState(2);
   const data = useMemo(() => {
     const withEstimates = operations
@@ -67,6 +67,53 @@ export default function PertPage({ operations }: { operations: PertOp[] }) {
 
   const noEstimates = data.withEstimates.length === 0;
   const noCriticalEstimates = !noEstimates && data.critical.length === 0;
+
+  // Питающие буферы: некритические ветви, входящие в цепь. Считаем по самой «разбросной» ветви:
+  // буфер такой ветви = k · √(сумма дисперсий по ветви). Это стандартный приём критической цепи.
+  const feeding = useMemo(() => {
+    if (!dependencies.length) return [] as { name: string; sigma: number }[];
+    const byId = new Map(data.withEstimates.map((r) => [r.op.id, r]));
+    const preds = new Map<string, string[]>();
+    for (const d of dependencies) {
+      if (!byId.has(d.predecessor_id) || !byId.has(d.successor_id)) continue;
+      const list = preds.get(d.successor_id) || [];
+      list.push(d.predecessor_id);
+      preds.set(d.successor_id, list);
+    }
+    const chainVar = new Map<string, number>();
+    const inProgress = new Set<string>();
+    // Наибольшая по дисперсии цепочка некритических работ, входящая в узел
+    const walk = (id: string): number => {
+      const cached = chainVar.get(id);
+      if (cached !== undefined) return cached;
+      if (inProgress.has(id)) return 0; // защита от цикла
+      inProgress.add(id);
+      const self = byId.get(id);
+      let best = 0;
+      for (const p of preds.get(id) || []) {
+        const parent = byId.get(p);
+        if (!parent) continue;
+        const v = walk(p) + (parent.critical ? 0 : parent.variance);
+        if (v > best) best = v;
+      }
+      inProgress.delete(id);
+      const total = best + (self && self.critical ? 0 : 0);
+      chainVar.set(id, total);
+      return total;
+    };
+    const out: { name: string; sigma: number }[] = [];
+    for (const r of data.critical) {
+      let best = 0;
+      for (const p of preds.get(r.op.id) || []) {
+        const parent = byId.get(p);
+        if (!parent || parent.critical) continue;
+        const v = walk(p) + parent.variance;
+        if (v > best) best = v;
+      }
+      if (best > 0) out.push({ name: r.op.name, sigma: Math.sqrt(best) });
+    }
+    return out.sort((a, b) => b.sigma - a.sigma).slice(0, 8);
+  }, [dependencies, data]);
 
   const tile = (title: string, value: string, sub: string) => (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
@@ -135,6 +182,29 @@ export default function PertPage({ operations }: { operations: PertOp[] }) {
                   Честная граница: здесь буфер считается по текущему критическому пути. Питающие буферы на входах в цепь и
                   ресурсные буферы перед общими ресурсами появятся вместе с полной критической цепью и ресурсным выравниванием (блок 6.20 целиком).
                 </div>
+
+                {feeding.length ? (
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>
+                      Питающие буферы — некритические ветви, которые могут сдвинуть цепь (сверху самые «разбросные», запас {bufferK}·σ)
+                    </div>
+                    <table className="tbl">
+                      <thead><tr><th>Вход в цепь</th><th>Питающая ветвь, σ</th><th>Буфер</th></tr></thead>
+                      <tbody>
+                        {feeding.map((f, i) => (
+                          <tr key={i}>
+                            <td>{f.name}</td>
+                            <td className="t-mono">{f.sigma.toFixed(2)}</td>
+                            <td className="t-mono">{hoursText(bufferK * f.sigma)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 4 }}>
+                      Буфер ставится перед входом ветви в цепь: если ветвь начинает запаздывать, съедается сначала он, а не срок цели.
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

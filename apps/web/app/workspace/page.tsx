@@ -247,6 +247,7 @@ export default function AppShell() {
 
   // ── Экспертная таблица оценок (блок 6.17) ──
   const [estimateOps, setEstimateOps] = useState<any[]>([]);
+  const [estimateDeps, setEstimateDeps] = useState<any[]>([]);
   const loadEstimates = async (projectId: string) => {
     try {
       const data: any = await apiF(`/projects/${projectId}/operations`);
@@ -255,13 +256,25 @@ export default function AppShell() {
       setEstimateOps([]);
     }
   };
+  // Связи нужны для питающих буферов: без них не видно, какие некритические ветви входят в цепь
+  const loadDeps = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/projects/${projectId}/operation-dependencies`);
+      setEstimateDeps(Array.isArray(data) ? data : data?.items || []);
+    } catch {
+      setEstimateDeps([]);
+    }
+  };
   const saveEstimate = async (opId: string, patch: Record<string, number | null>) => {
     if (!selectedProject) return;
     const saved: any = await apiF(`/projects/${selectedProject.id}/operations/${opId}`, { method: 'PUT', body: JSON.stringify(patch) });
     setEstimateOps((prev) => prev.map((o) => (o.id === opId ? { ...o, ...(saved || patch) } : o)));
   };
   useEffect(() => {
-    if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert') && selectedProject) loadEstimates(selectedProject.id);
+    if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert' || calcTab === 'monte-carlo') && selectedProject) {
+      loadEstimates(selectedProject.id);
+      if (calcTab === 'pert') loadDeps(selectedProject.id);
+    }
   }, [view, calcTab, selectedProject?.id]);
 
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
@@ -3718,7 +3731,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
-              <PertPage operations={estimateOps.length ? estimateOps : []} />
+              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} />
             ) : (
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
