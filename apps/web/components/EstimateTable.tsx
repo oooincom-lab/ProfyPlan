@@ -106,6 +106,111 @@ export default function EstimateTable({
     fontFamily: 'ui-monospace, monospace',
   };
 
+  // ── Выгрузка и загрузка таблицы оценок (блок 6.17) ──
+  type PreviewRow = {
+    id: string;
+    name: string;
+    before: string;
+    after: string;
+    status: 'меняется' | 'без изменений' | 'нарушен порядок' | 'не найдена';
+    patch?: Record<string, number | null>;
+  };
+  const [preview, setPreview] = useState<{ rows: PreviewRow[]; fileName: string } | null>(null);
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
+
+  const exportCsv = () => {
+    const head = 'ID;Операция;Опт.;Вероятн.;Пессим.;Ожидаемая;Разброс';
+    const lines = operations.map((op) => {
+      const { to, tm, tp } = rowNumbers(op);
+      const est = to !== null && tm !== null && tp !== null ? pertEstimate(to, tm, tp) : null;
+      return [op.id, '"' + String(op.name).replace(/"/g, '""') + '"', to ?? '', tm ?? '', tp ?? '', est ? est.mean.toFixed(2) : '', est ? est.sigma.toFixed(2) : ''].join(';');
+    });
+    const blob = new Blob(['\uFEFF' + [head, ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'оценки-операций.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    setNote('Файл выгружен: ' + operations.length + ' строк');
+  };
+
+  /** Сухой прогон: разбираем файл и показываем, что изменится. Данные не трогаем. */
+  const dryRun = async (file: File) => {
+    const text = await file.text();
+    const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (!lines.length) {
+      setPreview({ rows: [], fileName: file.name });
+      return;
+    }
+    const sep = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',';
+    const split = (line: string) => {
+      const out: string[] = [];
+      let cur = '';
+      let quoted = false;
+      for (const ch of line) {
+        if (ch === '"') quoted = !quoted;
+        else if (ch === sep && !quoted) {
+          out.push(cur);
+          cur = '';
+        } else cur += ch;
+      }
+      out.push(cur);
+      return out.map((s) => s.trim());
+    };
+    const header = split(lines[0]).map((h) => h.toLowerCase());
+    const iId = header.findIndex((h) => h === 'id');
+    const iName = header.findIndex((h) => h.includes('опер'));
+    const iTo = header.findIndex((h) => h.startsWith('опт'));
+    const iTm = header.findIndex((h) => h.startsWith('вероят'));
+    const iTp = header.findIndex((h) => h.startsWith('пессим'));
+    const rows: PreviewRow[] = [];
+    for (const line of lines.slice(1)) {
+      const cells = split(line);
+      const rawId = (iId >= 0 ? cells[iId] : '') || '';
+      const rawName = (iName >= 0 ? cells[iName] : '') || '';
+      const op = operations.find((o) => o.id === rawId) || operations.find((o) => o.name === rawName);
+      const to = num(iTo >= 0 ? cells[iTo] : null);
+      const tm = num(iTm >= 0 ? cells[iTm] : null);
+      const tp = num(iTp >= 0 ? cells[iTp] : null);
+      if (!op) {
+        rows.push({ id: rawId, name: rawName || '(без названия)', before: '—', after: `${to ?? ''} / ${tm ?? ''} / ${tp ?? ''}`, status: 'не найдена' });
+        continue;
+      }
+      const cur = rowNumbers(op);
+      const before = `${cur.to ?? '—'} / ${cur.tm ?? '—'} / ${cur.tp ?? '—'}`;
+      const after = `${to ?? '—'} / ${tm ?? '—'} / ${tp ?? '—'}`;
+      const bad = to !== null && tm !== null && tp !== null && !(to <= tm && tm <= tp);
+      const changed = cur.to !== to || cur.tm !== tm || cur.tp !== tp;
+      rows.push({
+        id: op.id,
+        name: op.name,
+        before,
+        after,
+        status: bad ? 'нарушен порядок' : changed ? 'меняется' : 'без изменений',
+        patch: bad ? undefined : { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp },
+      });
+    }
+    setPreview({ rows, fileName: file.name });
+  };
+
+  const applyPreview = async () => {
+    if (!preview) return;
+    const toSave = preview.rows.filter((r) => r.status === 'меняется' && r.patch);
+    setSavingId('all');
+    try {
+      for (const r of toSave) {
+        await onSave(r.id, r.patch!);
+      }
+      setNote('Применено строк: ' + toSave.length);
+      setPreview(null);
+    } catch (e: any) {
+      setNote('Не удалось применить: ' + (e?.message || String(e)));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <div className="panel">
       <div className="panel-hdr">
@@ -115,12 +220,61 @@ export default function EstimateTable({
             операций {operations.length} · оценок заполнено {filled} из {operations.length}
           </span>
         </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-secondary btn-sm" onClick={exportCsv} title="Выгрузить таблицу в файл (CSV для Excel)">
+            Выгрузить в файл
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()} title="Загрузить оценки из файла: сначала будет показан сухой прогон">
+            Загрузить из файла
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files && e.target.files[0];
+              if (f) dryRun(f);
+              e.target.value = '';
+            }}
+          />
+        </div>
       </div>
       <div style={{ padding: '0 16px 14px' }}>
         <div style={{ fontSize: 12, color: 'var(--fg-3)', margin: '8px 0 10px' }}>
           Введите три оценки по каждой операции. Порядок: оптимистичная ≤ вероятная ≤ пессимистичная — иначе строка
           не сохранится. Ожидаемая длительность и разброс считаются тут же и ничего не меняют в данных.
         </div>
+        {preview ? (
+          <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Сухой прогон: файл «{preview.fileName}»</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 8 }}>
+              Изменится строк: {preview.rows.filter((r) => r.status === 'меняется').length} · без изменений: {preview.rows.filter((r) => r.status === 'без изменений').length} · с нарушенным порядком: {preview.rows.filter((r) => r.status === 'нарушен порядок').length} · не найдено операций: {preview.rows.filter((r) => r.status === 'не найдена').length}.
+              Пока ничего не применено.
+            </div>
+            <table className="tbl">
+              <thead>
+                <tr><th>Операция</th><th>Было (опт. / вероятн. / пессим.)</th><th>Станет</th><th>Что будет</th></tr>
+              </thead>
+              <tbody>
+                {preview.rows.slice(0, 200).map((r, i) => (
+                  <tr key={r.id + i}>
+                    <td>{r.name}</td>
+                    <td className="t-mono">{r.before}</td>
+                    <td className="t-mono">{r.after}</td>
+                    <td style={{ color: r.status === 'нарушен порядок' ? '#FCD34D' : r.status === 'не найдена' ? '#F59E0B' : 'var(--fg-2)' }}>{r.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button className="btn btn-primary btn-sm" disabled={!preview.rows.some((r) => r.status === 'меняется') || savingId === 'all'} onClick={applyPreview}>
+                {savingId === 'all' ? 'Применяю…' : 'Применить изменения'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setPreview(null)}>Отмена</button>
+            </div>
+          </div>
+        ) : null}
         {operations.length === 0 ? (
           <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
             У проекта ещё нет операций: сначала нужен состав и маршрут (окно заказа, вкладка «Маршрут»).
