@@ -214,6 +214,19 @@ async def run_cpm(
         raise HTTPException(status_code=422, detail=str(e))
 
     # ---- Учёт событий мощности ресурсов (форсаж / ограничение / простой) ----
+    # ---- Сохраняем признак критичности в самих операциях ----
+    # Страницы PERT, буферы и конструктор расчёта читают критический путь из списка операций,
+    # поэтому расчёт обязан оставить его там — иначе они видят пустоту.
+    critical_ids = {str(nid) for nid in (result.critical_path or [])}
+    changed = False
+    for op in operations:
+        want = str(op.id) in critical_ids
+        if bool(getattr(op, "is_critical", False)) != want:
+            op.is_critical = want
+            changed = True
+    if changed:
+        await db.commit()
+
     op_ids_cpm = [op.id for op in operations]
     or_rows_cpm = await db.execute(
         select(OperationResource).where(OperationResource.operation_id.in_(op_ids_cpm))
