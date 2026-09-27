@@ -53,3 +53,6 @@ docker-compose.override.yml
 .openclaw-local-build.log
 apps/web/.openclaw_*
 apps/api/.openclaw_*
+
+# Сертификаты — никогда в репозиторий (на сервере свои)
+nginx/ssl/
