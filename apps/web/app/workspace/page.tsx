@@ -249,14 +249,15 @@ export default function AppShell() {
   const [estimateOps, setEstimateOps] = useState<any[]>([]);
   const loadEstimates = async (projectId: string) => {
     try {
-      const data: any = await apiF(`/operations?project_id=${projectId}`);
+      const data: any = await apiF(`/projects/${projectId}/operations`);
       setEstimateOps(Array.isArray(data) ? data : data?.items || []);
     } catch {
       setEstimateOps([]);
     }
   };
   const saveEstimate = async (opId: string, patch: Record<string, number | null>) => {
-    const saved: any = await apiF(`/operations/${opId}`, { method: 'PUT', body: JSON.stringify(patch) });
+    if (!selectedProject) return;
+    const saved: any = await apiF(`/projects/${selectedProject.id}/operations/${opId}`, { method: 'PUT', body: JSON.stringify(patch) });
     setEstimateOps((prev) => prev.map((o) => (o.id === opId ? { ...o, ...(saved || patch) } : o)));
   };
   useEffect(() => {
