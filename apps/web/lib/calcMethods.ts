@@ -33,14 +33,28 @@ const ANALYSIS_LABEL: Record<UncertaintyAnalysis, string> = {
   mc: 'Монте-Карло — симуляция',
 };
 
-export function parseCalcMethods(defaultMethod?: string | null): CalcMethods {
+export function parseCalcMethods(
+  defaultMethod?: string | null,
+  planningLogic?: string | null,
+  uncertaintyAnalysis?: string | null,
+): CalcMethods {
   const raw = String(defaultMethod || 'cpm').toLowerCase();
-  const logic: PlanningLogic = raw.includes('ccm') ? 'ccm' : 'cpm';
-  const analysis: UncertaintyAnalysis = raw.includes('pert')
+  const fromMethodLogic: PlanningLogic = raw.includes('ccm') ? 'ccm' : 'cpm';
+  const fromMethodAnalysis: UncertaintyAnalysis = raw.includes('pert')
     ? 'pert'
-    : raw.includes('monte') || raw.includes('_mc')
+    : raw.includes('mc')
       ? 'mc'
       : 'none';
+
+  // Хранимые оси (projects.planning_logic / projects.uncertainty_analysis) — источник истины.
+  // Строка default_method остаётся для совместимости и используется, если осей в ответе нет.
+  const logic: PlanningLogic =
+    planningLogic === 'cpm' || planningLogic === 'ccm' ? (planningLogic as PlanningLogic) : fromMethodLogic;
+  const analysis: UncertaintyAnalysis =
+    uncertaintyAnalysis === 'none' || uncertaintyAnalysis === 'pert' || uncertaintyAnalysis === 'mc'
+      ? (uncertaintyAnalysis as UncertaintyAnalysis)
+      : fromMethodAnalysis;
+
   return { logic, analysis, raw };
 }
 

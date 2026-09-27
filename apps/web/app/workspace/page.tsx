@@ -200,8 +200,20 @@ export default function AppShell() {
   const [scaleVersionInfo, setScaleVersionInfo] = useState('');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
-  // Оси методов расчёта (блок 6.16.2): читаем из строки проекта, без изменения хранения.
-  const calcMethods = parseCalcMethods(selectedProject?.default_method);
+  // Оси методов расчёта (блок 6.16.2/6.16.7): источник истины — поля проекта, строка default_method для совместимости.
+  const calcMethods = parseCalcMethods(selectedProject?.default_method, selectedProject?.planning_logic, selectedProject?.uncertainty_analysis);
+
+  /** Сохранение настроек расчёта проекта (блок 6.16.7). */
+  const saveCalcSettings = async (patch: Record<string, any>) => {
+    if (!selectedProject) return;
+    try {
+      const updated: any = await apiF(`/projects/${selectedProject.id}`, { method: 'PUT', body: JSON.stringify(patch) });
+      setSelectedProject({ ...selectedProject, ...updated });
+      setMsg('Настройки расчёта сохранены');
+    } catch (e: any) {
+      setMsg('Не удалось сохранить настройки расчёта: ' + (e?.message || String(e)));
+    }
+  };
   const [orders, setOrders] = useState<any[]>([]);
   const [groups, setGroups] = useState<Record<string, any[]>>({});
   const [pools, setPools] = useState<Record<string, any[]>>({});
@@ -4491,6 +4503,70 @@ const changeOrderStatus = async (o: any, status: string) => {
                       <b>Использовать общие ресурсы каталога</b>
                       <div style={{ fontSize: 11.5, color: '#5A7090' }}>Включает в выбор межпроектные (shared) ресурсы; проектные (project) резервируются под один проект</div>
                     </label>
+                  </div>
+
+                  {/* ─── Расчёты (блок 6.16.7): две независимые оси ─── */}
+                  <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>🧮 Расчёты</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>Две независимые оси: логика планирования и модель оценки. Сочетания допустимы любые. Метод, выключенный здесь, не скрывается в разделе «Расчёты» — вкладка видна неактивной с причиной.</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                        Логика планирования
+                        <select
+                          value={selectedProject.planning_logic || 'cpm'}
+                          onChange={(e) => saveCalcSettings({ planning_logic: e.target.value })}
+                          style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, minWidth: 240 }}
+                        >
+                          <option value="cpm">CPM — критический путь</option>
+                          <option value="ccm">CCM — межпроектное объединение</option>
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                        Модель оценки
+                        <select
+                          value={selectedProject.uncertainty_analysis || 'none'}
+                          onChange={(e) => saveCalcSettings({ uncertainty_analysis: e.target.value })}
+                          style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, minWidth: 240 }}
+                        >
+                          <option value="none">Без анализа неопределённости</option>
+                          <option value="pert">PERT — аналитическая оценка</option>
+                          <option value="mc">Монте-Карло — симуляция</option>
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                        Прогонов Монте-Карло
+                        <input
+                          type="number" min={100} max={1000000} step={100}
+                          defaultValue={selectedProject.monte_carlo_runs ?? 10000}
+                          onBlur={(e) => saveCalcSettings({ monte_carlo_runs: Number(e.target.value) || 10000 })}
+                          style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, width: 140 }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                        Доверительный уровень
+                        <input
+                          type="number" min={0.5} max={0.999} step={0.01}
+                          defaultValue={Math.round(Number(selectedProject.confidence_level ?? 0.8) * 100) / 100}
+                          onBlur={(e) => saveCalcSettings({ confidence_level: Number(e.target.value) || 0.8 })}
+                          style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, width: 140 }}
+                        />
+                      </label>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#B0C4DE' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedProject.use_history === true}
+                        onChange={(e) => saveCalcSettings({ use_history: e.target.checked })}
+                        style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: 'pointer' }}
+                      />
+                      Использовать исторические данные
+                      <span style={{ color: '#5A7090' }}>по умолчанию выключено — включается только решением пользователя</span>
+                    </label>
+                    <div style={{ fontSize: 11.5, color: '#5A7090' }}>
+                      Оси хранятся раздельно. Совместимая строка метода проекта держится в согласии с ними: {calcMethods.raw}. Параметры Монте-Карло и доверительный уровень начнут влиять на расчёт со страницей расчёта (блок 6.19).
+                    </div>
                   </div>
 <div style={{ fontWeight: 600, fontSize: 14 }}>🧩 Этапы проекта</div>
                         <div style={{ fontSize: 12, color: '#5A7090' }}>Регистр этапов для группировки операций маршрутов</div>

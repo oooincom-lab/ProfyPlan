@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -30,7 +30,25 @@ class Project(BaseModel):
     )  # quick / project / recurring
     default_method: Mapped[str] = mapped_column(
         String(20), default="cpm"
-    )  # cpm / pert_cpm / cpm_ccm / pert_ccm
+    )  # cpm / pert_cpm / cpm_ccm / pert_ccm — совместимость: повторяет сочетание осей ниже
+
+    # Расчёты (блок 6.16.7): две НЕЗАВИСИМЫЕ оси. Хранятся раздельно;
+    # default_method остаётся для совместимости и держится в согласии с ними.
+    planning_logic: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="cpm", server_default="cpm"
+    )  # cpm / ccm
+    uncertainty_analysis: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="none", server_default="none"
+    )  # none / pert / mc
+    monte_carlo_runs: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=10000, server_default="10000"
+    )
+    confidence_level: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.8, server_default="0.8"
+    )
+    use_history: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )  # включается только решением пользователя
     country_code: Mapped[str] = mapped_column(
         String(2), default="RU"
     )

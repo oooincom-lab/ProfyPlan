@@ -48,6 +48,24 @@ async def list_projects(
     )
 
 
+def _axes_from_method(method: str) -> tuple[str, str]:
+    """Логика планирования и модель оценки из строки default_method.
+
+    Нужно для совместимости: старые записи и клиенты знают только одну строку.
+    """
+    method = (method or "cpm").lower()
+    logic = "ccm" if "ccm" in method else "cpm"
+    analysis = "pert" if "pert" in method else ("mc" if "mc" in method else "none")
+    return logic, analysis
+
+
+def _method_from_axes(logic: str, analysis: str) -> str:
+    """Строка default_method из двух осей — держим совместимое поле в согласии."""
+    if analysis == "pert":
+        return "pert_ccm" if logic == "ccm" else "pert_cpm"
+    return "cpm_ccm" if logic == "ccm" else "cpm"
+
+
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(
     body: ProjectCreate,
@@ -56,12 +74,25 @@ async def create_project(
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     """Создать новый проект."""
+    # Оси расчёта (блок 6.16.7): если заданы явно — они источник истины,
+    # иначе выводим их из default_method; совместимая строка всегда согласована с осями.
+    logic, analysis = _axes_from_method(body.default_method)
+    if body.planning_logic:
+        logic = body.planning_logic
+    if body.uncertainty_analysis:
+        analysis = body.uncertainty_analysis
+
     project = Project(
         tenant_id=tenant_id,
         name=body.name,
         description=body.description,
         mode=body.mode,
-        default_method=body.default_method,
+        default_method=_method_from_axes(logic, analysis),
+        planning_logic=logic,
+        uncertainty_analysis=analysis,
+        monte_carlo_runs=body.monte_carlo_runs if body.monte_carlo_runs is not None else 10000,
+        confidence_level=body.confidence_level if body.confidence_level is not None else 0.8,
+        use_history=bool(body.use_history) if body.use_history is not None else False,
         country_code=body.country_code,
         start_date=body.start_date,
         priority=getattr(body, 'priority', None) or 'normal',
@@ -113,6 +144,13 @@ async def update_project(
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(project, key, value)
+
+    # Оси расчёта и совместимая строка держатся в согласии (блок 6.16.7):
+    # изменили оси — пересчитываем строку; изменили строку — разбираем её на оси.
+    if "planning_logic" in update_data or "uncertainty_analysis" in update_data:
+        project.default_method = _method_from_axes(project.planning_logic, project.uncertainty_analysis)
+    elif "default_method" in update_data:
+        project.planning_logic, project.uncertainty_analysis = _axes_from_method(project.default_method)
 
     await db.commit()
     await db.refresh(project)
