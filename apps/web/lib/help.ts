@@ -203,6 +203,14 @@ export const HELP_ARTICLES: HelpArticle[] = [
       '«Состав» показывает структуру изделия; «Маршрут» — операции; «Ресурсы» — ресурсы заказа; «План» — сроки.',
       'Заказ со значком ⚡ «динамический»: по нему развёрнут расчёт CPM.',
     ],
+    fields: [
+      ['График', 'Текущий график расчёта: ⚡ — динамический (с пересчётом).'],
+      ['ID', 'Внешний идентификатор заказа — тот, под которым заказ пришёл из учётной системы.'],
+      ['Заказчик', 'Кому принадлежит заказ.'],
+      ['Кол-во', 'Количество и единица измерения.'],
+      ['Приоритет', 'Порядок обработки при конфликте ресурсов: High и Critical идут первыми.'],
+      ['Статус', '«Черновик» — в расчёт не идёт; «плановый» — участвует в расчёте.'],
+    ],
     limits: ['Материал не может быть узлом маршрута — материал не выполняет операции.'],
     links: ['calculations', 'directories', 'views'],
   },
@@ -465,6 +473,9 @@ export const HELP_ELEMENTS: Record<string, HelpElement> = {
   'indicator.presetNotice': { title: 'Сообщение об откате раскладки', article: 'calc-network', hintGroup: 'indicator', hintKey: 'presetNotice' },
   'indicator.cutMarker': { title: 'Маркер обрезки цепочки', article: 'calc-network', hintGroup: 'indicator', hintKey: 'cutMarker' },
   'indicator.serviceEvents': { title: 'Служебные события сети', article: 'calc-network', hintGroup: 'indicator', hintKey: 'serviceEvents' },
+  // Таблица заказов: пометка на самой таблице — тогда любой элемент внутри (строка, ячейка, колонка)
+  // в режиме «Что это?» ведёт в статью «Заказы». Точные пометки колонок и кнопок — в сквозном разборе (6.28).
+  'orders.table': { title: 'Таблица заказов', article: 'orders' },
   // Разделы и вкладки, которые уже помечены в интерфейсе
   'calc.tab.overview': { title: 'Вкладка «Обзор»', article: 'calc-overview' },
   'calc.tab.gantt': { title: 'Вкладка «Гант»', article: 'calc-gantt' },

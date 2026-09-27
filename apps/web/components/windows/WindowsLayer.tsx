@@ -873,7 +873,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                 </>
               )}
               {isList && w.listKind === 'orders' && (renderOrdersTable ? renderOrdersTable() : (
-                <table className="tbl">
+                <table data-help-id="orders.table" className="tbl">
                   <thead><tr>
                     <th className="t-graph">Граф</th>
                     <th>ID</th>
