@@ -12,6 +12,8 @@ const API_ORIGIN =
 import { useState, useCallback, Fragment, useRef, useEffect } from 'react';
 import CatalogOps from '@/components/CatalogOps';
 import GraphStylePicker from '@/components/GraphStylePicker';
+import CalculationsTabs, { CalcTab, CalcTabNotice } from '@/components/CalculationsTabs';
+import { parseCalcMethods, logicLabel, analysisLabel } from '@/lib/calcMethods';
 import { getPalette, type ThemeName } from '@/lib/graph-styles';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
@@ -160,7 +162,7 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -180,6 +182,8 @@ export default function AppShell() {
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
   const [view, setView] = useState<View>('dashboard');
+  // Расчёты (блок 6.16 плана): активная вкладка хаба. «Гант» и «Сеть CPM» — отдельные виды, поэтому вкладка выводится из вида.
+  const [calcTab, setCalcTab] = useState<CalcTab>('overview');
   // Реестр сохранённых видов (блок 6.13а): панель поверх рабочего поля сети CPM.
   const [savedViewsOpen, setSavedViewsOpen] = useState(false);
   const [netData, setNetData] = useState<any>(null);
@@ -196,6 +200,8 @@ export default function AppShell() {
   const [scaleVersionInfo, setScaleVersionInfo] = useState('');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
+  // Оси методов расчёта (блок 6.16.2): читаем из строки проекта, без изменения хранения.
+  const calcMethods = parseCalcMethods(selectedProject?.default_method);
   const [orders, setOrders] = useState<any[]>([]);
   const [groups, setGroups] = useState<Record<string, any[]>>({});
   const [pools, setPools] = useState<Record<string, any[]>>({});
@@ -3148,6 +3154,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'projects': 'Проекты',
     'project-dashboard': selectedProject?.name || 'Проект',
     'project-orders': selectedProject ? `Заказы — ${selectedProject.name}` : 'Заказы',
+    'calculations': selectedProject ? `Расчёты — ${selectedProject.name}` : 'Расчёты',
     'project-gantt': selectedProject ? `Гант — ${selectedProject.name}` : 'Диаграмма Ганта',
     'project-pools': selectedProject ? `Кластеры — ${selectedProject.name}` : 'Кластеры',
     'project-groups': selectedProject ? `Группы — ${selectedProject.name}` : 'Группы',
@@ -3423,6 +3430,68 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {/* ═══ PROJECT ORDERS ═══ */}
           {view === 'project-orders' && (panelMode === 'window' ? <div ref={dashHeadRef}>{renderSectionDashboard()}</div> : renderOrdersView())}
+
+          {/* ═══ РАСЧЁТЫ (блок 6.16): полоса контекста и лента вкладок ═══ */}
+          {(view === 'calculations' || view === 'project-gantt' || view === 'network') && (
+            <CalculationsTabs
+              active={view === 'project-gantt' ? 'gantt' : view === 'network' ? 'network' : calcTab}
+              onSelect={(t) => {
+                if (t === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); else setView('project-gantt'); return; }
+                if (t === 'network') { setView('network'); return; }
+                setCalcTab(t); setView('calculations');
+              }}
+              methods={calcMethods}
+              area="проект"
+              areaName={selectedProject?.name || null}
+              dataDate={null}
+              dataVersion={null}
+              dirty={false}
+              onRecalculate={selectedProject ? () => { setMsg('Пересчёт проекта…'); loadProjectGantt(selectedProject); } : undefined}
+              onOpenSettings={() => setView('settings')}
+            />
+          )}
+
+          {/* ═══ РАСЧЁТЫ: ОБЗОР (блок 6.16 плана) ═══ */}
+          {view === 'calculations' && (calcTab === 'overview' ? (
+            <div className="panel">
+              <div className="panel-hdr">
+                <div>
+                  <span className="panel-title">Расчёты — обзор</span>
+                  <span className="panel-sub">{selectedProject?.name || 'проект не выбран'}</span>
+                </div>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                  {[
+                    { k: 'Детерминированный срок', w: 'появится с расчётной страницей' },
+                    { k: 'p50 / p80 / p95', w: 'блоки 6.18 (PERT) и 6.19 (Монте-Карло)' },
+                    { k: 'Разрыв к цели', w: 'режим цели — блок 6.14г' },
+                    { k: 'Конфликты и узкие места', w: 'блок 6.20' },
+                  ].map((t) => (
+                    <div key={t.k} style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>{t.k}</div>
+                      <div style={{ fontSize: 16, color: 'var(--fg-3)', margin: '4px 0 2px' }}>нет данных</div>
+                      <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>{t.w}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Методы расчёта — две независимые оси</div>
+                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{logicLabel(calcMethods.logic)}</div>
+                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{analysisLabel(calcMethods.analysis)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 6 }}>
+                    Оси читаются из строки проекта (default_method: {calcMethods.raw}). Раздельные настройки расчёта — блок 6.16.7.
+                  </div>
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Что уже доступно в разделе</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант и Сеть CPM — вкладки существующих экранов. PERT, Монте-Карло, CCM, Сравнение и Запуски появятся по блокам 6.18–6.22; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
+          ))}
 
           {/* ═══ PROJECT GANTT ═══ */}
           {view === 'project-gantt' && (
