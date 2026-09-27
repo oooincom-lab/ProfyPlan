@@ -250,12 +250,32 @@ export default function AppShell() {
   // с пометкой data-help-id открывает его справку. Одна карта элементов — все входы.
   const [whatIsMode, setWhatIsMode] = useState(false);
   const [helpPickMsg, setHelpPickMsg] = useState('');
+  const [hoverToggle, setHoverToggle] = useState(false);
   const helpOverlayRef = useRef<HTMLDivElement | null>(null);
 
   // Что это? — выбор элемента под прозрачным слоем.
   // Слой лежит сверху, поэтому элемент под ним не получает нажатие. Чтобы узнать, что под курсором,
   // на миг отключаем у слоя перехват щелчков и спрашиваем точку напрямую — это надёжнее,
   // чем перебирать список слоёв (список включал сам слой и его содержимое).
+  // Наведение в режиме: элемент под курсором — это кнопка режима?
+  // Слой лежит сверху, поэтому обычный :hover к кнопке не доходит: слой сам сообщает курсору,
+  // что сейчас над кнопкой, и подсвечивает её ярче.
+  const onOverlayMove = (e: React.PointerEvent) => {
+    const overlay = helpOverlayRef.current;
+    if (!overlay || !whatIsMode) return;
+    const prevPointer = overlay.style.pointerEvents;
+    overlay.style.pointerEvents = 'none';
+    let target: HTMLElement | null = null;
+    try {
+      target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    } finally {
+      overlay.style.pointerEvents = prevPointer || '';
+    }
+    const overToggle = !!(target && target.closest && target.closest('[data-help-toggle]'));
+    overlay.style.cursor = overToggle ? 'pointer' : 'help';
+    setHoverToggle(overToggle);
+  };
+
   const pickHelpElement = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -3432,8 +3452,18 @@ const changeOrderStatus = async (o: any, status: string) => {
               }}
               style={
                 whatIsMode
-                  ? { position: 'relative', zIndex: 6000, borderColor: '#F59E0B', background: '#231A06', color: '#FCD34D', fontWeight: 600, boxShadow: '0 0 0 1px rgba(245,158,11,0.45)' }
-                  : { position: 'relative', zIndex: 6000 }
+                  ? {
+                      position: 'relative',
+                      zIndex: 6000,
+                      cursor: 'pointer',
+                      borderColor: '#F59E0B',
+                      background: hoverToggle ? '#3A2A08' : '#231A06',
+                      color: '#FCD34D',
+                      fontWeight: 600,
+                      boxShadow: hoverToggle ? '0 0 0 2px rgba(245,158,11,0.85)' : '0 0 0 1px rgba(245,158,11,0.45)',
+                      transition: 'background .12s ease, box-shadow .12s ease',
+                    }
+                  : { position: 'relative', zIndex: 6000, cursor: 'pointer' }
               }
             >
               {whatIsMode ? 'Что это? ✕' : 'Что это?'}
@@ -5018,6 +5048,7 @@ const changeOrderStatus = async (o: any, status: string) => {
       <div
         ref={helpOverlayRef}
         onPointerDown={pickHelpElement}
+        onPointerMove={onOverlayMove}
         onMouseDown={pickHelpElement}
         onClick={pickHelpElement}
         title="Щёлкните по элементу — откроется справка. Esc — отмена"
