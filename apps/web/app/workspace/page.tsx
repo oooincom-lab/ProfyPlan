@@ -37,6 +37,7 @@ import WindowsLayer from '@/components/windows/WindowsLayer';
 import { HelpButton } from '@/components/HelpWindow';
 import EstimateTable from '@/components/EstimateTable';
 import PertPage from '@/components/PertPage';
+import McPage from '@/components/McPage';
 import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
@@ -3702,6 +3703,18 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
               </div>
             </div>
+          ) : calcTab === 'monte-carlo' ? (
+            calcMethods.analysis === 'mc' ? (
+              <McPage
+                onRun={async (iterations, seed) => {
+                  if (!selectedProject) return {};
+                  const qs = `/ccm/projects/${selectedProject.id}/monte-carlo?iterations=${iterations}` + (seed !== null ? `&seed=${seed}` : '');
+                  return (await apiF(qs, { method: 'POST' })) as any;
+                }}
+              />
+            ) : (
+              <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
+            )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
               <PertPage operations={estimateOps.length ? estimateOps : []} />
