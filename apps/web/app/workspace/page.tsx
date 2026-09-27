@@ -289,6 +289,16 @@ export default function AppShell() {
   // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
   const [opResources, setOpResources] = useState<any[]>([]);
 
+  // Карточка проекта нужна для полей, которых нет в списке портфеля (например, дата старта для расчёта вероятностей)
+  const [projectDetail, setProjectDetail] = useState<any>(null);
+  const loadProjectDetail = async (projectId: string) => {
+    try {
+      setProjectDetail(await apiF(`/projects/${projectId}`));
+    } catch {
+      setProjectDetail(null);
+    }
+  };
+
   // Контекст данных проекта для конструктора режимов: по нему проверяются требования и считается рекомендация
   const modeContext: ModeContext = useMemo(() => {
     const withEstimates = estimateOps.filter((o) => o.to_optimistic !== null && o.to_optimistic !== undefined && o.tm_likely !== null && o.tp_pessimistic !== null).length;
@@ -340,6 +350,7 @@ export default function AppShell() {
       loadEstimates(selectedProject.id);
       if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
       if (calcTab === 'overview') loadDeps(selectedProject.id);
+      if (calcTab === 'overview') loadProjectDetail(selectedProject.id);
     }
     // Конструктор в настройках проекта: нужны те же данные для проверок и рекомендации
     if (view === 'settings' && selectedProject) {
@@ -369,7 +380,9 @@ export default function AppShell() {
 
   const goalProbability = useMemo(() => {
     if (!goalBasis || !selectedProject) return new Map<string, { p: number; note: string }>();
-    const originRaw = selectedProject.start_date ? new Date(selectedProject.start_date) : new Date();
+    const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date
+      ? new Date((projectDetail && projectDetail.start_date) || selectedProject.start_date)
+      : new Date();
     const origin = new Date(originRaw.getFullYear(), originRaw.getMonth(), originRaw.getDate()).getTime();
     const out = new Map<string, { p: number; note: string }>();
     for (const [key, value] of [
@@ -384,7 +397,7 @@ export default function AppShell() {
       out.set(key, { p: r.probability, note: r.note });
     }
     return out;
-  }, [goalBasis, selectedProject]);
+  }, [goalBasis, selectedProject, projectDetail]);
   // Это сценарии, а не вероятности: все работы одновременно быстрее или медленнее — так не бывает,
   // зато видно, насколько срок чувствителен к ошибке в длительностях.
   const scenarioRange = useMemo(() => {
@@ -3878,7 +3891,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                       })}
                       <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
                         Основание расчёта: ожидаемый срок {Math.round(goalBasis.expected)} ч · разброс {Math.round(goalBasis.sigma)} ч ·
-                        от даты старта {selectedProject.start_date ? String(selectedProject.start_date).slice(0, 10) : 'сегодняшней (старт проекта не задан)'}.
+                        от даты старта {(() => { const s = (projectDetail && projectDetail.start_date) || selectedProject.start_date; return s ? String(s).slice(0, 10) : 'сегодняшней (старт проекта не задан)'; })()}.
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
                         Считано по ожидаемому сроку и разбросу (допущение PERT: состав критического пути не меняется).
