@@ -24,6 +24,7 @@ interface SidebarProps {
   loadProjectDashboard: (p: any) => void;
   loadProjectOrdersView: (p: any) => void;
   loadProjectGantt: (p: any) => void;
+  onOpenSavedViews?: (p: any) => void;
   loadProjectPools: (p: any) => void;
   loadProjectGroups: (p: any) => void;
   loadProjectOrders: (id: string) => void;
@@ -54,6 +55,7 @@ export default function Sidebar(props: SidebarProps) {
     view, navTo, projects, selectedProject, groups, pools,
     projectOrders, expandedOrders, setExpandedOrders,
     loadProjectDashboard, loadProjectOrdersView, loadProjectGantt,
+    onOpenSavedViews,
     loadProjectPools, loadProjectGroups, loadProjectOrders,
     setCtxMenu, setSidebarCtx, moveOrder,
     delGroup, delPool,
@@ -130,6 +132,7 @@ export default function Sidebar(props: SidebarProps) {
         <span className="s-fi" onClick={() => { onSelectPool(null, p); loadProjectPools(p); }}>📦 Кластеры</span>
         <span className="s-fi" onClick={() => { setSelectedProject(p); setView('settings'); }}>⚙️ Настройки</span>
         <span className="s-fi" onClick={() => loadProjectGantt(p)}>📊 Диаграмма Ганта</span>
+        <span className="s-fi" onClick={() => onOpenSavedViews && onOpenSavedViews(p)}>🗂 Виды</span>
       </span>
     );
     return (
@@ -188,6 +191,7 @@ export default function Sidebar(props: SidebarProps) {
                 <span className="s-fi" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}>📦 Кластеры</span>
                 <span className="s-fi" onClick={() => { setSelectedProject(openProj); setView('settings'); }}>⚙️ Настройки</span>
                 <span className="s-fi" onClick={() => loadProjectGantt(openProj)}>📊 Диаграмма Ганта</span>
+                <span className="s-fi" onClick={() => onOpenSavedViews && onOpenSavedViews(openProj)}>🗂 Виды</span>
               </span>
             </button>
             <button className="s-rail-item" onClick={() => loadProjectOrdersView(openProj)}><span className="s-tip">Заказы</span>📋</button>
@@ -195,6 +199,7 @@ export default function Sidebar(props: SidebarProps) {
             <button className="s-rail-item" onClick={() => { onSelectPool(null, openProj); loadProjectPools(openProj); }}><span className="s-tip">Кластеры</span>📦</button>
             <button className="s-rail-item" onClick={() => { setSelectedProject(openProj); setView('settings'); }}><span className="s-tip">Настройки</span>⚙️</button>
             <button className="s-rail-item" onClick={() => loadProjectGantt(openProj)}><span className="s-tip">Диаграмма Ганта</span>📊</button>
+            <button className="s-rail-item" onClick={() => onOpenSavedViews && onOpenSavedViews(openProj)}><span className="s-tip">Сохранённые виды: сохранить текущее состояние сетевого графика и применять его одним действием</span>🗂</button>
           </div>
         )}
         {archivedProjects.map((p: any) => (
@@ -497,6 +502,13 @@ export default function Sidebar(props: SidebarProps) {
                   style={view === 'project-gantt' && selectedProject?.id === p.id ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
                 >
                   📊 Диаграмма Ганта{debug && <DebugBadge debug={debug} text="[nav:gantt]" />}
+                </div>
+                <div
+                  className="s-sub"
+                  onClick={() => onOpenSavedViews && onOpenSavedViews(p)}
+                  title="Сохранённые виды: сохранить текущее состояние сетевого графика и применять его одним действием"
+                >
+                  🗂 Виды{debug && <DebugBadge debug={debug} text="[nav:saved-views]" />}
                 </div>
               </>
             )}

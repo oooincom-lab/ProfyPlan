@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Апстрим: локально — локальный API, в продакшене — боевой.
+// Апстрим: сначала явная настройка окружения, затем локальный API в разработке,
+// иначе — боевой адрес. Явная настройка нужна, чтобы проверочную сборку
+// можно было направить на локальный сервис, не трогая боевые данные.
 const UPSTREAM =
-  process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8000' : 'https://profyplan.ru';
+  process.env.PP_API_UPSTREAM ||
+  (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8000' : 'https://profyplan.ru');
 
 
 export async function GET(request: NextRequest) {

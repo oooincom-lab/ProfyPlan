@@ -39,6 +39,7 @@ import {
 } from '@/lib/cpm-labels';
 import CpmReadability from '@/components/CpmReadability';
 import { CPM_GRAPH_HINTS, CPM_INDICATOR_HINTS } from '@/lib/cpm-hints';
+import { CPM_APPLY_EVENT, CPM_CAPTURE_EVENT, CPM_STATE_EVENT } from '@/lib/savedViews';
 
 export type { LayoutMetrics } from '@/lib/cpm-metrics';
 
@@ -76,6 +77,8 @@ export interface CpmGraphProps {
   paletteId?: string;
   /** Колбэк метрик качества раскладки — для строки состояния панели. */
   onMetrics?: (m: LayoutMetrics) => void;
+  /** Открыть реестр сохранённых видов (показывает кнопку «Виды» в шапке графа). */
+  onOpenSavedViews?: () => void;
 }
 
 interface GOp {
@@ -560,6 +563,54 @@ export default function CpmGraph(props: CpmGraphProps) {
   useEffect(() => {
     try { window.localStorage.setItem(FONT_SIZE_KEY, fontSize); } catch { /* ignore */ }
   }, [fontSize]);
+
+  /* ── мост «сохранённые виды» (блок 6.13а) ──
+     Панель реестра видов просит снять текущее состояние рабочего поля
+     (CPM_CAPTURE_EVENT) и ждёт ответ с состоянием (CPM_STATE_EVENT); при применении
+     вида присылает снимок (CPM_APPLY_EVENT) — граф возвращает поле в это состояние. */
+  const viewStateRef = useRef<Record<string, any>>({});
+  viewStateRef.current = {
+    layoutPreset, mode, unit, critOnly, showEdgeDays, showEndpoints,
+    periodFrom, periodTo, alignCutEnds, zoomPct, nodePositions: manualRef.current,
+  };
+  useEffect(() => {
+    const onCapture = () => {
+      if (typeof window === 'undefined') return;
+      window.dispatchEvent(new CustomEvent(CPM_STATE_EVENT, { detail: viewStateRef.current }));
+    };
+    const onApply = (e: Event) => {
+      const st = (e as CustomEvent).detail as Record<string, any> | undefined;
+      if (!st || typeof st !== 'object') return;
+      if (typeof st.layoutPreset === 'string') {
+        const lp = sanitizeLayoutPreset(st.layoutPreset);
+        setLayoutPreset(lp);
+        saveLayoutPreset(lp);
+      }
+      if (st.mode === 'byDate' || st.mode === 'byLayer') setMode(st.mode);
+      if (st.unit === 'd' || st.unit === 'h' || st.unit === 'm') setUnit(st.unit);
+      if (typeof st.critOnly === 'boolean') setCritOnly(st.critOnly);
+      if (typeof st.showEdgeDays === 'boolean') setShowEdgeDays(st.showEdgeDays);
+      if (typeof st.showEndpoints === 'boolean') setShowEndpoints(st.showEndpoints);
+      if (typeof st.periodFrom === 'string') setPeriodFrom(st.periodFrom);
+      if (typeof st.periodTo === 'string') setPeriodTo(st.periodTo);
+      if (typeof st.alignCutEnds === 'boolean') { setAlignCutEnds(st.alignCutEnds); saveAlignCutEnds(st.alignCutEnds); }
+      if (typeof st.zoomPct === 'number' && Number.isFinite(st.zoomPct)) {
+        setZoomPct(Math.max(10, Math.min(400, Math.round(st.zoomPct))));
+      }
+      if (st.nodePositions && typeof st.nodePositions === 'object') {
+        const np = st.nodePositions as { byDate?: Record<string, [number, number]>; byLayer?: Record<string, [number, number]> };
+        manualRef.current = { byDate: { ...(np.byDate || {}) }, byLayer: { ...(np.byLayer || {}) } };
+        setPosNonce((n) => n + 1);
+      }
+      setPresetNotice('Вид применён — рабочее поле возвращено в сохранённое состояние.');
+    };
+    window.addEventListener(CPM_CAPTURE_EVENT, onCapture);
+    window.addEventListener(CPM_APPLY_EVENT, onApply);
+    return () => {
+      window.removeEventListener(CPM_CAPTURE_EVENT, onCapture);
+      window.removeEventListener(CPM_APPLY_EVENT, onApply);
+    };
+  }, []);
 
   /* связи: из пропа, из расчёта или запросом к API */
   const mappedOps = useMemo(() => mapOps(props), [props.cpmResult, props.ops]);
@@ -2221,6 +2272,14 @@ export default function CpmGraph(props: CpmGraphProps) {
             />
             Выравнивать по границам периода
           </label>
+        )}
+        {props.onOpenSavedViews && (
+          <button
+            className="cpmui-btn"
+            type="button"
+            onClick={props.onOpenSavedViews}
+            title="Сохранённые виды: сохранить текущее состояние и применять его одним действием"
+          >🗂 Виды</button>
         )}
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 4 }}>

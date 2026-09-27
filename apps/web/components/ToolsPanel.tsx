@@ -10,6 +10,7 @@ type Props = {
   projects: any[];
   selectedProject: any;
   onOpenNetwork: (p: any) => void;
+  onOpenSavedViews?: (p: any) => void;
 };
 
 const card: React.CSSProperties = {
@@ -29,7 +30,7 @@ const badge = (text: string, tone: 'ok' | 'wait'): React.CSSProperties => ({
   color: tone === 'ok' ? '#34D399' : '#8FA3BD',
 });
 
-export default function ToolsPanel({ projects, selectedProject, onOpenNetwork }: Props) {
+export default function ToolsPanel({ projects, selectedProject, onOpenNetwork, onOpenSavedViews }: Props) {
   const [pick, setPick] = useState<string>(selectedProject?.id || (projects?.[0]?.id || ''));
   const proj = projects?.find((p: any) => p.id === pick) || null;
 
@@ -58,6 +59,16 @@ export default function ToolsPanel({ projects, selectedProject, onOpenNetwork }:
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+        <div style={card}>
+          <div style={title}>🗂 Сохранённые виды</div>
+          <div style={desc}>
+            Сохранить текущее состояние сетевого графика (раскладка, режим, период, масштаб, ручные сдвиги узлов)
+            и возвращать его одним действием. Список видов ведётся на сервере, есть общий доступ и выгрузка в файл.
+          </div>
+          <span style={badge('доступно', 'ok')}>доступно</span>
+          <button style={btn} disabled={!proj} onClick={() => proj && onOpenSavedViews && onOpenSavedViews(proj)}>Открыть реестр видов</button>
+        </div>
+
         <div style={card}>
           <div style={title}>🕸 Сеть CPM</div>
           <div style={desc}>

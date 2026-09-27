@@ -43,6 +43,7 @@ import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
 import ToolsPanel from '@/components/ToolsPanel';
 import CpmGraph from '@/components/CpmGraph';
+import SavedViewsPanel from '@/components/SavedViewsPanel';
 import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
@@ -179,6 +180,8 @@ export default function AppShell() {
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
   const [view, setView] = useState<View>('dashboard');
+  // Реестр сохранённых видов (блок 6.13а): панель поверх рабочего поля сети CPM.
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
   const [netData, setNetData] = useState<any>(null);
   const [netLoading, setNetLoading] = useState(false);
   const [netOrderId, setNetOrderId] = useState<string | null>(null);
@@ -1862,6 +1865,13 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     setNetLoading(false);
   };
 
+  // Реестр сохранённых видов можно открыть из любого места (сайдбар, инструменты):
+  // сначала показываем сеть CPM проекта, затем раскрываем панель видов.
+  const openSavedViewsForProject = async (p: any) => {
+    await loadProjectNetwork(p);
+    setSavedViewsOpen(true);
+  };
+
   // ── Шкала куста по ресурсам (шаг 2.3) ──
   const loadProjectScale = async (p: any, power: number = 1.0) => {
     const proj = p || selectedProject;
@@ -3185,6 +3195,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         loadProjectDashboard={loadProjectDashboard}
         loadProjectOrdersView={loadProjectOrdersView}
         loadProjectGantt={loadProjectGantt}
+        onOpenSavedViews={openSavedViewsForProject}
         loadProjectPools={loadProjectPools}
         loadProjectGroups={loadProjectGroups}
         loadProjectOrders={loadProjectOrders}
@@ -4595,7 +4606,7 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {/* ═══ ИНСТРУМЕНТЫ ═══ */}
           {view === 'tools' && (
-            <ToolsPanel projects={projects} selectedProject={selectedProject} onOpenNetwork={loadProjectNetwork} />
+            <ToolsPanel projects={projects} selectedProject={selectedProject} onOpenNetwork={loadProjectNetwork} onOpenSavedViews={openSavedViewsForProject} />
           )}
 
           {/* ═══ СЕТЬ CPM (вид рабочего поля) ═══ */}
@@ -4643,9 +4654,16 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>В выбранной области расчёта нет операций.</div>
                 )}
                 {!netLoading && !netError && netData && netData.node_count > 0 && (
-                  <CpmGraph cpmResult={netData} paletteId={paletteId} />
+                  <CpmGraph cpmResult={netData} paletteId={paletteId} onOpenSavedViews={() => setSavedViewsOpen(true)} />
                 )}
               </div>
+              {savedViewsOpen && (
+                <SavedViewsPanel
+                  projectId={selectedProject?.id ? String(selectedProject.id) : null}
+                  projectName={selectedProject?.name || null}
+                  onClose={() => setSavedViewsOpen(false)}
+                />
+              )}
             </div>
           )}
 
