@@ -24,15 +24,26 @@ import {
 
 /** Кнопка «?» — единая для шапок окон, шапки панели и ленты вкладок раздела «Расчёты». */
 export function HelpButton({ articleId, title, compact }: { articleId: string; title?: string; compact?: boolean }) {
+  const onOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openHelp(articleId);
+  };
+  // В шапке окна — та же кнопка, что «свернуть / раскладка / закрыть». В шапке раздела и на вкладках —
+  // штатная маленькая вторичная кнопка системы (.btn.btn-secondary.btn-sm), а не голый текст.
+  if (compact) {
+    return (
+      <button type="button" className="pp-wbtn" title={title || 'Справка по этому окну'} onClick={onOpen}>
+        ?
+      </button>
+    );
+  }
   return (
     <button
       type="button"
-      className={compact ? 'pp-wbtn' : undefined}
-      title={title || 'Справка по этому разделу'}
-      onClick={(e) => {
-        e.stopPropagation();
-        openHelp(articleId);
-      }}
+      className="btn btn-secondary btn-sm"
+      title={title || 'Справка по разделу'}
+      onClick={onOpen}
+      style={{ minWidth: 30, justifyContent: 'center', fontWeight: 700 }}
     >
       ?
     </button>
