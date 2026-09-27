@@ -3430,7 +3430,11 @@ const changeOrderStatus = async (o: any, status: string) => {
                   return !v;
                 });
               }}
-              style={{ position: 'relative', zIndex: 6000 }}
+              style={
+                whatIsMode
+                  ? { position: 'relative', zIndex: 6000, borderColor: '#F59E0B', background: '#231A06', color: '#FCD34D', fontWeight: 600, boxShadow: '0 0 0 1px rgba(245,158,11,0.45)' }
+                  : { position: 'relative', zIndex: 6000 }
+              }
             >
               {whatIsMode ? 'Что это? ✕' : 'Что это?'}
             </button>
