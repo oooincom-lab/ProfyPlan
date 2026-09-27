@@ -281,6 +281,10 @@ export default function AppShell() {
   const [calcAreaLabel, setCalcAreaLabel] = useState('');
   // Конструктор расчёта (блок 6.29): выбранный режим — контекст данных считается ниже, после загрузки ресурсов
   const [calcMode, setCalcMode] = useState('');
+  // Ответы помощника выбора: известные данные — что нужно — ограничения по ресурсам
+  const [wizKnown, setWizKnown] = useState('estimates');
+  const [wizNeed, setWizNeed] = useState('interval');
+  const [wizRes, setWizRes] = useState('none');
   // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
   const [opResources, setOpResources] = useState<any[]>([]);
 
@@ -305,6 +309,18 @@ export default function AppShell() {
   }, [estimateOps, estimateDeps, opResources]);
   const modeHint = useMemo(() => recommendMode(modeContext), [modeContext]);
   const activeMode = CALC_MODES.find((m) => m.id === (calcMode || modeHint.modeId)) || CALC_MODES[0];
+
+  // Помощник выбора: из ответов собирается подходящий режим — про методы человеку думать не нужно
+  const wizardMode = useMemo(() => {
+    if (wizKnown === 'dates') return 'plan';
+    if (wizNeed === 'plan') return 'plan';
+    if (wizRes === 'portfolio') return 'portfolio';
+    if (wizRes === 'project') return 'resources';
+    if (wizNeed === 'probability') return 'monte-carlo';
+    if (wizNeed === 'both') return 'both';
+    if (wizNeed === 'protect') return 'buffers';
+    return 'pert';
+  }, [wizKnown, wizNeed, wizRes]);
   const loadOpResources = async (projectId: string) => {
     try {
       const data: any = await apiF(`/projects/${projectId}/operations/resources-map`);
@@ -4953,6 +4969,46 @@ const changeOrderStatus = async (o: any, status: string) => {
                       </span>
                     </div>
                     <div style={{ fontSize: 11.5, color: '#5A7090' }}>Почему: {modeHint.reason}</div>
+
+                    {/* Помощник выбора: три вопроса о задаче — режим подбирается по ответам */}
+                    <div style={{ border: '1px dashed #2A4060', borderRadius: 8, padding: '10px 12px', display: 'grid', gap: 8 }}>
+                      <div style={{ fontSize: 12, color: '#8FA3BD' }}>
+                        Не хотите выбирать по названию — ответьте на три вопроса, и режим подберётся сам:
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                          что уже известно
+                          <select value={wizKnown} onChange={(e) => setWizKnown(e.target.value)} style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}>
+                            <option value="dates">только длительности</option>
+                            <option value="estimates">есть тройные оценки</option>
+                            <option value="history">есть история факта</option>
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                          что нужно узнать
+                          <select value={wizNeed} onChange={(e) => setWizNeed(e.target.value)} style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}>
+                            <option value="plan">срок и что критично</option>
+                            <option value="interval">быстрый интервал</option>
+                            <option value="probability">вероятность уложиться в дату</option>
+                            <option value="both">оба ответа для сравнения</option>
+                            <option value="protect">защитить дату запасом</option>
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                          ресурсы ограничивают
+                          <select value={wizRes} onChange={(e) => setWizRes(e.target.value)} style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}>
+                            <option value="none">нет</option>
+                            <option value="project">внутри проекта</option>
+                            <option value="portfolio">общие у нескольких проектов</option>
+                          </select>
+                        </label>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setCalcMode(wizardMode)} style={{ alignSelf: 'flex-end' }}>Подобрать режим</button>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#5A7090' }}>
+                        По вашим ответам подходит: <b style={{ color: '#B0C4DE' }}>{CALC_MODES.find((m) => m.id === wizardMode)?.title}</b>
+                        {wizardMode !== activeMode.id ? ' — нажмите «Подобрать режим», чтобы применить' : ' — уже выбран'}
+                      </div>
+                    </div>
 
                     <div style={{ border: '1px solid #1E3252', borderRadius: 8, background: '#0B1B33', padding: '10px 12px', display: 'grid', gap: 8 }}>
                       <div style={{ fontSize: 12.5, color: '#B0C4DE' }}><b>Что считает:</b> {activeMode.computes}</div>
