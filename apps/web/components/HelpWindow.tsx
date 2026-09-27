@@ -224,46 +224,54 @@ export default function HelpWindow({
           ) : (
             HELP_GROUPS.map((g) => {
               const isCollapsed = !!collapsed[g.title];
+              const groupActive = g.ids.includes(article.id);
               return (
-                <div key={g.title} style={{ marginBottom: 6 }}>
+                <div key={g.title} style={{ marginBottom: 10 }}>
+                  {/* Ветка дерева: заголовок раздела */}
                   <button
                     onClick={() => setCollapsed((c) => ({ ...c, [g.title]: !c[g.title] }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 0, padding: '5px 6px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--fg-3)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', background: 'transparent', border: 0, padding: '5px 6px 5px 4px', cursor: 'pointer', fontFamily: 'inherit', color: groupActive ? 'var(--fg-2)' : 'var(--fg-4)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}
                   >
-                    <span style={{ width: 10 }}>{isCollapsed ? '▸' : '▾'}</span>
-                    {g.title}
+                    <span style={{ width: 11, color: 'var(--fg-4)' }}>{isCollapsed ? '▸' : '▾'}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>{g.title}</span>
                   </button>
-                  {!isCollapsed &&
-                    g.ids.map((id) => {
-                      const a = helpArticle(id);
-                      if (!a) return null;
-                      const active = id === article.id;
-                      return (
-                        <button
-                          key={id}
-                          onClick={() => go(id)}
-                          title={HELP_STATE_LABEL[a.state]}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 7,
-                            width: '100%',
-                            textAlign: 'left',
-                            background: active ? 'rgba(59,130,246,.14)' : 'transparent',
-                            border: 0,
-                            borderLeft: '2px solid ' + (active ? 'var(--accent)' : 'transparent'),
-                            padding: '6px 8px',
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                            color: active ? 'var(--fg)' : 'var(--fg-2)',
-                            fontSize: 12.5,
-                          }}
-                        >
-                          <span style={{ width: 6, height: 6, borderRadius: 3, background: HELP_STATE_COLOR[a.state], flexShrink: 0 }} />
-                          <span style={{ flex: 1, minWidth: 0 }}>{a.title}</span>
-                        </button>
-                      );
-                    })}
+                  {/* Вложенность: статьи сдвинуты вправо и соединены направляющей линией */}
+                  {!isCollapsed && (
+                    <div style={{ marginLeft: 13, borderLeft: '1px solid var(--border)', paddingTop: 2, paddingBottom: 2 }}>
+                      {g.ids.map((id) => {
+                        const a = helpArticle(id);
+                        if (!a) return null;
+                        const active = id === article.id;
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => go(id)}
+                            title={HELP_STATE_LABEL[a.state]}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              width: '100%',
+                              textAlign: 'left',
+                              background: active ? 'rgba(59,130,246,.14)' : 'transparent',
+                              border: 0,
+                              borderLeft: '2px solid ' + (active ? 'var(--accent)' : 'transparent'),
+                              marginLeft: -1,
+                              padding: '6px 8px 6px 12px',
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                              color: active ? 'var(--fg)' : 'var(--fg-2)',
+                              fontSize: 12.5,
+                              fontWeight: active ? 600 : 400,
+                            }}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: 3, background: HELP_STATE_COLOR[a.state], flexShrink: 0 }} />
+                            <span style={{ flex: 1, minWidth: 0 }}>{a.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })
