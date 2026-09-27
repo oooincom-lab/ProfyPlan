@@ -134,6 +134,7 @@ export default function EstimateTable({
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; fileName: string } | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const [fillMode, setFillMode] = useState('25');
+  const [confirmClear, setConfirmClear] = useState(false);
 
   /**
    * Заполнение пустых оценок по варианту:
@@ -168,6 +169,36 @@ export default function EstimateTable({
         ? `Заполнено профилем ±${Math.round(p * 100)} %: строк ${filled}. Это допущение, а не измерение — проверьте и нажмите «Сохранить все».`
         : 'Заполнять нечего: у всех операций уже есть полная тройка оценок',
     );
+  };
+
+  /** Очистка всех оценок: сначала запрос подтверждения — действие необратимо. */
+  const clearAll = async () => {
+    const targets = operations.filter(
+      (o) => o.to_optimistic !== null && o.to_optimistic !== undefined || o.tm_likely !== null && o.tm_likely !== undefined || o.tp_pessimistic !== null && o.tp_pessimistic !== undefined,
+    );
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setNote(
+        `Очистить оценки у всех операций? Будут затронуты строки: ${targets.length}. Сначала можно выгрузить таблицу в файл — действие необратимо.`,
+      );
+      return;
+    }
+    setConfirmClear(false);
+    setSavingId('all');
+    let cleared = 0;
+    for (const op of targets) {
+      try {
+        await onSave(op.id, { to_optimistic: null, tm_likely: null, tp_pessimistic: null, estimate_source: 'expert' } as any);
+        cleared += 1;
+      } catch {
+        setNote('Очистка прервана на строке: ' + op.name);
+        setSavingId(null);
+        return;
+      }
+    }
+    setDraft({});
+    setSavingId(null);
+    setNote(`Очищено строк: ${cleared}. Оценки можно ввести заново или заполнить профилем.`);
   };
 
   /** Сохранение всех изменённых строк: по одной, чтобы видеть ошибки и не потерять порядок оценок. */
@@ -335,6 +366,27 @@ export default function EstimateTable({
             title="Сохранить все изменённые строки"
           >
             {savingId === 'all' ? 'Сохраняю…' : 'Сохранить все'}
+          </button>
+          {Object.keys(draft).length ? (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setDraft({});
+                setNote('Изменения сброшены — данные не тронуты');
+              }}
+              title="Отменить несохранённые изменения в таблице"
+            >
+              Сбросить изменения
+            </button>
+          ) : null}
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={savingId === 'all'}
+            onClick={clearAll}
+            title="Очистить тройные оценки у всех операций (с подтверждением)"
+            style={confirmClear ? { borderColor: '#F59E0B', color: '#FCD34D' } : undefined}
+          >
+            {confirmClear ? 'Подтвердить очистку' : 'Очистить все'}
           </button>
           <input
             ref={fileRef}
