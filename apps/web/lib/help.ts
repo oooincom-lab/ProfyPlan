@@ -87,6 +87,19 @@ export const HELP_ARTICLES: HelpArticle[] = [
     links: ['calc-pert', 'calc-mc', 'methods'],
   },
   {
+    id: 'calc-modes',
+    title: 'Режимы расчёта',
+    summary: 'Семь режимов: что считает, что получите, что нужно, чего не будет, время и когда выбирать',
+    state: 'check',
+    purpose:
+      'Режим собирает слои расчёта сам: структура → ограничения → анализ → защита срока. Выбирается в настройках проекта; его номер и название записываются в запуск, поэтому в реестре видно, каким режимом получена цифра. Список ниже строится из того же описания, что и в настройках — расходиться не может.',
+    limits: [
+      'Бессмысленное сочетание объясняется, а не запускается: например, Монте-Карло без тройных оценок.',
+      'Одно число — одно происхождение: если включены PERT и Монте-Карло, показываются оба ответа с подписью, без усреднения.',
+    ],
+    links: ['calc-overview', 'calc-estimates', 'calc-pert', 'calc-mc', 'methods'],
+  },
+  {
     id: 'calc-overview',
     title: 'Расчёты — обзор',
     summary: 'Вкладка «Обзор» раздела «Расчёты»: что здесь показывается и почему часть плиток пуста',
@@ -583,7 +596,8 @@ export function helpArticle(id: string | null | undefined): HelpArticle | null {
 export const HELP_GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Начало', ids: ['help', 'workspace', 'calculations'] },
   { title: 'Проект', ids: ['project-summary', 'orders', 'order-window', 'bom', 'groups', 'scale', 'new-project', 'archive'] },
-  { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-gantt', 'calc-network', 'calc-estimates', 'calc-pert', 'calc-mc', 'calc-runs'] },
+  { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-estimates', 'calc-gantt', 'calc-network', 'calc-pert', 'calc-mc', 'calc-runs'] },
+  { title: 'Методы и режимы', ids: ['calc-modes', 'methods'] },
   { title: 'Настройки', ids: ['project-settings', 'views', 'tools'] },
   { title: 'Справочники и ресурсы', ids: ['directories', 'resource-window', 'calendar-window'] },
   { title: 'Аналитика', ids: ['ccm', 'reports'] },

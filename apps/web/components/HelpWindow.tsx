@@ -21,6 +21,7 @@ import {
   helpSnippet,
   openHelp,
 } from '@/lib/help';
+import { CALC_MODES } from '@/lib/calcModes';
 
 /** Кнопка «?» — единая для шапок окон, шапки панели и ленты вкладок раздела «Расчёты». */
 export function HelpButton({ articleId, title, compact }: { articleId: string; title?: string; compact?: boolean }) {
@@ -297,6 +298,22 @@ export default function HelpContent({
                   </li>
                 ))}
               </ul>
+            </Section>
+          ) : null}
+
+          {article.id === 'calc-modes' ? (
+            <Section title="Режимы (из общего описания)">
+              <div style={{ display: 'grid', gap: 8 }}>
+                {CALC_MODES.map((m) => (
+                  <div key={m.id} style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 10px' }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 3 }}>{m.title}</div>
+                    <div style={{ ...bodyText, fontSize: 12 }}><b>Считает:</b> {m.computes}</div>
+                    <div style={{ ...bodyText, fontSize: 12 }}><b>Получите:</b> {m.gives.join(' · ')}</div>
+                    <div style={{ ...bodyText, fontSize: 12, color: 'var(--fg-3)' }}><b>Не будет:</b> {m.limits.join('; ')}</div>
+                    <div style={{ ...bodyText, fontSize: 12, color: 'var(--fg-4)' }}>{m.time} · {m.when}</div>
+                  </div>
+                ))}
+              </div>
             </Section>
           ) : null}
 

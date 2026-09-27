@@ -92,6 +92,8 @@ export type CalculationsTabsProps = {
   dataVersion?: string | null;
   /** Есть несохранённые изменения относительно последнего расчёта. */
   dirty?: boolean;
+  /** Активный режим расчёта (блок 6.29) — показывается в полосе контекста */
+  modeTitle?: string | null;
   onRecalculate?: () => void;
   onOpenSettings?: () => void;
 };
@@ -105,6 +107,7 @@ export default function CalculationsTabs({
   dataDate,
   dataVersion,
   dirty = false,
+  modeTitle,
   onRecalculate,
   onOpenSettings,
 }: CalculationsTabsProps) {
@@ -164,6 +167,13 @@ export default function CalculationsTabs({
           <span style={{ color: 'var(--fg-2)' }}>{dataDate || 'нет данных'}</span>
           {dataVersion ? <span style={{ color: 'var(--fg-3)' }}>· версия {dataVersion}</span> : null}
         </span>
+
+        {modeTitle ? (
+          <span style={{ ...chipStyle, borderColor: 'var(--accent)' }} title="Режим расчёта из настроек проекта: его номер и название записываются в запуск">
+            <span style={{ color: 'var(--fg-4)' }}>режим:</span>
+            <b style={{ color: 'var(--fg-2)', fontWeight: 600 }}>{modeTitle}</b>
+          </span>
+        ) : null}
 
         {dirty ? (
           <span style={{ ...chipStyle, borderColor: 'var(--warning)', color: 'var(--warning)' }}>есть несохранённые изменения</span>
