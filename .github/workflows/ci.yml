@@ -28,6 +28,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
+      - name: Схема базы собирается с нуля
+        run: python -m scripts.db_upgrade
+        env:
+          DATABASE_URL: postgresql+asyncpg://profyplan:test@localhost:5432/profyplan_test
+      - name: Схема базы совпадает с моделями
+        run: alembic check
+        env:
+          DATABASE_URL: postgresql+asyncpg://profyplan:test@localhost:5432/profyplan_test
       - run: pytest --cov=app --cov-report=term
         env:
           DATABASE_URL: postgresql+asyncpg://profyplan:test@localhost:5432/profyplan_test

@@ -39,8 +39,10 @@ jobs:
             docker compose build api web
             docker compose up -d --force-recreate api web
             sleep 10
-            # миграции базы — обязательный шаг, иначе новый код падает на новой схеме
-            docker compose exec -T api alembic upgrade head
+            # схема базы — обязательный шаг, иначе новый код падает на новой схеме.
+            # Скрипт разбирает три случая: пустая база, база прежней цепочки
+            # (только отмечается, схема не меняется) и текущая цепочка.
+            docker compose exec -T api python -m scripts.db_upgrade
             docker compose exec -T api alembic current
             # ОБЯЗАТЕЛЬНО: пересоздание api/web выдаёт им новые внутренние адреса.
             # Прокси держит разрешённые имена в памяти с момента запуска, поэтому
