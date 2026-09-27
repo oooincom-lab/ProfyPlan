@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 // Демо-вход: значения по умолчанию — боевые; локально переопределяются окружением
 const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || 'planner@demo.ru';
@@ -3327,7 +3327,6 @@ const changeOrderStatus = async (o: any, status: string) => {
             {view === 'projects' && <div className="tb-sub">{projects.length} проектов</div>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <HelpButton articleId={viewHelpId} title="Справка по разделу" />
             {view === 'project-dashboard' && (
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
@@ -3361,6 +3360,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             onClick={() => selectedProject && loadProjectGantt(selectedProject)}>▶ Рассчитать проект</button>
         )}
         <button onClick={onRefresh} className="btn btn-secondary btn-sm" title="Обновить данные" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></button>
+            <HelpButton articleId={viewHelpId} title="Справка по разделу" />
           </div>
         </div>
 

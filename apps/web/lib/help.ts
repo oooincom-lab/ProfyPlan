@@ -41,8 +41,7 @@ export const HELP_STATE_COLOR: Record<HelpState, string> = {
   planned: 'var(--fg-4)',
 };
 
-export const HELP_ARTICLES: HelpArticle[] = [
-  {
+export const HELP_ARTICLES: HelpArticle[] = [  {
     id: 'calc-overview',
     title: 'Расчёты — обзор',
     summary: 'Вкладка «Обзор» раздела «Расчёты»: что здесь показывается и почему часть плиток пуста',
@@ -52,8 +51,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     steps: [
       'Откройте проект в дереве слева и выберите «📊 Расчёты».',
       'В полосе контекста видно область расчёта, активные методы и дату с версией данных последнего расчёта.',
-      'Кнопка «Пересчитать» выполняет расчёт и сохраняет его в реестр запусков.',
-      'Плитки «нет данных» честно показывают, что для них ещё нет источника: например, p50/p80/p95 появятся вместе со страницами PERT и Монте-Карло.',
+      'Кнопка «Пересчитать» выполняет расчёт и сохраняет его в реестр запусков — см. [[calc-runs|реестр запусков]].',
+      'Плитки «нет данных» честно показывают, что для них ещё нет источника: например, [[calc-pert|PERT]] и [[calc-mc|Монте-Карло]] пока не считаются — страниц нет.',
     ],
     limits: [
       'PERT и Монте-Карло пока не считаются: вкладки видны, но страницы появятся в блоках 6.18 и 6.19.',
@@ -275,6 +274,78 @@ export const HELP_ARTICLES: HelpArticle[] = [
 export function helpArticle(id: string | null | undefined): HelpArticle | null {
   if (!id) return null;
   return HELP_ARTICLES.find((a) => a.id === id) || null;
+}
+
+/** Разделы справки — дерево слева. Порядок статей в разделах = порядок перехода «дальше». */
+export const HELP_GROUPS: { title: string; ids: string[] }[] = [
+  { title: 'Начало', ids: ['calculations'] },
+  { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-gantt', 'calc-network', 'calc-pert', 'calc-mc', 'calc-runs'] },
+  { title: 'Настройки', ids: ['project-settings', 'views'] },
+  { title: 'Заказы и состав', ids: ['orders', 'order-window', 'bom'] },
+  { title: 'Справочники и ресурсы', ids: ['directories', 'resource-window', 'calendar-window'] },
+  { title: 'Методы', ids: ['methods'] },
+];
+
+/** Плоский порядок статей — для переходов «назад / дальше». */
+export function helpOrder(): string[] {
+  return HELP_GROUPS.flatMap((g) => g.ids);
+}
+
+/** В каком разделе живёт статья — для хлебных крошек. */
+export function helpGroupOf(id: string): string {
+  const g = HELP_GROUPS.find((x) => x.ids.includes(id));
+  return g ? g.title : 'Справка';
+}
+
+/** Поиск по справке: заголовок, краткое описание, назначение, поля, расчёт, ограничения. */
+export function helpSearch(query: string): HelpArticle[] {
+  const q = (query || '').trim().toLowerCase();
+  if (q.length < 2) return [];
+  const hay = (a: HelpArticle) =>
+    [
+      a.title,
+      a.summary,
+      a.purpose,
+      ...(a.steps || []),
+      ...(a.fields || []).flat(),
+      ...(a.calc || []),
+      ...(a.limits || []),
+    ]
+      .join(' ')
+      .toLowerCase();
+  return HELP_ARTICLES.filter((a) => hay(a).includes(q));
+}
+
+/** Строка совпадения для выдачи поиска: короткий фрагмент вокруг найденного слова. */
+export function helpSnippet(a: HelpArticle, query: string): string {
+  const q = (query || '').trim().toLowerCase();
+  const source = [a.summary, a.purpose, ...(a.steps || []), ...(a.limits || [])].join(' ');
+  const pos = q ? source.toLowerCase().indexOf(q) : -1;
+  if (pos < 0) return a.summary;
+  const from = Math.max(0, pos - 60);
+  return (from > 0 ? '…' : '') + source.slice(from, pos + 90).trim() + '…';
+}
+
+/**
+ * Ссылки внутри текста статьи: `[[id]]` — ссылка с названием статьи,
+ * `[[id|свой текст]]` — ссылка со своим текстом. Позволяет вести читателя по справке,
+ * а не заставлять его искать статью в списке.
+ */
+export type HelpTextPart = { text: string; id?: string };
+
+export function helpInline(text: string): HelpTextPart[] {
+  const out: HelpTextPart[] = [];
+  const re = /\[\[([a-z0-9-]+)(?:\|([^\]]+))?\]\]/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index) });
+    const target = helpArticle(m[1]);
+    out.push({ text: m[2] || (target ? target.title : m[1]), id: target ? target.id : undefined });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
 }
 
 /**

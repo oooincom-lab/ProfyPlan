@@ -1,19 +1,28 @@
 'use client';
 /**
- * Окно справки (блок 6.27 плана; спецификация — Дополнение 14 промта).
- *
- * Одно окно на всё приложение: содержимое переключается по модулю. Открывается поверх
- * рабочего экрана — место работы не теряется. Кнопку «?» в шапке окон и в шапке панели
- * даёт контекст справки, поэтому текст статьи живёт в одном месте (lib/help.ts).
+ * Окно справки (блок 6.27). Устройство — как у нормальных справочных сайтов:
+ *   • поиск сверху (по заголовку, описанию, шагам, полям, расчёту и ограничениям);
+ *   • дерево разделов слева, активная статья подсвечена;
+ *   • хлебные крошки, ссылки внутри текста, переходы «назад / дальше по разделу»;
+ *   • окно можно тащить за шапку — место работы не теряется.
+ * Одно окно на всё приложение: содержимое переключается по модулю (см. lib/help.ts).
  */
-import React from 'react';
-import { HELP_ARTICLES, HELP_STATE_COLOR, HELP_STATE_LABEL, helpArticle, openHelp } from '@/lib/help';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  HELP_ARTICLES,
+  HELP_GROUPS,
+  HELP_STATE_COLOR,
+  HELP_STATE_LABEL,
+  helpArticle,
+  helpGroupOf,
+  helpInline,
+  helpOrder,
+  helpSearch,
+  helpSnippet,
+  openHelp,
+} from '@/lib/help';
 
-/**
- * Кнопка «?» — единая для шапок окон, шапки панели и ленты вкладок раздела «Расчёты».
- * Ничего не знает о том, кто её отрисовал: отправляет событие, окно справки ловит его
- * в рабочем столе. Поэтому новую кнопку можно поставить где угодно без прокидывания свойств.
- */
+/** Кнопка «?» — единая для шапок окон, шапки панели и ленты вкладок раздела «Расчёты». */
 export function HelpButton({ articleId, title, compact }: { articleId: string; title?: string; compact?: boolean }) {
   return (
     <button
@@ -24,20 +33,6 @@ export function HelpButton({ articleId, title, compact }: { articleId: string; t
         e.stopPropagation();
         openHelp(articleId);
       }}
-      style={
-        compact
-          ? undefined
-          : {
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--fg-3)',
-              borderRadius: 6,
-              padding: '2px 9px',
-              fontSize: 12,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }
-      }
     >
       ?
     </button>
@@ -53,6 +48,36 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** Текст со ссылками [[id]] / [[id|текст]] — чтобы читатель шёл по справке, а не искал статью. */
+function RichText({
+  text,
+  style,
+  onSelect,
+}: {
+  text: string;
+  style?: React.CSSProperties;
+  onSelect: (id: string) => void;
+}) {
+  const parts = helpInline(text);
+  return (
+    <span style={style}>
+      {parts.map((p, i) =>
+        p.id ? (
+          <button
+            key={i}
+            onClick={() => onSelect(p.id!)}
+            style={{ background: 'none', border: 0, padding: 0, color: '#93C5FD', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+          >
+            {p.text}
+          </button>
+        ) : (
+          <React.Fragment key={i}>{p.text}</React.Fragment>
+        ),
+      )}
+    </span>
+  );
+}
+
 export default function HelpWindow({
   articleId,
   onSelect,
@@ -62,112 +87,283 @@ export default function HelpWindow({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const [query, setQuery] = useState('');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [history, setHistory] = useState<string[]>([]);
+  const [pos, setPos] = useState<{ left: number | null; top: number }>({ left: null, top: 72 });
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+
   const article = helpArticle(articleId) || HELP_ARTICLES[0];
+  const results = useMemo(() => helpSearch(query), [query]);
+  const order = helpOrder();
+  const idx = order.indexOf(article.id);
+  const prev = idx > 0 ? helpArticle(order[idx - 1]) : null;
+  const next = idx >= 0 && idx < order.length - 1 ? helpArticle(order[idx + 1]) : null;
+
+  const go = (id: string) => {
+    if (!id || id === article.id) return;
+    setHistory((h) => [...h, article.id]);
+    setQuery('');
+    onSelect(id);
+  };
+  const back = () => {
+    setHistory((h) => {
+      if (!h.length) return h;
+      const last = h[h.length - 1];
+      onSelect(last);
+      return h.slice(0, -1);
+    });
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    drag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    setPos({ left: Math.max(8, e.clientX - drag.current.dx), top: Math.max(8, e.clientY - drag.current.dy) });
+  };
+  const onPointerUp = () => {
+    drag.current = null;
+  };
+
   const bodyText: React.CSSProperties = { fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 };
+  const linkStyle: React.CSSProperties = {
+    background: 'transparent',
+    border: '1px solid var(--border-2)',
+    color: '#93C5FD',
+    borderRadius: 6,
+    padding: '3px 10px',
+    fontSize: 11.5,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  };
 
   return (
     <div
       className="pp-win focus"
-      style={{ position: 'fixed', right: 24, top: 72, width: 470, maxWidth: 'calc(100vw - 48px)', height: 640, maxHeight: 'calc(100vh - 120px)', zIndex: 900, display: 'flex', flexDirection: 'column' }}
+      style={{
+        position: 'fixed',
+        left: pos.left == null ? undefined : pos.left,
+        right: pos.left == null ? 24 : undefined,
+        top: pos.top,
+        width: 880,
+        maxWidth: 'calc(100vw - 32px)',
+        height: 660,
+        maxHeight: 'calc(100vh - 96px)',
+        zIndex: 900,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
-      <div className="pp-win-title" style={{ cursor: 'default' }}>
+      <div
+        className="pp-win-title"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22D3EE', flexShrink: 0 }} />
         <span className="ttl">Справка</span>
-        <button className="pp-wbtn close" title="Закрыть" onClick={onClose}>✕</button>
+        <button className="pp-wbtn" title="Назад" onClick={back}>↩</button>
+        <button className="pp-wbtn close" title="Закрыть (Esc)" onClick={onClose}>✕</button>
       </div>
 
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
-        <select
-          value={article.id}
-          onChange={(e) => onSelect(e.target.value)}
-          style={{ flex: 1, minWidth: 200, background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, fontFamily: 'inherit' }}
-        >
-          {HELP_ARTICLES.map((a) => (
-            <option key={a.id} value={a.id}>{a.title}</option>
-          ))}
-        </select>
-        <span
-          title="Состояние статьи: справка описывает то, что код делает, а не то, что планировалось"
-          style={{ fontSize: 10.5, color: HELP_STATE_COLOR[article.state], border: '1px solid ' + HELP_STATE_COLOR[article.state], borderRadius: 10, padding: '1px 8px', whiteSpace: 'nowrap' }}
-        >
-          {HELP_STATE_LABEL[article.state]}{article.block ? ' — блок ' + article.block : ''}
-        </span>
+      {/* ─── Поиск и хлебные крошки ─── */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && results.length) go(results[0].id);
+          }}
+          placeholder="Поиск по справке: поле, окно, метод, расчёт…"
+          style={{ flex: 1, minWidth: 160, background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 6, padding: '6px 10px', fontSize: 12.5, outline: 'none', fontFamily: 'inherit' }}
+        />
+        {query ? <span style={{ fontSize: 11.5, color: 'var(--fg-4)', whiteSpace: 'nowrap' }}>{results.length} найдено</span> : null}
       </div>
 
-      <div style={{ overflow: 'auto', padding: '12px 14px', display: 'grid', gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 4 }}>{article.title}</div>
-          <div style={{ ...bodyText, color: 'var(--fg-3)' }}>{article.summary}</div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        {/* ─── Дерево разделов (или выдача поиска) ─── */}
+        <div style={{ width: 250, flexShrink: 0, borderRight: '1px solid var(--border)', overflow: 'auto', padding: '8px 6px' }}>
+          {query.trim().length >= 2 ? (
+            results.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--fg-4)', padding: '8px 6px' }}>Ничего не нашлось. Попробуйте другое слово — например, «резерв», «прогоны», «заказ».</div>
+            ) : (
+              results.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => go(a.id)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 0, borderLeft: '2px solid transparent', padding: '6px 8px', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{a.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 2 }}>{helpSnippet(a, query)}</div>
+                </button>
+              ))
+            )
+          ) : (
+            HELP_GROUPS.map((g) => {
+              const isCollapsed = !!collapsed[g.title];
+              return (
+                <div key={g.title} style={{ marginBottom: 6 }}>
+                  <button
+                    onClick={() => setCollapsed((c) => ({ ...c, [g.title]: !c[g.title] }))}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 0, padding: '5px 6px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--fg-3)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em' }}
+                  >
+                    <span style={{ width: 10 }}>{isCollapsed ? '▸' : '▾'}</span>
+                    {g.title}
+                  </button>
+                  {!isCollapsed &&
+                    g.ids.map((id) => {
+                      const a = helpArticle(id);
+                      if (!a) return null;
+                      const active = id === article.id;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => go(id)}
+                          title={HELP_STATE_LABEL[a.state]}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 7,
+                            width: '100%',
+                            textAlign: 'left',
+                            background: active ? 'rgba(59,130,246,.14)' : 'transparent',
+                            border: 0,
+                            borderLeft: '2px solid ' + (active ? 'var(--accent)' : 'transparent'),
+                            padding: '6px 8px',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            color: active ? 'var(--fg)' : 'var(--fg-2)',
+                            fontSize: 12.5,
+                          }}
+                        >
+                          <span style={{ width: 6, height: 6, borderRadius: 3, background: HELP_STATE_COLOR[a.state], flexShrink: 0 }} />
+                          <span style={{ flex: 1, minWidth: 0 }}>{a.title}</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              );
+            })
+          )}
         </div>
 
-        <Section title="Назначение">
-          <div style={bodyText}>{article.purpose}</div>
-        </Section>
+        {/* ─── Статья ─── */}
+        <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: '12px 16px', display: 'grid', gap: 12, alignContent: 'start' }}>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+            Справка <span style={{ color: 'var(--fg-4)' }}>›</span> {helpGroupOf(article.id)} <span>›</span> <span style={{ color: 'var(--fg-3)' }}>{article.title}</span>
+          </div>
 
-        {article.steps?.length ? (
-          <Section title="Как пользоваться">
-            <ol style={{ margin: 0, paddingLeft: 18, ...bodyText }}>
-              {article.steps.map((s, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>{s}</li>
-              ))}
-            </ol>
-          </Section>
-        ) : null}
-
-        {article.fields?.length ? (
-          <Section title="Поля и значения">
-            <table className="tbl">
-              <tbody>
-                {article.fields.map(([k, v]) => (
-                  <tr key={k}>
-                    <td style={{ whiteSpace: 'nowrap', color: 'var(--fg)' }}>{k}</td>
-                    <td>{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
-        ) : null}
-
-        {article.calc?.length ? (
-          <Section title="Как считается">
-            <ul style={{ margin: 0, paddingLeft: 18, ...bodyText }}>
-              {article.calc.map((s, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>{s}</li>
-              ))}
-            </ul>
-          </Section>
-        ) : null}
-
-        {article.limits?.length ? (
-          <Section title="Ограничения">
-            <ul style={{ margin: 0, paddingLeft: 18, ...bodyText, color: 'var(--fg-3)' }}>
-              {article.limits.map((s, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>{s}</li>
-              ))}
-            </ul>
-          </Section>
-        ) : null}
-
-        {article.links?.length ? (
-          <Section title="Смотрите также">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {article.links.map((id) => {
-                const a = helpArticle(id);
-                if (!a) return null;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => onSelect(id)}
-                    style={{ background: 'transparent', border: '1px solid var(--border-2)', color: '#93C5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    {a.title}
-                  </button>
-                );
-              })}
+          <div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>{article.title}</span>
+              <span
+                title="Справка описывает то, что код делает, а не то, что планировалось"
+                style={{ fontSize: 10.5, color: HELP_STATE_COLOR[article.state], border: '1px solid ' + HELP_STATE_COLOR[article.state], borderRadius: 10, padding: '1px 8px', whiteSpace: 'nowrap' }}
+              >
+                {HELP_STATE_LABEL[article.state]}{article.block ? ' — блок ' + article.block : ''}
+              </span>
             </div>
+            <div style={{ ...bodyText, color: 'var(--fg-3)', marginTop: 4 }}>{article.summary}</div>
+          </div>
+
+          <Section title="Назначение">
+            <RichText text={article.purpose} style={bodyText} onSelect={go} />
           </Section>
-        ) : null}
+
+          {article.steps?.length ? (
+            <Section title="Как пользоваться">
+              <ol style={{ margin: 0, paddingLeft: 18, ...bodyText }}>
+                {article.steps.map((s, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <RichText text={s} onSelect={go} />
+                  </li>
+                ))}
+              </ol>
+            </Section>
+          ) : null}
+
+          {article.fields?.length ? (
+            <Section title="Поля и значения">
+              <table className="tbl">
+                <tbody>
+                  {article.fields.map(([k, v]) => (
+                    <tr key={k}>
+                      <td style={{ whiteSpace: 'nowrap', color: 'var(--fg)' }}>{k}</td>
+                      <td>
+                        <RichText text={v} onSelect={go} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Section>
+          ) : null}
+
+          {article.calc?.length ? (
+            <Section title="Как считается">
+              <ul style={{ margin: 0, paddingLeft: 18, ...bodyText }}>
+                {article.calc.map((s, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <RichText text={s} onSelect={go} />
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : null}
+
+          {article.limits?.length ? (
+            <Section title="Ограничения">
+              <ul style={{ margin: 0, paddingLeft: 18, ...bodyText, color: 'var(--fg-3)' }}>
+                {article.limits.map((s, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <RichText text={s} onSelect={go} />
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : null}
+
+          {article.links?.length ? (
+            <Section title="Смотрите также">
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {article.links.map((id) => {
+                  const a = helpArticle(id);
+                  if (!a) return null;
+                  return (
+                    <button key={id} onClick={() => go(id)} style={linkStyle}>
+                      {a.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+          ) : null}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            {prev ? (
+              <button onClick={() => go(prev.id)} style={linkStyle} title="Предыдущая статья раздела">← {prev.title}</button>
+            ) : (
+              <span />
+            )}
+            {next ? (
+              <button onClick={() => go(next.id)} style={linkStyle} title="Следующая статья раздела">{next.title} →</button>
+            ) : (
+              <span />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
