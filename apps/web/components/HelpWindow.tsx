@@ -15,6 +15,7 @@ import {
   helpArticle,
   helpGroupOf,
   helpInline,
+  hintEntries,
   helpOrder,
   helpSearch,
   helpSnippet,
@@ -297,6 +298,29 @@ export default function HelpContent({
                 ))}
               </ul>
             </Section>
+          ) : null}
+
+          {article.id === 'calc-network' ? (
+            <>
+              <Section title="Подсказки органов управления (из общего словаря)">
+                <ul style={{ margin: 0, paddingLeft: 18, ...bodyText }}>
+                  {hintEntries('graph').map((h) => (
+                    <li key={h.key} style={{ marginBottom: 5 }}>
+                      <RichText text={h.text} onSelect={go} />
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+              <Section title="Индикаторы, цвета и пороги">
+                <ul style={{ margin: 0, paddingLeft: 18, ...bodyText }}>
+                  {hintEntries('indicator').map((h) => (
+                    <li key={h.key} style={{ marginBottom: 5 }}>
+                      <RichText text={h.text} onSelect={go} />
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            </>
           ) : null}
 
           {article.links?.length ? (

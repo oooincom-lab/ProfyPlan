@@ -417,6 +417,15 @@ export function hintArticle(group: 'graph' | 'indicator'): string {
   return HINT_ARTICLE_BY_GROUP[group] || 'calc-network';
 }
 
+/**
+ * Подсказки группы в виде списка — для показа прямо в статье (вкладка «Сеть CPM»).
+ * Подсказка и статья берут текст из одного места, поэтому расхождение невозможно.
+ */
+export function hintEntries(group: 'graph' | 'indicator'): { key: string; text: string }[] {
+  const source = group === 'graph' ? CPM_GRAPH_HINTS : CPM_INDICATOR_HINTS;
+  return Object.entries(source as Record<string, string>).map(([key, text]) => ({ key, text }));
+}
+
 /** Справка органов управления вида «Сетевой график» (четыре вопроса одним текстом). */
 export const CPM_GRAPH_HINTS = {
   units:
