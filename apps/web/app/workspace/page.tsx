@@ -39,6 +39,7 @@ import EstimateTable from '@/components/EstimateTable';
 import PertPage from '@/components/PertPage';
 import McPage from '@/components/McPage';
 import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
+import { cpm as netCpm, scenario as netScenario } from '@/lib/network';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
@@ -293,11 +294,25 @@ export default function AppShell() {
     setEstimateOps((prev) => prev.map((o) => (o.id === opId ? { ...o, ...(saved || patch) } : o)));
   };
   useEffect(() => {
-    if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert' || calcTab === 'monte-carlo') && selectedProject) {
+    if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert' || calcTab === 'monte-carlo' || calcTab === 'overview') && selectedProject) {
       loadEstimates(selectedProject.id);
       if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
+      if (calcTab === 'overview') loadDeps(selectedProject.id);
     }
   }, [view, calcTab, selectedProject?.id]);
+
+  // Сценарный диапазон (страница «Обзор»): тот же расчёт при всех длительностях ×0,85 и ×1,25.
+  // Это сценарии, а не вероятности: все работы одновременно быстрее или медленнее — так не бывает,
+  // зато видно, насколько срок чувствителен к ошибке в длительностях.
+  const scenarioRange = useMemo(() => {
+    if (calcTab !== 'overview') return null;
+    const netOps = estimateOps
+      .map((o) => ({ id: o.id as string, duration: Number(o.duration_base || 0) }))
+      .filter((o) => o.duration > 0);
+    if (netOps.length < 2 || !estimateDeps.length) return null;
+    const base = netCpm(netOps, estimateDeps).length;
+    return { low: netScenario(netOps, estimateDeps, 0.85), base, high: netScenario(netOps, estimateDeps, 1.25) };
+  }, [calcTab, estimateOps, estimateDeps]);
 
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
@@ -3720,6 +3735,25 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 6 }}>
                     Оси читаются из строки проекта (default_method: {calcMethods.raw}). Раздельные настройки расчёта — блок 6.16.7.
                   </div>
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Сценарный диапазон срока</div>
+                  {scenarioRange ? (
+                    <>
+                      <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
+                        быстрее ×0,85 — {Math.round(scenarioRange.low / 24)} дн · расчёт — {Math.round(scenarioRange.base / 24)} дн · медленнее ×1,25 — {Math.round(scenarioRange.high / 24)} дн
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 6 }}>
+                        Это <b>сценарии, а не вероятности</b>: все длительности одновременно уменьшены или увеличены. В жизни одни работы
+                        опережают план, а другие отстают — для вероятностей нужны тройные оценки (вкладка «Оценки») и страница PERT.
+                        Зато видно, насколько срок чувствителен к ошибке в длительностях: разброс диапазона {Math.round((scenarioRange.high - scenarioRange.low) / 24)} дн.
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>
+                      Нечего считать: нужны операции с длительностями и связи между ними.
+                    </div>
+                  )}
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Последний расчёт</div>
