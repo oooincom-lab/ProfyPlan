@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Сборка веб-версии плана из канонического текста.
  *
@@ -16,8 +16,22 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = join(ROOT, 'profyplan-план-реализации.md');
-const OUT = join(ROOT, 'profyplan-план-реализации.html');
+
+// Исходный документ берём из аргумента, иначе — канонический план.
+//   node scripts/render_plan.mjs                          — собрать план
+//   node scripts/render_plan.mjs profyplan-тест-план.md   — собрать тест-план
+const ARGS = process.argv.slice(2);
+const SRC_NAME = ARGS[0] || 'profyplan-план-реализации.md';
+const OUT_NAME = ARGS[1] || SRC_NAME.replace(/\.md$/i, '.html');
+const SRC = join(ROOT, SRC_NAME);
+const OUT = join(ROOT, OUT_NAME);
+
+// Защита от порчи документов: текстовый источник нельзя перезаписывать выводом.
+if (OUT === SRC || /\.md$/i.test(OUT)) {
+  console.error('[plan] Отказ: целевой файл — текстовый. Сборка пишет только .html — проверьте аргументы.');
+  process.exit(1);
+}
+
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
