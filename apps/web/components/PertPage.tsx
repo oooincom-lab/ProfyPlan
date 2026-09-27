@@ -41,8 +41,76 @@ function hoursText(hours: number): string {
   return rest === 0 ? `${sign}${days} дн` : `${sign}${days} дн ${rest} ч`;
 }
 
-export default function PertPage({ operations, dependencies = [], resources = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[] }) {
+export type PertOrder = { id: string; ext_id?: string | null; parent_order_id?: string | null; specification_name?: string | null; name?: string | null };
+
+export default function PertPage({ operations, dependencies = [], resources = [], orders = [] }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[]; orders?: PertOrder[] }) {
   const [bufferK, setBufferK] = useState(2);
+  const [areaOrderId, setAreaOrderId] = useState('');
+
+  // Область расчёта: весь проект или ветка дерева заказов (заказ вместе со всеми дочерними)
+  const orderTree = useMemo(() => {
+    if (!orders.length) return [] as { id: string; label: string; depth: number }[];
+    const byParent = new Map<string, PertOrder[]>();
+    for (const o of orders) {
+      const key = o.parent_order_id || '';
+      const list = byParent.get(key) || [];
+      list.push(o);
+      byParent.set(key, list);
+    }
+    const out: { id: string; label: string; depth: number }[] = [];
+    const label = (o: PertOrder) => `${o.ext_id || ''} ${o.specification_name || o.name || ''}`.trim() || 'заказ';
+    const walk = (parent: string, depth: number, guard: Set<string>) => {
+      for (const o of byParent.get(parent) || []) {
+        if (guard.has(o.id)) continue;
+        guard.add(o.id);
+        out.push({ id: o.id, label: label(o), depth });
+        walk(o.id, depth + 1, guard);
+      }
+    };
+    walk('', 0, new Set<string>());
+    // заказы без родителя, не попавшие в обход (битые ссылки), добавляем плоско
+    for (const o of orders) if (!out.some((x) => x.id === o.id)) out.push({ id: o.id, label: label(o), depth: 0 });
+    return out;
+  }, [orders]);
+
+  const areaSubtree = useMemo(() => {
+    if (!areaOrderId) return null;
+    const children = new Map<string, string[]>();
+    for (const o of orders) {
+      if (!o.parent_order_id) continue;
+      const list = children.get(o.parent_order_id) || [];
+      list.push(o.id);
+      children.set(o.parent_order_id, list);
+    }
+    const ids = new Set<string>([areaOrderId]);
+    const stack = [areaOrderId];
+    while (stack.length) {
+      const cur = stack.pop() as string;
+      for (const c of children.get(cur) || []) if (!ids.has(c)) { ids.add(c); stack.push(c); }
+    }
+    return ids;
+  }, [orders, areaOrderId]);
+
+  const areaOps = useMemo(
+    () => (areaSubtree ? operations.filter((o) => (o as any).order_id && areaSubtree.has((o as any).order_id)) : operations),
+    [operations, areaSubtree],
+  );
+  const areaLabel = areaOrderId ? orderTree.find((o) => o.id === areaOrderId)?.label || 'выбранная ветка' : 'весь проект';
+
+  /** Срез области из выполненного расчёта: состав и сумма ожидаемых — без критического пути и интервалов. */
+  const areaSlice = useMemo(() => {
+    const rows = areaOps
+      .map((o) => {
+        const to = num(o.to_optimistic);
+        const tm = num(o.tm_likely);
+        const tp = num(o.tp_pessimistic);
+        if (to === null || tm === null || tp === null) return null;
+        return { id: o.id, name: o.name, te: (to + 4 * tm + tp) / 6, sigma: (tp - to) / 6 };
+      })
+      .filter(Boolean) as { id: string; name: string; te: number; sigma: number }[];
+    const sumTe = rows.reduce((s, r) => s + r.te, 0);
+    return { rows, sumTe };
+  }, [areaOps]);
   const data = useMemo(() => {
     const withEstimates = operations
       .map((op) => {
@@ -190,8 +258,53 @@ export default function PertPage({ operations, dependencies = [], resources = []
             оценок у операций: {data.withEstimates.length} из {operations.length} · в критическом пути с оценками: {data.critical.length}
           </span>
         </div>
+        {orderTree.length ? (
+          <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'flex', gap: 6, alignItems: 'center' }}>
+            область расчёта
+            <select
+              value={areaOrderId}
+              onChange={(e) => setAreaOrderId(e.target.value)}
+              title="Весь проект или ветка заказов: заказ считается вместе со всеми дочерними"
+              style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 6, padding: '4px 8px', fontSize: 12, fontFamily: 'inherit', maxWidth: 320 }}
+            >
+              <option value="">весь проект</option>
+              {orderTree.map((o) => (
+                <option key={o.id} value={o.id}>{'\u00A0'.repeat(o.depth * 3) + o.label}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
       <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
+        {areaOrderId ? (
+          <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Область: {areaLabel} — срез из выполненного расчёта проекта</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
+              Операций в области: {areaSlice.rows.length} из {operations.length} · сумма ожидаемых длительностей: {hoursText(areaSlice.sumTe)}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+              Это срез, а не свой расчёт: критический путь и интервалы НЕ подписываются областью, потому что посчитаны по проекту целиком.
+              Свои интервалы области появятся после пересчёта по ней (следующий шаг, пункт 6.18.1 плана).
+            </div>
+            {areaSlice.rows.length ? (
+              <table className="tbl">
+                <thead><tr><th>Операция</th><th>Ожидаемая</th><th>Разброс σ</th></tr></thead>
+                <tbody>
+                  {areaSlice.rows.slice(0, 25).map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ maxWidth: 420 }}>{r.name}</td>
+                      <td className="t-mono">{r.te.toFixed(2)}</td>
+                      <td className="t-mono">{r.sigma.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>У операций этой области нет тройных оценок — заполните их на вкладке «Оценки».</div>
+            )}
+          </div>
+        ) : null}
+
         {noEstimates ? (
           <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
             Пока нечего считать: ни у одной операции нет трёх оценок. Заполните их на вкладке «Оценки» — и здесь появятся

@@ -44,6 +44,7 @@ class OperationOut(BaseModel):
     tm_likely: Optional[Decimal] = None
     tp_pessimistic: Optional[Decimal] = None
     estimate_source: Optional[str] = None
+    order_id: Optional[str] = None
     position: Optional[int] = None
     is_critical: bool = False
 

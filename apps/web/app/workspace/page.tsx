@@ -265,6 +265,16 @@ export default function AppShell() {
       setEstimateDeps([]);
     }
   };
+  // Заказы нужны для отбора области расчёта (весь проект · куст · ветка · заказ)
+  const [areaOrders, setAreaOrders] = useState<any[]>([]);
+  const loadAreaOrders = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/production-orders/?project_id=${projectId}`);
+      setAreaOrders(Array.isArray(data) ? data : data?.items || []);
+    } catch {
+      setAreaOrders([]);
+    }
+  };
   // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
   const [opResources, setOpResources] = useState<any[]>([]);
   const loadOpResources = async (projectId: string) => {
@@ -283,7 +293,7 @@ export default function AppShell() {
   useEffect(() => {
     if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert' || calcTab === 'monte-carlo') && selectedProject) {
       loadEstimates(selectedProject.id);
-      if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); }
+      if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
     }
   }, [view, calcTab, selectedProject?.id]);
 
@@ -3741,7 +3751,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
-              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} />
+              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} orders={areaOrders} />
             ) : (
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
