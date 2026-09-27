@@ -36,6 +36,22 @@ jobs:
             cd /opt/profyplan
             git fetch origin master
             git reset --hard origin/master
+
+            # Перед сборкой проверяем импорты: случай, когда файл в репозитории
+            # лежит в другом регистре, ломает Linux-сборку (ловушка 28.09.2026).
+            sh scripts/check-imports-case.sh
+
+            # Сборка занимает много места и кэш растёт без предела. 28.09.2026
+            # кэш занял 33,7 ГБ и сборка упала из-за нехватки диска. Если свободного
+            # места меньше 15 ГБ — сначала чистим кэш сборки (образы и данные не трогаем).
+            avail=$(df -Pk / | awk "NR==2 {print \$4}")
+            echo "свободно на диске, КБ: ${avail}"
+            if [ "${avail:-0}" -lt 15000000 ]; then
+              echo "мало места — очищаю кэш сборки"
+              docker builder prune -f || true
+              df -h / | tail -1
+            fi
+
             docker compose build api web
             docker compose up -d --force-recreate api web
             sleep 10
