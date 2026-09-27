@@ -5031,18 +5031,18 @@ const changeOrderStatus = async (o: any, status: string) => {
             padding: '6px 12px',
             borderRadius: 8,
             border: '1px solid #F59E0B',
-            background: 'rgba(245,158,11,0.14)',
+            background: '#231A06',
             color: '#FCD34D',
             fontSize: 12.5,
             zIndex: 5001,
-            boxShadow: '0 6px 18px rgba(0,0,0,.4)',
+            boxShadow: '0 8px 22px rgba(0,0,0,.55)',
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
             fontWeight: 600,
           }}
         >
           {helpPickMsg ? helpPickMsg : 'Режим «Что это?»: щёлкните по элементу'}
-          {helpPickMsg ? null : <span style={{ color: 'rgba(252,211,77,0.72)', fontWeight: 400 }}>Esc — отмена</span>}
+          {helpPickMsg ? null : <span style={{ color: '#F59E0B', fontWeight: 400 }}>Esc — отмена</span>}
         </div>
       </div>
     ) : null}
