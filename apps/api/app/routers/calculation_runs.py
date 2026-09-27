@@ -55,6 +55,7 @@ class RunOut(BaseModel):
     uncertainty_analysis: str
     data_fingerprint: Optional[str] = None
     data_date: Optional[datetime] = None
+    params: Optional[dict] = None
     status: str
     result: Optional[dict] = None
     error: Optional[str] = None
@@ -205,8 +206,6 @@ async def create_run(
             summary["notes"] = list(notes) + list(provided.get("notes") or [])
         if provided.get("iterations"):
             summary["iterations"] = provided.get("iterations")
-    except StopIteration:
-        pass
 
     run = CalculationRun(
         tenant_id=tenant_id,
