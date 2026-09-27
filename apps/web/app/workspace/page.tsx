@@ -249,24 +249,38 @@ export default function AppShell() {
   // F1 — статья текущего модуля; Shift+F1 — режим «Что это?»: следующий щёлчок по элементу
   // с пометкой data-help-id открывает его справку. Одна карта элементов — все входы.
   const [whatIsMode, setWhatIsMode] = useState(false);
+  const [helpPickMsg, setHelpPickMsg] = useState('');
   const helpOverlayRef = useRef<HTMLDivElement | null>(null);
 
   // Что это? — выбор элемента под прозрачным слоем.
-  // Слой лежит сверху, поэтому элемент под ним не получает нажатие: срабатывает только справка.
+  // Слой лежит сверху, поэтому элемент под ним не получает нажатие. Чтобы узнать, что под курсором,
+  // на миг отключаем у слоя перехват щелчков и спрашиваем точку напрямую — это надёжнее,
+  // чем перебирать список слоёв (список включал сам слой и его содержимое).
   const pickHelpElement = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'click') return; // открываем один раз — на первом событии жеста
-    const layers = (document.elementsFromPoint(e.clientX, e.clientY) as HTMLElement[]) || [];
-    const target = layers.find((el) => el !== helpOverlayRef.current) || null;
+    const overlay = helpOverlayRef.current;
+    const prevPointer = overlay ? overlay.style.pointerEvents : '';
+    if (overlay) overlay.style.pointerEvents = 'none';
+    let target: HTMLElement | null = null;
+    try {
+      target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    } finally {
+      if (overlay) overlay.style.pointerEvents = prevPointer || '';
+    }
     const holder = target && target.closest ? (target.closest('[data-help-id]') as HTMLElement | null) : null;
     const elementId = holder?.getAttribute('data-help-id') || null;
-    setWhatIsMode(false);
     if (elementId) {
+      setWhatIsMode(false);
+      setHelpPickMsg('');
       win.setHelpArticle(helpElement(elementId)?.article || 'help');
-      setMsg('');
     } else {
-      setMsg('Справки по этому элементу пока нет — он ещё не отмечен в карте элементов');
+      // Режим оставляем включённым, а в плашке показываем, что именно оказалось под курсором:
+      // так видно, почему справки нет, и можно сразу щёлкнуть по другому элементу.
+      const tag = target ? target.tagName.toLowerCase() : 'ничего';
+      const cls = target && target.className && typeof target.className === 'string' ? '.' + target.className.split(' ').filter(Boolean).slice(0, 2).join('.') : '';
+      setHelpPickMsg('Справки пока нет: ' + tag + cls + ' — элемент ещё не отмечен в карте');
     }
   };
   // Реестр запусков подгружается при входе в раздел «Расчёты»
@@ -3402,7 +3416,10 @@ const changeOrderStatus = async (o: any, status: string) => {
               className="btn btn-secondary btn-sm"
               title="Режим «Что это?»: щёлкните по элементу — откроется справка по нему; Esc — отмена"
               onClick={() => {
-                setWhatIsMode((v) => !v);
+                setWhatIsMode((v) => {
+                  setHelpPickMsg('');
+                  return !v;
+                });
               }}
             >
               {whatIsMode ? 'Что это? ✕' : 'Что это?'}
@@ -5014,8 +5031,8 @@ const changeOrderStatus = async (o: any, status: string) => {
             fontWeight: 600,
           }}
         >
-          Режим «Что это?»: щёлкните по элементу
-          <span style={{ color: 'rgba(252,211,77,0.72)', fontWeight: 400 }}>Esc — отмена</span>
+          {helpPickMsg ? helpPickMsg : 'Режим «Что это?»: щёлкните по элементу'}
+          {helpPickMsg ? null : <span style={{ color: 'rgba(252,211,77,0.72)', fontWeight: 400 }}>Esc — отмена</span>}
         </div>
       </div>
     ) : null}
