@@ -44,6 +44,9 @@ function WinTitleBar({ w, dot, title, debug, debugId, onDrag, onReset, onToggleM
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span className="ttl">{title}</span>
       {debug && debugId && <DebugBadge text={debugId.badge} copy={debugId.copy} debug={debug} />}
+      {/* «?» — последняя перед группой управления окном (свернуть / развернуть / раскладка / закрыть),
+          то есть самая правая из обычных кнопок и слева от группы управления окном (блок 6.27) */}
+      <HelpButton compact articleId={articleIdForWindow(w.kind, (w as any).listKind, (w as any).data?.entity)} title="Справка по этому окну" />
       <button className="pp-wbtn" title="Свернуть" onClick={(e) => { e.stopPropagation(); onToggleMin(w.id); }}>–</button>
       <button className="pp-wbtn" title={w.max ? 'Восстановить' : 'Развернуть'} onClick={(e) => { e.stopPropagation(); onToggleMax(w.id); }}>
         {w.max
@@ -52,8 +55,6 @@ function WinTitleBar({ w, dot, title, debug, debugId, onDrag, onReset, onToggleM
       </button>
       <button className="pp-wbtn" title="Раскладка окон (Snap)" onClick={(e) => { e.stopPropagation(); onSnap(w.id); }}>⛶</button>
       <button className="pp-wbtn close" title="Закрыть" onClick={(e) => { e.stopPropagation(); onClose(w.id); }}>✕</button>
-      {/* «?» — самая правая кнопка шапки (блок 6.27): статья берётся по виду окна */}
-      <HelpButton compact articleId={articleIdForWindow(w.kind, (w as any).listKind, (w as any).data?.entity)} title="Справка по этому окну" />
     </div>
   );
 }
