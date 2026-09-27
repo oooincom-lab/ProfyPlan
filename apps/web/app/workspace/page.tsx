@@ -9,7 +9,7 @@ const API_ORIGIN =
     ? 'http://localhost:8000'
     : 'https://profyplan.ru';
 
-import { useState, useCallback, Fragment, useRef, useEffect } from 'react';
+import { useState, useCallback, Fragment, useRef, useEffect, useMemo } from 'react';
 import CatalogOps from '@/components/CatalogOps';
 import GraphStylePicker from '@/components/GraphStylePicker';
 import CalculationsTabs, { CalcTab, CalcTabNotice } from '@/components/CalculationsTabs';
