@@ -21,6 +21,8 @@ class ProjectCreate(BaseModel):
     monte_carlo_runs: Optional[int] = Field(default=None, ge=100, le=1000000)
     confidence_level: Optional[float] = Field(default=None, ge=0.5, le=0.999)
     use_history: Optional[bool] = None
+    date_policy: Optional[str] = Field(default=None, pattern="^(calculated|probability)$")
+    date_probability: Optional[float] = Field(default=None, ge=0.5, le=0.999)
     country_code: str = Field(default="RU", min_length=2, max_length=2)
     start_date: Optional[datetime] = None
     priority: str = Field(default="normal", pattern="^(low|normal|high)$")
@@ -37,6 +39,8 @@ class ProjectUpdate(BaseModel):
     monte_carlo_runs: Optional[int] = Field(default=None, ge=100, le=1000000)
     confidence_level: Optional[float] = Field(default=None, ge=0.5, le=0.999)
     use_history: Optional[bool] = None
+    date_policy: Optional[str] = Field(default=None, pattern="^(calculated|probability)$")
+    date_probability: Optional[float] = Field(default=None, ge=0.5, le=0.999)
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     start_date: Optional[datetime] = None
     priority: Optional[str] = Field(default=None, pattern="^(low|normal|high)$")
@@ -59,6 +63,8 @@ class ProjectOut(BaseModel):
     monte_carlo_runs: Optional[int] = None
     confidence_level: Optional[float] = None
     use_history: Optional[bool] = None
+    date_policy: Optional[str] = None
+    date_probability: Optional[float] = None
     country_code: str
     schedule_id: Optional[UUID] = None
     use_shared_resources: Optional[bool] = None

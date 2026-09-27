@@ -237,7 +237,7 @@ export default function AppShell() {
       setMsg('Расчёт запущен…');
       const run: any = await apiF(`/projects/${selectedProject.id}/calculation-runs`, {
         method: 'POST',
-        body: JSON.stringify({ area: calcAreaId ? 'cluster' : 'project', area_ref: calcAreaId || null, params: { mode: calcMode || modeHint.modeId } }),
+        body: JSON.stringify({ area: calcAreaId ? 'cluster' : 'project', area_ref: calcAreaId || null, params: { mode: calcMode || modeHint.modeId, date_policy: selectedProject.date_policy || 'calculated', date_probability: selectedProject.date_probability ?? null } }),
       });
       await loadCalcRuns(selectedProject.id);
       setMsg(run?.status === 'failed' ? `Расчёт не выполнен: ${run?.error || ''}` : 'Расчёт сохранён в реестр запусков');
@@ -4943,6 +4943,50 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </label>
                     <div style={{ fontSize: 11.5, color: '#5A7090' }}>
                       Оси хранятся раздельно. Совместимая строка метода проекта держится в согласии с ними: {calcMethods.raw}. Параметры Монте-Карло и доверительный уровень начнут влиять на расчёт со страницей расчёта (блок 6.19).
+                    </div>
+                  </div>
+
+                  {/* ─── Политика даты плана (блок 6.29) ─── */}
+                  <div style={{ display: 'grid', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>🎯 Дата плана</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>
+                        Решение руководителя, а не метод расчёта: брать за план срок из расчёта или срок по вероятности.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                        что берём за план
+                        <select
+                          value={selectedProject.date_policy || 'calculated'}
+                          onChange={(e) => saveCalcSettings({ date_policy: e.target.value })}
+                          style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
+                        >
+                          <option value="calculated">срок из расчёта</option>
+                          <option value="probability">срок по вероятности</option>
+                        </select>
+                      </label>
+                      {(selectedProject.date_policy || 'calculated') === 'probability' ? (
+                        <>
+                          <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                            процентиль
+                            <select
+                              value={String(selectedProject.date_probability ?? 0.8)}
+                              onChange={(e) => saveCalcSettings({ date_probability: Number(e.target.value) })}
+                              style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
+                            >
+                              <option value="0.5">p50 — половина случаев</option>
+                              <option value="0.8">p80 — обычный запас</option>
+                              <option value="0.9">p90 — с осторожностью</option>
+                              <option value="0.95">p95 — почти наверняка</option>
+                            </select>
+                          </label>
+                          <div style={{ fontSize: 11.5, color: '#5A7090', maxWidth: 420 }}>
+                            Дата по вероятности считается только в режимах PERT и Монте-Карло. Если выбран режим без анализа,
+                            будет показан срок из расчёта — без подмены числа.
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
 

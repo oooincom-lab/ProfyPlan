@@ -49,6 +49,10 @@ class Project(BaseModel):
     use_history: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )  # включается только решением пользователя
+
+    # Политика даты плана (блок 6.29): расчётная дата или процентиль (p50/p80/заданный)
+    date_policy: Mapped[str] = mapped_column(String(20), nullable=False, default="calculated", server_default="calculated")
+    date_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     country_code: Mapped[str] = mapped_column(
         String(2), default="RU"
     )
