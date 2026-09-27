@@ -363,28 +363,35 @@ export default function AppShell() {
     };
     window.addEventListener('keydown', onKey);
 
-    // Режим «Что это?»: щёлчок по элементу с пометкой data-help-id открывает его справку.
-    // Слушаем на фазе перехвата, чтобы щелчок не сработал по элементу как обычно.
-    const onClick = (e: MouseEvent) => {
+    // Режим «Что это?»: элемент не должен срабатывать — только справка.
+    // Перехватываем весь жест (pointerdown, mousedown, click, dblclick) на фазе захвата:
+    // многие элементы в приложении срабатывают уже на pointerdown, поэтому одного click недостаточно.
+    const onBlock = (e: Event) => {
       if (!whatIsMode) return;
+      // Глушим событие всегда, чтобы элемент не выполнил своё действие
+      e.preventDefault();
+      e.stopPropagation();
+      const anyE = e as any;
+      if (typeof anyE.stopImmediatePropagation === 'function') anyE.stopImmediatePropagation();
+      // Справку открываем один раз — на первом событии жеста
+      if (e.type === 'click' || e.type === 'dblclick') return;
       const target = e.target as HTMLElement | null;
       const holder = target && target.closest ? (target.closest('[data-help-id]') as HTMLElement | null) : null;
       const elementId = holder?.getAttribute('data-help-id') || null;
       setWhatIsMode(false);
       if (elementId) {
-        e.preventDefault();
-        e.stopPropagation();
         win.setHelpArticle(helpElement(elementId)?.article || 'help');
         setMsg('');
       } else {
         setMsg('У этого элемента справки пока нет — отметьте его в карте элементов');
       }
     };
-    window.addEventListener('click', onClick, true);
+    const blockEvents = ['pointerdown', 'mousedown', 'touchstart', 'click', 'dblclick'];
+    blockEvents.forEach((t) => window.addEventListener(t, onBlock, true));
 
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('click', onClick, true);
+      blockEvents.forEach((t) => window.removeEventListener(t, onBlock, true));
     };
   }, [win, viewHelpId, whatIsMode]);
   // Открытие окна правки записи справочника из панели справочника
