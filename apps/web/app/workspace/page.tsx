@@ -35,7 +35,7 @@ import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
 import HelpWindow, { HelpButton } from '@/components/HelpWindow';
-import { HELP_EVENT, articleIdForCalcTab } from '@/lib/help';
+import { HELP_EVENT, articleIdForView } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
@@ -254,14 +254,8 @@ export default function AppShell() {
     window.addEventListener(HELP_EVENT, onHelp as any);
     return () => window.removeEventListener(HELP_EVENT, onHelp as any);
   }, []);
-  // Статья для кнопки в шапке панели: по текущему разделу
-  const viewHelpId =
-    view === 'calculations' ? articleIdForCalcTab(calcTab)
-      : view === 'project-gantt' ? 'calc-gantt'
-        : view === 'network' ? 'calc-network'
-          : view === 'project-orders' ? 'orders'
-            : view === 'directories' || view === 'nomenclature' || view === 'resources' || view === 'departments' ? 'directories'
-              : 'calculations';
+  // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
+  const viewHelpId = articleIdForView(view, calcTab);
   // Реестр запусков подгружается при входе в раздел «Расчёты»
   useEffect(() => {
     if (view === 'calculations' && selectedProject) loadCalcRuns(selectedProject.id);

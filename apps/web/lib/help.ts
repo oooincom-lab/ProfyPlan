@@ -269,6 +269,114 @@ export const HELP_ARTICLES: HelpArticle[] = [  {
     ],
     links: ['resource-window', 'directories'],
   },
+  {
+    id: 'workspace',
+    title: 'Рабочий стол и портфель',
+    summary: 'Стартовый экран: портфель проектов, ключевые показатели, мини-Гант, потери',
+    state: 'verified',
+    purpose:
+      'Точка входа в систему: здесь видно все проекты, доступные пользователю, их сроки, конфликты по общим ресурсам и потери времени.',
+    steps: [
+      '«Обновить» пересобирает портфель: сроки, конфликты, потери.',
+      'Мини-Гант показывает первые проекты; синяя полоса — проект, оранжевая — есть конфликт по общим ресурсам.',
+      'Клик по названию проекта открывает его: дальше работа идёт уже в контексте проекта.',
+    ],
+    fields: [
+      ['Всего проектов', 'Сколько проектов доступно пользователю.'],
+      ['Конфликты ресурсов', 'Пересечения по общим (межпроектным) ресурсам.'],
+      ['Потери (события)', 'Сколько времени сняли события мощности: простой, ограничение, форсаж.'],
+    ],
+    links: ['project-summary', 'orders', 'ccm'],
+  },
+  {
+    id: 'project-summary',
+    title: 'Сводка расчёта проекта',
+    summary: 'Что показывается, когда выбран проект: финиш, критический путь, конфликты, риск PERT',
+    state: 'verified',
+    purpose:
+      'Открывается при выборе проекта в дереве. Собирает главное о проекте: расчётный финиш, размер критического пути, конфликты общих ресурсов, разброс по PERT.',
+    fields: [
+      ['Финиш проекта', 'Дата окончания по календарному расчёту — с учётом графиков работы, событий мощности, долей и квот.'],
+      ['Критический путь', 'Число операций без резерва: их задержка сдвигает весь проект.'],
+      ['Конфликты ресурсов', 'Пересечения по общим ресурсам с другими проектами (это уже область CCM).'],
+      ['Риск PERT σ', 'Разброс срока: чем больше σ, тем выше неопределённость оценок операций.'],
+    ],
+    limits: [
+      'Без тройных оценок строки показывает «нет PERT-оценок» — это не ошибка, а честное отсутствие данных (нужен блок 6.17).',
+    ],
+    links: ['orders', 'calc-overview', 'calc-network'],
+  },
+  {
+    id: 'groups',
+    title: 'Группы и кластеры',
+    summary: 'Объединение заказов проекта: группы и кластеры (пулы)',
+    state: 'check',
+    purpose:
+      'Группа объединяет заказы одного проекта, кластер (пул) — межпроектное объединение для совместного расчёта и выравнивания.',
+    steps: [
+      'Группа создаётся кнопкой «+ Группа» в списке заказов проекта.',
+      'Кластер создаётся в разделе «Кластеры»; заказы переносятся перетаскиванием.',
+      'Состав группы и кластера виден в дереве слева.',
+    ],
+    limits: ['Расчёт по кластеру идёт вместе с блоком CCM (6.20).'],
+    links: ['orders', 'project-summary', 'ccm'],
+  },
+  {
+    id: 'scale',
+    title: 'Шкала куста',
+    summary: 'Единая шкала времени по кусту заказов',
+    state: 'check',
+    purpose: 'Шкала показывает операции куста на общей временной оси — от старта до финиша, вместе с событиями мощности.',
+    links: ['calc-gantt', 'calc-overview'],
+  },
+  {
+    id: 'ccm',
+    title: 'CCM · Портфель',
+    summary: 'Межпроектное объединение: общие ресурсы и конфликты между проектами',
+    state: 'check',
+    purpose:
+      'Раздел про межпроектное планирование: какие ресурсы общие, где проекты мешают друг другу и что будет при объединении в пул.',
+    limits: ['Полноценный расчёт CCM как метода — блок 6.20 плана.'],
+    links: ['workspace', 'groups', 'methods'],
+  },
+  {
+    id: 'reports',
+    title: 'Отчёты',
+    summary: 'Загрузка подразделений и межпроектное выравнивание',
+    state: 'check',
+    purpose: 'Отчёты показывают загрузку подразделений и результат межпроектного выравнивания ресурсов.',
+    links: ['ccm', 'directories'],
+  },
+  {
+    id: 'tools',
+    title: 'Инструменты',
+    summary: 'Служебные операции: очистка, проверки, импорт',
+    state: 'check',
+    purpose: 'Служебные действия над данными проекта и портфеля: проверки целостности, массовые операции, импорт.',
+    limits: ['Массовые операции необратимы: делайте их на копии данных.'],
+    links: ['directories'],
+  },
+  {
+    id: 'archive',
+    title: 'Архив проектов',
+    summary: 'Проекты, убранные из работы, с возможностью восстановления',
+    state: 'check',
+    purpose: 'Архив хранит проекты, которые не должны мешать в списках. Данные не удаляются: проект восстанавливается.',
+    links: ['workspace'],
+  },
+  {
+    id: 'new-project',
+    title: 'Мастер проекта',
+    summary: 'Создание проекта: быстро или по проектной схеме, с выбором метода расчёта',
+    state: 'check',
+    purpose: 'Мастер создаёт проект и задаёт его метод расчёта. Дальше проект открывается на сводке расчёта.',
+    steps: [
+      'Заполните название и режим (быстрый или проектный).',
+      'Выберите метод расчёта или задайте оси отдельно в настройках проекта.',
+      'Заказы можно вводить вручную или вставить списком из буфера.',
+    ],
+    links: ['project-summary', 'project-settings', 'orders'],
+  },
 ];
 
 export function helpArticle(id: string | null | undefined): HelpArticle | null {
@@ -278,11 +386,12 @@ export function helpArticle(id: string | null | undefined): HelpArticle | null {
 
 /** Разделы справки — дерево слева. Порядок статей в разделах = порядок перехода «дальше». */
 export const HELP_GROUPS: { title: string; ids: string[] }[] = [
-  { title: 'Начало', ids: ['calculations'] },
+  { title: 'Начало', ids: ['workspace', 'calculations'] },
+  { title: 'Проект', ids: ['project-summary', 'orders', 'order-window', 'bom', 'groups', 'scale', 'new-project', 'archive'] },
   { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-gantt', 'calc-network', 'calc-pert', 'calc-mc', 'calc-runs'] },
-  { title: 'Настройки', ids: ['project-settings', 'views'] },
-  { title: 'Заказы и состав', ids: ['orders', 'order-window', 'bom'] },
+  { title: 'Настройки', ids: ['project-settings', 'views', 'tools'] },
   { title: 'Справочники и ресурсы', ids: ['directories', 'resource-window', 'calendar-window'] },
+  { title: 'Аналитика', ids: ['ccm', 'reports'] },
   { title: 'Методы', ids: ['methods'] },
 ];
 
@@ -385,4 +494,47 @@ export function articleIdForCalcTab(tab: string): string {
   if (tab === 'monte-carlo') return 'calc-mc';
   if (tab === 'runs') return 'calc-runs';
   return 'calc-overview';
+}
+
+/**
+ * Статья по тому, что сейчас в рабочей области (блок 6.27).
+ * Главное правило справки: «?» открывает раздел про то, что человек видит перед собой,
+ * а не общий раздел. Каждый вид рабочего стола отображён здесь явно — без «запасного» варианта
+ * для всего подряд.
+ */
+export function articleIdForView(view: string, calcTab?: string): string {
+  switch (view) {
+    case 'dashboard':
+    case 'projects':
+      return 'workspace';
+    case 'project-dashboard':
+      return 'project-summary';
+    case 'project-orders':
+      return 'orders';
+    case 'project-groups':
+    case 'project-pools':
+      return 'groups';
+    case 'project-gantt':
+      return 'calc-gantt';
+    case 'network':
+      return 'calc-network';
+    case 'scale':
+      return 'scale';
+    case 'calculations':
+      return articleIdForCalcTab(calcTab || 'overview');
+    case 'ccm':
+      return 'ccm';
+    case 'reports':
+      return 'reports';
+    case 'tools':
+      return 'tools';
+    case 'archive':
+      return 'archive';
+    case 'new-project':
+      return 'new-project';
+    case 'settings':
+      return 'project-settings';
+    default:
+      return 'directories';
+  }
 }
