@@ -278,6 +278,17 @@ export default function AppShell() {
       setAreaOrders([]);
     }
   };
+  // Значения плиток обзора считаются из уже посчитанного: расчёт сети (детерминированный срок),
+  // ожидаемый срок и разброс (p50/p80/p95), даты цели (разрыв). Заглушек быть не должно там, где данные есть.
+  const hoursText = (hours: number): string => {
+    if (!Number.isFinite(hours)) return '—';
+    const abs = Math.abs(hours);
+    const days = Math.floor(abs / 24);
+    const rest = Math.round((abs - days * 24) * 10) / 10;
+    if (days === 0) return `${rest} ч`;
+    return rest === 0 ? `${days} дн` : `${days} дн ${rest} ч`;
+  };
+
   const [calcAreaId, setCalcAreaId] = useState('');
   const [calcAreaLabel, setCalcAreaLabel] = useState('');
   // Конструктор расчёта (блок 6.29): выбранный режим — контекст данных считается ниже, после загрузки ресурсов
@@ -3812,14 +3823,48 @@ const changeOrderStatus = async (o: any, status: string) => {
               <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                   {[
-                    { k: 'Детерминированный срок', w: 'появится с расчётной страницей' },
-                    { k: 'p50 / p80 / p95', w: 'блоки 6.18 (PERT) и 6.19 (Монте-Карло)' },
-                    { k: 'Разрыв к цели', w: 'режим цели — блок 6.14г' },
-                    { k: 'Конфликты и узкие места', w: 'блок 6.20' },
+                    {
+                      k: 'Детерминированный срок',
+                      v: goalBasis || scenarioRange ? hoursText((scenarioRange ? scenarioRange.base : 0)) : 'нет данных',
+                      w: goalBasis || scenarioRange ? 'по длительностям операций и связям (расчёт сети)' : 'нужны операции с длительностями и связи',
+                    },
+                    {
+                      k: 'p50 / p80 / p95',
+                      v: goalBasis
+                        ? `${hoursText(goalBasis.expected)} / ${hoursText(goalBasis.expected + 0.8416 * goalBasis.sigma)} / ${hoursText(goalBasis.expected + 1.645 * goalBasis.sigma)}`
+                        : 'нет данных',
+                      w: goalBasis ? 'по PERT: ожидаемый срок и разброс (точнее — Монте-Карло)' : 'нужны тройные оценки (вкладка «Оценки»)',
+                    },
+                    {
+                      k: 'Разрыв к цели',
+                      v: (() => {
+                        if (!goalBasis) return 'нет данных';
+                        const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+                        const origin = originRaw ? new Date(originRaw) : new Date();
+                        const base = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
+                        const parts: string[] = [];
+                        for (const [name, value] of [
+                          ['договорная', selectedProject.goal_contract_date],
+                          ['рабочая', selectedProject.goal_working_date],
+                        ] as [string, string | null | undefined][]) {
+                          if (!value) continue;
+                          const hours = ((new Date(value).getTime() - base) / 86400000) * 24;
+                          const gap = hours - goalBasis.expected;
+                          parts.push(`${name}: ${gap >= 0 ? 'запас' : 'нехватка'} ${hoursText(Math.abs(gap))}`);
+                        }
+                        return parts.length ? parts.join(' · ') : 'нет данных';
+                      })(),
+                      w: goalBasis ? 'разница между датами цели и ожидаемым сроком' : 'нужны оценки и даты цели',
+                    },
+                    {
+                      k: 'Конфликты и узкие места',
+                      v: modeContext.sharedResources > 0 ? `общих ресурсов: ${modeContext.sharedResources}` : 'нет данных',
+                      w: 'полный анализ узких мест — блок 6.20 (CCM с ресурсами)',
+                    },
                   ].map((t) => (
                     <div key={t.k} style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                       <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>{t.k}</div>
-                      <div style={{ fontSize: 16, color: 'var(--fg-3)', margin: '4px 0 2px' }}>нет данных</div>
+                      <div style={{ fontSize: 15, color: 'var(--fg-2)', margin: '4px 0 2px' }}>{t.v}</div>
                       <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>{t.w}</div>
                     </div>
                   ))}
