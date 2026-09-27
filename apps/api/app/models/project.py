@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -53,6 +53,10 @@ class Project(BaseModel):
     # Политика даты плана (блок 6.29): расчётная дата или процентиль (p50/p80/заданный)
     date_policy: Mapped[str] = mapped_column(String(20), nullable=False, default="calculated", server_default="calculated")
     date_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Цели проекта (блок 6.14г): назначения человека, при пересчёте не сбрасываются
+    goal_contract_date: Mapped[Optional[object]] = mapped_column(Date, nullable=True)
+    goal_working_date: Mapped[Optional[object]] = mapped_column(Date, nullable=True)
     country_code: Mapped[str] = mapped_column(
         String(2), default="RU"
     )

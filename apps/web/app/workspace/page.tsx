@@ -41,6 +41,7 @@ import McPage from '@/components/McPage';
 import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import { cpm as netCpm, scenario as netScenario } from '@/lib/network';
 import { CALC_MODES, modeRequirements, recommendMode, ModeContext } from '@/lib/calcModes';
+import { probabilityByNormal, goalState } from '@/lib/probability';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
@@ -348,7 +349,42 @@ export default function AppShell() {
     }
   }, [view, calcTab, selectedProject?.id]);
 
-  // Сценарный диапазон (страница «Обзор»): тот же расчёт при всех длительностях ×0,85 и ×1,25.
+  // Цель (блок 6.14г): вероятность уложиться в назначенные даты — по ожидаемому сроку и разбросу.
+  // Если оценок нет, распределения нет — и вероятности не выдумываются.
+  const goalBasis = useMemo(() => {
+    if (calcTab !== 'overview') return null;
+    const netOps = estimateOps
+      .map((o) => {
+        const to = Number(o.to_optimistic);
+        const tm = Number(o.tm_likely);
+        const tp = Number(o.tp_pessimistic);
+        if (!Number.isFinite(to) || !Number.isFinite(tm) || !Number.isFinite(tp)) return null;
+        return { id: o.id as string, duration: (to + 4 * tm + tp) / 6, sigma: (tp - to) / 6 };
+      })
+      .filter(Boolean) as { id: string; duration: number; sigma: number }[];
+    if (netOps.length < 2 || !estimateDeps.length) return null;
+    const cpmResult = netCpm(netOps, estimateDeps);
+    return { expected: cpmResult.length, sigma: cpmResult.sigma, withEstimates: netOps.length };
+  }, [calcTab, estimateOps, estimateDeps]);
+
+  const goalProbability = useMemo(() => {
+    if (!goalBasis || !selectedProject) return new Map<string, { p: number; note: string }>();
+    const originRaw = selectedProject.start_date ? new Date(selectedProject.start_date) : new Date();
+    const origin = new Date(originRaw.getFullYear(), originRaw.getMonth(), originRaw.getDate()).getTime();
+    const out = new Map<string, { p: number; note: string }>();
+    for (const [key, value] of [
+      ['contract', selectedProject.goal_contract_date],
+      ['working', selectedProject.goal_working_date],
+    ] as [string, string | null | undefined][]) {
+      if (!value) continue;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) continue;
+      const hours = ((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - origin) / 86400000) * 24;
+      const r = probabilityByNormal(goalBasis.expected, goalBasis.sigma, hours);
+      out.set(key, { p: r.probability, note: r.note });
+    }
+    return out;
+  }, [goalBasis, selectedProject]);
   // Это сценарии, а не вероятности: все работы одновременно быстрее или медленнее — так не бывает,
   // зато видно, насколько срок чувствителен к ошибке в длительностях.
   const scenarioRange = useMemo(() => {
@@ -3799,6 +3835,56 @@ const changeOrderStatus = async (o: any, status: string) => {
                   ) : (
                     <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>
                       Нечего считать: нужны операции с длительностями и связи между ними.
+                    </div>
+                  )}
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>Цель: даты обосновываются вероятностями</div>
+                  <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'grid', gap: 4 }}>
+                      договорная дата
+                      <input
+                        type="date"
+                        value={selectedProject.goal_contract_date ? String(selectedProject.goal_contract_date).slice(0, 10) : ''}
+                        onChange={(e) => saveCalcSettings({ goal_contract_date: e.target.value || null })}
+                        style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'grid', gap: 4 }}>
+                      рабочая дата
+                      <input
+                        type="date"
+                        value={selectedProject.goal_working_date ? String(selectedProject.goal_working_date).slice(0, 10) : ''}
+                        onChange={(e) => saveCalcSettings({ goal_working_date: e.target.value || null })}
+                        style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
+                      />
+                    </label>
+                  </div>
+                  {goalBasis ? (
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {(['contract', 'working'] as const).map((key) => {
+                        const label = key === 'contract' ? 'договорная' : 'рабочая';
+                        const has = key === 'contract' ? !!selectedProject.goal_contract_date : !!selectedProject.goal_working_date;
+                        const info = goalProbability.get(key);
+                        if (!has) return <div key={key} style={{ fontSize: 12, color: 'var(--fg-4)' }}>{label}: дата не назначена</div>;
+                        if (!info) return <div key={key} style={{ fontSize: 12, color: 'var(--fg-4)' }}>{label}: вероятность не посчитана</div>;
+                        const st = goalState(info.p);
+                        return (
+                          <div key={key} style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
+                            {label}: вероятность уложиться — <b>{Math.round(info.p * 100)} %</b>{' '}
+                            <span style={{ color: st.color }}>· {st.label}</span>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                        Считано по ожидаемому сроку и разбросу (допущение PERT: состав критического пути не меняется).
+                        Точнее — по S-кривой Монте-Карло; цели при пересчёте не сбрасываются.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                      Вероятности не посчитаны: без тройных оценок и связей распределения срока нет.
+                      Заполните оценки — и здесь появится основание для назначенных дат.
                     </div>
                   )}
                 </div>
