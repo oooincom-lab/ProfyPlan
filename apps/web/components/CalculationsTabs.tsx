@@ -185,6 +185,7 @@ export default function CalculationsTabs({
           return (
             <button
               key={t.id}
+              data-help-id={'calc.tab.' + t.id}
               onClick={() => onSelect(t.id)}
               title={
                 state === 'ready'

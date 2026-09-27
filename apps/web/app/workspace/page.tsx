@@ -35,7 +35,7 @@ import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
 import { HelpButton } from '@/components/HelpWindow';
-import { HELP_EVENT, articleIdForView } from '@/lib/help';
+import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
@@ -244,6 +244,11 @@ export default function AppShell() {
 
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
+
+  // ── Дополнительные входы в справку (блок 6.27) ──
+  // F1 — статья текущего модуля; Shift+F1 — режим «Что это?»: следующий щёлчок по элементу
+  // с пометкой data-help-id открывает его справку. Одна карта элементов — все входы.
+  const [whatIsMode, setWhatIsMode] = useState(false);
   // Реестр запусков подгружается при входе в раздел «Расчёты»
   useEffect(() => {
     if (view === 'calculations' && selectedProject) loadCalcRuns(selectedProject.id);
@@ -339,6 +344,49 @@ export default function AppShell() {
     window.addEventListener(HELP_EVENT, onHelp as any);
     return () => window.removeEventListener(HELP_EVENT, onHelp as any);
   }, [win]);
+
+  // F1 — справка текущего модуля; Shift+F1 — режим «Что это?»; Esc — отмена режима
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setWhatIsMode(true);
+          setMsg('Режим «Что это?»: щёлкните по элементу, Esc — отмена');
+        } else {
+          win.setHelpArticle(viewHelpId);
+        }
+      } else if (e.key === 'Escape' && whatIsMode) {
+        setWhatIsMode(false);
+        setMsg('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+
+    // Режим «Что это?»: щёлчок по элементу с пометкой data-help-id открывает его справку.
+    // Слушаем на фазе перехвата, чтобы щелчок не сработал по элементу как обычно.
+    const onClick = (e: MouseEvent) => {
+      if (!whatIsMode) return;
+      const target = e.target as HTMLElement | null;
+      const holder = target && target.closest ? (target.closest('[data-help-id]') as HTMLElement | null) : null;
+      const elementId = holder?.getAttribute('data-help-id') || null;
+      setWhatIsMode(false);
+      if (elementId) {
+        e.preventDefault();
+        e.stopPropagation();
+        win.setHelpArticle(helpElement(elementId)?.article || 'help');
+        setMsg('');
+      } else {
+        setMsg('У этого элемента справки пока нет — отметьте его в карте элементов');
+      }
+    };
+    window.addEventListener('click', onClick, true);
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('click', onClick, true);
+    };
+  }, [win, viewHelpId, whatIsMode]);
   // Открытие окна правки записи справочника из панели справочника
   useEffect(() => {
     const h = (e: any) => {
@@ -3353,7 +3401,12 @@ const changeOrderStatus = async (o: any, status: string) => {
             onClick={() => selectedProject && loadProjectGantt(selectedProject)}>▶ Рассчитать проект</button>
         )}
         <button onClick={onRefresh} className="btn btn-secondary btn-sm" title="Обновить данные" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></button>
-            <HelpButton articleId={viewHelpId} title="Справка по разделу" />
+            {whatIsMode ? (
+              <span style={{ fontSize: 11.5, color: '#FBBF24', border: '1px solid #FBBF24', borderRadius: 10, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                Режим «Что это?»: щёлкните по элементу · Esc — отмена
+              </span>
+            ) : null}
+            <HelpButton articleId={viewHelpId} title="Справка по разделу (F1; Shift+F1 — режим «Что это?»)" />
           </div>
         </div>
 

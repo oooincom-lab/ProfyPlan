@@ -426,6 +426,68 @@ export function hintEntries(group: 'graph' | 'indicator'): { key: string; text: 
   return Object.entries(source as Record<string, string>).map(([key, text]) => ({ key, text }));
 }
 
+/* ─────────── Карта элементов (блок 6.27): одна карта — три входа в справку ───────────
+ * Элемент интерфейса помечается атрибутом data-help-id, а здесь указано, что про него знает
+ * справка: название для меню, короткая подсказка и статья. Одна и та же карта обслуживает:
+ *   • правую кнопку — пункт «Что это? …» в контекстном меню;
+ *   • режим Shift+F1 — щёлчок по элементу;
+ *   • кнопку «?» в шапке окна и раздела.
+ * Никаких отдельных списков для каждого входа заводить не нужно.
+ */
+export type HelpElement = {
+  /** Как элемента назвать в меню и в заголовке справки */
+  title: string;
+  /** Статья, которая его объясняет */
+  article: string;
+  /** Группа подсказок, если у элемента есть короткий текст */
+  hintGroup?: 'graph' | 'indicator';
+  /** Ключ в словаре подсказок */
+  hintKey?: string;
+};
+
+export const HELP_ELEMENTS: Record<string, HelpElement> = {
+  // Органы управления вида «Сетевой график»
+  'graph.units': { title: 'Единицы измерения', article: 'calc-network', hintGroup: 'graph', hintKey: 'units' },
+  'graph.critOnly': { title: 'Только критический путь', article: 'calc-network', hintGroup: 'graph', hintKey: 'critOnly' },
+  'graph.showEdgeDays': { title: 'Дни на связях', article: 'calc-network', hintGroup: 'graph', hintKey: 'showEdgeDays' },
+  'graph.showEndpoints': { title: 'События «Старт» и «Финиш»', article: 'calc-network', hintGroup: 'graph', hintKey: 'showEndpoints' },
+  'graph.fontSize': { title: 'Размер шрифта подписей', article: 'calc-network', hintGroup: 'graph', hintKey: 'fontSize' },
+  'graph.period': { title: 'Период показа', article: 'calc-network', hintGroup: 'graph', hintKey: 'period' },
+  'graph.mode': { title: 'Режим укладки', article: 'calc-network', hintGroup: 'graph', hintKey: 'mode' },
+  'graph.layout': { title: 'Раскладка и пресеты', article: 'calc-network', hintGroup: 'graph', hintKey: 'layout' },
+  'graph.alignCutEnds': { title: 'Выравнивание маркеров обрезки', article: 'calc-network', hintGroup: 'graph', hintKey: 'alignCutEnds' },
+  'graph.zoom': { title: 'Масштаб схемы', article: 'calc-network', hintGroup: 'graph' },
+  'graph.reset': { title: 'Сброс вида', article: 'calc-network', hintGroup: 'graph', hintKey: 'reset' },
+  // Индикаторы и панель качества
+  'indicator.readability': { title: 'Читаемость раскладки', article: 'calc-network', hintGroup: 'indicator', hintKey: 'readability' },
+  'indicator.planarity': { title: 'Планарность сети', article: 'calc-network', hintGroup: 'indicator', hintKey: 'planarity' },
+  'indicator.noplan': { title: 'Раскладка «Без пересечений»', article: 'calc-network', hintGroup: 'indicator', hintKey: 'noplanZero' },
+  'indicator.presetNotice': { title: 'Сообщение об откате раскладки', article: 'calc-network', hintGroup: 'indicator', hintKey: 'presetNotice' },
+  'indicator.cutMarker': { title: 'Маркер обрезки цепочки', article: 'calc-network', hintGroup: 'indicator', hintKey: 'cutMarker' },
+  'indicator.serviceEvents': { title: 'Служебные события сети', article: 'calc-network', hintGroup: 'indicator', hintKey: 'serviceEvents' },
+  // Разделы и вкладки, которые уже помечены в интерфейсе
+  'calc.tab.overview': { title: 'Вкладка «Обзор»', article: 'calc-overview' },
+  'calc.tab.gantt': { title: 'Вкладка «Гант»', article: 'calc-gantt' },
+  'calc.tab.network': { title: 'Вкладка «Сеть CPM»', article: 'calc-network' },
+  'calc.tab.pert': { title: 'Вкладка «PERT»', article: 'calc-pert' },
+  'calc.tab.monte-carlo': { title: 'Вкладка «Монте-Карло»', article: 'calc-mc' },
+  'calc.tab.ccm': { title: 'Вкладка «CCM»', article: 'ccm' },
+  'calc.tab.compare': { title: 'Вкладка «Сравнение»', article: 'calc-overview' },
+  'calc.tab.runs': { title: 'Вкладка «Запуски»', article: 'calc-runs' },
+};
+
+/** Что справка знает про элемент — для контекстного меню и режима «Что это?». */
+export function helpElement(elementId: string | null | undefined): HelpElement | null {
+  if (!elementId) return null;
+  return HELP_ELEMENTS[elementId] || null;
+}
+
+/** Текст пункта контекстного меню: «Что это? — Название элемента». */
+export function whatIsThisLabel(elementId: string): string {
+  const el = helpElement(elementId);
+  return el ? 'Что это? — ' + el.title : 'Что это?';
+}
+
 /** Справка органов управления вида «Сетевой график» (четыре вопроса одним текстом). */
 export const CPM_GRAPH_HINTS = {
   units:
