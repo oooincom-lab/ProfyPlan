@@ -133,6 +133,73 @@ export default function EstimateTable({
   };
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; fileName: string } | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
+  const [fillMode, setFillMode] = useState('25');
+
+  /**
+   * Заполнение пустых оценок по варианту:
+   *   профиль — от одной длительности по коэффициенту (источник «коэффициент», это допущение, а не измерение);
+   *   из истории — по завершённым операциям (когда появится факт, блок 6.24).
+   * Заполняются только строки без полной тройки; сохраняет человек кнопкой — молча ничего не пишется.
+   */
+  const fillEmpty = () => {
+    if (fillMode === 'history') {
+      setNote('Заполнение из истории пока недоступно: нет завершённых операций с фактической длительностью. Появится вместе с блоком 6.24 — тогда источником станет «факт».');
+      return;
+    }
+    const p = Number(fillMode) / 100;
+    const next: Record<string, { to: string; tm: string; tp: string; src: string }> = { ...draft };
+    let filled = 0;
+    for (const op of operations) {
+      const base = Number(op.duration_base || 0);
+      if (!base) continue;
+      const already = num(op.to_optimistic) !== null && num(op.tm_likely) !== null && num(op.tp_pessimistic) !== null;
+      if (already) continue;
+      next[op.id] = {
+        to: (base * (1 - p)).toFixed(2),
+        tm: base.toFixed(2),
+        tp: (base * (1 + p)).toFixed(2),
+        src: 'coefficient',
+      };
+      filled += 1;
+    }
+    setDraft(next);
+    setNote(
+      filled
+        ? `Заполнено профилем ±${Math.round(p * 100)} %: строк ${filled}. Это допущение, а не измерение — проверьте и нажмите «Сохранить все».`
+        : 'Заполнять нечего: у всех операций уже есть полная тройка оценок',
+    );
+  };
+
+  /** Сохранение всех изменённых строк: по одной, чтобы видеть ошибки и не потерять порядок оценок. */
+  const saveAllDrafts = async () => {
+    const ids = Object.keys(draft);
+    let saved = 0;
+    let failed = 0;
+    for (const id of ids) {
+      const op = operations.find((o) => o.id === id);
+      if (!op) continue;
+      const { to, tm, tp } = rowNumbers(op);
+      const src = cellSource(id);
+      if (to !== null && tm !== null && tp !== null && !(to <= tm && tm <= tp)) {
+        failed += 1;
+        continue;
+      }
+      setSavingId(id);
+      try {
+        await onSave(id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: src } as any);
+        saved += 1;
+        setDraft((prev) => {
+          const copy = { ...prev };
+          delete copy[id];
+          return copy;
+        });
+      } catch {
+        failed += 1;
+      }
+    }
+    setSavingId(null);
+    setNote(`Сохранено строк: ${saved}${failed ? `, не прошло: ${failed} (порядок оценок)` : ''}`);
+  };
 
   const exportCsv = () => {
     const head = 'ID;Операция;Опт.;Вероятн.;Пессим.;Ожидаемая;Разброс';
@@ -236,12 +303,38 @@ export default function EstimateTable({
             операций {operations.length} · оценок заполнено {filled} из {operations.length}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn btn-secondary btn-sm" onClick={exportCsv} title="Выгрузить таблицу в файл (CSV для Excel)">
             Выгрузить в файл
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()} title="Загрузить оценки из файла: сначала будет показан сухой прогон">
             Загрузить из файла
+          </button>
+          <span style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
+          <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'flex', gap: 6, alignItems: 'center' }}>
+            вариант заполнения
+            <select
+              value={fillMode}
+              onChange={(e) => setFillMode(e.target.value)}
+              title="Чем заполнять пустые оценки"
+              style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
+            >
+              <option value="15">профиль ±15 %</option>
+              <option value="25">профиль ±25 %</option>
+              <option value="40">профиль ±40 %</option>
+              <option value="history">из истории (факт)</option>
+            </select>
+          </label>
+          <button className="btn btn-secondary btn-sm" onClick={fillEmpty} title="Заполнить только строки без полной тройки оценок">
+            Заполнить пустые
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={!Object.keys(draft).length || savingId === 'all'}
+            onClick={saveAllDrafts}
+            title="Сохранить все изменённые строки"
+          >
+            {savingId === 'all' ? 'Сохраняю…' : 'Сохранить все'}
           </button>
           <input
             ref={fileRef}
@@ -334,6 +427,7 @@ export default function EstimateTable({
                         <option value="expert">эксперт</option>
                         <option value="fact">факт</option>
                         <option value="ai">предложено ИИ</option>
+                        <option value="coefficient">коэффициент</option>
                       </select>
                     </td>
                     <td>
