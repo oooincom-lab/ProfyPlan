@@ -5094,6 +5094,41 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </div>
                   </div>
 
+                  {/* ─── Дата старта проекта: основание для расчёта дат цели (блок 6.14г) ─── */}
+                  <div style={{ display: 'grid', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>🗓 Дата старта проекта</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>
+                        Основание для отсчёта дат: от неё считаются вероятности выполнения договорной и рабочей дат.
+                        Если старт не задан, вероятности считаются от сегодняшнего дня — и на экране это будет видно.
+                      </div>
+                    </div>
+                    <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4, maxWidth: 220 }}>
+                      дата старта
+                      <input
+                        type="date"
+                        value={((projectDetail && projectDetail.start_date) || selectedProject.start_date)
+                          ? String((projectDetail && projectDetail.start_date) || selectedProject.start_date).slice(0, 10)
+                          : ''}
+                        onChange={async (e) => {
+                          const v = e.target.value;
+                          try {
+                            const updated: any = await apiF(`/projects/${selectedProject.id}`, {
+                              method: 'PUT',
+                              body: JSON.stringify({ start_date: v ? v + 'T00:00:00' : null }),
+                            });
+                            setSelectedProject({ ...selectedProject, ...(updated || { start_date: v ? v + 'T00:00:00' : null }) });
+                            setProjectDetail((prev: any) => ({ ...(prev || {}), start_date: v ? v + 'T00:00:00' : null }));
+                            setMsg(v ? 'Дата старта сохранена: ' + v : 'Дата старта очищена');
+                          } catch (err: any) {
+                            setMsg('Не удалось сохранить дату старта: ' + (err?.message || String(err)));
+                          }
+                        }}
+                        style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12.5 }}
+                      />
+                    </label>
+                  </div>
+
                   {/* ─── Политика даты плана (блок 6.29) ─── */}
                   <div style={{ display: 'grid', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
                     <div>
