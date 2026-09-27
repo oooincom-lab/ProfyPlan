@@ -15,7 +15,7 @@
  *
  * Пустых и выдуманных чисел не показываем: нет оценок — пишем, чего не хватает.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
 export type PertOp = {
   id: string;
@@ -42,6 +42,7 @@ function hoursText(hours: number): string {
 }
 
 export default function PertPage({ operations }: { operations: PertOp[] }) {
+  const [bufferK, setBufferK] = useState(2);
   const data = useMemo(() => {
     const withEstimates = operations
       .map((op) => {
@@ -57,10 +58,11 @@ export default function PertPage({ operations }: { operations: PertOp[] }) {
 
     const critical = withEstimates.filter((r) => r.critical);
     const expected = critical.reduce((sum, r) => sum + r.te, 0);
+    const aggressive = critical.reduce((sum, r) => sum + r.tm, 0);
     const variance = critical.reduce((sum, r) => sum + r.variance, 0);
     const sigma = Math.sqrt(variance);
     const totalVariance = variance || 1;
-    return { withEstimates, critical, expected, sigma, totalVariance };
+    return { withEstimates, critical, expected, aggressive, sigma, totalVariance };
   }, [operations]);
 
   const noEstimates = data.withEstimates.length === 0;
@@ -103,6 +105,36 @@ export default function PertPage({ operations }: { operations: PertOp[] }) {
               <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
                 Оценки есть, но ни одна критическая операция их не имеет. Разброс срока складывается именно из критических
                 операций — заполните оценки по ним, и интервалы станут осмысленными.
+              </div>
+            ) : null}
+
+            {/* Защита срока буферами (блок 6.20): первая часть — буфер по критическому пути */}
+            {data.critical.length ? (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '12px 14px', display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>Защита срока буферами (критическая цепь)</div>
+                  <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                    запас буфера, k·σ
+                    <input
+                      type="number" min={0} max={4} step={0.25} value={bufferK}
+                      onChange={(e) => setBufferK(Number(e.target.value) || 0)}
+                      style={{ width: 70, background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '3px 6px', fontSize: 12 }}
+                    />
+                  </label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                  {tile('Агрессивный срок', hoursText(data.aggressive), 'чаще всего случающаяся длительность критических операций')}
+                  {tile('Проектный буфер', hoursText(bufferK * data.sigma), `запас ${bufferK}·σ на непредвиденное в конце цепи`)}
+                  {tile('Защищённый срок', hoursText(data.aggressive + bufferK * data.sigma), 'агрессивный срок плюс буфер')}
+                  {tile('Сравнение с ожидаемым', hoursText(data.aggressive + bufferK * data.sigma - data.expected), 'насколько защищённый срок отличается от обычного расчёта')}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                  Смысл приёма: длительности операций берутся напряжённые (в половине случаев выполнимые), а весь риск собирается
+                  в один буфер в конце — им и управляют, вместо того чтобы прятать запас в каждой операции.
+                  <br />
+                  Честная граница: здесь буфер считается по текущему критическому пути. Питающие буферы на входах в цепь и
+                  ресурсные буферы перед общими ресурсами появятся вместе с полной критической цепью и ресурсным выравниванием (блок 6.20 целиком).
+                </div>
               </div>
             ) : null}
 
