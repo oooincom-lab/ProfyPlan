@@ -14,6 +14,8 @@
  */
 import React from 'react';
 import { CalcMethods, MethodFill, METHOD_FILL_COLOR, METHOD_FILL_LABEL, analysisLabel, logicLabel } from '@/lib/calcMethods';
+import { HelpButton } from '@/components/HelpWindow';
+import { articleIdForCalcTab } from '@/lib/help';
 
 export type CalcTab = 'overview' | 'gantt' | 'network' | 'pert' | 'monte-carlo' | 'ccm' | 'compare' | 'runs';
 
@@ -226,6 +228,8 @@ export default function CalculationsTabs({
             Настройки расчёта
           </button>
         ) : null}
+        {/* Справка по вкладке: статья активного модуля (блок 6.27) */}
+        <HelpButton articleId={articleIdForCalcTab(active)} title="Справка по этой вкладке" />
       </div>
     </div>
   );

@@ -34,6 +34,8 @@ import BomExpand from '@/components/bomexpand';
 import { importProductionOrders } from '@/lib/api';
 import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
+import HelpWindow, { HelpButton } from '@/components/HelpWindow';
+import { HELP_EVENT, articleIdForCalcTab } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
@@ -239,6 +241,27 @@ export default function AppShell() {
     }
   };
   const lastCalcRun = calcRuns[0] || null;
+
+  // ── Справка (блок 6.27): одно окно, статья по текущему модулю ──
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpArticleId, setHelpArticleId] = useState('calculations');
+  useEffect(() => {
+    const onHelp = (e: any) => {
+      const id = e?.detail?.articleId;
+      if (typeof id === 'string' && id) setHelpArticleId(id);
+      setHelpOpen(true);
+    };
+    window.addEventListener(HELP_EVENT, onHelp as any);
+    return () => window.removeEventListener(HELP_EVENT, onHelp as any);
+  }, []);
+  // Статья для кнопки в шапке панели: по текущему разделу
+  const viewHelpId =
+    view === 'calculations' ? articleIdForCalcTab(calcTab)
+      : view === 'project-gantt' ? 'calc-gantt'
+        : view === 'network' ? 'calc-network'
+          : view === 'project-orders' ? 'orders'
+            : view === 'directories' || view === 'nomenclature' || view === 'resources' || view === 'departments' ? 'directories'
+              : 'calculations';
   // Реестр запусков подгружается при входе в раздел «Расчёты»
   useEffect(() => {
     if (view === 'calculations' && selectedProject) loadCalcRuns(selectedProject.id);
@@ -3304,6 +3327,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             {view === 'projects' && <div className="tb-sub">{projects.length} проектов</div>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <HelpButton articleId={viewHelpId} title="Справка по разделу" />
             {view === 'project-dashboard' && (
               <>
                 <button onClick={addGroup} className="btn btn-primary btn-sm">+ Группа</button>
@@ -4910,6 +4934,11 @@ const changeOrderStatus = async (o: any, status: string) => {
           )}
         </div>
       </div>
+
+    {/* Справка: одно окно поверх рабочего экрана (блок 6.27) */}
+    {helpOpen && (
+      <HelpWindow articleId={helpArticleId} onSelect={setHelpArticleId} onClose={() => setHelpOpen(false)} />
+    )}
 
     {/* Окна заказов + окна-списки (поверх рабочего стола) */}
     {win.wins.length > 0 && (
