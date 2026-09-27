@@ -279,8 +279,12 @@ export default function AppShell() {
   };
   const [calcAreaId, setCalcAreaId] = useState('');
   const [calcAreaLabel, setCalcAreaLabel] = useState('');
-  // Конструктор расчёта (блок 6.29): выбранный режим и контекст данных проекта для проверок и рекомендации
+  // Конструктор расчёта (блок 6.29): выбранный режим — контекст данных считается ниже, после загрузки ресурсов
   const [calcMode, setCalcMode] = useState('');
+  // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
+  const [opResources, setOpResources] = useState<any[]>([]);
+
+  // Контекст данных проекта для конструктора режимов: по нему проверяются требования и считается рекомендация
   const modeContext: ModeContext = useMemo(() => {
     const withEstimates = estimateOps.filter((o) => o.to_optimistic !== null && o.to_optimistic !== undefined && o.tm_likely !== null && o.tp_pessimistic !== null).length;
     const used = new Map<string, Set<string>>();
@@ -301,8 +305,6 @@ export default function AppShell() {
   }, [estimateOps, estimateDeps, opResources]);
   const modeHint = useMemo(() => recommendMode(modeContext), [modeContext]);
   const activeMode = CALC_MODES.find((m) => m.id === (calcMode || modeHint.modeId)) || CALC_MODES[0];
-  // Ресурсы операций нужны для разметки общих ресурсов (кандидаты на ресурсный буфер)
-  const [opResources, setOpResources] = useState<any[]>([]);
   const loadOpResources = async (projectId: string) => {
     try {
       const data: any = await apiF(`/projects/${projectId}/operations/resources-map`);
