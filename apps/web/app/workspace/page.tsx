@@ -270,6 +270,14 @@ export default function AppShell() {
       if (overlay) overlay.style.pointerEvents = prevPointer || '';
     }
     const holder = target && target.closest ? (target.closest('[data-help-id]') as HTMLElement | null) : null;
+    // Нажатие по самой кнопке режима (она помечена) — это не выбор элемента, а выключение режима.
+    // Так кнопка работает и когда слой лежит поверх всей шапки.
+    const toggle = target && target.closest ? target.closest('[data-help-toggle]') : null;
+    if (toggle) {
+      setWhatIsMode(false);
+      setHelpPickMsg('');
+      return;
+    }
     const elementId = holder?.getAttribute('data-help-id') || null;
     if (elementId) {
       setWhatIsMode(false);
@@ -3414,6 +3422,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
+              data-help-toggle="what-is"
               title="Режим «Что это?»: щёлкните по элементу — откроется справка по нему. Нажмите ещё раз или Esc — выключить"
               onClick={() => {
                 setWhatIsMode((v) => {
@@ -5014,8 +5023,8 @@ const changeOrderStatus = async (o: any, status: string) => {
         <div
           style={{
             position: 'fixed',
-            top: 10,
-            right: 156,
+            top: 48,
+            right: 24,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
