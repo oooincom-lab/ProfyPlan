@@ -39,7 +39,7 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
   estimates: { block: '6.17', needs: '' },
   gantt: { block: '6.16.9', needs: '' },
   network: { block: '6.16.9', needs: '' },
-  pert: { block: '6.18', needs: 'Нужен ввод тройных оценок — блок 6.17' },
+  pert: { block: '6.18', needs: 'Оценки разброса показываются по критическому пути; полный разбор — Монте-Карло (6.19)' },
   'monte-carlo': { block: '6.19', needs: 'Нужен ввод тройных оценок — блок 6.17' },
   ccm: { block: '6.20', needs: 'Нужен CCM как равноправный метод расчёта' },
   compare: { block: '6.22', needs: 'Появится вместе с запусками и сравнением методов' },
@@ -48,7 +48,7 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
 
 export function calcTabState(tab: CalcTab, methods: CalcMethods): CalcTabState {
   if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'estimates' || tab === 'runs') return 'ready';
-  if (tab === 'pert') return methods.analysis === 'pert' ? 'planned' : 'method-off';
+  if (tab === 'pert') return methods.analysis === 'pert' ? 'ready' : 'method-off';
   if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'planned' : 'method-off';
   if (tab === 'ccm') return methods.logic === 'ccm' ? 'planned' : 'method-off';
   return 'planned';

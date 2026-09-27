@@ -36,6 +36,7 @@ import { useWindows, type WinRec } from '@/components/windows/useWindows';
 import WindowsLayer from '@/components/windows/WindowsLayer';
 import { HelpButton } from '@/components/HelpWindow';
 import EstimateTable from '@/components/EstimateTable';
+import PertPage from '@/components/PertPage';
 import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import AppModal from '@/components/AppModal';
 import ReferenceField from '@/components/ReferenceField';
@@ -258,7 +259,7 @@ export default function AppShell() {
     setEstimateOps((prev) => prev.map((o) => (o.id === opId ? { ...o, ...(saved || patch) } : o)));
   };
   useEffect(() => {
-    if (view === 'calculations' && calcTab === 'estimates' && selectedProject) loadEstimates(selectedProject.id);
+    if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert') && selectedProject) loadEstimates(selectedProject.id);
   }, [view, calcTab, selectedProject?.id]);
 
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
@@ -3701,6 +3702,12 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
               </div>
             </div>
+          ) : calcTab === 'pert' ? (
+            calcMethods.analysis === 'pert' ? (
+              <PertPage operations={estimateOps.length ? estimateOps : []} />
+            ) : (
+              <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
+            )
           ) : calcTab === 'estimates' ? (
             <EstimateTable operations={estimateOps} onSave={saveEstimate} />
           ) : calcTab === 'runs' ? (
