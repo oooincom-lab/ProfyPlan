@@ -4990,7 +4990,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         onMouseDown={pickHelpElement}
         onClick={pickHelpElement}
         title="Щёлкните по элементу — откроется справка. Esc — отмена"
-        style={{ position: 'fixed', inset: 0, zIndex: 5000, cursor: 'help', background: 'rgba(59,130,246,0.05)', outline: '2px solid rgba(59,130,246,0.5)', outlineOffset: -2 }}
+        style={{ position: 'fixed', inset: 0, zIndex: 5000, cursor: 'help', background: 'rgba(245,158,11,0.05)', outline: '2px solid rgba(245,158,11,0.45)', outlineOffset: -2 }}
       >
         {/* Подсказка режима — на самом слое, в правом верхнем углу: шапку не сдвигает */}
         <div
@@ -5003,18 +5003,19 @@ const changeOrderStatus = async (o: any, status: string) => {
             gap: 8,
             padding: '6px 12px',
             borderRadius: 8,
-            border: '1px solid #3B82F6',
-            background: '#0B1B33',
-            color: 'var(--fg-2)',
-            fontSize: 12,
+            border: '1px solid #F59E0B',
+            background: 'rgba(245,158,11,0.14)',
+            color: '#FCD34D',
+            fontSize: 12.5,
             zIndex: 5001,
             boxShadow: '0 6px 18px rgba(0,0,0,.4)',
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
+            fontWeight: 600,
           }}
         >
           Режим «Что это?»: щёлкните по элементу
-          <span style={{ color: 'var(--fg-4)' }}>Esc — отмена</span>
+          <span style={{ color: 'rgba(252,211,77,0.72)', fontWeight: 400 }}>Esc — отмена</span>
         </div>
       </div>
     ) : null}
