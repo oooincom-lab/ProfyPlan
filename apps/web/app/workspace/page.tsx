@@ -540,6 +540,8 @@ export default function AppShell() {
   const [confirmCalcDate, setConfirmCalcDate] = useState(false);
   // Свёрнутые ветки таблицы целей: пустое множество — всё раскрыто (по умолчанию).
   const [goalCollapsed, setGoalCollapsed] = useState<Set<string>>(new Set());
+  // Пришли в «Оценки» из разбора разрыва — показываем возврат к разбору (блок 6.14д.6).
+  const [gapReturn, setGapReturn] = useState(false);
   const unfixRows = async () => {
     const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
     if (!confirmUnfix) {
@@ -4368,7 +4370,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
                             <td style={{ color: 'var(--fg-4)' }}>
                               только в объекте{' '}
-                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => setCalcTab('estimates')} title="Открыть вкладку «Оценки»">Оценки →</button>
+                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => { setGapReturn(true); setCalcTab('estimates'); }} title="Открыть вкладку «Оценки»">Оценки →</button>
                             </td>
                           </tr>
                           <tr>
@@ -4410,7 +4412,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>лёгкие</td>
                             <td style={{ color: 'var(--fg-4)' }}>
                               только в объекте{' '}
-                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => setCalcTab('estimates')} title="Открыть вкладку «Оценки»">Оценки →</button>
+                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => { setGapReturn(true); setCalcTab('estimates'); }} title="Открыть вкладку «Оценки»">Оценки →</button>
                             </td>
                           </tr>
                         </tbody>
@@ -4641,7 +4643,14 @@ const changeOrderStatus = async (o: any, status: string) => {
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
           ) : calcTab === 'estimates' ? (
-            <EstimateTable operations={estimateOps} onSave={saveEstimate} />
+            <>
+              {gapReturn && (
+                <div style={{ marginBottom: 8 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setGapReturn(false); setCalcTab('overview'); }}>← Вернуться к разбору разрыва</button>
+                </div>
+              )}
+              <EstimateTable operations={estimateOps} onSave={saveEstimate} />
+            </>
           ) : calcTab === 'runs' ? (
             <div className="panel">
               <div className="panel-hdr">
