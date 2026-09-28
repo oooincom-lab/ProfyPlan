@@ -694,6 +694,39 @@ export default function AppShell() {
     return { low: netScenario(netOps, estimateDeps, 0.85), base, high: netScenario(netOps, estimateDeps, 1.25) };
   }, [calcTab, estimateOps, estimateDeps]);
 
+  // Разбор разрыва (блок 6.14д, Дополнение 13): только чтение — план не меняется.
+  // Раскладывает разрыв по причинам; где данных нет — честно «нет данных», а не выдуманный совет.
+  const gapAnalysis = useMemo(() => {
+    if (calcTab !== 'overview' || !goalBasis) return null;
+    const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+    const base = originRaw
+      ? (() => { const o = new Date(originRaw); return new Date(o.getFullYear(), o.getMonth(), o.getDate()).getTime(); })()
+      : null;
+    const gaps: { key: 'contract' | 'working'; label: string; hours: number | null }[] = [
+      { key: 'contract', label: 'договорная', hours: null },
+      { key: 'working', label: 'рабочая', hours: null },
+    ];
+    for (const g of gaps) {
+      const v = g.key === 'contract' ? (projectGoalRec && projectGoalRec.contract_date) : (projectGoalRec && projectGoalRec.working_date);
+      if (!v || base === null) continue;
+      g.hours = ((new Date(v).getTime() - base) / 86400000) * 24 - goalBasis.expected;
+    }
+    const netOps = estimateOps
+      .map((o: any) => {
+        const to = Number(o.to_optimistic);
+        const tm = Number(o.tm_likely);
+        const tp = Number(o.tp_pessimistic);
+        if (!Number.isFinite(to) || !Number.isFinite(tm) || !Number.isFinite(tp)) return null;
+        return { id: o.id as string, name: (o.name as string) || 'операция', duration: (to + 4 * tm + tp) / 6, sigma: (tp - to) / 6, flat: Math.abs(tp - to) < 1e-9 };
+      })
+      .filter(Boolean) as { id: string; name: string; duration: number; sigma: number; flat: boolean }[];
+    const r = netOps.length >= 2 && estimateDeps.length ? netCpm(netOps, estimateDeps) : null;
+    const critTop = r ? netOps.filter((o) => r.criticalIds.has(o.id)).sort((a, b) => b.duration - a.duration).slice(0, 3) : [];
+    const flatCount = netOps.filter((o) => o.flat).length;
+    return { gaps, critTop, opsCount: netOps.length, depsCount: estimateDeps.length, shared: modeContext.sharedResources, flatCount };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calcTab, goalBasis, projectGoalRec, estimateOps, estimateDeps, selectedProject, projectDetail, modeContext]);
+
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
 
@@ -4304,6 +4337,82 @@ const changeOrderStatus = async (o: any, status: string) => {
                       Вероятности не посчитаны: без тройных оценок и связей распределения срока нет.
                       Заполните оценки — и здесь появится основание для назначенных дат.
                     </div>
+                  )}
+                </div>
+                <div data-help-id="calc.gap" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Разбор разрыва — что мешает вписаться в цель</div>
+                    <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>только чтение — план не меняется</span>
+                    <HelpButton articleId="calc-gap" title="Как читать разбор разрыва" />
+                  </div>
+                  {gapAnalysis ? (
+                    <>
+                      <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                        {gapAnalysis.gaps.some((g) => g.hours !== null)
+                          ? gapAnalysis.gaps.filter((g) => g.hours !== null).map((g) => `${g.label}: ${(g.hours as number) >= 0 ? 'запас' : 'нехватка'} ${hoursText(Math.abs(g.hours as number))}`).join(' · ')
+                          : 'Даты цели не заданы — впишите договорную или рабочую дату в блоке «Цель» выше, и разбор появится.'}
+                      </div>
+                      <table className="tbl">
+                        <thead>
+                          <tr><th>Причина</th><th>Факт</th><th>Вывод и что делать</th><th>Цена</th><th>Состояние</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Длина технологической цепочки</td>
+                            <td className="t-mono">{hoursText(goalBasis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
+                            <td>{gapAnalysis.critTop.length
+                              ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки».</>
+                              : 'Критический путь не определён — нужны связи между операциями.'}</td>
+                            <td>бесплатно — уточнение нормы; дёшево — форсаж</td>
+                            <td style={{ color: 'var(--fg-4)' }}>только в объекте (вкладка «Оценки»)</td>
+                          </tr>
+                          <tr>
+                            <td>Ресурсный дефицит</td>
+                            <td className="t-mono">общих ресурсов: {gapAnalysis.shared}</td>
+                            <td>{gapAnalysis.shared > 0
+                              ? 'Возможны очереди на общие ресурсы; вклад в срок не считается — этот расчёт ресурсы не моделирует.'
+                              : 'Пересечений по общим ресурсам не найдено.'}</td>
+                            <td>—</td>
+                            <td style={{ color: 'var(--fg-4)' }}>нет данных о вкладе</td>
+                          </tr>
+                          <tr>
+                            <td>Календарь и сменность</td>
+                            <td className="t-mono">—</td>
+                            <td>Нет данных: расчёт идёт в непрерывном времени, календари и смены не подключены.</td>
+                            <td>—</td>
+                            <td style={{ color: 'var(--fg-4)' }}>вне расчёта</td>
+                          </tr>
+                          <tr>
+                            <td>Поставки и закупки</td>
+                            <td className="t-mono">—</td>
+                            <td>Нет данных: сроки поставки не подключены к расчёту.</td>
+                            <td>—</td>
+                            <td style={{ color: 'var(--fg-4)' }}>вне расчёта</td>
+                          </tr>
+                          <tr>
+                            <td>Межпроектные конфликты</td>
+                            <td className="t-mono">—</td>
+                            <td>Нет данных: межпроектное объединение (пул, кластер) ещё не считается.</td>
+                            <td>—</td>
+                            <td style={{ color: 'var(--fg-4)' }}>вне расчёта</td>
+                          </tr>
+                          <tr>
+                            <td>Качество данных</td>
+                            <td className="t-mono">без разброса: {gapAnalysis.flatCount} из {gapAnalysis.opsCount}</td>
+                            <td>{gapAnalysis.flatCount > 0
+                              ? 'У части операций оптимистичная равна пессимистичной — проверьте, не подставлены ли значения. Правка — вкладка «Оценки».'
+                              : 'У всех операций оценки с разбросом — источников сомнений в данных не нашли.'}</td>
+                            <td>бесплатно</td>
+                            <td style={{ color: 'var(--fg-4)' }}>только в объекте (вкладка «Оценки»)</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>
+                        Разбор только читает данные. Применение правок прямо из отчёта появится позже; пока изменения делаются во вкладке «Оценки» и пересчитываются кнопкой «Пересчитать».
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>Разбор появится, когда будут тройные оценки и связи между операциями (вкладка «Оценки»).</div>
                   )}
                 </div>
                 <div data-help-id="calc.goalTable" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
