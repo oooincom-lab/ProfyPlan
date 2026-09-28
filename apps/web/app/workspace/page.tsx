@@ -310,6 +310,13 @@ export default function AppShell() {
     }
   };
 
+  // Проектная цель — запись «область = проект» таблицы целей: она же показана блоком «Цель»
+  // и первой строкой таблицы детализации. Хранение одно — блок и таблица не расходятся.
+  const projectGoalRec = useMemo(
+    () => projectGoals.find((g: any) => g.area_type === 'project' && (g.area_ref || null) === null) || null,
+    [projectGoals],
+  );
+
   // Дерево заказов и состояния строк для таблицы целей (блок 6.30)
   const goalRows = useMemo(() => {
     if (calcTab !== 'overview') return [] as any[];
@@ -630,8 +637,8 @@ export default function AppShell() {
     const origin = new Date(originRaw.getFullYear(), originRaw.getMonth(), originRaw.getDate()).getTime();
     const out = new Map<string, { p: number; note: string }>();
     for (const [key, value] of [
-      ['contract', selectedProject.goal_contract_date],
-      ['working', selectedProject.goal_working_date],
+      ['contract', projectGoalRec && projectGoalRec.contract_date],
+      ['working', projectGoalRec && projectGoalRec.working_date],
     ] as [string, string | null | undefined][]) {
       if (!value) continue;
       const d = new Date(value);
@@ -641,7 +648,7 @@ export default function AppShell() {
       out.set(key, { p: r.probability, note: r.note });
     }
     return out;
-  }, [goalBasis, selectedProject, projectDetail]);
+  }, [goalBasis, projectGoalRec, selectedProject, projectDetail]);
   // Это сценарии, а не вероятности: все работы одновременно быстрее или медленнее — так не бывает,
   // зато видно, насколько срок чувствителен к ошибке в длительностях.
   const scenarioRange = useMemo(() => {
@@ -4129,8 +4136,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                         const base = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
                         const parts: string[] = [];
                         for (const [name, value] of [
-                          ['договорная', selectedProject.goal_contract_date],
-                          ['рабочая', selectedProject.goal_working_date],
+                          ['договорная', projectGoalRec && projectGoalRec.contract_date],
+                          ['рабочая', projectGoalRec && projectGoalRec.working_date],
                         ] as [string, string | null | undefined][]) {
                           if (!value) continue;
                           const hours = ((new Date(value).getTime() - base) / 86400000) * 24;
@@ -4181,15 +4188,18 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </div>
                   )}
                 </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>Цель: даты обосновываются вероятностями</div>
+                <div data-help-id="calc.goal" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Цель: даты обосновываются вероятностями</div>
+                    <HelpButton articleId="calc-goals" title="Как пользоваться целями и датами" />
+                  </div>
                   <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                     <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'grid', gap: 4 }}>
                       договорная дата
                       <input
                         type="date"
-                        value={selectedProject.goal_contract_date ? String(selectedProject.goal_contract_date).slice(0, 10) : ''}
-                        onChange={(e) => saveCalcSettings({ goal_contract_date: e.target.value || null })}
+                        value={projectGoalRec && projectGoalRec.contract_date ? String(projectGoalRec.contract_date).slice(0, 10) : ''}
+                        onChange={(e) => saveGoal({ area_type: 'project', area_ref: null, contract_date: e.target.value || null, contract_source: 'manual' })}
                         style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
                       />
                     </label>
@@ -4197,8 +4207,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                       рабочая дата
                       <input
                         type="date"
-                        value={selectedProject.goal_working_date ? String(selectedProject.goal_working_date).slice(0, 10) : ''}
-                        onChange={(e) => saveCalcSettings({ goal_working_date: e.target.value || null })}
+                        value={projectGoalRec && projectGoalRec.working_date ? String(projectGoalRec.working_date).slice(0, 10) : ''}
+                        onChange={(e) => saveGoal({ area_type: 'project', area_ref: null, working_date: e.target.value || null, working_source: 'manual' })}
                         style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
                       />
                     </label>
@@ -4207,7 +4217,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                     <div style={{ display: 'grid', gap: 6 }}>
                       {(['contract', 'working'] as const).map((key) => {
                         const label = key === 'contract' ? 'договорная' : 'рабочая';
-                        const has = key === 'contract' ? !!selectedProject.goal_contract_date : !!selectedProject.goal_working_date;
+                        const has = key === 'contract' ? !!(projectGoalRec && projectGoalRec.contract_date) : !!(projectGoalRec && projectGoalRec.working_date);
                         const info = goalProbability.get(key);
                         if (!has) return <div key={key} style={{ fontSize: 12, color: 'var(--fg-4)' }}>{label}: дата не назначена</div>;
                         if (!info) return <div key={key} style={{ fontSize: 12, color: 'var(--fg-4)' }}>{label}: вероятность не посчитана</div>;
@@ -4235,7 +4245,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </div>
                   )}
                 </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
+                <div data-help-id="calc.goalTable" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Детализация по областям — даты, расчётное окончание, черновик и состояние</div>
                     <button className="btn btn-secondary btn-sm" onClick={fillCalculated} title="Заполнить рабочие даты по расчёту: для свободных строк, по политике даты проекта">
