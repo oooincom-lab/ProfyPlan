@@ -4370,7 +4370,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
                             <td style={{ color: 'var(--fg-4)' }}>
                               только в объекте{' '}
-                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => { setGapReturn(true); setCalcTab('estimates'); }} title="Открыть вкладку «Оценки»">Оценки →</button>
+                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, marginTop: 2, padding: '5px 14px', fontSize: 12 }} onClick={() => { setGapReturn(true); setCalcTab('estimates'); }} title="Открыть вкладку «Оценки»">Оценки →</button>
                             </td>
                           </tr>
                           <tr>
@@ -4412,7 +4412,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>лёгкие</td>
                             <td style={{ color: 'var(--fg-4)' }}>
                               только в объекте{' '}
-                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => { setGapReturn(true); setCalcTab('estimates'); }} title="Открыть вкладку «Оценки»">Оценки →</button>
+                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, marginTop: 2, padding: '5px 14px', fontSize: 12 }} onClick={() => { setGapReturn(true); setCalcTab('estimates'); }} title="Открыть вкладку «Оценки»">Оценки →</button>
                             </td>
                           </tr>
                         </tbody>
