@@ -4228,6 +4228,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                         const isBranchRoot = r.areaType === 'project' || (rowOrder && !rowOrder.parent_order_id);
                         const canFix = !derived && (!simple || isBranchRoot);
                         const dateInput = { background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '3px 6px', fontSize: 12 } as any;
+                        // Дата окончания области — той же формулой, что и «Взять расчётные»: старт проекта + расчётный срок
+                        const finishIso2 = m && originRaw2 ? new Date(base2 + m.expected * 3600000).toISOString().slice(0, 10) : null;
                         return (
                           <tr key={r.key}>
                             <td style={{ paddingLeft: 10 + r.depth * 16 }}>{r.label}</td>
@@ -4249,7 +4251,18 @@ const changeOrderStatus = async (o: any, status: string) => {
                                 style={dateInput}
                               />
                             </td>
-                            <td className="t-mono">{m ? hoursText(m.expected) : '—'}</td>
+                            <td className="t-mono">
+                              {m ? (
+                                <>
+                                  {hoursText(m.expected)}
+                                  {finishIso2 ? (
+                                    <div style={{ fontSize: 11, color: 'var(--fg-4)', fontWeight: 400 }} title="Дата окончания — от старта проекта по расчётному сроку области, без учёта выходных">
+                                      {`${finishIso2.slice(8, 10)}.${finishIso2.slice(5, 7)}.${finishIso2.slice(0, 4)}`}
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : '—'}
+                            </td>
                             <td className="t-mono">{workProb !== null ? Math.round(workProb * 100) + ' %' : '—'}</td>
                             <td style={{ color: st ? st.color : 'var(--fg-4)' }}>{st ? st.label : derived ? 'зависит от родителя' : '—'}</td>
                             <td style={{ color: 'var(--fg-4)', fontSize: 11.5 }}>
@@ -4285,7 +4298,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </tbody>
                   </table>
                   <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
-                    Ручная дата не перезаписывается автоматикой и показывает состояние по расчётной схеме этой области.
+                    Ручная дата не перезаписывается автоматикой и показывает состояние по расчётной схеме этой области. Дата под расчётным окончанием — от старта проекта, без учёта выходных.
                     {((selectedProject.fixation_mode || 'simple') === 'simple')
                       ? ' Простой режим: фиксация — на ветке целиком, свой флажок внутри зафиксированной ветки недоступен.'
                       : ' Расширенный режим: фиксация возможна на любой строке.'}
