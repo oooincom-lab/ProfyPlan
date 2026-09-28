@@ -403,6 +403,60 @@ export default function AppShell() {
     return rows;
   }, [calcTab, areaOrders, projectGoals, estimateOps, estimateDeps, selectedProject]);
 
+  // «Взять расчётные» (блок 6.30, шаг 2): заполняет рабочие даты по политике даты проекта.
+  // Зафиксированные и зависимые строки не трогаются — у них свой порядок (Дополнение 16).
+  const fillCalculated = async () => {
+    if (!selectedProject) return;
+    const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+    if (!originRaw) {
+      setMsg('Сначала задайте дату старта проекта — от неё считаются даты');
+      return;
+    }
+    const origin = new Date(originRaw);
+    const base = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
+    const policyProbability = (selectedProject.date_policy || 'calculated') === 'probability';
+    const level = Number(selectedProject.date_probability ?? 0.8);
+    // z для выбранного уровня: 0,5 → 0; 0,8 → 0,8416; 0,9 → 1,2816; 0,95 → 1,6449
+    const z = level >= 0.95 ? 1.6449 : level >= 0.9 ? 1.2816 : level >= 0.8 ? 0.8416 : 0;
+    let filled = 0;
+    let skipped = 0;
+    for (const r of goalRows) {
+      if (r.state !== 'free') {
+        skipped += 1;
+        continue;
+      }
+      if (!r.metrics) continue;
+      const hours = policyProbability ? r.metrics.expected + z * r.metrics.sigma : r.metrics.expected;
+      const d = new Date(base + hours * 3600000);
+      const iso = d.toISOString().slice(0, 10);
+      await saveGoal({ area_type: r.areaType, area_ref: r.areaRef, working_date: iso, working_source: 'calculated' });
+      filled += 1;
+    }
+    setMsg(
+      `Рабочие даты заполнены по расчёту: строк ${filled}${skipped ? `, пропущено зафиксированных и зависимых: ${skipped}` : ''}. Основание — ${policyProbability ? `вероятность ${Math.round(level * 100)} %` : 'расчётный срок'}.`,
+    );
+  };
+
+  // Снятие построчных фиксаций (блок 6.30): явное действие при переходе к простому режиму.
+  const [confirmUnfix, setConfirmUnfix] = useState(false);
+  const unfixRows = async () => {
+    const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
+    if (!confirmUnfix) {
+      setConfirmUnfix(true);
+      setMsg(`Снять построчные фиксации? Затронуто строк: ${rows.length}. Даты останутся, снимутся только фиксации.`);
+      return;
+    }
+    setConfirmUnfix(false);
+    for (const g of rows) {
+      await apiF(`/projects/${selectedProject.id}/goals`, {
+        method: 'PUT',
+        body: JSON.stringify({ area_type: g.area_type, area_ref: g.area_ref, fixed: false }),
+      });
+    }
+    await loadGoals(selectedProject.id);
+    setMsg(`Построчные фиксации сняты: строк ${rows.length}`);
+  };
+
   const [calcAreaId, setCalcAreaId] = useState('');
   const [calcAreaLabel, setCalcAreaLabel] = useState('');
   // Конструктор расчёта (блок 6.29): выбранный режим — контекст данных считается ниже, после загрузки ресурсов
@@ -4074,7 +4128,22 @@ const changeOrderStatus = async (o: any, status: string) => {
                   )}
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
-                  <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>Детализация по областям — даты, расчётное окончание и состояние</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Детализация по областям — даты, расчётное окончание и состояние</div>
+                    <button className="btn btn-secondary btn-sm" onClick={fillCalculated} title="Заполнить рабочие даты по расчёту: для свободных строк, по политике даты проекта">
+                      Взять расчётные
+                    </button>
+                    {projectGoals.some((g) => g.fixed && g.area_type !== 'project') ? (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={unfixRows}
+                        title="Снять фиксации с отдельных строк (даты останутся)"
+                        style={confirmUnfix ? { borderColor: '#F59E0B', color: '#FCD34D' } : undefined}
+                      >
+                        {confirmUnfix ? 'Подтвердить снятие' : 'Снять построчные фиксации'}
+                      </button>
+                    ) : null}
+                  </div>
                   <table className="tbl">
                     <thead>
                       <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th>Расч. окончание</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
