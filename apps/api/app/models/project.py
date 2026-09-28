@@ -57,6 +57,12 @@ class Project(BaseModel):
     # Цели проекта (блок 6.14г): назначения человека, при пересчёте не сбрасываются
     goal_contract_date: Mapped[Optional[object]] = mapped_column(Date, nullable=True)
     goal_working_date: Mapped[Optional[object]] = mapped_column(Date, nullable=True)
+
+    # Режим фиксации дат (блок 6.30): simple — два состояния, extended — своя фиксация на любой строке
+    fixation_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="simple", server_default="simple")
+
+    # Режим фиксации дат (блок 6.30): simple — два состояния, extended — своя фиксация на любой строке
+    fixation_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="simple", server_default="simple")
     country_code: Mapped[str] = mapped_column(
         String(2), default="RU"
     )

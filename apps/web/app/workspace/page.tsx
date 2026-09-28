@@ -289,6 +289,120 @@ export default function AppShell() {
     return rest === 0 ? `${days} дн` : `${days} дн ${rest} ч`;
   };
 
+  // Цели по областям (блок 6.30): загрузка, правка, фиксация — таблица детализации на «Обзоре»
+  const [projectGoals, setProjectGoals] = useState<any[]>([]);
+  const loadGoals = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/projects/${projectId}/goals`);
+      setProjectGoals(data?.items || []);
+    } catch {
+      setProjectGoals([]);
+    }
+  };
+  const saveGoal = async (patch: Record<string, any>) => {
+    if (!selectedProject) return;
+    try {
+      await apiF(`/projects/${selectedProject.id}/goals`, { method: 'PUT', body: JSON.stringify(patch) });
+      await loadGoals(selectedProject.id);
+      setMsg('Цель сохранена');
+    } catch (e: any) {
+      setMsg('Не удалось сохранить цель: ' + (e?.message || String(e)));
+    }
+  };
+
+  // Дерево заказов и состояния строк для таблицы целей (блок 6.30)
+  const goalRows = useMemo(() => {
+    if (calcTab !== 'overview') return [] as any[];
+    const orders = areaOrders || [];
+    const goalFor = (areaType: string, ref: string | null) =>
+      projectGoals.find((g) => g.area_type === areaType && (g.area_ref || null) === ref) || null;
+    const byId = new Map(orders.map((o: any) => [o.id, o]));
+    const ancestorsFixed = (orderId: string): boolean => {
+      let cur = byId.get(orderId);
+      const guard = new Set<string>();
+      while (cur && cur.parent_order_id && !guard.has(cur.id)) {
+        guard.add(cur.id);
+        const parentGoal = goalFor('order', cur.parent_order_id);
+        if (parentGoal && parentGoal.fixed) return true;
+        cur = byId.get(cur.parent_order_id);
+      }
+      return !!(goalFor('project', selectedProject ? selectedProject.id : null) || {}).fixed;
+    };
+    const areaMetrics = (orderId: string | null) => {
+      const ids = new Set<string>();
+      if (!orderId) {
+        for (const o of estimateOps) ids.add(o.id);
+      } else {
+        const stack = [orderId];
+        const children = new Map<string, string[]>();
+        for (const o of orders) {
+          if (!o.parent_order_id) continue;
+          const list = children.get(o.parent_order_id) || [];
+          list.push(o.id);
+          children.set(o.parent_order_id, list);
+        }
+        while (stack.length) {
+          const cur = stack.pop() as string;
+          if (!ids.has(cur)) ids.add(cur);
+          for (const c of children.get(cur) || []) stack.push(c);
+        }
+      }
+      const netOps = estimateOps
+        .filter((o: any) => (orderId ? ids.has(o.order_id) : true))
+        .map((o: any) => {
+          const to = Number(o.to_optimistic);
+          const tm = Number(o.tm_likely);
+          const tp = Number(o.tp_pessimistic);
+          if (!Number.isFinite(to) || !Number.isFinite(tm) || !Number.isFinite(tp)) return null;
+          return { id: o.id as string, duration: (to + 4 * tm + tp) / 6, sigma: (tp - to) / 6 };
+        })
+        .filter(Boolean) as { id: string; duration: number; sigma: number }[];
+      if (netOps.length < 2) return null;
+      const r = netCpm(netOps, estimateDeps);
+      return { expected: r.length, sigma: r.sigma };
+    };
+    const rows: any[] = [];
+    const projectGoal = goalFor('project', selectedProject ? selectedProject.id : null);
+    rows.push({
+      key: 'project',
+      label: (selectedProject && selectedProject.name) || 'проект',
+      depth: 0,
+      areaType: 'project',
+      areaRef: null,
+      goal: projectGoal,
+      state: projectGoal && projectGoal.fixed ? 'fixed' : 'free',
+      metrics: areaMetrics(null),
+    });
+    const byParent = new Map<string, any[]>();
+    for (const o of orders) {
+      const key = o.parent_order_id || 'root';
+      const list = byParent.get(key) || [];
+      list.push(o);
+      byParent.set(key, list);
+    }
+    const walk = (parentKey: string, depth: number, guard: Set<string>) => {
+      for (const o of byParent.get(parentKey) || []) {
+        if (guard.has(o.id)) continue;
+        guard.add(o.id);
+        const g = goalFor('order', o.id);
+        const state = g && g.fixed ? 'fixed' : ancestorsFixed(o.id) ? 'derived' : 'free';
+        rows.push({
+          key: o.id,
+          label: `${o.ext_id || ''} ${o.specification_name || o.name || ''}`.trim() || 'заказ',
+          depth: depth + 1,
+          areaType: 'order',
+          areaRef: o.id,
+          goal: g,
+          state,
+          metrics: areaMetrics(o.id),
+        });
+        walk(o.id, depth + 1, guard);
+      }
+    };
+    walk('root', 0, new Set<string>());
+    return rows;
+  }, [calcTab, areaOrders, projectGoals, estimateOps, estimateDeps, selectedProject]);
+
   const [calcAreaId, setCalcAreaId] = useState('');
   const [calcAreaLabel, setCalcAreaLabel] = useState('');
   // Конструктор расчёта (блок 6.29): выбранный режим — контекст данных считается ниже, после загрузки ресурсов
@@ -362,6 +476,7 @@ export default function AppShell() {
       if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
       if (calcTab === 'overview') loadDeps(selectedProject.id);
       if (calcTab === 'overview') loadProjectDetail(selectedProject.id);
+      if (calcTab === 'overview') loadGoals(selectedProject.id);
     }
     // Конструктор в настройках проекта: нужны те же данные для проверок и рекомендации
     if (view === 'settings' && selectedProject) {
@@ -3958,6 +4073,82 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </div>
                   )}
                 </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>Детализация по областям — даты, расчётное окончание и состояние</div>
+                  <table className="tbl">
+                    <thead>
+                      <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th>Расч. окончание</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
+                    </thead>
+                    <tbody>
+                      {goalRows.map((r: any) => {
+                        const m = r.metrics;
+                        const originRaw2 = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+                        const origin2 = originRaw2 ? new Date(originRaw2) : new Date();
+                        const base2 = new Date(origin2.getFullYear(), origin2.getMonth(), origin2.getDate()).getTime();
+                        const probFor = (v?: string | null) => {
+                          if (!v || !m) return null;
+                          const hours = ((new Date(v).getTime() - base2) / 86400000) * 24;
+                          return probabilityByNormal(m.expected, m.sigma, hours).probability;
+                        };
+                        const workProb = probFor(r.goal && r.goal.working_date);
+                        const st = workProb !== null ? goalState(workProb) : null;
+                        const derived = r.state === 'derived';
+                        const simple = (selectedProject.fixation_mode || 'simple') === 'simple';
+                        const rowOrder = r.areaRef ? areaOrders.find((o: any) => o.id === r.areaRef) : null;
+                        const isBranchRoot = r.areaType === 'project' || (rowOrder && !rowOrder.parent_order_id);
+                        const canFix = !derived && (!simple || isBranchRoot);
+                        const dateInput = { background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '3px 6px', fontSize: 12 } as any;
+                        return (
+                          <tr key={r.key}>
+                            <td style={{ paddingLeft: 10 + r.depth * 16 }}>{r.label}</td>
+                            <td>
+                              <input
+                                type="date"
+                                disabled={derived}
+                                value={r.goal && r.goal.contract_date ? String(r.goal.contract_date).slice(0, 10) : ''}
+                                onChange={(e) => saveGoal({ area_type: r.areaType, area_ref: r.areaRef, contract_date: e.target.value || null, contract_source: 'manual' })}
+                                style={dateInput}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="date"
+                                disabled={derived}
+                                value={r.goal && r.goal.working_date ? String(r.goal.working_date).slice(0, 10) : ''}
+                                onChange={(e) => saveGoal({ area_type: r.areaType, area_ref: r.areaRef, working_date: e.target.value || null, working_source: 'manual' })}
+                                style={dateInput}
+                              />
+                            </td>
+                            <td className="t-mono">{m ? hoursText(m.expected) : '—'}</td>
+                            <td className="t-mono">{workProb !== null ? Math.round(workProb * 100) + ' %' : '—'}</td>
+                            <td style={{ color: st ? st.color : 'var(--fg-4)' }}>{st ? st.label : derived ? 'зависит от родителя' : '—'}</td>
+                            <td style={{ color: 'var(--fg-4)', fontSize: 11.5 }}>
+                              {r.goal ? (r.goal.working_source === 'calculated' ? 'расчётная' : 'ручная') : '—'}
+                            </td>
+                            <td>
+                              <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  disabled={!canFix}
+                                  checked={!!(r.goal && r.goal.fixed)}
+                                  onChange={(e) => saveGoal({ area_type: r.areaType, area_ref: r.areaRef, fixed: e.target.checked })}
+                                  style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: canFix ? 'pointer' : 'not-allowed' }}
+                                />
+                                {derived ? 'зависит' : r.goal && r.goal.fixed ? 'зафиксировано' : canFix ? 'фиксировать' : 'недоступно'}
+                              </label>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                    Ручная дата не перезаписывается автоматикой и показывает состояние по расчётной схеме этой области.
+                    {((selectedProject.fixation_mode || 'simple') === 'simple')
+                      ? ' Простой режим: фиксация — на ветке целиком, свой флажок внутри зафиксированной ветки недоступен.'
+                      : ' Расширенный режим: фиксация возможна на любой строке.'}
+                  </div>
+                </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Последний расчёт</div>
                   {lastCalcRun ? (
@@ -5151,6 +5342,20 @@ const changeOrderStatus = async (o: any, status: string) => {
                         }}
                         style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12.5 }}
                       />
+                    </label>
+                    <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4, maxWidth: 320 }}>
+                      режим фиксации дат
+                      <select
+                        value={selectedProject.fixation_mode || 'simple'}
+                        onChange={(e) => saveCalcSettings({ fixation_mode: e.target.value })}
+                        style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12.5 }}
+                      >
+                        <option value="simple">простой — фиксируется ветка целиком</option>
+                        <option value="extended">расширенный — фиксация на любой строке</option>
+                      </select>
+                      <span style={{ color: '#5A7090' }}>
+                        Простой режим проще в работе: жёсткая дата ставится на ветку, вложенное считается от неё. Расширенный нужен, когда требуются исключения по отдельным заказам.
+                      </span>
                     </label>
                   </div>
 
