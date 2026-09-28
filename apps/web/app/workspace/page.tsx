@@ -723,7 +723,7 @@ export default function AppShell() {
     const r = netOps.length >= 2 && estimateDeps.length ? netCpm(netOps, estimateDeps) : null;
     const critTop = r ? netOps.filter((o) => r.criticalIds.has(o.id)).sort((a, b) => b.duration - a.duration).slice(0, 3) : [];
     const flatCount = netOps.filter((o) => o.flat).length;
-    return { gaps, critTop, opsCount: netOps.length, depsCount: estimateDeps.length, shared: modeContext.sharedResources, flatCount };
+    return { gaps, critTop, opsCount: netOps.length, depsCount: estimateDeps.length, shared: modeContext.sharedResources, flatCount, expected: goalBasis.expected };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calcTab, goalBasis, projectGoalRec, estimateOps, estimateDeps, selectedProject, projectDetail, modeContext]);
 
@@ -4359,7 +4359,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                         <tbody>
                           <tr>
                             <td>Длина технологической цепочки</td>
-                            <td className="t-mono">{hoursText(goalBasis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
+                            <td className="t-mono">{hoursText(gapAnalysis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
                             <td>{gapAnalysis.critTop.length
                               ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки».</>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
