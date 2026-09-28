@@ -592,6 +592,8 @@ export default function AppShell() {
       if (calcTab === 'overview') loadDeps(selectedProject.id);
       if (calcTab === 'overview') loadProjectDetail(selectedProject.id);
       if (calcTab === 'overview') loadGoals(selectedProject.id);
+      if (calcTab === 'overview') loadAreaOrders(selectedProject.id);
+      if (calcTab === 'overview') reloadRoutings(selectedProject.id);
     }
     // Конструктор в настройках проекта: нужны те же данные для проверок и рекомендации
     if (view === 'settings' && selectedProject) {
@@ -1877,6 +1879,50 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       return { id: op.id, name: op.name, duration: op.duration, early_start: es, early_finish: es + (op.duration || 0) };
     });
   };
+
+  // Черновик области (для сравнения): сумма нормо-часов маршрутов поддерева заказов — тот же источник,
+  // что у серого таймлайна заказа ДО расчёта (операции маршрутов по порядку номеров, без связей и ресурсов).
+  const goalDraftHours = useMemo(() => {
+    const res: Record<string, { hours: number } | null> = {};
+    if (calcTab !== 'overview' || !selectedProject || !areaOrders.length || !routings.length) return res;
+    const byId = new Map(areaOrders.map((o: any) => [o.id, o]));
+    const cache: Record<string, number | null> = {};
+    const hoursOf = (o: any): number | null => {
+      if (!o) return null;
+      if (o.id in cache) return cache[o.id];
+      const nodes = orderBomNodes(o);
+      const ops = nodes.length ? buildDraftTimeline(nodes) : [];
+      const total = ops.length ? Number(ops[ops.length - 1].early_finish) || 0 : null;
+      cache[o.id] = total;
+      return total;
+    };
+    const children = new Map<string, string[]>();
+    for (const o of areaOrders) {
+      if (!o.parent_order_id) continue;
+      const list = children.get(o.parent_order_id) || [];
+      list.push(o.id);
+      children.set(o.parent_order_id, list);
+    }
+    const sumSubtree = (orderId: string | null): { hours: number } | null => {
+      let sum = 0;
+      let any = false;
+      const seen = new Set<string>();
+      const visit = (id: string) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        const h = hoursOf(byId.get(id));
+        if (h !== null) { sum += h; any = true; }
+        for (const c of children.get(id) || []) visit(c);
+      };
+      if (orderId) visit(orderId);
+      else for (const o of areaOrders) visit(o.id);
+      return any ? { hours: sum } : null;
+    };
+    res['project'] = sumSubtree(null);
+    for (const o of areaOrders) res[o.id] = sumSubtree(o.id);
+    return res;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calcTab, selectedProject, areaOrders, routings, bomTrees]);
 
   const createOrder = async () => {
     if (!newOrder.specification_name.trim() || !selectedProject) return;
@@ -4207,7 +4253,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   </div>
                   <table className="tbl">
                     <thead>
-                      <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th>Расч. окончание</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
+                      <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th>Расч. окончание</th><th title="Срок по предварительным нормо-часам маршрутов области — до расчёта, без связей и ресурсов">Черновик</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
                     </thead>
                     <tbody>
                       {goalRows.map((r: any) => {
@@ -4263,6 +4309,29 @@ const changeOrderStatus = async (o: any, status: string) => {
                                 </>
                               ) : '—'}
                             </td>
+                            <td className="t-mono">
+                              {(() => {
+                                const draft = goalDraftHours[r.key];
+                                if (!draft) return '—';
+                                const draftIso = originRaw2 ? new Date(base2 + draft.hours * 3600000).toISOString().slice(0, 10) : null;
+                                const diffDays = m ? Math.round(((draft.hours - m.expected) / 24) * 10) / 10 : null;
+                                return (
+                                  <>
+                                    {hoursText(draft.hours)}
+                                    {draftIso ? (
+                                      <div style={{ fontSize: 11, color: 'var(--fg-4)', fontWeight: 400 }} title="Черновик — сумма нормо-часов маршрутов области (как в сером таймлайне заказа), без связей и ресурсов">
+                                        {`${draftIso.slice(8, 10)}.${draftIso.slice(5, 7)}.${draftIso.slice(0, 4)}`}
+                                      </div>
+                                    ) : null}
+                                    {diffDays !== null ? (
+                                      <div style={{ fontSize: 11, color: 'var(--fg-4)', fontWeight: 400 }} title="Разница с расчётным сроком: плюс — черновик дольше расчёта, минус — короче">
+                                        {diffDays === 0 ? '= расчёт' : diffDays > 0 ? `+${String(diffDays).replace('.', ',')} дн` : `−${String(Math.abs(diffDays)).replace('.', ',')} дн`}
+                                      </div>
+                                    ) : null}
+                                  </>
+                                );
+                              })()}
+                            </td>
                             <td className="t-mono">{workProb !== null ? Math.round(workProb * 100) + ' %' : '—'}</td>
                             <td style={{ color: st ? st.color : 'var(--fg-4)' }}>{st ? st.label : derived ? 'зависит от родителя' : '—'}</td>
                             <td style={{ color: 'var(--fg-4)', fontSize: 11.5 }}>
@@ -4298,7 +4367,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </tbody>
                   </table>
                   <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
-                    Ручная дата не перезаписывается автоматикой и показывает состояние по расчётной схеме этой области. Дата под расчётным окончанием — от старта проекта, без учёта выходных.
+                    Ручная дата не перезаписывается автоматикой и показывает состояние по расчётной схеме этой области. Дата под расчётным окончанием — от старта проекта, без учёта выходных. Черновик — сумма нормо-часов маршрутов области (как серый таймлайн заказа до расчёта); с расчётом не смешивается и служит для сравнения.
                     {((selectedProject.fixation_mode || 'simple') === 'simple')
                       ? ' Простой режим: фиксация — на ветке целиком, свой флажок внутри зафиксированной ветки недоступен.'
                       : ' Расширенный режим: фиксация возможна на любой строке.'}
