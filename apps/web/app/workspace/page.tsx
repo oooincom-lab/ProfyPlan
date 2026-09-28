@@ -505,8 +505,41 @@ export default function AppShell() {
     );
   };
 
+  // «Из расчёта» у рабочей даты (блок 6.30): подставить расчётный срок в дату проекта.
+  // Это срок без запаса (≈50 %) — поэтому предупреждение и второе нажатие для подтверждения.
+  const setWorkingFromCalc = () => {
+    if (!selectedProject) return;
+    if (!goalBasis) {
+      setMsg('Расчётная дата появится, когда будут тройные оценки и связи — вкладка «Оценки».');
+      return;
+    }
+    const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+    if (!originRaw) {
+      setMsg('Сначала задайте дату старта проекта — от неё считаются даты.');
+      return;
+    }
+    const origin = new Date(originRaw);
+    const base = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
+    const iso = new Date(base + goalBasis.expected * 3600000).toISOString().slice(0, 10);
+    const ru = `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+    if (!confirmCalcDate) {
+      const current = projectGoalRec && projectGoalRec.working_date
+        ? String(projectGoalRec.working_date).slice(0, 10).split('-').reverse().join('.')
+        : 'не задана';
+      setConfirmCalcDate(true);
+      setMsg(`Заменить рабочую дату на расчётную? Было: ${current}, станет: ${ru}. Это срок без запаса — вероятность уложиться около 50 %. Нажмите кнопку ещё раз для подтверждения.`);
+      return;
+    }
+    setConfirmCalcDate(false);
+    saveGoal({ area_type: 'project', area_ref: null, working_date: iso, working_source: 'calculated' });
+  };
+
   // Снятие построчных фиксаций (блок 6.30): явное действие при переходе к простому режиму.
   const [confirmUnfix, setConfirmUnfix] = useState(false);
+  // «Из расчёта» у рабочей даты (блок 6.30): двухшаговое подтверждение — срок без запаса.
+  const [confirmCalcDate, setConfirmCalcDate] = useState(false);
+  // Свёрнутые ветки таблицы целей: пустое множество — всё раскрыто (по умолчанию).
+  const [goalCollapsed, setGoalCollapsed] = useState<Set<string>>(new Set());
   const unfixRows = async () => {
     const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
     if (!confirmUnfix) {
@@ -1931,6 +1964,24 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     return res;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calcTab, selectedProject, areaOrders, routings, bomTrees]);
+
+  // Свёртка веток таблицы целей: по умолчанию всё раскрыто; потомки свёрнутых веток скрыты.
+  const goalView = useMemo(() => {
+    const byKey = new Map(goalRows.map((r: any) => [r.key, r]));
+    const hasKids = new Set<string>(goalRows.map((r: any) => r.parentKey).filter(Boolean));
+    const isHidden = (r: any) => {
+      let k = r.parentKey as string | null;
+      const guard = new Set<string>();
+      while (k && !guard.has(k)) {
+        guard.add(k);
+        if (goalCollapsed.has(k)) return true;
+        const pr = byKey.get(k);
+        k = pr ? pr.parentKey : null;
+      }
+      return false;
+    };
+    return { rows: goalRows.filter((r: any) => !isHidden(r)), hasKids };
+  }, [goalRows, goalCollapsed]);
 
   const createOrder = async () => {
     if (!newOrder.specification_name.trim() || !selectedProject) return;
@@ -4205,12 +4256,22 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </label>
                     <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'grid', gap: 4 }}>
                       рабочая дата
-                      <input
-                        type="date"
-                        value={projectGoalRec && projectGoalRec.working_date ? String(projectGoalRec.working_date).slice(0, 10) : ''}
-                        onChange={(e) => saveGoal({ area_type: 'project', area_ref: null, working_date: e.target.value || null, working_source: 'manual' })}
-                        style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
-                      />
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <input
+                          type="date"
+                          value={projectGoalRec && projectGoalRec.working_date ? String(projectGoalRec.working_date).slice(0, 10) : ''}
+                          onChange={(e) => saveGoal({ area_type: 'project', area_ref: null, working_date: e.target.value || null, working_source: 'manual' })}
+                          style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
+                        />
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={setWorkingFromCalc}
+                          style={confirmCalcDate ? { borderColor: '#F59E0B', color: '#FCD34D' } : undefined}
+                          title="Подставить расчётную дату окончания (срок без запаса, около 50 % — будет предупреждение)"
+                        >
+                          {confirmCalcDate ? 'Подтвердить' : 'из расчёта'}
+                        </button>
+                      </span>
                     </label>
                   </div>
                   {goalBasis ? (
@@ -4248,6 +4309,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div data-help-id="calc.goalTable" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Детализация по областям — даты, расчётное окончание, черновик и состояние</div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setGoalCollapsed(new Set(goalView.hasKids))} title="Свернуть все ветки">Свернуть все</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setGoalCollapsed(new Set())} title="Развернуть все ветки">Развернуть все</button>
                     <button className="btn btn-secondary btn-sm" onClick={fillCalculated} title="Заполнить рабочие даты по расчёту: для свободных строк, по политике даты проекта">
                       Взять расчётные
                     </button>
@@ -4267,7 +4330,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                       <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th title="По ожидаемым оценкам операций ((о+4н+п)/6) и связям области — от этого срока считаются вероятности">Расч. окончание</th><th title="Срок по предварительным нормо-часам маршрутов области — до расчёта, без связей и ресурсов">Черновик</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
                     </thead>
                     <tbody>
-                      {goalRows.map((r: any) => {
+                      {goalView.rows.map((r: any) => {
                         const m = r.metrics;
                         const originRaw2 = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
                         const origin2 = originRaw2 ? new Date(originRaw2) : new Date();
@@ -4289,7 +4352,27 @@ const changeOrderStatus = async (o: any, status: string) => {
                         const finishIso2 = m && originRaw2 ? new Date(base2 + m.expected * 3600000).toISOString().slice(0, 10) : null;
                         return (
                           <tr key={r.key}>
-                            <td style={{ paddingLeft: 10 + r.depth * 16 }}>{r.label}</td>
+                            <td style={{ paddingLeft: 10 + r.depth * 16 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                {goalView.hasKids.has(r.key) ? (
+                                  <button
+                                    onClick={() => setGoalCollapsed((prev) => {
+                                      const n = new Set(prev);
+                                      if (n.has(r.key)) n.delete(r.key);
+                                      else n.add(r.key);
+                                      return n;
+                                    })}
+                                    title={goalCollapsed.has(r.key) ? 'Развернуть ветку' : 'Свернуть ветку'}
+                                    style={{ width: 16, height: 16, minWidth: 16, padding: 0, fontSize: 13, lineHeight: '14px', textAlign: 'center', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 4, color: 'var(--fg-3)', cursor: 'pointer' }}
+                                  >
+                                    {goalCollapsed.has(r.key) ? '+' : '−'}
+                                  </button>
+                                ) : (
+                                  <span style={{ width: 16, minWidth: 16, display: 'inline-block' }} />
+                                )}
+                                {r.label}
+                              </span>
+                            </td>
                             <td>
                               <input
                                 type="date"
