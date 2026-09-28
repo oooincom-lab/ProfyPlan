@@ -3696,6 +3696,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
     .tbl{width:100%;border-collapse:collapse;font-size:13px}
     .tbl th{text-align:left;padding:8px 12px;color:#60A5FA;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #1E3252}
     .tbl td{padding:10px 12px;border-bottom:1px solid #162844;color:#B0C4DE}
+.tbl.tbl-c th,.tbl.tbl-c td{padding:6px 8px}
     .tbl tr:hover td{background:rgba(59,130,246,.05)}
     .tbl .t-name{color:#E8EEF5;font-weight:600}
     .tbl .t-mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5A7090}
@@ -4352,7 +4353,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                           ? gapAnalysis.gaps.filter((g) => g.hours !== null).map((g) => `${g.label}: ${(g.hours as number) >= 0 ? 'запас' : 'нехватка'} ${hoursText(Math.abs(g.hours as number))}`).join(' · ')
                           : 'Даты цели не заданы — впишите договорную или рабочую дату в блоке «Цель» выше, и разбор появится.'}
                       </div>
-                      <table className="tbl">
+                      <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                      <table className="tbl tbl-c">
                         <thead>
                           <tr><th>Причина</th><th>Факт</th><th>Вывод и что делать</th><th>Усилия</th><th>Состояние</th></tr>
                         </thead>
@@ -4407,6 +4409,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                           </tr>
                         </tbody>
                       </table>
+                      </div>
                       <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>
                         Разбор только читает данные. Применение правок прямо из отчёта появится позже; пока изменения делаются во вкладке «Оценки» и пересчитываются кнопкой «Пересчитать».
                       </div>
@@ -4434,7 +4437,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                       </button>
                     ) : null}
                   </div>
-                  <table className="tbl">
+                  <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                  <table className="tbl tbl-c">
                     <thead>
                       <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th title="По ожидаемым оценкам операций ((о+4н+п)/6) и связям области — от этого срока считаются вероятности">Расч. окончание</th><th title="Срок по предварительным нормо-часам маршрутов области — до расчёта, без связей и ресурсов">Черновик</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
                     </thead>
@@ -4456,7 +4460,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                         const rowOrder = r.areaRef ? areaOrders.find((o: any) => o.id === r.areaRef) : null;
                         const isBranchRoot = r.areaType === 'project' || (rowOrder && !rowOrder.parent_order_id);
                         const canFix = !derived && (!simple || isBranchRoot);
-                        const dateInput = { background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '3px 6px', fontSize: 12 } as any;
+                        const dateInput = { background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '3px 6px', fontSize: 12, width: 106 } as any;
                         // Дата окончания области — той же формулой, что и «Взять расчётные»: старт проекта + расчётный срок
                         const finishIso2 = m && originRaw2 ? new Date(base2 + m.expected * 3600000).toISOString().slice(0, 10) : null;
                         return (
@@ -4555,7 +4559,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                 {goalRows.some((x: any) => x.parentKey === r.key) ? (
                                   <button
                                     className="btn btn-secondary btn-sm"
-                                    style={{ padding: '2px 8px', fontSize: 11 }}
+                                    style={{ padding: '2px 6px', fontSize: 10.5, lineHeight: 1.25, whiteSpace: 'normal', textAlign: 'center', maxWidth: 118 }}
                                     onClick={() => distributeRow(r)}
                                     title="Сдвинуть даты вложенных на ту же разницу, что между рабочей датой строки и её расчётным окончанием"
                                   >
@@ -4569,6 +4573,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                       })}
                     </tbody>
                   </table>
+                  </div>
                   <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
                     Ручная дата не перезаписывается автоматикой и показывает состояние по расчётной схеме этой области. Дата под расчётным окончанием — от старта проекта, без учёта выходных. Черновик — сумма нормо-часов маршрутов области (как серый таймлайн заказа до расчёта); с расчётом не смешивается и служит для сравнения.
                     {((selectedProject.fixation_mode || 'simple') === 'simple')
