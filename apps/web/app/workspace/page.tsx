@@ -4363,7 +4363,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td title={gapAnalysis.critTop.length ? gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ') : undefined}>{gapAnalysis.critTop.length
                               ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки».</>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
-                            <td>без доп. усилий: уточнение нормы · малые: форсаж</td>
+                            <td>лёгкие: уточнение нормы · средние: форсаж</td>
                             <td style={{ color: 'var(--fg-4)' }}>только в объекте (вкладка «Оценки»)</td>
                           </tr>
                           <tr>
@@ -4402,7 +4402,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>{gapAnalysis.flatCount > 0
                               ? 'У части операций оптимистичная равна пессимистичной — проверьте, не подставлены ли значения. Правка — вкладка «Оценки».'
                               : 'У всех операций оценки с разбросом — источников сомнений в данных не нашли.'}</td>
-                            <td>без доп. усилий</td>
+                            <td>лёгкие</td>
                             <td style={{ color: 'var(--fg-4)' }}>только в объекте (вкладка «Оценки»)</td>
                           </tr>
                         </tbody>
