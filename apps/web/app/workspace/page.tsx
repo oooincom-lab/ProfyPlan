@@ -326,7 +326,7 @@ export default function AppShell() {
         if (parentGoal && parentGoal.fixed) return true;
         cur = byId.get(cur.parent_order_id);
       }
-      return !!(goalFor('project', selectedProject ? selectedProject.id : null) || {}).fixed;
+      return !!(goalFor('project', null) || {}).fixed;
     };
     const areaMetrics = (orderId: string | null) => {
       const ids = new Set<string>();
@@ -362,7 +362,7 @@ export default function AppShell() {
       return { expected: r.length, sigma: r.sigma };
     };
     const rows: any[] = [];
-    const projectGoal = goalFor('project', selectedProject ? selectedProject.id : null);
+    const projectGoal = goalFor('project', null);
     rows.push({
       key: 'project',
       parentKey: null,
