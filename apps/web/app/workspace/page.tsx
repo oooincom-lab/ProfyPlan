@@ -4363,7 +4363,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>Длина технологической цепочки</td>
                             <td className="t-mono">{hoursText(gapAnalysis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
                             <td title={gapAnalysis.critTop.length ? gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ') : undefined}>{gapAnalysis.critTop.length
-                              ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки».</>
+                              ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки». Ориентир: −10 % по «{gapAnalysis.critTop[0].name}» ≈ −{Math.round((gapAnalysis.critTop[0].duration / 24) * 10) / 10} дн к сроку.</>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
                             <td style={{ color: 'var(--fg-4)' }}>
