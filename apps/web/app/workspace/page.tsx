@@ -534,6 +534,30 @@ export default function AppShell() {
     saveGoal({ area_type: 'project', area_ref: null, working_date: iso, working_source: 'calculated' });
   };
 
+  // Применение первого шага 6.14е: сжатие крупнейшей операции разбора (−10 %) с предупреждением в три вопроса и журналом.
+  const applyTopCompression = () => {
+    if (!gapAnalysis || !gapAnalysis.critTop.length) return;
+    const op = gapAnalysis.critTop[0];
+    const src = estimateOps.find((o: any) => o.id === op.id);
+    if (!src) return;
+    const to = Number(src.to_optimistic);
+    const tm = Number(src.tm_likely);
+    const tp = Number(src.tp_pessimistic);
+    if (!Number.isFinite(to) || !Number.isFinite(tm) || !Number.isFinite(tp)) return;
+    const r10 = (v: number) => Math.round(v * 0.9 * 100) / 100;
+    if (!confirmGapApply) {
+      setConfirmGapApply(true);
+      setMsg(`Применить сжатие −10 %? Что меняется: оценки «${op.name}» ${to}/${tm}/${tp} ч → ${r10(to)}/${r10(tm)}/${r10(tp)} ч. На что влияет: критический путь короче примерно на ${Math.round((op.duration * 0.1 / 24) * 10) / 10} дн (точный эффект — после пересчёта). Как вернуть: повторной правкой оценки; запись сохранится в журнале разбора. Подтвердите кнопкой «Изменить и пересчитать».`);
+      return;
+    }
+    setConfirmGapApply(false);
+    void (async () => {
+      await saveEstimate(op.id, { to_optimistic: r10(to), tm_likely: r10(tm), tp_pessimistic: r10(tp) });
+      setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч` }, ...prev]);
+      setMsg(`Применено: сжатие −10 % по «${op.name}». Срок пересчитан, запись добавлена в журнал разбора.`);
+    })();
+  };
+
   // Снятие построчных фиксаций (блок 6.30): явное действие при переходе к простому режиму.
   const [confirmUnfix, setConfirmUnfix] = useState(false);
   // «Из расчёта» у рабочей даты (блок 6.30): двухшаговое подтверждение — срок без запаса.
@@ -542,6 +566,9 @@ export default function AppShell() {
   const [goalCollapsed, setGoalCollapsed] = useState<Set<string>>(new Set());
   // Пришли в «Оценки» из разбора разрыва — показываем возврат к разбору (блок 6.14д.6).
   const [gapReturn, setGapReturn] = useState(false);
+  // Применение из разбора (6.14е, первый шаг): двухшаговое подтверждение и журнал применений (в рамках сессии).
+  const [confirmGapApply, setConfirmGapApply] = useState(false);
+  const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; from: string; to: string }[]>([]);
   const unfixRows = async () => {
     const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
     if (!confirmUnfix) {
@@ -4365,7 +4392,9 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td>Длина технологической цепочки</td>
                             <td className="t-mono">{hoursText(gapAnalysis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
                             <td title={gapAnalysis.critTop.length ? gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ') : undefined}>{gapAnalysis.critTop.length
-                              ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки». Ориентир: −10 % по «{gapAnalysis.critTop[0].name}» ≈ −{Math.round((gapAnalysis.critTop[0].duration / 24) * 10) / 10} дн к сроку.</>
+                              ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки». Ориентир: −10 % по «{gapAnalysis.critTop[0].name}» ≈ −{Math.round((gapAnalysis.critTop[0].duration / 24) * 10) / 10} дн к сроку.{' '}
+                                <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '3px 10px', fontSize: 11 }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : 'Применить −10 %'}</button>
+                              </>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
                             <td style={{ color: 'var(--fg-4)' }}>
@@ -4419,7 +4448,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                       </table>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>
-                        Разбор только читает данные. Применение правок прямо из отчёта появится позже; пока изменения делаются во вкладке «Оценки» и пересчитываются кнопкой «Пересчитать».
+                        Разбор читает данные и может применить сжатие по подтверждению; остальные правки — во вкладке «Оценки». {gapAppliedLog.length ? `Применено в этой сессии (${gapAppliedLog.length}): ${gapAppliedLog.map((e) => `${e.at} — ${e.name}: ${e.from} → ${e.to}`).join(' · ')}` : 'Журнал применённых правок пока пуст.'}
                       </div>
                     </>
                   ) : (
