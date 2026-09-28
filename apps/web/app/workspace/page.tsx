@@ -365,6 +365,7 @@ export default function AppShell() {
     const projectGoal = goalFor('project', selectedProject ? selectedProject.id : null);
     rows.push({
       key: 'project',
+      parentKey: null,
       label: (selectedProject && selectedProject.name) || 'проект',
       depth: 0,
       areaType: 'project',
@@ -388,6 +389,7 @@ export default function AppShell() {
         const state = g && g.fixed ? 'fixed' : ancestorsFixed(o.id) ? 'derived' : 'free';
         rows.push({
           key: o.id,
+          parentKey: o.parent_order_id || 'project',
           label: `${o.ext_id || ''} ${o.specification_name || o.name || ''}`.trim() || 'заказ',
           depth: depth + 1,
           areaType: 'order',
@@ -434,6 +436,65 @@ export default function AppShell() {
     }
     setMsg(
       `Рабочие даты заполнены по расчёту: строк ${filled}${skipped ? `, пропущено зафиксированных и зависимых: ${skipped}` : ''}. Основание — ${policyProbability ? `вероятность ${Math.round(level * 100)} %` : 'расчётный срок'}.`,
+    );
+  };
+
+  // «Распределить по вложенным» (блок 6.30, шаг 3): сдвиг дат потомков на ту же разницу,
+  // что между датой родителя и его расчётным окончанием. {"Сдвиг, а не сжатие": см. Дополнение 16}.
+  // Зафиксированные строки не трогаются; зависимые — обновляются, ведь в этом и есть их смысл.
+  const distributeRow = async (row: any) => {
+    if (!selectedProject || !row.metrics || !row.goal || !row.goal.working_date) {
+      setMsg('Сначала задайте рабочую дату этой строке');
+      return;
+    }
+    const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+    if (!originRaw) {
+      setMsg('Сначала задайте дату старта проекта — от неё считаются даты');
+      return;
+    }
+    const origin = new Date(originRaw);
+    const base = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
+    const parentFinish = base + row.metrics.expected * 3600000;
+    const parentDate = new Date(row.goal.working_date).getTime();
+    const deltaHours = parentDate - parentFinish;
+    const deltaDays = Math.round((deltaHours / 86400000) * 10) / 10;
+
+    // Потомки: всё, что ниже этой строки в дереве
+    const children = new Map<string, any[]>();
+    for (const r of goalRows) {
+      if (!r.parentKey) continue;
+      const list = children.get(r.parentKey) || [];
+      list.push(r);
+      children.set(r.parentKey, list);
+    }
+    const subtree: any[] = [];
+    const stack = [...(children.get(row.key) || [])];
+    while (stack.length) {
+      const cur = stack.pop();
+      subtree.push(cur);
+      for (const c of children.get(cur.key) || []) stack.push(c);
+    }
+    if (!subtree.length) {
+      setMsg('У этой строки нет вложенных — распределять нечего');
+      return;
+    }
+
+    let moved = 0;
+    let skipped = 0;
+    for (const r of subtree) {
+      if (r.state === 'fixed') {
+        skipped += 1;
+        continue;
+      }
+      if (!r.metrics) continue;
+      const finish = base + r.metrics.expected * 3600000;
+      const iso = new Date(finish + deltaHours).toISOString().slice(0, 10);
+      await saveGoal({ area_type: r.areaType, area_ref: r.areaRef, working_date: iso, working_source: 'calculated' });
+      moved += 1;
+    }
+    const basis = deltaDays >= 0 ? `позже расчёта на ${deltaDays} дн — цели поставлены с запасом` : `раньше расчёта на ${Math.abs(deltaDays)} дн — цели поставлены, требуется сжатие`;
+    setMsg(
+      `Сдвинуто строк: ${moved}${skipped ? `, не тронуто зафиксированных: ${skipped}` : ''}. Основание: дата строки ${basis}.`,
     );
   };
 
@@ -4195,16 +4256,28 @@ const changeOrderStatus = async (o: any, status: string) => {
                               {r.goal ? (r.goal.working_source === 'calculated' ? 'расчётная' : 'ручная') : '—'}
                             </td>
                             <td>
-                              <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                                <input
-                                  type="checkbox"
-                                  disabled={!canFix}
-                                  checked={!!(r.goal && r.goal.fixed)}
-                                  onChange={(e) => saveGoal({ area_type: r.areaType, area_ref: r.areaRef, fixed: e.target.checked })}
-                                  style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: canFix ? 'pointer' : 'not-allowed' }}
-                                />
-                                {derived ? 'зависит' : r.goal && r.goal.fixed ? 'зафиксировано' : canFix ? 'фиксировать' : 'недоступно'}
-                              </label>
+                              <div style={{ display: 'grid', gap: 4 }}>
+                                <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    disabled={!canFix}
+                                    checked={!!(r.goal && r.goal.fixed)}
+                                    onChange={(e) => saveGoal({ area_type: r.areaType, area_ref: r.areaRef, fixed: e.target.checked })}
+                                    style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: canFix ? 'pointer' : 'not-allowed' }}
+                                  />
+                                  {derived ? 'зависит' : r.goal && r.goal.fixed ? 'зафиксировано' : canFix ? 'фиксировать' : 'недоступно'}
+                                </label>
+                                {goalRows.some((x: any) => x.parentKey === r.key) ? (
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '2px 8px', fontSize: 11 }}
+                                    onClick={() => distributeRow(r)}
+                                    title="Сдвинуть даты вложенных на ту же разницу, что между рабочей датой строки и её расчётным окончанием"
+                                  >
+                                    Распределить по вложенным
+                                  </button>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         );
