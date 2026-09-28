@@ -204,7 +204,7 @@ export default function CalculationsTabs({
                   ? 'Готова'
                   : state === 'method-off'
                     ? 'Метод выключен в настройках расчёта проекта'
-                    : 'Страница появится позже (блок ' + CALC_TAB_BLOCK[t.id].block + ')'
+                    : 'Страница появится позже'
               }
               style={{
                 fontSize: 12,

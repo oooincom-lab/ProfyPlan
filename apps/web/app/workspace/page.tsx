@@ -594,6 +594,7 @@ export default function AppShell() {
       if (calcTab === 'overview') loadGoals(selectedProject.id);
       if (calcTab === 'overview') loadAreaOrders(selectedProject.id);
       if (calcTab === 'overview') reloadRoutings(selectedProject.id);
+      if (calcTab === 'overview') loadOpResources(selectedProject.id);
     }
     // Конструктор в настройках проекта: нужны те же данные для проверок и рекомендации
     if (view === 'settings' && selectedProject) {
@@ -4101,8 +4102,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                   {[
                     {
                       k: 'Детерминированный срок',
-                      v: goalBasis || scenarioRange ? hoursText((scenarioRange ? scenarioRange.base : 0)) : 'нет данных',
-                      w: goalBasis || scenarioRange ? 'по длительностям операций и связям (расчёт сети)' : 'нужны операции с длительностями и связи',
+                      v: scenarioRange ? hoursText(scenarioRange.base) : 'нет данных',
+                      w: scenarioRange ? 'по базовым продолжительностям операций и связям — без оценок' : 'нужны продолжительности операций и связи',
                     },
                     {
                       k: 'p50 / p80 / p95',
@@ -4142,8 +4143,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                     },
                     {
                       k: 'Конфликты и узкие места',
-                      v: modeContext.sharedResources > 0 ? `общих ресурсов: ${modeContext.sharedResources}` : 'нет данных',
-                      w: 'полный анализ узких мест — блок 6.20 (CCM с ресурсами)',
+                      v: modeContext.sharedResources > 0 ? `общих ресурсов: ${modeContext.sharedResources}` : 'общих ресурсов не найдено',
+                      w: 'полный анализ пересечений по общим ресурсам появится позже',
                     },
                   ].map((t) => (
                     <div key={t.k} style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
@@ -4158,7 +4159,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{logicLabel(calcMethods.logic)}</div>
                   <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{analysisLabel(calcMethods.analysis)}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 6 }}>
-                    Оси читаются из строки проекта (default_method: {calcMethods.raw}). Раздельные настройки расчёта — блок 6.16.7.
+                    Значения берутся из настроек проекта — изменить можно на вкладке «Настройки расчёта».
                   </div>
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
@@ -4236,7 +4237,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Детализация по областям — даты, расчётное окончание и состояние</div>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Детализация по областям — даты, расчётное окончание, черновик и состояние</div>
                     <button className="btn btn-secondary btn-sm" onClick={fillCalculated} title="Заполнить рабочие даты по расчёту: для свободных строк, по политике даты проекта">
                       Взять расчётные
                     </button>
@@ -4253,7 +4254,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   </div>
                   <table className="tbl">
                     <thead>
-                      <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th>Расч. окончание</th><th title="Срок по предварительным нормо-часам маршрутов области — до расчёта, без связей и ресурсов">Черновик</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
+                      <tr><th>Область</th><th>Договорная</th><th>Рабочая</th><th title="По ожидаемым оценкам операций ((о+4н+п)/6) и связям области — от этого срока считаются вероятности">Расч. окончание</th><th title="Срок по предварительным нормо-часам маршрутов области — до расчёта, без связей и ресурсов">Черновик</th><th>Вероятность</th><th>Состояние</th><th>Источник</th><th>Фиксация</th></tr>
                     </thead>
                     <tbody>
                       {goalRows.map((r: any) => {
@@ -4377,7 +4378,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Последний расчёт</div>
                   {lastCalcRun ? (
                     <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-                      {runDateText(lastCalcRun.data_date) || 'дата не указана'} · версия данных {lastCalcRun.data_fingerprint || 'нет'} · {lastCalcRun.planning_logic.toUpperCase()} + {lastCalcRun.uncertainty_analysis} · операций {lastCalcRun.result?.operations ?? '—'}
+                      {runDateText(lastCalcRun.data_date) || 'дата не указана'} · версия данных {lastCalcRun.data_fingerprint || 'нет'} · {lastCalcRun.planning_logic.toUpperCase()}{lastCalcRun.uncertainty_analysis === 'pert' ? ' + PERT' : lastCalcRun.uncertainty_analysis === 'monte_carlo' ? ' + Монте-Карло' : ''} · операций {lastCalcRun.result?.operations ?? '—'}
                       {lastCalcRun.result?.project_duration_hours ? ` · срок ${Math.round(Number(lastCalcRun.result.project_duration_hours) / 24)} дн` : ''}
                       {lastCalcRun.status === 'failed' ? ' · расчёт не выполнен' : ''}
                     </div>
@@ -4387,7 +4388,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Что уже доступно в разделе</div>
-                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант и Сеть CPM — вкладки существующих экранов. PERT, Монте-Карло, CCM, Сравнение и Запуски появятся по блокам 6.18–6.22; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант, Сеть CPM, Оценки, PERT, Монте-Карло и Запуски — готовы. CCM и Сравнение — страницы появятся позже; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
                 </div>
               </div>
             </div>
@@ -4439,7 +4440,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               <div style={{ padding: '0 16px 14px' }}>
                 {calcRuns.length === 0 ? (
                   <div style={{ fontSize: 12.5, color: 'var(--fg-3)', padding: '10px 0' }}>
-                    Запусков пока нет. Каждый расчёт сохраняется со своей датой и версией входных данных - нажмите «Пересчитать» в полосе выше, и он появится здесь. Сравнение двух запусков и выгрузка появятся в блоке 6.22.
+                    Запусков пока нет. Каждый расчёт сохраняется со своей датой и версией входных данных - нажмите «Пересчитать» в полосе выше, и он появится здесь. Сравнение двух запусков и выгрузка появятся позже.
                   </div>
                 ) : (
                   <table className="tbl">
