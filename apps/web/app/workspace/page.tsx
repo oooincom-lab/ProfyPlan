@@ -4366,7 +4366,10 @@ const changeOrderStatus = async (o: any, status: string) => {
                               ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки».</>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
-                            <td style={{ color: 'var(--fg-4)' }}>только в объекте (вкладка «Оценки»)</td>
+                            <td style={{ color: 'var(--fg-4)' }}>
+                              только в объекте{' '}
+                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => setCalcTab('estimates')} title="Открыть вкладку «Оценки»">Оценки →</button>
+                            </td>
                           </tr>
                           <tr>
                             <td>Ресурсный дефицит</td>
@@ -4405,7 +4408,10 @@ const changeOrderStatus = async (o: any, status: string) => {
                               ? 'У части операций оптимистичная равна пессимистичной — проверьте, не подставлены ли значения. Правка — вкладка «Оценки».'
                               : 'У всех операций оценки с разбросом — источников сомнений в данных не нашли.'}</td>
                             <td>лёгкие</td>
-                            <td style={{ color: 'var(--fg-4)' }}>только в объекте (вкладка «Оценки»)</td>
+                            <td style={{ color: 'var(--fg-4)' }}>
+                              только в объекте{' '}
+                              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '1px 6px', fontSize: 10.5 }} onClick={() => setCalcTab('estimates')} title="Открыть вкладку «Оценки»">Оценки →</button>
+                            </td>
                           </tr>
                         </tbody>
                       </table>
