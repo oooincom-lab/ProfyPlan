@@ -553,8 +553,19 @@ export default function AppShell() {
     setConfirmGapApply(false);
     void (async () => {
       await saveEstimate(op.id, { to_optimistic: r10(to), tm_likely: r10(tm), tp_pessimistic: r10(tp) });
-      setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч` }, ...prev]);
+      setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, opId: op.id, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч`, before: [to, tm, tp] as [number, number, number] }, ...prev]);
       setMsg(`Применено: сжатие −10 % по «${op.name}». Срок пересчитан, запись добавлена в журнал разбора.`);
+    })();
+  };
+
+  // Отмена единичной правки из журнала разбора (6.14е.4): восстанавливаем прежние оценки и пересчитываем.
+  const revertGapApply = (index: number) => {
+    const e = gapAppliedLog[index];
+    if (!e || e.reverted) return;
+    void (async () => {
+      await saveEstimate(e.opId, { to_optimistic: e.before[0], tm_likely: e.before[1], tp_pessimistic: e.before[2] });
+      setGapAppliedLog((prev) => prev.map((x, i) => (i === index ? { ...x, reverted: true } : x)));
+      setMsg(`Возвращено: «${e.name}» — прежние оценки восстановлены, срок пересчитан.`);
     })();
   };
 
@@ -568,7 +579,7 @@ export default function AppShell() {
   const [gapReturn, setGapReturn] = useState(false);
   // Применение из разбора (6.14е, первый шаг): двухшаговое подтверждение и журнал применений (в рамках сессии).
   const [confirmGapApply, setConfirmGapApply] = useState(false);
-  const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; from: string; to: string }[]>([]);
+  const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; reverted?: boolean }[]>([]);
   const unfixRows = async () => {
     const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
     if (!confirmUnfix) {
@@ -4448,7 +4459,20 @@ const changeOrderStatus = async (o: any, status: string) => {
                       </table>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>
-                        Разбор читает данные и может применить сжатие по подтверждению; остальные правки — во вкладке «Оценки». {gapAppliedLog.length ? `Применено в этой сессии (${gapAppliedLog.length}): ${gapAppliedLog.map((e) => `${e.at} — ${e.name}: ${e.from} → ${e.to}`).join(' · ')}` : 'Журнал применённых правок пока пуст.'}
+                        Разбор читает данные и может применить сжатие по подтверждению; остальные правки — во вкладке «Оценки».
+                        {gapAppliedLog.length ? (
+                          <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
+                            <div>Применено в этой сессии ({gapAppliedLog.length}):</div>
+                            {gapAppliedLog.map((e, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span>{e.at} — {e.name}: {e.from} → {e.to}{e.reverted ? ' (возвращено)' : ''}</span>
+                                {!e.reverted && (
+                                  <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 10.5 }} onClick={() => revertGapApply(i)} title="Вернуть прежние оценки и пересчитать">Вернуть</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : 'Журнал применённых правок пока пуст.'}
                       </div>
                     </>
                   ) : (
