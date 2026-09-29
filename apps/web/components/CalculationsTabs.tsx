@@ -5,28 +5,31 @@
  * Что даёт этот каркас:
  *   • единую полосу контекста — область, активные методы (две оси), дата и версия данных, «Пересчитать»,
  *     индикатор «есть несохранённые изменения» — одинаково на всех страницах раздела;
- *   • ленту вкладок: Обзор · Гант · Сеть CPM · PERT · Монте-Карло · CCM · Сравнение · Запуски;
+ *   • ленту вкладок: Обзор · Гант · Сетевой график · PERT · Монте-Карло · Сравнение · Запуски;
  *   • состояния вкладок: готова · метод выключен в настройках · страница появится позже (блок в очереди).
  *     Вкладка выключенного метода НЕ скрывается — показывается неактивной с причиной и переходом в настройки.
  *
- * Страницы внутри вкладок рисует рабочий стол: «Гант» и «Сеть CPM» — существующие экраны,
+ * Страницы внутри вкладок рисует рабочий стол: «Гант» и «Сетевой график» — существующие экраны,
  * остальные появятся по блокам 6.17–6.22. Пустых страниц не бывает: вместо пустоты — объяснение.
+ *
+ * 30.09.2026: вкладки «Сеть CPM» и «CCM» объединены в одну — «Сетевой график» (решение владельца;
+ * спецификация — Дополнение 19). CCM остаётся методом оси логики; слой критической цепи кластера
+ * появится в общем графике вместе с блоком 6.20.
  */
 import React from 'react';
 import { CalcMethods, MethodFill, METHOD_FILL_COLOR, METHOD_FILL_LABEL, analysisLabel, logicLabel } from '@/lib/calcMethods';
 import { HelpButton } from '@/components/HelpWindow';
 import { articleIdForCalcTab } from '@/lib/help';
 
-export type CalcTab = 'overview' | 'gantt' | 'network' | 'estimates' | 'pert' | 'monte-carlo' | 'ccm' | 'compare' | 'runs';
+export type CalcTab = 'overview' | 'gantt' | 'network' | 'estimates' | 'pert' | 'monte-carlo' | 'compare' | 'runs';
 
 export const CALC_TABS: { id: CalcTab; label: string }[] = [
   { id: 'overview', label: 'Обзор' },
   { id: 'gantt', label: 'Гант' },
-  { id: 'network', label: 'Сеть CPM' },
+  { id: 'network', label: 'Сетевой график' },
   { id: 'estimates', label: 'Оценки' },
   { id: 'pert', label: 'PERT' },
   { id: 'monte-carlo', label: 'Монте-Карло' },
-  { id: 'ccm', label: 'CCM' },
   { id: 'compare', label: 'Сравнение' },
   { id: 'runs', label: 'Запуски' },
 ];
@@ -41,7 +44,6 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
   network: { block: '6.16.9', needs: '' },
   pert: { block: '6.18', needs: 'Оценки разброса показываются по критическому пути; полный разбор — Монте-Карло (6.19)' },
   'monte-carlo': { block: '6.19', needs: 'Нужен ввод тройных оценок — блок 6.17' },
-  ccm: { block: '6.20', needs: 'Нужен CCM как равноправный метод расчёта' },
   compare: { block: '6.22', needs: 'Появится вместе с запусками и сравнением методов' },
   runs: { block: '6.16.3', needs: 'Сравнение двух запусков и выгрузка — блок 6.22' },
 };
@@ -50,7 +52,6 @@ export function calcTabState(tab: CalcTab, methods: CalcMethods): CalcTabState {
   if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'estimates' || tab === 'runs') return 'ready';
   if (tab === 'pert') return methods.analysis === 'pert' ? 'ready' : 'method-off';
   if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'planned' : 'method-off';
-  if (tab === 'ccm') return methods.logic === 'ccm' ? 'planned' : 'method-off';
   return 'planned';
 }
 
@@ -70,11 +71,6 @@ function tabNotice(tab: CalcTab, methods: CalcMethods): TabNotice {
     return methods.analysis === 'mc'
       ? { reason: 'Монте-Карло включён, но страница ещё не построена.', blockedInBlock: '6.19', needs: CALC_TAB_BLOCK['monte-carlo'].needs }
       : { reason: 'Монте-Карло выключен в настройках расчёта проекта — вкладка показана неактивной, а не скрыта.', blockedInBlock: '6.16.7', needs: 'Включить Монте-Карло в настройках расчёта проекта' };
-  }
-  if (tab === 'ccm') {
-    return methods.logic === 'ccm'
-      ? { reason: 'CCM включён как логика планирования, но страница ещё не построена.', blockedInBlock: '6.20', needs: CALC_TAB_BLOCK.ccm.needs }
-      : { reason: 'Логика планирования — CPM. CCM выключен, вкладка показана неактивной, а не скрыта.', blockedInBlock: '6.16.7', needs: 'Включить CCM в настройках расчёта проекта' };
   }
   return { reason: 'Страница ещё не построена.', blockedInBlock: CALC_TAB_BLOCK[tab].block, needs: CALC_TAB_BLOCK[tab].needs };
 }

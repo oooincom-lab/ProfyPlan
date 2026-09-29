@@ -190,7 +190,7 @@ export default function AppShell() {
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
   const [view, setView] = useState<View>('dashboard');
-  // Расчёты (блок 6.16 плана): активная вкладка хаба. «Гант» и «Сеть CPM» — отдельные виды, поэтому вкладка выводится из вида.
+  // Расчёты (блок 6.16 плана): активная вкладка хаба. «Гант» и «Сетевой график» — отдельные виды, поэтому вкладка выводится из вида.
   const [calcTab, setCalcTab] = useState<CalcTab>('overview');
   // Реестр сохранённых видов (блок 6.13а): панель поверх рабочего поля сети CPM.
   const [savedViewsOpen, setSavedViewsOpen] = useState(false);
@@ -2641,7 +2641,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     if (['directories','nomenclature','units','resources','work-schedules','production-calendars','departments','organizations','settings'].includes(v)) win.minimizeAll();
   };
 
-  // ── Сеть CPM (вид рабочего поля) ──
+  // ── Сетевой график (вид рабочего поля) ──
   // orderId: undefined — сохранить текущую область; null/'' — весь проект; id — цепочка заказа.
   const loadProjectNetwork = async (p: any, orderId?: string | null) => {
     if (!p && !selectedProject) return;
@@ -3971,7 +3971,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'production-calendars': 'Производственные календари',
     'ccm': 'CCM · Портфель',
     'tools': 'Инструменты',
-    'network': 'Сеть CPM',
+    'network': 'Сетевой график',
     'scale': 'Шкала куста',
     'reports': 'Отчёты',
     'settings': 'Настройки',
@@ -4579,7 +4579,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                       <span>Разбор появится, когда будут тройные оценки и связи между операциями.</span>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => { setCalcTab('estimates'); }}>Открыть «Оценки» →</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { setView('network'); }}>Открыть «Сеть CPM» →</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { setView('network'); }}>Открыть «Сетевой график» →</button>
                       </div>
                     </div>
                   )}
@@ -4761,7 +4761,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Что уже доступно в разделе</div>
-                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант, Сеть CPM, Оценки, PERT, Монте-Карло и Запуски — готовы. CCM и Сравнение — страницы появятся позже; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант, Сетевой график, Оценки, PERT, Монте-Карло и Запуски — готовы. Сравнение появится позже, слой CCM — в «Сетевом графике»; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
                 </div>
               </div>
             </div>
@@ -4864,7 +4864,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   {ganttData?.project_finish_date && <span style={{ fontSize: 11, color: '#8FA3BD' }}>→ финиш <span style={{ color: '#10B981', fontWeight: 600 }}>{ganttData.project_finish_date.slice(8, 10)}.{ganttData.project_finish_date.slice(5, 7)}.{ganttData.project_finish_date.slice(0, 4)}</span></span>}
                   {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{Number(ganttData.total_duration_days).toFixed(1).replace(".", ",")} раб. дн.</span>}
                   <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
-              <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">🕸 Сеть CPM</button>
+              <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">🕸 Сетевой график</button>
               <button onClick={() => loadProjectScale(selectedProject)} className="btn btn-secondary btn-sm">📐 Шкала куста</button>
                   <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
                 </div>
@@ -6281,11 +6281,16 @@ const changeOrderStatus = async (o: any, status: string) => {
             <ToolsPanel projects={projects} selectedProject={selectedProject} onOpenNetwork={loadProjectNetwork} onOpenSavedViews={openSavedViewsForProject} />
           )}
 
-          {/* ═══ СЕТЬ CPM (вид рабочего поля) ═══ */}
+          {/* ═══ СЕТЕВОЙ ГРАФИК (вид рабочего поля) ═══ */}
           {view === 'network' && (
             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, height: 'calc(100vh - 96px)' }}>
+              {calcMethods.logic === 'ccm' && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 12px', fontSize: 12, color: 'var(--fg-2)' }}>
+                  Логика планирования — CCM: критическая цепь кластера появится слоем в этом же графике (блок 6.20). Пока вид показывает расчёт текущей области.
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 16, fontWeight: 700 }}>Сеть CPM</span>
+                <span style={{ fontSize: 16, fontWeight: 700 }}>Сетевой график</span>
                 <span style={{ fontSize: 12.5, color: '#8FA3BD' }}>{selectedProject?.name || 'проект не выбран'}</span>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD' }}>
                   Заказ:

@@ -70,13 +70,13 @@ export default function ToolsPanel({ projects, selectedProject, onOpenNetwork, o
         </div>
 
         <div style={card}>
-          <div style={title}>🕸 Сеть CPM</div>
+          <div style={title}>🕸 Сетевой график</div>
           <div style={desc}>
             Сетевой граф операций с днями на связях: ранние и поздние сроки, резервы, критический путь.
             Открывается видом в рабочем поле, без отдельной страницы.
           </div>
           <span style={badge('доступно', 'ok')}>доступно</span>
-          <button style={btn} disabled={!proj} onClick={() => proj && onOpenNetwork(proj)}>Открыть сеть CPM</button>
+          <button style={btn} disabled={!proj} onClick={() => proj && onOpenNetwork(proj)}>Открыть сетевой график</button>
         </div>
 
         <div style={card}>
