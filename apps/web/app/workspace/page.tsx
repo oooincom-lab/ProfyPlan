@@ -536,7 +536,7 @@ export default function AppShell() {
 
   // Применение первого шага 6.14е: сжатие крупнейшей операции разбора (−10 %) с предупреждением в три вопроса и журналом.
   const applyTopCompression = () => {
-    if (!gapAnalysis || !gapAnalysis.critTop.length) return;
+    if (!gapAnalysis || !goalBasis || !gapAnalysis.critTop.length) return;
     const op = gapAnalysis.critTop[0];
     const src = estimateOps.find((o: any) => o.id === op.id);
     if (!src) return;
@@ -550,10 +550,19 @@ export default function AppShell() {
       setMsg(`Применить сжатие −10 %? Что меняется: оценки «${op.name}» ${to}/${tm}/${tp} ч → ${r10(to)}/${r10(tm)}/${r10(tp)} ч. На что влияет: критический путь короче примерно на ${Math.round((op.duration * 0.1 / 24) * 10) / 10} дн (точный эффект — после пересчёта). Как вернуть: повторной правкой оценки; запись сохранится в журнале разбора. Подтвердите кнопкой «Изменить и пересчитать».`);
       return;
     }
+    // Разрыв до/после (оценка, линейно по критическому пути) — для панели «что применено».
+    const _origin = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+    const _base = _origin
+      ? (() => { const o = new Date(_origin); return new Date(o.getFullYear(), o.getMonth(), o.getDate()).getTime(); })()
+      : null;
+    const _wd = projectGoalRec && projectGoalRec.working_date;
+    const _wdH = _wd && _base !== null ? (new Date(_wd).getTime() - _base) / 3600000 : null;
+    const gapBefore = _wdH !== null ? Math.round(((_wdH - goalBasis.expected) / 24) * 10) / 10 : null;
+    const gapAfter = gapBefore !== null ? Math.round((gapBefore + (op.duration * 0.1) / 24) * 10) / 10 : null;
     setConfirmGapApply(false);
     void (async () => {
       await saveEstimate(op.id, { to_optimistic: r10(to), tm_likely: r10(tm), tp_pessimistic: r10(tp) });
-      setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, opId: op.id, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч`, before: [to, tm, tp] as [number, number, number] }, ...prev]);
+      setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, opId: op.id, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч`, before: [to, tm, tp] as [number, number, number], gapBefore, gapAfter }, ...prev]);
       setMsg(`Применено: сжатие −10 % по «${op.name}». Срок пересчитан, запись добавлена в журнал разбора.`);
     })();
   };
@@ -569,6 +578,19 @@ export default function AppShell() {
     })();
   };
 
+  // Откат накопленного (6.14е.4): возвращаем прежние оценки по всем неприменённым записям журнала.
+  const revertAllGapApplies = () => {
+    const pending = gapAppliedLog.map((e, i) => ({ e, i })).filter((x) => !x.e.reverted);
+    if (!pending.length) return;
+    void (async () => {
+      for (const { e, i } of pending) {
+        await saveEstimate(e.opId, { to_optimistic: e.before[0], tm_likely: e.before[1], tp_pessimistic: e.before[2] });
+        setGapAppliedLog((prev) => prev.map((x, j) => (j === i ? { ...x, reverted: true } : x)));
+      }
+      setMsg(`Откат выполнен: возвращено правок — ${pending.length}, срок пересчитан.`);
+    })();
+  };
+
   // Снятие построчных фиксаций (блок 6.30): явное действие при переходе к простому режиму.
   const [confirmUnfix, setConfirmUnfix] = useState(false);
   // «Из расчёта» у рабочей даты (блок 6.30): двухшаговое подтверждение — срок без запаса.
@@ -579,7 +601,7 @@ export default function AppShell() {
   const [gapReturn, setGapReturn] = useState(false);
   // Применение из разбора (6.14е, первый шаг): двухшаговое подтверждение и журнал применений (в рамках сессии).
   const [confirmGapApply, setConfirmGapApply] = useState(false);
-  const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; reverted?: boolean }[]>([]);
+  const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; gapBefore: number | null; gapAfter: number | null; reverted?: boolean }[]>([]);
   const unfixRows = async () => {
     const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
     if (!confirmUnfix) {
@@ -4462,10 +4484,20 @@ const changeOrderStatus = async (o: any, status: string) => {
                         Разбор читает данные и может применить сжатие по подтверждению; остальные правки — во вкладке «Оценки».
                         {gapAppliedLog.length ? (
                           <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
-                            <div>Применено в этой сессии ({gapAppliedLog.length}):</div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span>Применено в этой сессии ({gapAppliedLog.length}):</span>
+                              {gapAppliedLog.some((e) => !e.reverted) && (
+                                <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 10.5 }} onClick={revertAllGapApplies} title="Вернуть прежние оценки по всем неприменённым правкам и пересчитать">Откатить всё</button>
+                              )}
+                            </div>
                             {gapAppliedLog.map((e, i) => (
                               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                <span>{e.at} — {e.name}: {e.from} → {e.to}{e.reverted ? ' (возвращено)' : ''}</span>
+                                <span>
+                                  {e.at} — {e.name}: {e.from} → {e.to}{e.reverted ? ' (возвращено)' : ''}
+                                  {e.gapBefore !== null && e.gapAfter !== null
+                                    ? ` · разрыв: ${e.gapBefore >= 0 ? 'запас' : 'нехватка'} ${String(Math.abs(e.gapBefore)).replace('.', ',')} → ${e.gapAfter >= 0 ? 'запас' : 'нехватка'} ${String(Math.abs(e.gapAfter)).replace('.', ',')} дн (оценка)`
+                                    : ''}
+                                </span>
                                 {!e.reverted && (
                                   <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 10.5 }} onClick={() => revertGapApply(i)} title="Вернуть прежние оценки и пересчитать">Вернуть</button>
                                 )}
