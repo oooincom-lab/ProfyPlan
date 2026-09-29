@@ -4404,7 +4404,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td className="t-mono">{hoursText(gapAnalysis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
                             <td title={gapAnalysis.critTop.length ? gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ') : undefined}>{gapAnalysis.critTop.length
                               ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки». Ориентир: −10 % по «{gapAnalysis.critTop[0].name}» ≈ −{Math.round((gapAnalysis.critTop[0].duration / 24) * 10) / 10} дн к сроку.{' '}
-                                <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '3px 10px', fontSize: 11 }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : 'Применить −10 %'}</button>
+                                <button className="btn btn-sm" style={{ marginLeft: 6, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, background: confirmGapApply ? 'rgba(245,158,11,0.18)' : 'rgba(59,130,246,0.16)', border: confirmGapApply ? '1px solid #F59E0B' : '1px solid #3B82F6', borderRadius: 6, color: confirmGapApply ? '#FCD34D' : '#93C5FD', cursor: 'pointer' }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : 'Применить −10 %'}</button>
                               </>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
