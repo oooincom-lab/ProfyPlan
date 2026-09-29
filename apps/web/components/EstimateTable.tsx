@@ -138,8 +138,8 @@ export default function EstimateTable({
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; fileName: string } | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const [fillMode, setFillMode] = useState('25');
-  // Основа для «Заполнить пустые» (блок 6.17.7): из расчёта графика (по умолчанию) или из нормы маршрута.
-  const [fillSrc, setFillSrc] = useState<'schedule' | 'base'>('schedule');
+  // Основа для «Заполнить пустые» (блок 6.17.7): из расчёта графика (по умолчанию), из нормы маршрута или из истории (после 6.24).
+  const [fillSrc, setFillSrc] = useState<'schedule' | 'base' | 'history'>('schedule');
   const [confirmClear, setConfirmClear] = useState(false);
 
   /**
@@ -149,7 +149,7 @@ export default function EstimateTable({
    * Заполняются только строки без полной тройки; сохраняет человек кнопкой — молча ничего не пишется.
    */
   const fillEmpty = () => {
-    if (fillMode === 'history') {
+    if (fillSrc === 'history') {
       setNote('Заполнение из истории пока недоступно: нет завершённых операций с фактической длительностью. Появится вместе с блоком 6.24 — тогда источником станет «факт».');
       return;
     }
@@ -365,19 +365,19 @@ export default function EstimateTable({
               <option value="15">профиль ±15 %</option>
               <option value="25">профиль ±25 %</option>
               <option value="40">профиль ±40 %</option>
-              <option value="history">из истории (факт)</option>
             </select>
           </label>
           <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'flex', gap: 6, alignItems: 'center' }}>
             основа
             <select
               value={fillSrc}
-              onChange={(e) => setFillSrc(e.target.value as 'schedule' | 'base')}
-              title="Основа для заполнения: длительность выполнения из последнего расчёта графика или базовая норма из маршрута"
+              onChange={(e) => setFillSrc(e.target.value as 'schedule' | 'base' | 'history')}
+              title="Основа для заполнения: длительность выполнения из последнего расчёта графика, базовая норма из маршрута или факт из истории"
               style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
             >
               <option value="schedule">из расчёта (график)</option>
               <option value="base">из маршрута (норма)</option>
+              <option value="history">из истории (факт)</option>
             </select>
           </label>
           <button className="btn btn-secondary btn-sm" onClick={fillEmpty} title="Заполнить только строки без полной тройки оценок">
