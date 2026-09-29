@@ -424,6 +424,10 @@ export default function EstimateTable({
             }}
           />
         </div>
+        {fillSrc === 'history' ? (
+          <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>Из истории пока недоступно: нет завершённых операций с фактической длительностью — появится вместе с калибровкой (блок 6.24).</div>
+        ) : null}
+        {note ? <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)' }}>{note}</div> : null}
       </div>
       <div style={{ padding: '0 16px 14px' }}>
         <div style={{ fontSize: 12, color: 'var(--fg-3)', margin: '8px 0 10px' }}>
@@ -522,7 +526,6 @@ export default function EstimateTable({
             </tbody>
           </table>
         )}
-        {note ? <div style={{ marginTop: 10, fontSize: 12, color: 'var(--fg-3)' }}>{note}</div> : null}
       </div>
     </div>
   );
