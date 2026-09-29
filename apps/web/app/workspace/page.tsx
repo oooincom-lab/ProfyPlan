@@ -357,6 +357,7 @@ export default function AppShell() {
       const netOps = estimateOps
         .filter((o: any) => (orderId ? ids.has(o.order_id) : true))
         .map((o: any) => {
+          if (o.to_optimistic == null || o.tm_likely == null || o.tp_pessimistic == null) return null;
           const to = Number(o.to_optimistic);
           const tm = Number(o.tm_likely);
           const tp = Number(o.tp_pessimistic);
@@ -540,6 +541,7 @@ export default function AppShell() {
     const op = gapAnalysis.critTop[0];
     const src = estimateOps.find((o: any) => o.id === op.id);
     if (!src) return;
+    if (src.to_optimistic == null || src.tm_likely == null || src.tp_pessimistic == null) return;
     const to = Number(src.to_optimistic);
     const tm = Number(src.tm_likely);
     const tp = Number(src.tp_pessimistic);
@@ -715,6 +717,7 @@ export default function AppShell() {
     if (calcTab !== 'overview') return null;
     const netOps = estimateOps
       .map((o) => {
+        if (o.to_optimistic == null || o.tm_likely == null || o.tp_pessimistic == null) return null;
         const to = Number(o.to_optimistic);
         const tm = Number(o.tm_likely);
         const tp = Number(o.tp_pessimistic);
@@ -778,6 +781,7 @@ export default function AppShell() {
     }
     const netOps = estimateOps
       .map((o: any) => {
+        if (o.to_optimistic == null || o.tm_likely == null || o.tp_pessimistic == null) return null;
         const to = Number(o.to_optimistic);
         const tm = Number(o.tm_likely);
         const tp = Number(o.tp_pessimistic);
@@ -795,7 +799,7 @@ export default function AppShell() {
   // Путь расчёта (блок 6.31): цепочка шагов со статусами и переходами — из реальных данных проекта.
   const calcPathSteps = useMemo(() => {
     const opsTotal = estimateOps.length;
-    const opsWithEst = estimateOps.filter((o: any) => Number.isFinite(Number(o.to_optimistic)) && Number.isFinite(Number(o.tm_likely)) && Number.isFinite(Number(o.tp_pessimistic))).length;
+    const opsWithEst = estimateOps.filter((o: any) => o.to_optimistic != null && o.tm_likely != null && o.tp_pessimistic != null && Number.isFinite(Number(o.to_optimistic)) && Number.isFinite(Number(o.tm_likely)) && Number.isFinite(Number(o.tp_pessimistic))).length;
     const deps = estimateDeps.length;
     const mcOn = !!(selectedProject && selectedProject.uncertainty_analysis === 'monte_carlo');
     const runHours = lastCalcRun && lastCalcRun.result && lastCalcRun.result.project_duration_hours != null ? Number(lastCalcRun.result.project_duration_hours) : null;
