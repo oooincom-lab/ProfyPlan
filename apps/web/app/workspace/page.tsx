@@ -544,10 +544,11 @@ export default function AppShell() {
     const tm = Number(src.tm_likely);
     const tp = Number(src.tp_pessimistic);
     if (!Number.isFinite(to) || !Number.isFinite(tm) || !Number.isFinite(tp)) return;
-    const r10 = (v: number) => Math.round(v * 0.9 * 100) / 100;
+    const pct = Math.min(90, Math.max(1, Math.round(gapApplyPct)));
+    const r10 = (v: number) => Math.round(v * (1 - pct / 100) * 100) / 100;
     if (!confirmGapApply) {
       setConfirmGapApply(true);
-      setMsg(`Применить сжатие −10 %? Что меняется: оценки «${op.name}» ${to}/${tm}/${tp} ч → ${r10(to)}/${r10(tm)}/${r10(tp)} ч. На что влияет: критический путь короче примерно на ${Math.round((op.duration * 0.1 / 24) * 10) / 10} дн (точный эффект — после пересчёта). Как вернуть: повторной правкой оценки; запись сохранится в журнале разбора. Подтвердите кнопкой «Изменить и пересчитать».`);
+      setMsg(`Применить сжатие −${pct} %? Что меняется: оценки «${op.name}» ${to}/${tm}/${tp} ч → ${r10(to)}/${r10(tm)}/${r10(tp)} ч. На что влияет: критический путь короче примерно на ${Math.round((op.duration * (pct / 100) / 24) * 10) / 10} дн (точный эффект — после пересчёта). Как вернуть: повторной правкой оценки; запись сохранится в журнале разбора. Подтвердите кнопкой «Изменить и пересчитать».`);
       return;
     }
     // Разрыв до/после (оценка, линейно по критическому пути) — для панели «что применено».
@@ -558,12 +559,12 @@ export default function AppShell() {
     const _wd = projectGoalRec && projectGoalRec.working_date;
     const _wdH = _wd && _base !== null ? (new Date(_wd).getTime() - _base) / 3600000 : null;
     const gapBefore = _wdH !== null ? Math.round(((_wdH - goalBasis.expected) / 24) * 10) / 10 : null;
-    const gapAfter = gapBefore !== null ? Math.round((gapBefore + (op.duration * 0.1) / 24) * 10) / 10 : null;
+    const gapAfter = gapBefore !== null ? Math.round((gapBefore + (op.duration * (pct / 100)) / 24) * 10) / 10 : null;
     setConfirmGapApply(false);
     void (async () => {
       await saveEstimate(op.id, { to_optimistic: r10(to), tm_likely: r10(tm), tp_pessimistic: r10(tp) });
       setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, opId: op.id, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч`, before: [to, tm, tp] as [number, number, number], gapBefore, gapAfter }, ...prev]);
-      setMsg(`Применено: сжатие −10 % по «${op.name}». Срок пересчитан, запись добавлена в журнал разбора.`);
+      setMsg(`Применено: сжатие −${pct} % по «${op.name}». Срок пересчитан, запись добавлена в журнал разбора.`);
     })();
   };
 
@@ -602,6 +603,8 @@ export default function AppShell() {
   // Применение из разбора (6.14е, первый шаг): двухшаговое подтверждение и журнал применений (в рамках сессии).
   const [confirmGapApply, setConfirmGapApply] = useState(false);
   const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; gapBefore: number | null; gapAfter: number | null; reverted?: boolean }[]>([]);
+  // Шаг сжатия из разбора, % (по умолчанию 10).
+  const [gapApplyPct, setGapApplyPct] = useState(10);
   const unfixRows = async () => {
     const rows = projectGoals.filter((g) => g.fixed && g.area_type !== 'project');
     if (!confirmUnfix) {
@@ -4426,7 +4429,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                             <td className="t-mono">{hoursText(gapAnalysis.expected)} · {gapAnalysis.opsCount} оп. · связей {gapAnalysis.depsCount}</td>
                             <td title={gapAnalysis.critTop.length ? gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ') : undefined}>{gapAnalysis.critTop.length
                               ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки». Ориентир: −10 % по «{gapAnalysis.critTop[0].name}» ≈ −{Math.round((gapAnalysis.critTop[0].duration / 24) * 10) / 10} дн к сроку.{' '}
-                                <button className="btn btn-sm" style={{ marginLeft: 6, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, background: confirmGapApply ? 'rgba(245,158,11,0.18)' : 'rgba(59,130,246,0.16)', border: confirmGapApply ? '1px solid #F59E0B' : '1px solid #3B82F6', borderRadius: 6, color: confirmGapApply ? '#FCD34D' : '#93C5FD', cursor: 'pointer' }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : 'Применить −10 %'}</button>
+                                <input type="number" min={1} max={90} value={gapApplyPct} onChange={(e) => setGapApplyPct(Math.min(90, Math.max(1, Number(e.target.value) || 10)))} title="На сколько сжать оценки операции, %" style={{ width: 50, marginLeft: 6, padding: '3px 6px', fontSize: 11.5, background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 6 }} />{' '}
+                              <button className="btn btn-sm" style={{ marginLeft: 4, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, background: confirmGapApply ? 'rgba(245,158,11,0.18)' : 'rgba(59,130,246,0.16)', border: confirmGapApply ? '1px solid #F59E0B' : '1px solid #3B82F6', borderRadius: 6, color: confirmGapApply ? '#FCD34D' : '#93C5FD', cursor: 'pointer' }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : `Применить −${gapApplyPct} %`}</button>
                               </>
                               : 'Критический путь не определён — нужны связи между операциями.'}</td>
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
