@@ -1028,6 +1028,18 @@ export default function AppShell() {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [ganttData, setGanttData] = useState<any>(null);
+
+  // Длительности выполнения из последнего календарного расчёта (блок 6.17.7): длительность графика → часы (1 дн = 24 ч),
+  // для «Заполнить пустые → из расчёта (график)». Без расчёта карта пустая — интерфейс честно предложит норму.
+  const schedDurHours = useMemo(() => {
+    const m: Record<string, number> = {};
+    const nodes = ganttData && Array.isArray(ganttData.nodes) ? ganttData.nodes : [];
+    for (const n of nodes) {
+      const d = Number(n && n.duration_days);
+      if (n && n.id && Number.isFinite(d) && d > 0) m[n.id] = Math.round(d * 24 * 100) / 100;
+    }
+    return m;
+  }, [ganttData]);
   const [projCapacity, setProjCapacity] = useState<any>(null);
   const [projLoading, setProjLoading] = useState<any>(null);
   const [ganttLoading, setGanttLoading] = useState(false);
@@ -4796,7 +4808,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <button className="btn btn-secondary btn-sm" onClick={() => { setGapReturn(false); setCalcTab('overview'); }}>← Вернуться к разбору разрыва</button>
                 </div>
               )}
-              <EstimateTable operations={estimateOps} onSave={saveEstimate} />
+              <EstimateTable operations={estimateOps} onSave={saveEstimate} schedHours={schedDurHours} schedAt={ganttData ? ganttData.anchor || null : null} />
             </>
           ) : calcTab === 'runs' ? (
             <div className="panel">

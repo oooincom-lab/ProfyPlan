@@ -38,9 +38,13 @@ function num(value: unknown): number | null {
 export default function EstimateTable({
   operations,
   onSave,
+  schedHours,
+  schedAt,
 }: {
   operations: EstimateOp[];
   onSave: (id: string, patch: Record<string, number | null>) => Promise<void>;
+  schedHours?: Record<string, number>;
+  schedAt?: string | null;
 }) {
   const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string; src: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -134,6 +138,8 @@ export default function EstimateTable({
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; fileName: string } | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const [fillMode, setFillMode] = useState('25');
+  // Основа для «Заполнить пустые» (блок 6.17.7): из расчёта графика (по умолчанию) или из нормы маршрута.
+  const [fillSrc, setFillSrc] = useState<'schedule' | 'base'>('schedule');
   const [confirmClear, setConfirmClear] = useState(false);
 
   /**
@@ -147,11 +153,13 @@ export default function EstimateTable({
       setNote('Заполнение из истории пока недоступно: нет завершённых операций с фактической длительностью. Появится вместе с блоком 6.24 — тогда источником станет «факт».');
       return;
     }
+    const schedAvail = !!(schedHours && Object.keys(schedHours).length > 0);
+    const useSched = fillSrc === 'schedule' && schedAvail;
     const p = Number(fillMode) / 100;
     const next: Record<string, { to: string; tm: string; tp: string; src: string }> = { ...draft };
     let filled = 0;
     for (const op of operations) {
-      const base = Number(op.duration_base || 0);
+      const base = useSched ? Number(schedHours?.[op.id] || 0) : Number(op.duration_base || 0);
       if (!base) continue;
       const already = num(op.to_optimistic) !== null && num(op.tm_likely) !== null && num(op.tp_pessimistic) !== null;
       if (already) continue;
@@ -159,14 +167,18 @@ export default function EstimateTable({
         to: (base * (1 - p)).toFixed(2),
         tm: base.toFixed(2),
         tp: (base * (1 + p)).toFixed(2),
-        src: 'coefficient',
+        src: useSched ? 'schedule' : 'coefficient',
       };
       filled += 1;
     }
     setDraft(next);
+    const srcText = useSched
+      ? `из расчёта графика${schedAt ? ` от ${String(schedAt).slice(0, 10).split('-').reverse().join('.')}` : ''}`
+      : 'по норме маршрута';
+    const fb = fillSrc === 'schedule' && !schedAvail ? ' Расчёт графика не найден — сначала «Рассчитать проект»; заполнено по норме.' : '';
     setNote(
       filled
-        ? `Заполнено профилем ±${Math.round(p * 100)} %: строк ${filled}. Это допущение, а не измерение — проверьте и нажмите «Сохранить все».`
+        ? `Заполнено ${srcText} (профиль ±${Math.round(p * 100)} %): строк ${filled}. Это допущение, а не измерение — проверьте и нажмите «Сохранить все».${fb}`
         : 'Заполнять нечего: у всех операций уже есть полная тройка оценок',
     );
   };
@@ -356,6 +368,18 @@ export default function EstimateTable({
               <option value="history">из истории (факт)</option>
             </select>
           </label>
+          <label style={{ fontSize: 11.5, color: 'var(--fg-3)', display: 'flex', gap: 6, alignItems: 'center' }}>
+            основа
+            <select
+              value={fillSrc}
+              onChange={(e) => setFillSrc(e.target.value as 'schedule' | 'base')}
+              title="Основа для заполнения: длительность выполнения из последнего расчёта графика или базовая норма из маршрута"
+              style={{ background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 5, padding: '4px 6px', fontSize: 12 }}
+            >
+              <option value="schedule">из расчёта (график)</option>
+              <option value="base">из маршрута (норма)</option>
+            </select>
+          </label>
           <button className="btn btn-secondary btn-sm" onClick={fillEmpty} title="Заполнить только строки без полной тройки оценок">
             Заполнить пустые
           </button>
@@ -480,6 +504,7 @@ export default function EstimateTable({
                         <option value="fact">факт</option>
                         <option value="ai">предложено ИИ</option>
                         <option value="coefficient">коэффициент</option>
+                        <option value="schedule">из расчёта</option>
                       </select>
                     </td>
                     <td>
