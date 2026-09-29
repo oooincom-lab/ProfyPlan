@@ -660,6 +660,7 @@ export const HELP_ELEMENTS: Record<string, HelpElement> = {
   'calc.goal': { title: 'Блок «Цель проекта»', article: 'calc-goals' },
   'calc.goalTable': { title: 'Таблица детализации по областям', article: 'calc-goals' },
   'calc.gap': { title: 'Разбор разрыва', article: 'calc-gap' },
+  'calc.path': { title: 'Путь расчёта', article: 'calc-guide' },
   // Разделы и вкладки, которые уже помечены в интерфейсе
   'calc.tab.overview': { title: 'Вкладка «Обзор»', article: 'calc-overview' },
   'calc.tab.gantt': { title: 'Вкладка «Гант»', article: 'calc-gantt' },

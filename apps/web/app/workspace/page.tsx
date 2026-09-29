@@ -792,6 +792,25 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calcTab, goalBasis, projectGoalRec, estimateOps, estimateDeps, selectedProject, projectDetail, modeContext]);
 
+  // Путь расчёта (блок 6.31): цепочка шагов со статусами и переходами — из реальных данных проекта.
+  const calcPathSteps = useMemo(() => {
+    const opsTotal = estimateOps.length;
+    const opsWithEst = estimateOps.filter((o: any) => Number.isFinite(Number(o.to_optimistic)) && Number.isFinite(Number(o.tm_likely)) && Number.isFinite(Number(o.tp_pessimistic))).length;
+    const deps = estimateDeps.length;
+    const mcOn = !!(selectedProject && selectedProject.uncertainty_analysis === 'monte_carlo');
+    const runHours = lastCalcRun && lastCalcRun.result && lastCalcRun.result.project_duration_hours != null ? Number(lastCalcRun.result.project_duration_hours) : null;
+    const goalSet = !!(projectGoalRec && (projectGoalRec.contract_date || projectGoalRec.working_date));
+    const steps: { key: string; title: string; caption: string; state: 'ok' | 'warn' | 'off'; tab: string | null; hint: string }[] = [
+      { key: 'data', title: 'Данные и связи', caption: deps > 1 ? `связей: ${deps}` : 'связей пока нет', state: deps > 1 ? 'ok' : 'warn', tab: 'network', hint: deps > 1 ? 'Структура заведена — можно смотреть сеть' : 'Добавьте последовательность операций: без связей сеть не строится' },
+      { key: 'base', title: 'Срок и резервы', caption: runHours != null ? `срок ≈ ${Math.round(runHours / 24)} дн` : 'не рассчитан', state: runHours != null ? 'ok' : 'warn', tab: 'gantt', hint: runHours != null ? 'Последний расчёт есть' : 'Сначала выполните «Рассчитать проект» на вкладке «Гант»' },
+      { key: 'est', title: 'Оценки', caption: opsTotal ? `${opsWithEst} из ${opsTotal}` : 'нет операций', state: opsWithEst > 0 ? (opsWithEst >= opsTotal ? 'ok' : 'warn') : 'warn', tab: 'estimates', hint: opsWithEst > 0 ? 'Тройные оценки — вкладка «Оценки»' : 'Заполните оценки — вручную или «Заполнить пустые» профилем' },
+      { key: 'pert', title: 'PERT', caption: opsWithEst > 0 && deps > 1 ? 'интервалы 68/95 %' : 'нужны оценки и связи', state: opsWithEst > 0 && deps > 1 ? 'ok' : 'warn', tab: 'pert', hint: opsWithEst > 0 && deps > 1 ? 'Доступен: ожидаемый срок и интервалы' : 'PERT без оценок и связей не считается' },
+      { key: 'mc', title: 'Монте-Карло', caption: mcOn ? (opsWithEst > 0 ? 'прогоны и процентили' : 'нужны оценки') : 'выключен в настройках', state: mcOn ? (opsWithEst > 0 ? 'ok' : 'warn') : 'off', tab: 'settings', hint: mcOn ? 'Прогоны дадут вероятности по датам' : 'Включите метод в «Настройках расчёта», чтобы получить вероятности' },
+      { key: 'goal', title: 'Цель и разбор', caption: goalSet ? 'даты заданы' : 'дата цели не задана', state: goalSet ? 'ok' : 'warn', tab: 'overview', hint: 'Цели и разрыв — в блоке «Цель» ниже; разбор подскажет, что сжать' },
+    ];
+    return steps;
+  }, [estimateOps, estimateDeps, selectedProject, lastCalcRun, projectGoalRec]);
+
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
 
@@ -4255,6 +4274,34 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
               </div>
               <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
+                {/* Путь расчёта (блок 6.31): цепочка шагов — ведёт, подсказывает, переходит по клику */}
+                <div data-help-id="calc.path" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Путь расчёта — нажмите шаг, чтобы перейти</div>
+                    <HelpButton articleId="calc-guide" title="Путеводитель: методы и режимы" />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                    {calcPathSteps.map((s, i): any => [
+                      i > 0 ? <span key={s.key + '-arrow'} style={{ alignSelf: 'center', color: 'var(--fg-4)', fontSize: 12 }}>→</span> : null,
+                      <button
+                        key={s.key}
+                        onClick={() => {
+                          if (!s.tab) return;
+                          if (s.tab === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); return; }
+                          if (s.tab === 'network') { setView('network'); return; }
+                          setCalcTab(s.tab as any);
+                          setView('calculations');
+                        }}
+                        title={s.hint}
+                        style={{ display: 'grid', gap: 2, textAlign: 'left', padding: '6px 10px', borderRadius: 8, border: s.state === 'ok' ? '1px solid rgba(16,185,129,0.55)' : s.state === 'warn' ? '1px solid rgba(245,158,11,0.6)' : '1px solid var(--border-2)', background: s.state === 'ok' ? 'rgba(16,185,129,0.10)' : s.state === 'warn' ? 'rgba(245,158,11,0.10)' : 'transparent', cursor: s.tab ? 'pointer' : 'default' }}
+                      >
+                        <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>{s.state === 'ok' ? '✓ сделан' : s.state === 'warn' ? '⚠ действие' : '○ впереди'}</span>
+                        <span style={{ fontSize: 12, color: 'var(--fg)' }}>{s.title}</span>
+                        <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>{s.caption}</span>
+                      </button>,
+                    ])}
+                  </div>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                   {[
                     {
