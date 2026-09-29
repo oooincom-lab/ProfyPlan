@@ -110,7 +110,7 @@ function localCpm(
   return { length, aggressive, sigma: Math.sqrt(variance), criticalIds, slack };
 }
 
-export default function PertPage({ operations, dependencies = [], resources = [], orders = [], onAreaChange }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[]; orders?: PertOrder[]; onAreaChange?: (orderId: string, label: string) => void }) {
+export default function PertPage({ operations, dependencies = [], resources = [], orders = [], onAreaChange, onOpenTab }: { operations: PertOp[]; dependencies?: { predecessor_id: string; successor_id: string }[]; resources?: { operation_id: string; resource_id: string; resource_name?: string }[]; orders?: PertOrder[]; onAreaChange?: (orderId: string, label: string) => void; onOpenTab?: (tab: string) => void }) {
   const [bufferK, setBufferK] = useState(2);
   const [areaOrderId, setAreaOrderId] = useState('');
 
@@ -413,9 +413,11 @@ export default function PertPage({ operations, dependencies = [], resources = []
         ) : null}
 
         {noEstimates ? (
-          <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
-            Пока нечего считать: ни у одной операции нет трёх оценок. Заполните их на вкладке «Оценки» — и здесь появятся
-            ожидаемый срок и интервалы.
+          <div style={{ fontSize: 12.5, color: 'var(--fg-3)', display: 'grid', gap: 8 }}>
+            <span>Пока нечего считать: ни у одной операции нет трёх оценок. Заполните их на вкладке «Оценки» — и здесь появятся ожидаемый срок и интервалы.</span>
+            {onOpenTab ? (
+              <div><button className="btn btn-secondary btn-sm" onClick={() => onOpenTab('estimates')}>Открыть «Оценки» →</button></div>
+            ) : null}
           </div>
         ) : (
           <>
@@ -427,9 +429,11 @@ export default function PertPage({ operations, dependencies = [], resources = []
             </div>
 
             {noCriticalEstimates ? (
-              <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
-                Оценки есть, но ни одна критическая операция их не имеет. Разброс срока складывается именно из критических
-                операций — заполните оценки по ним, и интервалы станут осмысленными.
+              <div style={{ fontSize: 12.5, color: 'var(--fg-3)', display: 'grid', gap: 8 }}>
+                <span>Оценки есть, но ни одна критическая операция их не имеет. Разброс срока складывается именно из критических операций — заполните оценки по ним, и интервалы станут осмысленными.</span>
+                {onOpenTab ? (
+                  <div><button className="btn btn-secondary btn-sm" onClick={() => onOpenTab('estimates')}>Открыть «Оценки» →</button></div>
+                ) : null}
               </div>
             ) : null}
 

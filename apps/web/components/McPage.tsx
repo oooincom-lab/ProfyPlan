@@ -33,8 +33,10 @@ function hoursText(hours: number | undefined | null): string {
 
 export default function McPage({
   onRun,
+  onOpenTab,
 }: {
   onRun: (iterations: number, seed: number | null) => Promise<McResult>;
+  onOpenTab?: (tab: string) => void;
 }) {
   const [iterations, setIterations] = useState(10000);
   const [seed, setSeed] = useState('');
@@ -178,9 +180,11 @@ export default function McPage({
             ) : null}
           </>
         ) : (
-          <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>
-            Нажмите «Рассчитать»: покажем распределение срока, процентили и вероятность уложиться в дату. Оценки берутся
-            из вкладки «Оценки» — сейчас это {result ? '' : 'то, что заполнено по операциям проекта'}.
+          <div style={{ fontSize: 12.5, color: 'var(--fg-3)', display: 'grid', gap: 8 }}>
+            <span>Нажмите «Рассчитать»: покажем распределение срока, процентили и вероятность уложиться в дату. Оценки берутся из вкладки «Оценки» — сейчас это {result ? '' : 'то, что заполнено по операциям проекта'}.</span>
+            {onOpenTab ? (
+              <div><button className="btn btn-secondary btn-sm" onClick={() => onOpenTab('estimates')}>Открыть «Оценки» →</button></div>
+            ) : null}
           </div>
         )}
       </div>

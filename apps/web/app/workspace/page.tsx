@@ -4559,7 +4559,13 @@ const changeOrderStatus = async (o: any, status: string) => {
                       </div>
                     </>
                   ) : (
-                    <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>Разбор появится, когда будут тройные оценки и связи между операциями (вкладка «Оценки»).</div>
+                    <div style={{ fontSize: 12, color: 'var(--fg-4)', display: 'grid', gap: 8 }}>
+                      <span>Разбор появится, когда будут тройные оценки и связи между операциями.</span>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { setCalcTab('estimates'); }}>Открыть «Оценки» →</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { setView('network'); }}>Открыть «Сеть CPM» →</button>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div data-help-id="calc.goalTable" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 6 }}>
@@ -4768,13 +4774,14 @@ const changeOrderStatus = async (o: any, status: string) => {
                   }
                   return res;
                 }}
+                onOpenTab={(t: string) => { setCalcTab(t as any); setView('calculations'); }}
               />
             ) : (
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
-              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} orders={areaOrders} onAreaChange={(id, label) => { setCalcAreaId(id); setCalcAreaLabel(label); }} />
+              <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} orders={areaOrders} onAreaChange={(id, label) => { setCalcAreaId(id); setCalcAreaLabel(label); }} onOpenTab={(t: string) => { setCalcTab(t as any); setView('calculations'); }} />
             ) : (
               <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
             )
