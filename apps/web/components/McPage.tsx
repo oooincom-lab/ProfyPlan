@@ -43,6 +43,8 @@ export default function McPage({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<McResult | null>(null);
   const [error, setError] = useState('');
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [pickedIdx, setPickedIdx] = useState<number | null>(null);
 
   const run = async () => {
     setBusy(true);
@@ -61,6 +63,14 @@ export default function McPage({
   const maxCount = variants.reduce((m: number, v: any) => Math.max(m, Number(v?.count ?? v?.value ?? 0)), 0);
   const curve = Array.isArray((result as any)?.s_curve) ? (result as any).s_curve : [];
   const p = result?.percentiles || {};
+  const totalRuns = variants.reduce((s: number, v: any) => s + Number(v?.count ?? 0), 0);
+  const cdfShare = (i: number) => {
+    if (!totalRuns) return 0;
+    let acc = 0;
+    for (let j = 0; j <= i && j < variants.length; j++) acc += Number(variants[j]?.count ?? 0);
+    return acc / totalRuns;
+  };
+  const pctColor: Record<string, string> = { p50: '#3B82F6', p80: '#F59E0B', p95: '#EF4444' };
 
   const tile = (title: string, value: string, sub: string) => (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
@@ -140,18 +150,78 @@ export default function McPage({
 
             {variants.length ? (
               <div>
-                <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Частота сроков по прогонам</div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 120 }}>
-                  {variants.map((v: any, i: number) => {
-                    const h = maxCount ? Math.round((Number(v?.count ?? v?.value ?? 0) / maxCount) * 112) : 0;
+                <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>
+                  Частота сроков по прогонам — наведите курсор на столбец, клик закрепляет выбор и показывает вероятность уложиться в этот срок.
+                </div>
+                <div onMouseLeave={() => setHoverIdx(null)} style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 120 }}>
+                    {variants.map((v: any, i: number) => {
+                      const cnt = Number(v?.count ?? v?.value ?? 0);
+                      const h = maxCount ? Math.round((cnt / maxCount) * 112) : 0;
+                      const active = pickedIdx === i;
+                      const hovered = hoverIdx === i;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          aria-label={`Столбец ${i + 1}: срок ≤ ${hoursText(v?.to ?? v?.duration ?? v?.hours ?? v?.bin)} · прогонов ${cnt}`}
+                          title={`до ${hoursText(v?.to)} · прогонов: ${cnt}`}
+                          onMouseEnter={() => setHoverIdx(i)}
+                          onFocus={() => setHoverIdx(i)}
+                          onBlur={() => setHoverIdx(null)}
+                          onClick={() => setPickedIdx(pickedIdx === i ? null : i)}
+                          style={{
+                            flex: 1,
+                            height: Math.max(2, h),
+                            background: active ? '#F59E0B' : '#3B82F6',
+                            borderRadius: '2px 2px 0 0',
+                            opacity: active ? 1 : hovered ? 1 : 0.8,
+                            outline: hovered && !active ? '1px solid rgba(147,197,253,.7)' : 'none',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fg-4)' }}>
+                    <span>{hoursText(variants[0]?.from)}</span>
+                    <span>{hoursText((variants[variants.length - 1] as any)?.to)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>Показать на диаграмме:</span>
+                    {['p50', 'p80', 'p95'].filter((k) => p[k] !== undefined).map((k) => {
+                      const idx = variants.findIndex((v: any) => Number(v?.from) <= Number(p[k]) && Number(p[k]) <= Number(v?.to));
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => idx >= 0 && setPickedIdx(idx)}
+                          title={`Подсветить столбец с ${k} = ${hoursText(p[k])}`}
+                          style={{ fontSize: 11, color: pctColor[k], background: 'transparent', border: '1px solid ' + pctColor[k] + '66', borderRadius: 6, padding: '1px 8px', cursor: 'pointer' }}
+                        >
+                          {k} — {hoursText(p[k])}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(hoverIdx !== null || pickedIdx !== null) && (() => {
+                    const showingHover = hoverIdx !== null;
+                    const i = (showingHover ? hoverIdx : pickedIdx) as number;
+                    const v: any = variants[i] || {};
+                    const share = cdfShare(i);
                     return (
-                      <div
-                        key={i}
-                        title={`${hoursText(v?.duration ?? v?.hours ?? v?.bin)} · ${v?.count ?? v?.value ?? ''}`}
-                        style={{ flex: 1, height: Math.max(2, h), background: '#3B82F6', borderRadius: '2px 2px 0 0', opacity: 0.85 }}
-                      />
+                      <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                        {showingHover ? 'Наведение: ' : 'Выбрано: '}
+                        срок ≤ <b>{hoursText(v?.to)}</b> — вероятность уложиться <b>{Math.round(share * 100)} %</b>
+                        <span style={{ color: 'var(--fg-4)' }}>
+                          {' '}· прогонов в столбце: {Number(v?.count ?? 0)} из {totalRuns}
+                          {!showingHover ? '; повторный клик — снять выбор' : ''}
+                        </span>
+                      </div>
                     );
-                  })}
+                  })()}
                 </div>
               </div>
             ) : null}

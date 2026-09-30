@@ -51,7 +51,7 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
 export function calcTabState(tab: CalcTab, methods: CalcMethods): CalcTabState {
   if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'estimates' || tab === 'runs') return 'ready';
   if (tab === 'pert') return methods.analysis === 'pert' ? 'ready' : 'method-off';
-  if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'planned' : 'method-off';
+  if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'ready' : 'method-off';
   return 'planned';
 }
 
@@ -69,7 +69,7 @@ function tabNotice(tab: CalcTab, methods: CalcMethods): TabNotice {
   }
   if (tab === 'monte-carlo') {
     return methods.analysis === 'mc'
-      ? { reason: 'Монте-Карло включён, но страница ещё не построена.', blockedInBlock: '6.19', needs: CALC_TAB_BLOCK['monte-carlo'].needs }
+      ? { reason: 'Монте-Карло включён — страница открывается на этой вкладке.', blockedInBlock: '6.19', needs: '' }
       : { reason: 'Монте-Карло выключен в настройках расчёта проекта — вкладка показана неактивной, а не скрыта.', blockedInBlock: '6.16.7', needs: 'Включить Монте-Карло в настройках расчёта проекта' };
   }
   return { reason: 'Страница ещё не построена.', blockedInBlock: CALC_TAB_BLOCK[tab].block, needs: CALC_TAB_BLOCK[tab].needs };
