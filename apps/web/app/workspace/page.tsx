@@ -5852,23 +5852,18 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </label>
                   </div>
 
-                  {/* ─── Расчёты (блок 6.16.7): две независимые оси ─── */}
+                  {/* ─── Расчёты (блок 6.16.7; уточнение 30.09.2026 · 6.16.7а): метод — по объекту ─── */}
                   <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>🧮 Расчёты</div>
-                      <div style={{ fontSize: 12, color: '#5A7090' }}>Две независимые оси: логика планирования и модель оценки. Сочетания допустимы любые. Метод, выключенный здесь, не скрывается в разделе «Расчёты» — вкладка видна неактивной с причиной.</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>Метод (CPM/CCM) определяется объектом: простой куст — CPM, кластер (даже с одним кустом) — CCM. Выбор остаётся для модели оценки. Метод анализа, выключенный здесь, не скрывается в разделе «Расчёты» — вкладка видна неактивной с причиной.</div>
                     </div>
                     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                      <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
+                      <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4, minWidth: 240, maxWidth: 430 }}>
                         Логика планирования
-                        <select
-                          value={selectedProject.planning_logic || 'cpm'}
-                          onChange={(e) => saveCalcSettings({ planning_logic: e.target.value })}
-                          style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, minWidth: 240 }}
-                        >
-                          <option value="cpm">CPM — критический путь</option>
-                          <option value="ccm">CCM — межпроектное объединение</option>
-                        </select>
+                        <div style={{ background: '#0B1B33', color: '#C9D6E8', border: '1px dashed #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12, lineHeight: 1.5 }}>
+                          Определяется объектом: простой куст — CPM, кластер — CCM. Куст в кластере считается в составе кластера; ручной выбор убран — подробности в справке.
+                        </div>
                       </label>
                       <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
                         Модель оценки
