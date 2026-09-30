@@ -48,6 +48,21 @@ const selectStyle: React.CSSProperties = {
   borderRadius: 5, padding: '4px 6px', fontSize: 12, minWidth: 280, maxWidth: 420,
 };
 
+/** Выгрузка CSV: разделитель «;» и BOM — файл открывается в Excel без настроек. */
+function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]) {
+  const esc = (v: any) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = '\uFEFF' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export default function ComparePage({ runs, onOpenRuns }: { runs: Run[]; onOpenRuns?: () => void }) {
   const [leftId, setLeftId] = useState<string | null>(null);
   const [rightId, setRightId] = useState<string | null>(null);
@@ -126,6 +141,22 @@ export default function ComparePage({ runs, onOpenRuns }: { runs: Run[]; onOpenR
 
   const headDiff = diff(dur(left), dur(right));
 
+  // Выгрузка сравнения в CSV (остаток 6.22): таблица показателей с разницей и подписями запусков.
+  const exportCompareCsv = () => {
+    if (!left || !right) return;
+    const rowsOut: (string | number)[][] = [
+      ['Показатель', 'Запуск A', 'Запуск B', 'Разница (B − A)'],
+      ...rows.map((r) => [r.label, r.a, r.b, r.d ?? '—'] as (string | number)[]),
+      [],
+      ['Запуск A', runLabel(left)],
+      ['Запуск B', runLabel(right)],
+      ['Выгружено', new Date().toLocaleString('ru-RU')],
+    ];
+    const leftLabel = String(left?.data_fingerprint || '').slice(0, 8) || 'a';
+    const rightLabel = String(right?.data_fingerprint || '').slice(0, 8) || 'b';
+    downloadCsv(`сравнение-запусков-${leftLabel}-${rightLabel}.csv`, rowsOut);
+  };
+
   // Наложение S-кривых — только когда оба запуска вероятностные (у Монте-Карло есть S-кривая).
   const curveA: any[] = Array.isArray(left?.result?.s_curve) ? left.result.s_curve : [];
   const curveB: any[] = Array.isArray(right?.result?.s_curve) ? right.result.s_curve : [];
@@ -182,6 +213,7 @@ export default function ComparePage({ runs, onOpenRuns }: { runs: Run[]; onOpenR
           <span className="panel-title">Сравнение запусков</span>
           <span className="panel-sub">{runs.length} запусков в реестре · выберите два</span>
         </div>
+        <button className="btn btn-secondary btn-sm" onClick={exportCompareCsv} title="Выгрузить таблицу сравнения в CSV (Excel)">Выгрузить CSV</button>
       </div>
       <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>

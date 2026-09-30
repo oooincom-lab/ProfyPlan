@@ -274,6 +274,66 @@ export default function AppShell() {
       setEstimateOps([]);
     }
   };
+  // Журнал применённых сжатий (6.14е): хранится на сервере — переживает перезагрузку;
+  // лимит — 100 записей на проект (согласован 01.10.2026).
+  const loadGapLog = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/projects/${projectId}/gap-applications?limit=100`);
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setGapAppliedLog(
+        items.map((e: any) => ({
+          id: e.id as string,
+          at: new Date(e.created_at).toLocaleString('ru-RU'),
+          name: e.op_name,
+          opId: e.op_id,
+          from: `${e.before?.[0]}/${e.before?.[1]}/${e.before?.[2]} ч`,
+          to: `${e.after?.[0]}/${e.after?.[1]}/${e.after?.[2]} ч`,
+          before: [Number(e.before?.[0]), Number(e.before?.[1]), Number(e.before?.[2])] as [number, number, number],
+          gapBefore: e.gap_before ?? null,
+          gapAfter: e.gap_after ?? null,
+          reverted: !!e.reverted,
+        })),
+      );
+    } catch {
+      // Сервер недоступен — уже показанный журнал не стираем.
+    }
+  };
+  // Выгрузка CSV (остаток 6.22): реестр запусков и сравнение открываются в Excel без настроек
+  // (разделитель «;», BOM для кириллицы).
+  const downloadCsv = (filename: string, rows: (string | number | null | undefined)[][]) => {
+    const esc = (v: any) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const csv = '\uFEFF' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const exportRunsCsv = () => {
+    if (!calcRuns.length) return;
+    const rows: (string | number)[][] = [
+      ['Когда', 'Область', 'Логика', 'Анализ', 'Версия данных', 'Операций', 'Срок, дн', 'Критических', 'Состояние'],
+    ];
+    for (const r of calcRuns) {
+      rows.push([
+        runDateText(r.data_date) || '',
+        r.area === 'project' ? 'проект' : r.area,
+        String(r.planning_logic || '').toUpperCase(),
+        r.uncertainty_analysis || '',
+        r.data_fingerprint || '',
+        r.result?.operations ?? '',
+        r.result?.project_duration_hours ? Math.round(Number(r.result.project_duration_hours) / 24) : '',
+        r.result?.critical_operations ?? '',
+        r.status === 'failed' ? 'не выполнен' : 'выполнен',
+      ]);
+    }
+    const name = (selectedProject?.name || 'проект').replace(/[\\/:*?"<>|]+/g, '').slice(0, 40).trim() || 'проект';
+    downloadCsv(`запуски-${name}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
   // Связи нужны для питающих буферов: без них не видно, какие некритические ветви входят в цепь
   const loadDeps = async (projectId: string) => {
     try {
@@ -580,7 +640,20 @@ export default function AppShell() {
     setConfirmGapApply(false);
     void (async () => {
       await saveEstimate(op.id, { to_optimistic: r10(to), tm_likely: r10(tm), tp_pessimistic: r10(tp) });
-      setGapAppliedLog((prev) => [{ at: new Date().toLocaleString('ru-RU'), name: op.name, opId: op.id, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч`, before: [to, tm, tp] as [number, number, number], gapBefore, gapAfter }, ...prev]);
+      const entry: any = { at: new Date().toLocaleString('ru-RU'), name: op.name, opId: op.id, from: `${to}/${tm}/${tp} ч`, to: `${r10(to)}/${r10(tm)}/${r10(tp)} ч`, before: [to, tm, tp], gapBefore, gapAfter, reverted: false };
+      try {
+        const created: any = await apiF(`/projects/${selectedProject.id}/gap-applications`, {
+          method: 'POST',
+          body: JSON.stringify({ op_id: op.id, op_name: op.name, percent: pct, before: [to, tm, tp], after: [r10(to), r10(tm), r10(tp)], gap_before: gapBefore, gap_after: gapAfter }),
+        });
+        if (created?.id) {
+          entry.id = created.id;
+          entry.at = new Date(created.created_at).toLocaleString('ru-RU');
+        }
+      } catch {
+        // Журнал на сервере недоступен — запись остаётся в текущей сессии.
+      }
+      setGapAppliedLog((prev) => [entry, ...prev]);
       setMsg(`Применено: сжатие −${pct} % по «${op.name}». Срок пересчитан, запись добавлена в журнал разбора.`);
     })();
   };
@@ -590,8 +663,22 @@ export default function AppShell() {
     const e = gapAppliedLog[index];
     if (!e || e.reverted) return;
     void (async () => {
-      await saveEstimate(e.opId, { to_optimistic: e.before[0], tm_likely: e.before[1], tp_pessimistic: e.before[2] });
-      setGapAppliedLog((prev) => prev.map((x, i) => (i === index ? { ...x, reverted: true } : x)));
+      let ok = true;
+      try {
+        if (e.id) {
+          await apiF(`/gap-applications/${e.id}/revert`, { method: 'POST' });
+          if (selectedProject) await loadEstimates(selectedProject.id);
+        } else {
+          await saveEstimate(e.opId, { to_optimistic: e.before[0], tm_likely: e.before[1], tp_pessimistic: e.before[2] });
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        setMsg(`Не удалось вернуть «${e.name}» — попробуйте ещё раз.`);
+        return;
+      }
+      setGapAppliedLog((prev) => prev.map((x, i2) => (i2 === index ? { ...x, reverted: true } : x)));
       setMsg(`Возвращено: «${e.name}» — прежние оценки восстановлены, срок пересчитан.`);
     })();
   };
@@ -601,11 +688,24 @@ export default function AppShell() {
     const pending = gapAppliedLog.map((e, i) => ({ e, i })).filter((x) => !x.e.reverted);
     if (!pending.length) return;
     void (async () => {
+      let done = 0;
       for (const { e, i } of pending) {
-        await saveEstimate(e.opId, { to_optimistic: e.before[0], tm_likely: e.before[1], tp_pessimistic: e.before[2] });
-        setGapAppliedLog((prev) => prev.map((x, j) => (j === i ? { ...x, reverted: true } : x)));
+        try {
+          if (e.id) {
+            await apiF(`/gap-applications/${e.id}/revert`, { method: 'POST' });
+          } else {
+            await saveEstimate(e.opId, { to_optimistic: e.before[0], tm_likely: e.before[1], tp_pessimistic: e.before[2] });
+          }
+          done += 1;
+          setGapAppliedLog((prev) => prev.map((x, j2) => (j2 === i ? { ...x, reverted: true } : x)));
+        } catch {
+          // Одна запись не прошла — продолжаем остальные, в конце покажем счёт.
+        }
       }
-      setMsg(`Откат выполнен: возвращено правок — ${pending.length}, срок пересчитан.`);
+      if (selectedProject) {
+        try { await loadEstimates(selectedProject.id); } catch { /* остаёмся с локальным состоянием */ }
+      }
+      setMsg(`Откат выполнен: возвращено правок — ${done} из ${pending.length}, срок пересчитан.`);
     })();
   };
 
@@ -619,7 +719,7 @@ export default function AppShell() {
   const [gapReturn, setGapReturn] = useState(false);
   // Применение из разбора (6.14е, первый шаг): двухшаговое подтверждение и журнал применений (в рамках сессии).
   const [confirmGapApply, setConfirmGapApply] = useState(false);
-  const [gapAppliedLog, setGapAppliedLog] = useState<{ at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; gapBefore: number | null; gapAfter: number | null; reverted?: boolean }[]>([]);
+  const [gapAppliedLog, setGapAppliedLog] = useState<{ id?: string; at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; gapBefore: number | null; gapAfter: number | null; reverted?: boolean }[]>([]);
   // Шаг сжатия из разбора, % (по умолчанию 10).
   const [gapApplyPct, setGapApplyPct] = useState(10);
   const unfixRows = async () => {
@@ -713,6 +813,7 @@ export default function AppShell() {
       if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
       if (calcTab === 'overview') loadDeps(selectedProject.id);
       if (calcTab === 'overview') loadProjectDetail(selectedProject.id);
+      if (calcTab === 'overview') loadGapLog(selectedProject.id);
       if (calcTab === 'overview') loadGoals(selectedProject.id);
       if (calcTab === 'overview') loadAreaOrders(selectedProject.id);
       if (calcTab === 'overview') reloadRoutings(selectedProject.id);
@@ -4655,7 +4756,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                         {gapAppliedLog.length ? (
                           <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span>Применено в этой сессии ({gapAppliedLog.length}):</span>
+                              <span>Журнал применённых правок ({gapAppliedLog.length}):</span>
                               {gapAppliedLog.some((e) => !e.reverted) && (
                                 <button className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: 10.5 }} onClick={revertAllGapApplies} title="Вернуть прежние оценки по всем неприменённым правкам и пересчитать">Откатить всё</button>
                               )}
@@ -4922,6 +5023,9 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <span className="panel-title">Запуски расчёта</span>
                   <span className="panel-sub">{selectedProject?.name || 'проект не выбран'}</span>
                 </div>
+                {calcRuns.length ? (
+                  <button className="btn btn-secondary btn-sm" onClick={exportRunsCsv} title="Выгрузить реестр запусков в CSV (Excel)">Выгрузить CSV</button>
+                ) : null}
               </div>
               <div style={{ padding: '0 16px 14px' }}>
                 {calcRuns.length === 0 ? (
