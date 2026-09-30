@@ -162,6 +162,40 @@ export const NAV_TARGET_LABEL: Record<string, string> = {
   settings: 'Настройки расчёта',
 };
 
+/** Шаги режима для живой схемы справки (блок 6.31.4): каждая ступень ведёт в интерфейс. */
+export const MODE_STEPS: Record<string, { label: string; target: string }[]> = {
+  plan: [
+    { label: 'Связи и данные', target: 'network' },
+    { label: 'Рассчитать проект', target: 'gantt' },
+    { label: 'Результат — обзор', target: 'overview' },
+  ],
+  pert: [
+    { label: 'Оценки O/M/P', target: 'estimates' },
+    { label: 'Расчёт PERT', target: 'pert' },
+  ],
+  'monte-carlo': [
+    { label: 'Оценки O/M/P', target: 'estimates' },
+    { label: 'Прогоны МК', target: 'monte-carlo' },
+  ],
+  both: [
+    { label: 'Оценки O/M/P', target: 'estimates' },
+    { label: 'PERT', target: 'pert' },
+    { label: 'Монте-Карло', target: 'monte-carlo' },
+  ],
+  resources: [
+    { label: 'Оценки O/M/P', target: 'estimates' },
+    { label: 'Прогоны с мощностями', target: 'monte-carlo' },
+  ],
+  portfolio: [
+    { label: 'Сетевой график', target: 'network' },
+    { label: 'Настройки расчёта', target: 'settings' },
+  ],
+  buffers: [
+    { label: 'Оценки O/P', target: 'estimates' },
+    { label: 'Буферы на PERT', target: 'pert' },
+  ],
+};
+
 /** Рекомендация по данным проекта — с причиной, а не галочкой. */
 export function recommendMode(ctx: ModeContext): { modeId: string; reason: string } {
   if (ctx.withEstimates === 0) {

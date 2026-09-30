@@ -22,7 +22,7 @@ import {
   openHelp,
   requestCalcNav,
 } from '@/lib/help';
-import { CALC_MODES, MODE_UI_TARGET, NAV_TARGET_LABEL } from '@/lib/calcModes';
+import { CALC_MODES, MODE_UI_TARGET, MODE_STEPS, NAV_TARGET_LABEL } from '@/lib/calcModes';
 
 /** Кнопка «?» — единая для шапок окон, шапки панели и ленты вкладок раздела «Расчёты». */
 export function HelpButton({ articleId, title, compact }: { articleId: string; title?: string; compact?: boolean }) {
@@ -338,20 +338,40 @@ export default function HelpContent({
                 {CALC_MODES.map((m) => {
                   const tgt = MODE_UI_TARGET[m.id] || 'overview';
                   const lbl = NAV_TARGET_LABEL[tgt] || tgt;
+                  const steps = MODE_STEPS[m.id] || [];
                   return (
-                    <button
+                    <div
                       key={m.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => requestCalcNav(tgt)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); requestCalcNav(tgt); } }}
                       title={'Открыть: «' + lbl + '»'}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
+                      style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}
                     >
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)' }}>{m.title}</span>
-                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--fg-4)' }}>{m.computes}</span>
-                      </span>
-                      <span style={{ fontSize: 11.5, color: '#93C5FD', whiteSpace: 'nowrap' }}>Открыть «{lbl}» →</span>
-                    </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)' }}>{m.title}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--fg-4)' }}>{m.computes}</span>
+                        </span>
+                        <span style={{ fontSize: 11.5, color: '#93C5FD', whiteSpace: 'nowrap' }}>Открыть «{lbl}» →</span>
+                      </div>
+                      {steps.length > 0 && (
+                        <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>
+                          {steps.map((st, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); requestCalcNav(st.target); }}
+                              title={'Шаг ' + (i + 1) + ': открыть «' + (NAV_TARGET_LABEL[st.target] || st.target) + '»'}
+                              style={{ fontSize: 11, color: '#93C5FD', background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.25)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}
+                            >
+                              {i + 1}. {st.label}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </div>
                   );
                 })}
               </div>

@@ -791,8 +791,17 @@ export default function AppShell() {
       .filter(Boolean) as { id: string; name: string; duration: number; sigma: number; flat: boolean }[];
     const r = netOps.length >= 2 && estimateDeps.length ? netCpm(netOps, estimateDeps) : null;
     const critTop = r ? netOps.filter((o) => r.criticalIds.has(o.id)).sort((a, b) => b.duration - a.duration).slice(0, 3) : [];
+    // Почти критические (near-critical, 6.31.5): резерв мал, но не ноль — задержка сверх резерва переводит на критический путь.
+    const NEAR_SLACK_HOURS = 40; // ≤ 5 рабочих дней по 8 ч
+    const nearCrit = r
+      ? netOps
+          .filter((o) => !r.criticalIds.has(o.id) && (r.slack.get(o.id) || 0) > 0.001 && (r.slack.get(o.id) || 0) <= NEAR_SLACK_HOURS)
+          .sort((a, b) => (r.slack.get(a.id) as number) - (r.slack.get(b.id) as number))
+          .slice(0, 5)
+          .map((o) => ({ name: o.name, slack: r.slack.get(o.id) as number }))
+      : [];
     const flatCount = netOps.filter((o) => o.flat).length;
-    return { gaps, critTop, opsCount: netOps.length, depsCount: estimateDeps.length, shared: modeContext.sharedResources, flatCount, expected: goalBasis.expected };
+    return { gaps, critTop, nearCrit, opsCount: netOps.length, depsCount: estimateDeps.length, shared: modeContext.sharedResources, flatCount, expected: goalBasis.expected };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calcTab, goalBasis, projectGoalRec, estimateOps, estimateDeps, selectedProject, projectDetail, modeContext]);
 
@@ -4509,7 +4518,12 @@ const changeOrderStatus = async (o: any, status: string) => {
                                 <input type="number" min={1} max={90} value={gapApplyPct} onChange={(e) => setGapApplyPct(Math.min(90, Math.max(1, Number(e.target.value) || 10)))} title="На сколько сжать оценки операции, %" style={{ width: 50, marginLeft: 6, padding: '3px 6px', fontSize: 11.5, background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 6 }} />{' '}
                               <button className="btn btn-sm" style={{ marginLeft: 4, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, background: confirmGapApply ? 'rgba(245,158,11,0.18)' : 'rgba(59,130,246,0.16)', border: confirmGapApply ? '1px solid #F59E0B' : '1px solid #3B82F6', borderRadius: 6, color: confirmGapApply ? '#FCD34D' : '#93C5FD', cursor: 'pointer' }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : `Применить −${gapApplyPct} %`}</button>
                               </>
-                              : 'Критический путь не определён — нужны связи между операциями.'}</td>
+                              : 'Критический путь не определён — нужны связи между операциями.'}
+                            {gapAnalysis.nearCrit.length > 0 && (
+                              <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-3)' }}>
+                                Почти критические (резерв ≤ 5 дн): {gapAnalysis.nearCrit.map((o) => `${o.name} (резерв ${hoursText(o.slack)})`).join(' · ')}. Задержка сверх резерва переведёт их на критический путь.
+                              </div>
+                            )}</td>
                             <td>лёгкие: уточнение нормы · средние: форсаж</td>
                             <td style={{ color: 'var(--fg-4)' }}>
                               только в объекте{' '}
