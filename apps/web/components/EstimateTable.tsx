@@ -198,6 +198,7 @@ export default function EstimateTable({
   const calStats = useMemo(() => calibrationStats(obs), [obs]);
   const [calConfirm, setCalConfirm] = useState(false);
   const [calNote, setCalNote] = useState('');
+  const [calOpen, setCalOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
 
   const calTargets = useMemo(() => {
@@ -209,7 +210,8 @@ export default function EstimateTable({
       const tm = num(op.tm_likely);
       const tp = num(op.tp_pessimistic);
       const hasFact = num(op.fact_hours) !== null;
-      if (to !== null && tm !== null && tp !== null && !hasFact) targets.push(op);
+      const fromHistory = op.estimate_source === 'fact';
+      if (to !== null && tm !== null && tp !== null && !hasFact && !fromHistory) targets.push(op);
     }
     return targets;
   }, [operations, draft, calStats]);
@@ -225,6 +227,22 @@ export default function EstimateTable({
       const hasFact = num(op.fact_hours) !== null;
       const full = to !== null && tm !== null && tp !== null;
       if (!full && !hasFact) k += 1;
+    }
+    return k;
+  }, [operations, draft, calStats]);
+
+  /** Строки, заполненные из истории (источник «факт»): в применение коэффициента не попадают — оценка уже калибрована. */
+  const calSkipHistory = useMemo(() => {
+    if (!calStats) return 0;
+    let k = 0;
+    for (const op of operations) {
+      if (draft[op.id]) continue;
+      const to = num(op.to_optimistic);
+      const tm = num(op.tm_likely);
+      const tp = num(op.tp_pessimistic);
+      const hasFact = num(op.fact_hours) !== null;
+      const full = to !== null && tm !== null && tp !== null;
+      if (full && !hasFact && op.estimate_source === 'fact') k += 1;
     }
     return k;
   }, [operations, draft, calStats]);
@@ -247,6 +265,7 @@ export default function EstimateTable({
       setCalConfirm(true);
       setCalNote(
         `Умножить оценки на медиану ${fmtRatio(k)}? Строк: ${calTargets.length}` +
+          (calSkipHistory ? ` (заполненные из истории пропускаются: ${calSkipHistory})` : '') +
           (calSkipNoTriple ? ` (без полной тройки пропустятся: ${calSkipNoTriple})` : '') +
           `. Завершённые строки не трогаем. Повторное применение умножит ещё раз — коэффициент применяйте один раз.`,
       );
@@ -300,7 +319,7 @@ export default function EstimateTable({
   const fillEmpty = () => {
     if (fillSrc === 'history') {
       if (!useHistory) {
-        setNote('Исторические данные выключены: включите переключатель в панели «Калибровка по истории» (по умолчанию выключено — включается решением пользователя).');
+        setNote('Исторические данные выключены: включите переключатель в строке «Калибровка по истории» (по умолчанию выключено — включается решением пользователя).');
         return;
       }
       if (!calStats) {
@@ -643,12 +662,84 @@ export default function EstimateTable({
               ? calStats
                 ? `Из истории: пустые строки заполняются от медианы ${fmtRatio(calStats.median)} (наблюдений ${calStats.n}); источник — «факт».`
                 : 'Из истории: нет данных — нет завершённых операций с фактической длительностью.'
-              : 'Из истории выключено: включите «Использовать исторические данные» в панели «Калибровка по истории».'}
+              : 'Из истории выключено: включите «Использовать исторические данные» в строке «Калибровка по истории».'}
           </div>
         ) : null}
         {note ? <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)' }}>{note}</div> : null}
       </div>
       <div style={{ padding: '0 16px 14px' }}>
+        {/* ── Калибровка по истории (блок 6.24): компактная строка над таблицей; полная панель — по развороту ── */}
+        {operations.length ? (
+          <div data-help-id="calc.calibration" style={{ margin: '8px 0 8px', border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontWeight: 600, fontSize: 12.5 }}>Калибровка по истории</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--fg-2)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={useHistory === true}
+                disabled={toggling || !onToggleHistory}
+                onChange={(e) => toggleHistory(e.target.checked)}
+                style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: 'pointer' }}
+              />
+              Использовать исторические данные
+              <span style={{ color: 'var(--fg-4)' }}>по умолчанию выключено</span>
+            </label>
+            <div style={{ flex: 1 }} />
+            <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+              {!useHistory
+                ? 'выключено — подсказки по факту скрыты; данные собираются'
+                : calStats
+                  ? `наблюдений ${calStats.n} · медиана ${fmtRatio(calStats.median)}`
+                  : 'нет данных — заполните «Факт, ч» у завершённых операций'}
+            </div>
+            {useHistory && calStats ? (
+              <button className="btn btn-secondary btn-sm" onClick={() => setCalOpen((v) => !v)} title="Показать наблюдения и применение коэффициента к оценкам">
+                {calOpen ? 'Свернуть' : 'Развернуть'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {operations.length && useHistory && calStats && calOpen ? (
+          <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 14px', display: 'grid', gap: 8, margin: '0 0 10px' }}>
+            <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+              Наблюдений: <b>{calStats.n}</b> · период: {fmtDateRu(calStats.from)} — {fmtDateRu(calStats.to)} · медиана отношения
+              «факт / оценка»: <b>{fmtRatio(calStats.median)}</b> (среднее {fmtRatio(calStats.mean)}) · факт больше оценки: {calStats.over}, меньше: {calStats.under}
+            </div>
+            <table className="tbl" style={{ maxWidth: 860 }}>
+              <thead>
+                <tr><th>Операция</th><th>Оценка M, ч</th><th>Факт, ч</th><th>Отношение</th><th>Завершена</th></tr>
+              </thead>
+              <tbody>
+                {obs.slice(0, 12).map((o) => (
+                  <tr key={o.id}>
+                    <td style={{ maxWidth: 300 }}>{o.name}</td>
+                    <td className="t-mono">{o.estimate.toFixed(2)}</td>
+                    <td className="t-mono">{o.fact.toFixed(2)}</td>
+                    <td className="t-mono" style={{ color: o.ratio > 1.001 ? '#FCD34D' : o.ratio < 0.999 ? '#93C5FD' : 'var(--fg-2)' }}>{fmtRatio(o.ratio)}</td>
+                    <td className="t-mono">{fmtDateRu(o.finishedOn)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {obs.length > 12 ? <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>…и ещё {obs.length - 12}; в подсказке участвуют все наблюдения.</div> : null}
+            <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+              Предложение: умножить оценки на медиану {fmtRatio(calStats.median)} — строк с полной тройкой без факта: {calTargets.length}
+              {calSkipHistory ? `, заполнены из истории (не трогаем): ${calSkipHistory}` : ''}
+              {calSkipNoTriple ? `, без полной тройки пропустятся: ${calSkipNoTriple}` : ''}. Завершённые строки не трогаем: их оценка уже история.
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={savingId === 'cal' || !calTargets.length}
+                onClick={applyCalibration}
+                style={calConfirm ? { borderColor: '#F59E0B', color: '#FCD34D' } : undefined}
+              >
+                {savingId === 'cal' ? 'Применяю…' : calConfirm ? `Подтвердить умножение` : `Применить ${fmtRatio(calStats.median)} к оценкам`}
+              </button>
+              <span style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>источник оценок станет «коэффициент»; это пересчёт, а не новое измерение</span>
+            </div>
+            {calNote ? <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{calNote}</div> : null}
+          </div>
+        ) : null}
         <div style={{ fontSize: 12, color: 'var(--fg-3)', margin: '8px 0 10px' }}>
           Введите три оценки по каждой операции. Порядок: оптимистичная ≤ вероятная ≤ пессимистичная — иначе строка
           не сохранится. Ожидаемая длительность и разброс считаются тут же и ничего не меняют в данных.
@@ -766,80 +857,6 @@ export default function EstimateTable({
             </tbody>
           </table>
         )}
-
-        {/* ── Калибровка по истории (блок 6.24): факт против оценки — подсказка с основанием ── */}
-        {operations.length ? (
-          <div data-help-id="calc.calibration" style={{ marginTop: 14, border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '12px 14px', display: 'grid', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>Калибровка по истории</div>
-              <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
-                факт завершённых операций сравнивается с оценкой M; это подсказка — оценки меняет только человек
-              </div>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-2)' }}>
-              <input
-                type="checkbox"
-                checked={useHistory === true}
-                disabled={toggling || !onToggleHistory}
-                onChange={(e) => toggleHistory(e.target.checked)}
-                style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: 'pointer' }}
-              />
-              Использовать исторические данные
-              <span style={{ color: 'var(--fg-4)' }}>по умолчанию выключено — включается только решением пользователя</span>
-            </label>
-            {!useHistory ? (
-              <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
-                Выключено — подсказки по факту скрыты. Данные собираются и при выключенном переключателе: отметьте
-                завершённые операции столбцами «Факт, ч» и «Завершена», а переключатель открывает коэффициенты.
-              </div>
-            ) : !calStats ? (
-              <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
-                Нет данных: ни одна операция не отмечена завершённой с фактической длительностью. Заполните столбец
-                «Факт, ч» — после этого здесь появится коэффициент.
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-                  Наблюдений: <b>{calStats.n}</b> · период: {fmtDateRu(calStats.from)} — {fmtDateRu(calStats.to)} · медиана отношения
-                  «факт / оценка»: <b>{fmtRatio(calStats.median)}</b> (среднее {fmtRatio(calStats.mean)}) · факт больше оценки: {calStats.over}, меньше: {calStats.under}
-                </div>
-                <table className="tbl" style={{ maxWidth: 860 }}>
-                  <thead>
-                    <tr><th>Операция</th><th>Оценка M, ч</th><th>Факт, ч</th><th>Отношение</th><th>Завершена</th></tr>
-                  </thead>
-                  <tbody>
-                    {obs.slice(0, 12).map((o) => (
-                      <tr key={o.id}>
-                        <td style={{ maxWidth: 300 }}>{o.name}</td>
-                        <td className="t-mono">{o.estimate.toFixed(2)}</td>
-                        <td className="t-mono">{o.fact.toFixed(2)}</td>
-                        <td className="t-mono" style={{ color: o.ratio > 1.001 ? '#FCD34D' : o.ratio < 0.999 ? '#93C5FD' : 'var(--fg-2)' }}>{fmtRatio(o.ratio)}</td>
-                        <td className="t-mono">{fmtDateRu(o.finishedOn)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {obs.length > 12 ? <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>…и ещё {obs.length - 12}; в подсказке участвуют все наблюдения.</div> : null}
-                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-                  Предложение: умножить оценки на медиану {fmtRatio(calStats.median)} — строк с полной тройкой без факта: {calTargets.length}
-                  {calSkipNoTriple ? `, без полной тройки пропустятся: ${calSkipNoTriple}` : ''}. Завершённые строки не трогаем: их оценка уже история.
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    disabled={savingId === 'cal' || !calTargets.length}
-                    onClick={applyCalibration}
-                    style={calConfirm ? { borderColor: '#F59E0B', color: '#FCD34D' } : undefined}
-                  >
-                    {savingId === 'cal' ? 'Применяю…' : calConfirm ? `Подтвердить умножение` : `Применить ${fmtRatio(calStats.median)} к оценкам`}
-                  </button>
-                  <span style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>источник оценок станет «коэффициент»; это пересчёт, а не новое измерение</span>
-                </div>
-              </>
-            )}
-            {calNote ? <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{calNote}</div> : null}
-          </div>
-        ) : null}
       </div>
     </div>
   );
