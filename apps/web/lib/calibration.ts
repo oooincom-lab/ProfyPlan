@@ -18,6 +18,7 @@ export type CalibOpLike = {
   tm_likely?: number | string | null;
   fact_hours?: number | string | null;
   fact_finished_on?: string | null;
+  operation_type?: string | null;
 };
 
 export type CalibrationObs = {
@@ -27,6 +28,7 @@ export type CalibrationObs = {
   fact: number; // фактическая длительность, ч
   ratio: number; // факт / оценка
   finishedOn: string | null; // YYYY-MM-DD, если указана
+  opType: string | null; // тип операции (production / procurement / …)
 };
 
 export type CalibrationStats = {
@@ -59,6 +61,7 @@ export function factObservations(ops: CalibOpLike[]): CalibrationObs[] {
       fact,
       ratio: fact / estimate,
       finishedOn: op.fact_finished_on ? String(op.fact_finished_on).slice(0, 10) : null,
+      opType: op.operation_type ? String(op.operation_type) : null,
     });
   }
   return out;
@@ -89,6 +92,48 @@ export function calibrationStats(obs: CalibrationObs[]): CalibrationStats | null
 /** «×1.15» — компактная запись отношения. */
 export function fmtRatio(r: number): string {
   return '×' + r.toFixed(2);
+}
+
+// ── Разбивка по типам операций (блок 6.24): единый коэффициент — не всегда вся правда;
+// ── производство и закупка могут недооцениваться по-разному.
+
+const TYPE_LABELS: Record<string, string> = {
+  production: 'производство',
+  procurement: 'закупка',
+  transport: 'перевозка',
+  assembly: 'сборка',
+};
+
+export function typeLabel(key: string): string {
+  return TYPE_LABELS[key] || key;
+}
+
+export type CalibrationGroup = {
+  key: string;
+  label: string;
+  n: number;
+  median: number;
+  mean: number;
+};
+
+/** Группировка наблюдений по типу операции: сколько и какая медиана у каждого типа. */
+export function calibrationGroups(obs: CalibrationObs[]): CalibrationGroup[] {
+  const by = new Map<string, number[]>();
+  for (const o of obs) {
+    const key = o.opType || 'other';
+    if (!by.has(key)) by.set(key, []);
+    by.get(key)!.push(o.ratio);
+  }
+  const out: CalibrationGroup[] = [];
+  for (const [key, ratios] of by) {
+    ratios.sort((a, b) => a - b);
+    const n = ratios.length;
+    const median = n % 2 === 1 ? ratios[(n - 1) / 2] : (ratios[n / 2 - 1] + ratios[n / 2]) / 2;
+    const mean = ratios.reduce((s, r) => s + r, 0) / n;
+    out.push({ key, label: typeLabel(key), n, median, mean });
+  }
+  out.sort((a, b) => b.n - a.n || a.key.localeCompare(b.key));
+  return out;
 }
 
 /** «01.10.2026» — дата для человека; null → «—». */

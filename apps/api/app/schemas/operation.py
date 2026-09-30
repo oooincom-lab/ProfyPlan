@@ -49,6 +49,7 @@ class OperationOut(BaseModel):
     estimate_source: Optional[str] = None
     fact_hours: Optional[Decimal] = None
     fact_finished_on: Optional[date] = None
+    operation_type: Optional[str] = None
     order_id: Optional[str] = None
     position: Optional[int] = None
     is_critical: bool = False

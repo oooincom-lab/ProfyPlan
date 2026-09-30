@@ -298,6 +298,59 @@ export default function AppShell() {
       // Сервер недоступен — уже показанный журнал не стираем.
     }
   };
+  const loadCalLog = async (projectId: string) => {
+    try {
+      const data: any = await apiF(`/projects/${projectId}/calibration-applications?limit=100`);
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setCalLog(
+        items.map((e: any) => ({
+          id: e.id as string,
+          at: new Date(e.created_at).toLocaleString('ru-RU'),
+          coefficient: Number(e.coefficient),
+          observations: Number(e.observations_count) || 0,
+          appliedCount: Number(e.applied_count) || 0,
+          reverted: !!e.reverted,
+        })),
+      );
+    } catch {
+      // Сервер недоступен — уже показанный журнал не стираем.
+    }
+  };
+
+  const recordCalibration = async (payload: {
+    coefficient: number;
+    observationsCount: number;
+    periodFrom: string | null;
+    periodTo: string | null;
+    appliedCount: number;
+    skippedHistory: number;
+    skippedNoTriple: number;
+    items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[];
+  }) => {
+    if (!selectedProject) return;
+    await apiF(`/projects/${selectedProject.id}/calibration-applications`, {
+      method: 'POST',
+      body: JSON.stringify({
+        coefficient: payload.coefficient,
+        observations_count: payload.observationsCount,
+        period_from: payload.periodFrom,
+        period_to: payload.periodTo,
+        applied_count: payload.appliedCount,
+        skipped_history: payload.skippedHistory,
+        skipped_no_triple: payload.skippedNoTriple,
+        items: payload.items,
+      }),
+    });
+    await loadCalLog(selectedProject.id);
+  };
+
+  const revertCalibration = async (entryId: string) => {
+    if (!selectedProject) return;
+    await apiF(`/calibration-applications/${entryId}/revert`, { method: 'POST' });
+    await loadCalLog(selectedProject.id);
+    await loadEstimates(selectedProject.id);
+  };
+
   // Выгрузка CSV (остаток 6.22): реестр запусков и сравнение открываются в Excel без настроек
   // (разделитель «;», BOM для кириллицы).
   const downloadCsv = (filename: string, rows: (string | number | null | undefined)[][]) => {
@@ -720,6 +773,8 @@ export default function AppShell() {
   // Применение из разбора (6.14е, первый шаг): двухшаговое подтверждение и журнал применений (в рамках сессии).
   const [confirmGapApply, setConfirmGapApply] = useState(false);
   const [gapAppliedLog, setGapAppliedLog] = useState<{ id?: string; at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; gapBefore: number | null; gapAfter: number | null; reverted?: boolean }[]>([]);
+  // Журнал применений калибровки по истории (блок 6.24): серверный, лимит 100 записей на проект.
+  const [calLog, setCalLog] = useState<{ id: string; at: string; coefficient: number; observations: number; appliedCount: number; reverted: boolean }[]>([]);
   // Шаг сжатия из разбора, % (по умолчанию 10).
   const [gapApplyPct, setGapApplyPct] = useState(10);
   const unfixRows = async () => {
@@ -810,6 +865,7 @@ export default function AppShell() {
   useEffect(() => {
     if (view === 'calculations' && (calcTab === 'estimates' || calcTab === 'pert' || calcTab === 'monte-carlo' || calcTab === 'overview') && selectedProject) {
       loadEstimates(selectedProject.id);
+      if (calcTab === 'estimates') loadCalLog(selectedProject.id);
       if (calcTab === 'pert') { loadDeps(selectedProject.id); loadOpResources(selectedProject.id); loadAreaOrders(selectedProject.id); }
       if (calcTab === 'overview') loadDeps(selectedProject.id);
       if (calcTab === 'overview') loadProjectDetail(selectedProject.id);
@@ -5044,6 +5100,9 @@ const changeOrderStatus = async (o: any, status: string) => {
                 schedAt={ganttData ? ganttData.anchor || null : null}
                 useHistory={selectedProject?.use_history === true}
                 onToggleHistory={async (v: boolean) => { await saveCalcSettings({ use_history: v }); }}
+                calLog={calLog}
+                onCalRecord={recordCalibration}
+                onCalRevert={revertCalibration}
               />
             </>
           ) : calcTab === 'runs' ? (

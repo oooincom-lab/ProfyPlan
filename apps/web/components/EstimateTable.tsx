@@ -16,7 +16,7 @@
  * меняются только по нажатию человека, с подтверждением.
  */
 import React, { useMemo, useState } from 'react';
-import { calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
+import { calibrationGroups, calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
 
 export type EstimateOp = {
   id: string;
@@ -50,6 +50,9 @@ export default function EstimateTable({
   schedAt,
   useHistory,
   onToggleHistory,
+  calLog,
+  onCalRecord,
+  onCalRevert,
 }: {
   operations: EstimateOp[];
   onSave: (id: string, patch: Record<string, number | string | null>) => Promise<void>;
@@ -57,6 +60,18 @@ export default function EstimateTable({
   schedAt?: string | null;
   useHistory?: boolean;
   onToggleHistory?: (value: boolean) => void | Promise<void>;
+  calLog?: { id: string; at: string; coefficient: number; observations: number; appliedCount: number; reverted: boolean }[];
+  onCalRecord?: (payload: {
+    coefficient: number;
+    observationsCount: number;
+    periodFrom: string | null;
+    periodTo: string | null;
+    appliedCount: number;
+    skippedHistory: number;
+    skippedNoTriple: number;
+    items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[];
+  }) => Promise<void> | void;
+  onCalRevert?: (entryId: string) => Promise<void> | void;
 }) {
   const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string; src: string; fact: string; factDate: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -247,6 +262,9 @@ export default function EstimateTable({
     return k;
   }, [operations, draft, calStats]);
 
+  /** Разбивка по типам операций — показывается, когда типов больше одного. */
+  const calGroups = useMemo(() => calibrationGroups(obs), [obs]);
+
   const toggleHistory = async (v: boolean) => {
     if (!onToggleHistory) return;
     setToggling(true);
@@ -276,21 +294,46 @@ export default function EstimateTable({
     let done = 0;
     let failed = 0;
     let firstErr = '';
+    const items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
     for (const op of calTargets) {
-      const to = Math.round(Number(op.to_optimistic) * k * 100) / 100;
-      const tm = Math.round(Number(op.tm_likely) * k * 100) / 100;
-      const tp = Math.round(Number(op.tp_pessimistic) * k * 100) / 100;
+      const toNew = Math.round(Number(op.to_optimistic) * k * 100) / 100;
+      const tmNew = Math.round(Number(op.tm_likely) * k * 100) / 100;
+      const tpNew = Math.round(Number(op.tp_pessimistic) * k * 100) / 100;
       try {
-        await onSave(op.id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: 'coefficient' });
+        await onSave(op.id, { to_optimistic: toNew, tm_likely: tmNew, tp_pessimistic: tpNew, estimate_source: 'coefficient' });
         done += 1;
+        items.push({
+          op_id: op.id,
+          op_name: op.name,
+          before: { to: num(op.to_optimistic), tm: num(op.tm_likely), tp: num(op.tp_pessimistic), source: op.estimate_source ?? null },
+          after: { to: toNew, tm: tmNew, tp: tpNew },
+        });
       } catch (e: any) {
         failed += 1;
         if (!firstErr) firstErr = (e?.message || String(e)).slice(0, 140);
       }
     }
+    let logNote = '';
+    if (onCalRecord && items.length) {
+      try {
+        await onCalRecord({
+          coefficient: k,
+          observationsCount: calStats.n,
+          periodFrom: calStats.from,
+          periodTo: calStats.to,
+          appliedCount: done,
+          skippedHistory: calSkipHistory,
+          skippedNoTriple: calSkipNoTriple,
+          items,
+        });
+        logNote = ' Запись добавлена в журнал применений.';
+      } catch {
+        logNote = ' Внимание: запись в журнал не удалась.';
+      }
+    }
     setSavingId(null);
     setCalNote(
-      `Применено к строкам: ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).`,
+      `Применено к строкам: ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).${logNote}`,
     );
   };
 
@@ -701,21 +744,30 @@ export default function EstimateTable({
                 ? 'выключено — подсказки по факту скрыты; данные собираются'
                 : calStats
                   ? `наблюдений ${calStats.n} · медиана ${fmtRatio(calStats.median)}`
-                  : 'нет данных — заполните «Факт, ч» у завершённых операций'}
+                  : calLog && calLog.length
+                    ? `наблюдений нет · применений: ${calLog.length}`
+                    : 'нет данных — заполните «Факт, ч» у завершённых операций'}
             </div>
-            {useHistory && calStats ? (
+            {(useHistory && calStats) || (calLog && calLog.length) ? (
               <button className="btn btn-secondary btn-sm" onClick={() => { if (calOpen && calConfirm) { setCalConfirm(false); setCalNote(''); } setCalOpen((v) => !v); }} title="Показать наблюдения и применение коэффициента к оценкам">
                 {calOpen ? 'Свернуть' : 'Развернуть'}
               </button>
             ) : null}
           </div>
         ) : null}
-        {operations.length && useHistory && calStats && calOpen ? (
+        {operations.length && calOpen && ((useHistory && calStats) || (calLog && calLog.length)) ? (
           <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 14px', display: 'grid', gap: 8, margin: '0 0 10px' }}>
+            {useHistory && calStats ? (
+              <>
             <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
               Наблюдений: <b>{calStats.n}</b> · период: {fmtDateRu(calStats.from)} — {fmtDateRu(calStats.to)} · медиана отношения
               «факт / оценка»: <b>{fmtRatio(calStats.median)}</b> (среднее {fmtRatio(calStats.mean)}) · факт больше оценки: {calStats.over}, меньше: {calStats.under}
             </div>
+            {calGroups.length > 1 ? (
+              <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                По типам операций: {calGroups.map((g) => `${g.label} — ${g.n} набл., медиана ${fmtRatio(g.median)}`).join(' · ')}
+              </div>
+            ) : null}
             <table className="tbl" style={{ maxWidth: 860 }}>
               <thead>
                 <tr><th>Операция</th><th>Оценка M, ч</th><th>Факт, ч</th><th>Отношение</th><th>Завершена</th></tr>
@@ -761,6 +813,57 @@ export default function EstimateTable({
               ) : null}
               <span style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>источник оценок станет «коэффициент»; это пересчёт, а не новое измерение</span>
             </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>
+                {useHistory
+                  ? 'Нет наблюдений — заполните «Факт, ч» у завершённых операций.'
+                  : 'Исторические данные выключены — включите переключатель, чтобы увидеть подсказки; журнал применений доступен ниже.'}
+              </div>
+            )}
+            {calLog && calLog.length ? (
+              <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                Применения (журнал): {calLog.length}
+                <table className="tbl" style={{ maxWidth: 860, marginTop: 4 }}>
+                  <thead>
+                    <tr><th>Когда</th><th>Коэффициент</th><th>Строк</th><th>Наблюдений</th><th>Статус</th><th /></tr>
+                  </thead>
+                  <tbody>
+                    {calLog.map((e) => (
+                      <tr key={e.id}>
+                        <td className="t-mono">{e.at}</td>
+                        <td className="t-mono">{fmtRatio(e.coefficient)}</td>
+                        <td className="t-mono">{e.appliedCount}</td>
+                        <td className="t-mono">{e.observations}</td>
+                        <td>{e.reverted ? '(возвращено)' : 'применено'}</td>
+                        <td>
+                          {!e.reverted && onCalRevert ? (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              disabled={savingId === 'calrev-' + e.id}
+                              onClick={async () => {
+                                setSavingId('calrev-' + e.id);
+                                try {
+                                  await onCalRevert(e.id);
+                                  setCalNote('Применение возвращено — оценки восстановлены.');
+                                } catch (err: any) {
+                                  setCalNote('Не удалось вернуть: ' + (err?.message || String(err)));
+                                } finally {
+                                  setSavingId(null);
+                                }
+                              }}
+                              title="Вернуть оценки, которые были до этого применения"
+                            >
+                              {savingId === 'calrev-' + e.id ? '…' : 'Вернуть'}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
             {calNote ? <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{calNote}</div> : null}
           </div>
         ) : null}
