@@ -1327,6 +1327,34 @@
     
   </div>
 </div>
+<h3>30.09.2026 (ночь) — фикс: сохранение оценок с источником «из расчёта» (schedule)</h3>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">Симптом (репорт владельца):</div>
+    <div class="task-detail">заполнил оценки → «Сохранить все» → ушёл на «Монте-Карло» → вернулся — поля пустые.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Причина:</div>
+    <div class="task-detail">«Заполнить пустые» проставляет источник <code>schedule</code> («из расчёта»), а API-схема принимала только <code>expert|fact|ai|coefficient</code> — каждый PUT отклонялся 422; «Сохранить все» глушило ошибки и писало невнятное «не прошло (порядок оценок)».</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Исправлено (d9f00f1):</div>
+    <div class="task-detail">pattern схемы расширен значением <code>schedule</code>; ответы операций (create/get/update) возвращают <code>estimate_source</code>; «Сохранить все» показывает реальные ошибки («ошибок сохранения: N — первая: …»).</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Проверено E2E (localhost):</div>
+    <div class="task-detail">«Заполнить пустые» (из расчёта от 27.09.2026, ±25 %) → «Сохранить все» → «Сохранено строк: 45» → переход «Монте-Карло» → назад → «оценок заполнено 45 из 45», значения и источник на месте; в БД — 45/45, <code>source=schedule</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Выложено и проверено на проде (d9f00f1):</div>
+    <div class="task-detail">PUT со <code>schedule</code> → 200 и запись в БД; для недопустимых значений остаётся 422; иголки веб-фикса в прод-сборке; сайт 200, API 200.</div>
+    
+  </div>
+</div>
 <footer>
   Файл собран автоматически — правьте текстовый план и запускайте <code>node scripts/render_plan.mjs</code>.
   Любая правка прямо в этом файле будет потеряна при следующей сборке.
