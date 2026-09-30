@@ -217,14 +217,16 @@ export default function EstimateTable({
   const saveAllDrafts = async () => {
     const ids = Object.keys(draft);
     let saved = 0;
+    let badOrder = 0;
     let failed = 0;
+    let failText = '';
     for (const id of ids) {
       const op = operations.find((o) => o.id === id);
       if (!op) continue;
       const { to, tm, tp } = rowNumbers(op);
       const src = cellSource(id);
       if (to !== null && tm !== null && tp !== null && !(to <= tm && tm <= tp)) {
-        failed += 1;
+        badOrder += 1;
         continue;
       }
       setSavingId(id);
@@ -236,12 +238,17 @@ export default function EstimateTable({
           delete copy[id];
           return copy;
         });
-      } catch {
+      } catch (e: any) {
         failed += 1;
+        if (!failText) failText = (e?.message || String(e)).slice(0, 140);
       }
     }
     setSavingId(null);
-    setNote(`Сохранено строк: ${saved}${failed ? `, не прошло: ${failed} (порядок оценок)` : ''}`);
+    setNote(
+      `Сохранено строк: ${saved}` +
+      (badOrder ? `, нарушен порядок оценок: ${badOrder}` : '') +
+      (failed ? `, ошибок сохранения: ${failed}${failText ? ` — первая: ${failText}` : ''}` : ''),
+    );
   };
 
   const exportCsv = () => {
