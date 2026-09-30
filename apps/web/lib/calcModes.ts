@@ -139,6 +139,29 @@ export function modeRequirements(mode: CalcMode, ctx: ModeContext): RequirementS
   });
 }
 
+/** Куда ведёт режим в интерфейсе — для интерактивных схем справки (блок 6.31.4). */
+export const MODE_UI_TARGET: Record<string, string> = {
+  plan: 'gantt',
+  pert: 'pert',
+  'monte-carlo': 'monte-carlo',
+  both: 'pert',
+  resources: 'monte-carlo',
+  portfolio: 'network',
+  buffers: 'pert',
+};
+
+/** Подписи мест интерфейса для кнопок схем. */
+export const NAV_TARGET_LABEL: Record<string, string> = {
+  overview: 'Обзор',
+  gantt: 'Гант (рассчитать проект)',
+  network: 'Сетевой график',
+  estimates: 'Оценки',
+  pert: 'PERT',
+  'monte-carlo': 'Монте-Карло',
+  runs: 'Запуски',
+  settings: 'Настройки расчёта',
+};
+
 /** Рекомендация по данным проекта — с причиной, а не галочкой. */
 export function recommendMode(ctx: ModeContext): { modeId: string; reason: string } {
   if (ctx.withEstimates === 0) {

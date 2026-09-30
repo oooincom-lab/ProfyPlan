@@ -828,6 +828,22 @@ export function openHelp(articleId: string): void {
   }
 }
 
+/**
+ * Событие «перейди в место интерфейса» (блок 6.31.4: интерактивные схемы).
+ * Клик по шагу схемы в справке ведёт в раздел «Расчёты»: вкладка, вид или настройки.
+ * Цели: overview · gantt · network · estimates · pert · monte-carlo · runs · settings.
+ */
+export const CALC_NAV_EVENT = 'profyplan:calc-nav';
+
+export function requestCalcNav(target: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent(CALC_NAV_EVENT, { detail: { target } }));
+  } catch {
+    /* среда без window — переход просто не выполнится */
+  }
+}
+
 /** Статья для окна рабочего стола: по виду окна, а не по его заголовку. */
 export function articleIdForWindow(kind: string, listKind?: string, entity?: string): string {
   if (kind === 'help') return 'help';

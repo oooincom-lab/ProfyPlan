@@ -38,7 +38,7 @@ import { HelpButton } from '@/components/HelpWindow';
 import EstimateTable from '@/components/EstimateTable';
 import PertPage from '@/components/PertPage';
 import McPage from '@/components/McPage';
-import { HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
+import { CALC_NAV_EVENT, HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import { cpm as netCpm, scenario as netScenario } from '@/lib/network';
 import { CALC_MODES, modeRequirements, recommendMode, ModeContext } from '@/lib/calcModes';
 import { probabilityByNormal, goalState } from '@/lib/probability';
@@ -1006,6 +1006,20 @@ export default function AppShell() {
     window.addEventListener('profyplan:open-catoped', h as any);
     return () => window.removeEventListener('profyplan:open-catoped', h as any);
   }, [win]);
+
+  // Блок 6.31.4: живая схема из справки — клик по режиму ведёт в место интерфейса
+  useEffect(() => {
+    const onCalcNav = (e: any) => {
+      const t = e?.detail?.target;
+      if (typeof t !== 'string' || !t) return;
+      if (t === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); else setView('project-gantt'); return; }
+      if (t === 'network') { if (selectedProject) loadProjectNetwork(selectedProject); setView('network'); return; }
+      if (t === 'settings') { setView('settings'); return; }
+      setCalcTab(t as any); setView('calculations');
+    };
+    window.addEventListener(CALC_NAV_EVENT, onCalcNav as any);
+    return () => window.removeEventListener(CALC_NAV_EVENT, onCalcNav as any);
+  });
 
   const [pendingList, setPendingList] = useState<{ kind: 'orders' | 'groups' | 'pools'; title: string } | null>(null);
   const dashHeadRef = useRef<HTMLDivElement>(null);

@@ -20,8 +20,9 @@ import {
   helpSearch,
   helpSnippet,
   openHelp,
+  requestCalcNav,
 } from '@/lib/help';
-import { CALC_MODES } from '@/lib/calcModes';
+import { CALC_MODES, MODE_UI_TARGET, NAV_TARGET_LABEL } from '@/lib/calcModes';
 
 /** Кнопка «?» — единая для шапок окон, шапки панели и ленты вкладок раздела «Расчёты». */
 export function HelpButton({ articleId, title, compact }: { articleId: string; title?: string; compact?: boolean }) {
@@ -303,16 +304,59 @@ export default function HelpContent({
 
           {article.id === 'calc-modes' ? (
             <Section title="Режимы (из общего описания)">
+              <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginBottom: 2 }}>Кликните режим — откроется место в интерфейсе.</div>
               <div style={{ display: 'grid', gap: 8 }}>
-                {CALC_MODES.map((m) => (
-                  <div key={m.id} style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 10px' }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 3 }}>{m.title}</div>
-                    <div style={{ ...bodyText, fontSize: 12 }}><b>Считает:</b> {m.computes}</div>
-                    <div style={{ ...bodyText, fontSize: 12 }}><b>Получите:</b> {m.gives.join(' · ')}</div>
-                    <div style={{ ...bodyText, fontSize: 12, color: 'var(--fg-3)' }}><b>Не будет:</b> {m.limits.join('; ')}</div>
-                    <div style={{ ...bodyText, fontSize: 12, color: 'var(--fg-4)' }}>{m.time} · {m.when}</div>
-                  </div>
-                ))}
+                {CALC_MODES.map((m) => {
+                  const tgt = MODE_UI_TARGET[m.id] || 'overview';
+                  const lbl = NAV_TARGET_LABEL[tgt] || tgt;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => requestCalcNav(tgt)}
+                      title={'Открыть в интерфейсе: «' + lbl + '»'}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 3, flex: 1, minWidth: 0 }}>{m.title}</div>
+                        <span style={{ fontSize: 11, color: '#93C5FD', whiteSpace: 'nowrap' }}>Открыть «{lbl}» →</span>
+                      </div>
+                      <div style={{ ...bodyText, fontSize: 12 }}><b>Считает:</b> {m.computes}</div>
+                      <div style={{ ...bodyText, fontSize: 12 }}><b>Получите:</b> {m.gives.join(' · ')}</div>
+                      <div style={{ ...bodyText, fontSize: 12, color: 'var(--fg-3)' }}><b>Не будет:</b> {m.limits.join('; ')}</div>
+                      <div style={{ ...bodyText, fontSize: 12, color: 'var(--fg-4)' }}>{m.time} · {m.when}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+          ) : null}
+
+          {article.id === 'calc-guide' ? (
+            <Section title="Куда идти — живая схема режимов">
+              <div style={{ display: 'grid', gap: 6 }}>
+                {CALC_MODES.map((m) => {
+                  const tgt = MODE_UI_TARGET[m.id] || 'overview';
+                  const lbl = NAV_TARGET_LABEL[tgt] || tgt;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => requestCalcNav(tgt)}
+                      title={'Открыть: «' + lbl + '»'}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)' }}>{m.title}</span>
+                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--fg-4)' }}>{m.computes}</span>
+                      </span>
+                      <span style={{ fontSize: 11.5, color: '#93C5FD', whiteSpace: 'nowrap' }}>Открыть «{lbl}» →</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 6 }}>
+                Каждый шаг ведёт в интерфейс. Если шаг недоступен, место откроется с причиной и кнопкой устранения — не пустым экраном.
               </div>
             </Section>
           ) : null}
