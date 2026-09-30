@@ -5913,6 +5913,28 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {view === 'settings' && selectedProject && (
             <>
+              {/* 30.09.2026: настройки расчёта открываются, не убирая полосу расчётов с вкладками —
+                  вернуться можно вкладкой выше или кнопкой «← К расчётам» (раньше выход был только через меню). */}
+              <CalculationsTabs
+                active={null}
+                settingsActive
+                onSelect={(t) => {
+                  if (t === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); else setView('project-gantt'); return; }
+                  if (t === 'network') { setView('network'); return; }
+                  setCalcTab(t); setView('calculations');
+                }}
+                methods={calcMethods}
+                area={calcAreaId ? 'ветка заказов' : 'проект'}
+                areaName={calcAreaId ? calcAreaLabel : (selectedProject?.name || null)}
+                dataDate={runDateText(lastCalcRun?.data_date)}
+                dataVersion={lastCalcRun?.data_fingerprint || null}
+                dirty={false}
+                onRecalculate={selectedProject ? () => { createCalcRun(); } : undefined}
+                onOpenSettings={() => setView('settings')}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px' }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setView('calculations')}>← К расчётам</button>
+              </div>
               <div className="panel">
                 <div className="panel-hdr"><span className="panel-title">⚙️ Настройки проекта</span><span className="panel-sub">{selectedProject.name}</span></div>
                 <div style={{ display: 'grid', gap: 16, maxWidth: 500 }}>

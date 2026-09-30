@@ -76,7 +76,8 @@ function tabNotice(tab: CalcTab, methods: CalcMethods): TabNotice {
 }
 
 export type CalculationsTabsProps = {
-  active: CalcTab;
+  /** Активная вкладка; null — лента без выделенной вкладки (например, на странице настроек расчёта). */
+  active: CalcTab | null;
   onSelect: (tab: CalcTab) => void;
   methods: CalcMethods;
   /** Область расчёта: проект · куст · группа · пул. */
@@ -92,6 +93,8 @@ export type CalculationsTabsProps = {
   modeTitle?: string | null;
   onRecalculate?: () => void;
   onOpenSettings?: () => void;
+  /** Показываем на странице «Настройки расчёта»: кнопка настроек подсвечивается как активная. */
+  settingsActive?: boolean;
 };
 
 export default function CalculationsTabs({
@@ -106,6 +109,7 @@ export default function CalculationsTabs({
   modeTitle,
   onRecalculate,
   onOpenSettings,
+  settingsActive = false,
 }: CalculationsTabsProps) {
   const fill: MethodFill = methods.analysis === 'none' && methods.logic === 'cpm' ? 'partial' : 'filled';
 
@@ -229,16 +233,17 @@ export default function CalculationsTabs({
               padding: '5px 12px',
               borderRadius: 6,
               cursor: 'pointer',
-              border: '1px solid var(--border)',
-              background: 'transparent',
-              color: 'var(--fg-3)',
+              border: '1px solid ' + (settingsActive ? 'var(--accent)' : 'var(--border)'),
+              background: settingsActive ? 'var(--bg-3)' : 'transparent',
+              color: settingsActive ? 'var(--fg)' : 'var(--fg-3)',
+              fontWeight: settingsActive ? 600 : 400,
             }}
           >
             Настройки расчёта
           </button>
         ) : null}
-        {/* Справка по вкладке: статья активного модуля (блок 6.27) */}
-        <HelpButton articleId={articleIdForCalcTab(active)} title="Справка по этой вкладке" />
+        {/* Справка по вкладке: статья активного модуля (блок 6.27); без активной вкладки — справка настроек */}
+        <HelpButton articleId={active ? articleIdForCalcTab(active) : 'project-settings'} title={active ? 'Справка по этой вкладке' : 'Справка по настройкам расчёта'} />
       </div>
     </div>
   );
