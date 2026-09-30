@@ -5914,7 +5914,8 @@ const changeOrderStatus = async (o: any, status: string) => {
           {view === 'settings' && selectedProject && (
             <>
               {/* 30.09.2026: настройки расчёта открываются, не убирая полосу расчётов с вкладками —
-                  вернуться можно вкладкой выше или кнопкой «← К расчётам» (раньше выход был только через меню). */}
+                  вернуться можно вкладкой выше (раньше выход был только через меню).
+                  Отдельная кнопка «← К расчётам» убрана как избыточная — решение владельца, 23:31. */}
               <CalculationsTabs
                 active={null}
                 settingsActive
@@ -5932,9 +5933,6 @@ const changeOrderStatus = async (o: any, status: string) => {
                 onRecalculate={selectedProject ? () => { createCalcRun(); } : undefined}
                 onOpenSettings={() => setView('settings')}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => setView('calculations')}>← К расчётам</button>
-              </div>
               <div className="panel">
                 <div className="panel-hdr"><span className="panel-title">⚙️ Настройки проекта</span><span className="panel-sub">{selectedProject.name}</span></div>
                 <div style={{ display: 'grid', gap: 16, maxWidth: 500 }}>
