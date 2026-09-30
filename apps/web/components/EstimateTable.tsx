@@ -9,8 +9,14 @@
  *
  * Значения по умолчанию не подставляются: пустая оценка остаётся пустой, а не превращается
  * в правдоподобное число.
+ *
+ * Блок 6.24: столбцы «Факт, ч» и «Завершена» собирают факт по завершённым операциям,
+ * а панель «Калибровка по истории» показывает отношение «факт / оценка» как подсказку.
+ * Переключатель «использовать исторические данные» по умолчанию выключен; оценки
+ * меняются только по нажатию человека, с подтверждением.
  */
 import React, { useMemo, useState } from 'react';
+import { calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
 
 export type EstimateOp = {
   id: string;
@@ -20,6 +26,8 @@ export type EstimateOp = {
   tm_likely?: number | string | null;
   tp_pessimistic?: number | string | null;
   estimate_source?: string | null;
+  fact_hours?: number | string | null;
+  fact_finished_on?: string | null;
 };
 
 /** Ожидаемая длительность и разброс по трём оценкам (PERT). */
@@ -40,13 +48,17 @@ export default function EstimateTable({
   onSave,
   schedHours,
   schedAt,
+  useHistory,
+  onToggleHistory,
 }: {
   operations: EstimateOp[];
-  onSave: (id: string, patch: Record<string, number | null>) => Promise<void>;
+  onSave: (id: string, patch: Record<string, number | string | null>) => Promise<void>;
   schedHours?: Record<string, number>;
   schedAt?: string | null;
+  useHistory?: boolean;
+  onToggleHistory?: (value: boolean) => void | Promise<void>;
 }) {
-  const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string; src: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string; src: string; fact: string; factDate: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [note, setNote] = useState('');
 
@@ -63,9 +75,16 @@ export default function EstimateTable({
     return v === null ? '' : String(v);
   };
 
+  /** Начальные значения факта по операции — и для черновика, и для сравнения «изменено ли». */
+  const factInit = (op: EstimateOp | undefined): { fact: string; factDate: string } => ({
+    fact: op && op.fact_hours !== null && op.fact_hours !== undefined ? String(Number(op.fact_hours)) : '',
+    factDate: op && op.fact_finished_on ? String(op.fact_finished_on).slice(0, 10) : '',
+  });
+
   const setCell = (id: string, key: 'to' | 'tm' | 'tp', value: string) => {
     setDraft((prev) => {
-      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id) };
+      const op = operations.find((o) => o.id === id);
+      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id), ...factInit(op) };
       return { ...prev, [id]: { ...cur, [key]: value } };
     });
   };
@@ -79,9 +98,46 @@ export default function EstimateTable({
   };
   const setSource = (id: string, value: string) => {
     setDraft((prev) => {
-      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id) };
+      const op = operations.find((o) => o.id === id);
+      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id), ...factInit(op) };
       return { ...prev, [id]: { ...cur, src: value } };
     });
+  };
+
+  // ── Факт (блок 6.24): фактические часы и дата завершения ──
+  const factCell = (op: EstimateOp): string => {
+    const d = draft[op.id];
+    return d ? d.fact : factInit(op).fact;
+  };
+  const factDateCell = (op: EstimateOp): string => {
+    const d = draft[op.id];
+    return d ? d.factDate : factInit(op).factDate;
+  };
+  const setFactCell = (id: string, value: string) => {
+    setDraft((prev) => {
+      const op = operations.find((o) => o.id === id);
+      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id), ...factInit(op) };
+      return { ...prev, [id]: { ...cur, fact: value } };
+    });
+  };
+  const setFactDateCell = (id: string, value: string) => {
+    setDraft((prev) => {
+      const op = operations.find((o) => o.id === id);
+      const cur = prev[id] || { to: cell(id, 'to'), tm: cell(id, 'tm'), tp: cell(id, 'tp'), src: cellSource(id), ...factInit(op) };
+      return { ...prev, [id]: { ...cur, factDate: value } };
+    });
+  };
+  const parseFact = (v: string): { ok: boolean; value: number | null } => {
+    const s = v.trim();
+    if (!s) return { ok: true, value: null };
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 ? { ok: true, value: n } : { ok: false, value: null };
+  };
+  const factDirty = (op: EstimateOp): boolean => {
+    const d = draft[op.id];
+    if (!d) return false;
+    const init = factInit(op);
+    return d.fact !== init.fact || d.factDate !== init.factDate;
   };
 
   const rowNumbers = (op: EstimateOp) => ({
@@ -93,20 +149,31 @@ export default function EstimateTable({
   const saveRow = async (op: EstimateOp) => {
     const { to, tm, tp } = rowNumbers(op);
     const src = cellSource(op.id);
-    if (to === null && tm === null && tp === null && src === 'expert') return;
+    const fDirty = factDirty(op);
+    const pf = parseFact(factCell(op));
+    if (!pf.ok) {
+      setNote('Факт, ч: нужно число (или оставьте пустым)');
+      return;
+    }
+    if (!fDirty && to === null && tm === null && tp === null && src === 'expert') return;
     if (to !== null && tm !== null && tp !== null && !(to <= tm && tm <= tp)) {
       setNote('Порядок оценок нарушен: должно быть оптимистичная ≤ вероятная ≤ пессимистичная');
       return;
     }
+    const patch: Record<string, number | string | null> = { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: src };
+    if (fDirty) {
+      patch.fact_hours = pf.value;
+      patch.fact_finished_on = factDateCell(op).trim() || null;
+    }
     setSavingId(op.id);
     try {
-      await onSave(op.id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: src } as any);
+      await onSave(op.id, patch);
       setDraft((prev) => {
         const next = { ...prev };
         delete next[op.id];
         return next;
       });
-      setNote('Оценки сохранены');
+      setNote(fDirty ? 'Оценки и факт сохранены' : 'Оценки сохранены');
     } catch (e: any) {
       setNote('Не удалось сохранить: ' + (e?.message || String(e)));
     } finally {
@@ -126,6 +193,88 @@ export default function EstimateTable({
     fontFamily: 'ui-monospace, monospace',
   };
 
+  // ── Калибровка по истории (блок 6.24): наблюдения факта и подсказка коэффициента ──
+  const obs = useMemo(() => factObservations(operations), [operations]);
+  const calStats = useMemo(() => calibrationStats(obs), [obs]);
+  const [calConfirm, setCalConfirm] = useState(false);
+  const [calNote, setCalNote] = useState('');
+  const [toggling, setToggling] = useState(false);
+
+  const calTargets = useMemo(() => {
+    const targets: EstimateOp[] = [];
+    if (!calStats) return targets;
+    for (const op of operations) {
+      if (draft[op.id]) continue;
+      const to = num(op.to_optimistic);
+      const tm = num(op.tm_likely);
+      const tp = num(op.tp_pessimistic);
+      const hasFact = num(op.fact_hours) !== null;
+      if (to !== null && tm !== null && tp !== null && !hasFact) targets.push(op);
+    }
+    return targets;
+  }, [operations, draft, calStats]);
+
+  const calSkipNoTriple = useMemo(() => {
+    if (!calStats) return 0;
+    let k = 0;
+    for (const op of operations) {
+      if (draft[op.id]) continue;
+      const to = num(op.to_optimistic);
+      const tm = num(op.tm_likely);
+      const tp = num(op.tp_pessimistic);
+      const hasFact = num(op.fact_hours) !== null;
+      const full = to !== null && tm !== null && tp !== null;
+      if (!full && !hasFact) k += 1;
+    }
+    return k;
+  }, [operations, draft, calStats]);
+
+  const toggleHistory = async (v: boolean) => {
+    if (!onToggleHistory) return;
+    setToggling(true);
+    try {
+      await onToggleHistory(v);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  /** Применение медианного коэффициента к строкам с полной тройкой без факта. */
+  const applyCalibration = async () => {
+    if (!calStats || savingId === 'cal') return;
+    const k = calStats.median;
+    if (!calConfirm) {
+      setCalConfirm(true);
+      setCalNote(
+        `Умножить оценки на медиану ${fmtRatio(k)}? Строк: ${calTargets.length}` +
+          (calSkipNoTriple ? ` (без полной тройки пропустятся: ${calSkipNoTriple})` : '') +
+          `. Завершённые строки не трогаем. Повторное применение умножит ещё раз — коэффициент применяйте один раз.`,
+      );
+      return;
+    }
+    setCalConfirm(false);
+    setSavingId('cal');
+    let done = 0;
+    let failed = 0;
+    let firstErr = '';
+    for (const op of calTargets) {
+      const to = Math.round(Number(op.to_optimistic) * k * 100) / 100;
+      const tm = Math.round(Number(op.tm_likely) * k * 100) / 100;
+      const tp = Math.round(Number(op.tp_pessimistic) * k * 100) / 100;
+      try {
+        await onSave(op.id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: 'coefficient' });
+        done += 1;
+      } catch (e: any) {
+        failed += 1;
+        if (!firstErr) firstErr = (e?.message || String(e)).slice(0, 140);
+      }
+    }
+    setSavingId(null);
+    setCalNote(
+      `Применено к строкам: ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).`,
+    );
+  };
+
   // ── Выгрузка и загрузка таблицы оценок (блок 6.17) ──
   type PreviewRow = {
     id: string;
@@ -138,26 +287,58 @@ export default function EstimateTable({
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; fileName: string } | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const [fillMode, setFillMode] = useState('25');
-  // Основа для «Заполнить пустые» (блок 6.17.7): из расчёта графика (по умолчанию), из нормы маршрута или из истории (после 6.24).
+  // Основа для «Заполнить пустые» (блок 6.17.7): из расчёта графика (по умолчанию), из нормы маршрута или из истории (блок 6.24).
   const [fillSrc, setFillSrc] = useState<'schedule' | 'base' | 'history'>('schedule');
   const [confirmClear, setConfirmClear] = useState(false);
 
   /**
    * Заполнение пустых оценок по варианту:
    *   профиль — от одной длительности по коэффициенту (источник «коэффициент», это допущение, а не измерение);
-   *   из истории — по завершённым операциям (когда появится факт, блок 6.24).
+   *   из истории — от медианы фактических отношений (источник «факт», блок 6.24).
    * Заполняются только строки без полной тройки; сохраняет человек кнопкой — молча ничего не пишется.
    */
   const fillEmpty = () => {
     if (fillSrc === 'history') {
-      setNote('Заполнение из истории пока недоступно: нет завершённых операций с фактической длительностью. Появится вместе с блоком 6.24 — тогда источником станет «факт».');
+      if (!useHistory) {
+        setNote('Исторические данные выключены: включите переключатель в панели «Калибровка по истории» (по умолчанию выключено — включается решением пользователя).');
+        return;
+      }
+      if (!calStats) {
+        setNote('Нет данных: нет завершённых операций с фактической длительностью — заполните столбец «Факт, ч».');
+        return;
+      }
+      const p = Number(fillMode) / 100;
+      const k = calStats.median;
+      const next: Record<string, { to: string; tm: string; tp: string; src: string; fact: string; factDate: string }> = { ...draft };
+      let filledCount = 0;
+      for (const op of operations) {
+        const base = Number(op.duration_base || 0);
+        if (!base) continue;
+        const already = num(op.to_optimistic) !== null && num(op.tm_likely) !== null && num(op.tp_pessimistic) !== null;
+        if (already) continue;
+        const m = base * k;
+        next[op.id] = {
+          to: (m * (1 - p)).toFixed(2),
+          tm: m.toFixed(2),
+          tp: (m * (1 + p)).toFixed(2),
+          src: 'fact',
+          ...factInit(op),
+        };
+        filledCount += 1;
+      }
+      setDraft(next);
+      setNote(
+        filledCount
+          ? `Заполнено из истории: медиана ${fmtRatio(k)} (наблюдений ${calStats.n}), профиль ±${Math.round(p * 100)} %. Строк: ${filledCount}. Источник — «факт»; проверьте и нажмите «Сохранить все».`
+          : 'Заполнять нечего: у всех операций уже есть полная тройка оценок',
+      );
       return;
     }
     const schedAvail = !!(schedHours && Object.keys(schedHours).length > 0);
     const useSched = fillSrc === 'schedule' && schedAvail;
     const p = Number(fillMode) / 100;
-    const next: Record<string, { to: string; tm: string; tp: string; src: string }> = { ...draft };
-    let filled = 0;
+    const next: Record<string, { to: string; tm: string; tp: string; src: string; fact: string; factDate: string }> = { ...draft };
+    let filledCount = 0;
     for (const op of operations) {
       const base = useSched ? Number(schedHours?.[op.id] || 0) : Number(op.duration_base || 0);
       if (!base) continue;
@@ -168,8 +349,9 @@ export default function EstimateTable({
         tm: base.toFixed(2),
         tp: (base * (1 + p)).toFixed(2),
         src: useSched ? 'schedule' : 'coefficient',
+        ...factInit(op),
       };
-      filled += 1;
+      filledCount += 1;
     }
     setDraft(next);
     const srcText = useSched
@@ -177,8 +359,8 @@ export default function EstimateTable({
       : 'по норме маршрута';
     const fb = fillSrc === 'schedule' && !schedAvail ? ' Расчёт графика не найден — сначала «Рассчитать проект»; заполнено по норме.' : '';
     setNote(
-      filled
-        ? `Заполнено ${srcText} (профиль ±${Math.round(p * 100)} %): строк ${filled}. Это допущение, а не измерение — проверьте и нажмите «Сохранить все».${fb}`
+      filledCount
+        ? `Заполнено ${srcText} (профиль ±${Math.round(p * 100)} %): строк ${filledCount}. Это допущение, а не измерение — проверьте и нажмите «Сохранить все».${fb}`
         : 'Заполнять нечего: у всех операций уже есть полная тройка оценок',
     );
   };
@@ -218,6 +400,7 @@ export default function EstimateTable({
     const ids = Object.keys(draft);
     let saved = 0;
     let badOrder = 0;
+    let badFact = 0;
     let failed = 0;
     let failText = '';
     for (const id of ids) {
@@ -225,13 +408,24 @@ export default function EstimateTable({
       if (!op) continue;
       const { to, tm, tp } = rowNumbers(op);
       const src = cellSource(id);
+      const fDirty = factDirty(op);
+      const pf = parseFact(factCell(op));
+      if (!pf.ok) {
+        badFact += 1;
+        continue;
+      }
       if (to !== null && tm !== null && tp !== null && !(to <= tm && tm <= tp)) {
         badOrder += 1;
         continue;
       }
+      const patch: Record<string, number | string | null> = { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: src };
+      if (fDirty) {
+        patch.fact_hours = pf.value;
+        patch.fact_finished_on = factDateCell(op).trim() || null;
+      }
       setSavingId(id);
       try {
-        await onSave(id, { to_optimistic: to, tm_likely: tm, tp_pessimistic: tp, estimate_source: src } as any);
+        await onSave(id, patch);
         saved += 1;
         setDraft((prev) => {
           const copy = { ...prev };
@@ -247,16 +441,28 @@ export default function EstimateTable({
     setNote(
       `Сохранено строк: ${saved}` +
       (badOrder ? `, нарушен порядок оценок: ${badOrder}` : '') +
+      (badFact ? `, факт не число: ${badFact}` : '') +
       (failed ? `, ошибок сохранения: ${failed}${failText ? ` — первая: ${failText}` : ''}` : ''),
     );
   };
 
   const exportCsv = () => {
-    const head = 'ID;Операция;Опт.;Вероятн.;Пессим.;Ожидаемая;Разброс';
+    const head = 'ID;Операция;Опт.;Вероятн.;Пессим.;Ожидаемая;Разброс;Факт,ч;Завершена';
     const lines = operations.map((op) => {
       const { to, tm, tp } = rowNumbers(op);
       const est = to !== null && tm !== null && tp !== null ? pertEstimate(to, tm, tp) : null;
-      return [op.id, '"' + String(op.name).replace(/"/g, '""') + '"', to ?? '', tm ?? '', tp ?? '', est ? est.mean.toFixed(2) : '', est ? est.sigma.toFixed(2) : ''].join(';');
+      const fh = num(op.fact_hours);
+      return [
+        op.id,
+        '"' + String(op.name).replace(/"/g, '""') + '"',
+        to ?? '',
+        tm ?? '',
+        tp ?? '',
+        est ? est.mean.toFixed(2) : '',
+        est ? est.sigma.toFixed(2) : '',
+        fh ?? '',
+        op.fact_finished_on ? String(op.fact_finished_on).slice(0, 10) : '',
+      ].join(';');
     });
     const blob = new Blob(['\uFEFF' + [head, ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -432,7 +638,13 @@ export default function EstimateTable({
           />
         </div>
         {fillSrc === 'history' ? (
-          <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>Из истории пока недоступно: нет завершённых операций с фактической длительностью — появится вместе с калибровкой (блок 6.24).</div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+            {useHistory
+              ? calStats
+                ? `Из истории: пустые строки заполняются от медианы ${fmtRatio(calStats.median)} (наблюдений ${calStats.n}); источник — «факт».`
+                : 'Из истории: нет данных — нет завершённых операций с фактической длительностью.'
+              : 'Из истории выключено: включите «Использовать исторические данные» в панели «Калибровка по истории».'}
+          </div>
         ) : null}
         {note ? <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)' }}>{note}</div> : null}
       </div>
@@ -440,6 +652,7 @@ export default function EstimateTable({
         <div style={{ fontSize: 12, color: 'var(--fg-3)', margin: '8px 0 10px' }}>
           Введите три оценки по каждой операции. Порядок: оптимистичная ≤ вероятная ≤ пессимистичная — иначе строка
           не сохранится. Ожидаемая длительность и разброс считаются тут же и ничего не меняют в данных.
+          Для завершённых операций заполните «Факт, ч» и дату — это основа калибровки.
         </div>
         {preview ? (
           <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', marginBottom: 12 }}>
@@ -486,6 +699,8 @@ export default function EstimateTable({
                 <th>Ожидаемая</th>
                 <th>Разброс σ</th>
                 <th>Источник</th>
+                <th>Факт, ч</th>
+                <th>Завершена</th>
                 <th />
               </tr>
             </thead>
@@ -519,6 +734,24 @@ export default function EstimateTable({
                       </select>
                     </td>
                     <td>
+                      <input
+                        style={{ ...inputStyle, width: 66 }}
+                        value={factCell(op)}
+                        onChange={(e) => setFactCell(op.id, e.target.value)}
+                        placeholder="—"
+                        title="Фактическая длительность завершённой операции, ч — основа калибровки"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="date"
+                        style={{ ...inputStyle, width: 132, textAlign: 'left', colorScheme: 'dark' }}
+                        value={factDateCell(op)}
+                        onChange={(e) => setFactDateCell(op.id, e.target.value)}
+                        title="Дата завершения операции — по датам считается период наблюдений"
+                      />
+                    </td>
+                    <td>
                       {dirty ? (
                         <button className="btn btn-primary btn-sm" disabled={badOrder || savingId === op.id} onClick={() => saveRow(op)} title={badOrder ? 'Проверьте порядок оценок' : 'Сохранить строку'}>
                           {savingId === op.id ? '…' : 'Сохранить'}
@@ -533,6 +766,80 @@ export default function EstimateTable({
             </tbody>
           </table>
         )}
+
+        {/* ── Калибровка по истории (блок 6.24): факт против оценки — подсказка с основанием ── */}
+        {operations.length ? (
+          <div data-help-id="calc.calibration" style={{ marginTop: 14, border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '12px 14px', display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>Калибровка по истории</div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                факт завершённых операций сравнивается с оценкой M; это подсказка — оценки меняет только человек
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-2)' }}>
+              <input
+                type="checkbox"
+                checked={useHistory === true}
+                disabled={toggling || !onToggleHistory}
+                onChange={(e) => toggleHistory(e.target.checked)}
+                style={{ accentColor: '#3B82F6', width: 14, height: 14, cursor: 'pointer' }}
+              />
+              Использовать исторические данные
+              <span style={{ color: 'var(--fg-4)' }}>по умолчанию выключено — включается только решением пользователя</span>
+            </label>
+            {!useHistory ? (
+              <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
+                Выключено — подсказки по факту скрыты. Данные собираются и при выключенном переключателе: отметьте
+                завершённые операции столбцами «Факт, ч» и «Завершена», а переключатель открывает коэффициенты.
+              </div>
+            ) : !calStats ? (
+              <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>
+                Нет данных: ни одна операция не отмечена завершённой с фактической длительностью. Заполните столбец
+                «Факт, ч» — после этого здесь появится коэффициент.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                  Наблюдений: <b>{calStats.n}</b> · период: {fmtDateRu(calStats.from)} — {fmtDateRu(calStats.to)} · медиана отношения
+                  «факт / оценка»: <b>{fmtRatio(calStats.median)}</b> (среднее {fmtRatio(calStats.mean)}) · факт больше оценки: {calStats.over}, меньше: {calStats.under}
+                </div>
+                <table className="tbl" style={{ maxWidth: 860 }}>
+                  <thead>
+                    <tr><th>Операция</th><th>Оценка M, ч</th><th>Факт, ч</th><th>Отношение</th><th>Завершена</th></tr>
+                  </thead>
+                  <tbody>
+                    {obs.slice(0, 12).map((o) => (
+                      <tr key={o.id}>
+                        <td style={{ maxWidth: 300 }}>{o.name}</td>
+                        <td className="t-mono">{o.estimate.toFixed(2)}</td>
+                        <td className="t-mono">{o.fact.toFixed(2)}</td>
+                        <td className="t-mono" style={{ color: o.ratio > 1.001 ? '#FCD34D' : o.ratio < 0.999 ? '#93C5FD' : 'var(--fg-2)' }}>{fmtRatio(o.ratio)}</td>
+                        <td className="t-mono">{fmtDateRu(o.finishedOn)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {obs.length > 12 ? <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>…и ещё {obs.length - 12}; в подсказке участвуют все наблюдения.</div> : null}
+                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                  Предложение: умножить оценки на медиану {fmtRatio(calStats.median)} — строк с полной тройкой без факта: {calTargets.length}
+                  {calSkipNoTriple ? `, без полной тройки пропустятся: ${calSkipNoTriple}` : ''}. Завершённые строки не трогаем: их оценка уже история.
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={savingId === 'cal' || !calTargets.length}
+                    onClick={applyCalibration}
+                    style={calConfirm ? { borderColor: '#F59E0B', color: '#FCD34D' } : undefined}
+                  >
+                    {savingId === 'cal' ? 'Применяю…' : calConfirm ? `Подтвердить умножение` : `Применить ${fmtRatio(calStats.median)} к оценкам`}
+                  </button>
+                  <span style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>источник оценок станет «коэффициент»; это пересчёт, а не новое измерение</span>
+                </div>
+              </>
+            )}
+            {calNote ? <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{calNote}</div> : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

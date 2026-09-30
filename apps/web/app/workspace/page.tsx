@@ -802,7 +802,7 @@ export default function AppShell() {
       setOpResources([]);
     }
   };
-  const saveEstimate = async (opId: string, patch: Record<string, number | null>) => {
+  const saveEstimate = async (opId: string, patch: Record<string, number | string | null>) => {
     if (!selectedProject) return;
     const saved: any = await apiF(`/projects/${selectedProject.id}/operations/${opId}`, { method: 'PUT', body: JSON.stringify(patch) });
     setEstimateOps((prev) => prev.map((o) => (o.id === opId ? { ...o, ...(saved || patch) } : o)));
@@ -5014,7 +5014,14 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <button className="btn btn-secondary btn-sm" onClick={() => { setGapReturn(false); setCalcTab('overview'); }}>← Вернуться к разбору разрыва</button>
                 </div>
               )}
-              <EstimateTable operations={estimateOps} onSave={saveEstimate} schedHours={schedDurHours} schedAt={ganttData ? ganttData.anchor || null : null} />
+              <EstimateTable
+                operations={estimateOps}
+                onSave={saveEstimate}
+                schedHours={schedDurHours}
+                schedAt={ganttData ? ganttData.anchor || null : null}
+                useHistory={selectedProject?.use_history === true}
+                onToggleHistory={async (v: boolean) => { await saveCalcSettings({ use_history: v }); }}
+              />
             </>
           ) : calcTab === 'runs' ? (
             <div className="panel">

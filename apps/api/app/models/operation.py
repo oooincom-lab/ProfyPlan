@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -48,6 +48,11 @@ class Operation(BaseModel):
 
     # Источник оценок (блок 6.17): expert — ввёл человек, fact — из истории, ai — принято от советника
     estimate_source: Mapped[str] = mapped_column(String(20), nullable=False, default="expert", server_default="expert")
+
+    # Факт исполнения (блок 6.24): фактическая длительность и дата завершения.
+    # Заполняется по завершённым операциям; основа калибровки — сравнение факта с оценкой M.
+    fact_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    fact_finished_on: Mapped[Optional[object]] = mapped_column(Date, nullable=True)
 
     position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     catalog_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)

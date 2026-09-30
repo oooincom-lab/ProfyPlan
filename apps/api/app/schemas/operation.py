@@ -1,6 +1,7 @@
 """
 Pydantic-схемы для операций.
 """
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
@@ -29,6 +30,8 @@ class OperationUpdate(BaseModel):
     tm_likely: Optional[Decimal] = None
     tp_pessimistic: Optional[Decimal] = None
     estimate_source: Optional[str] = Field(default=None, pattern="^(expert|fact|ai|coefficient|schedule)$")
+    fact_hours: Optional[Decimal] = Field(default=None, ge=0)
+    fact_finished_on: Optional[date] = None
     position: Optional[int] = None
 
 
@@ -44,6 +47,8 @@ class OperationOut(BaseModel):
     tm_likely: Optional[Decimal] = None
     tp_pessimistic: Optional[Decimal] = None
     estimate_source: Optional[str] = None
+    fact_hours: Optional[Decimal] = None
+    fact_finished_on: Optional[date] = None
     order_id: Optional[str] = None
     position: Optional[int] = None
     is_critical: bool = False
