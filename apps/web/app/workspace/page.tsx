@@ -13,7 +13,7 @@ import { useState, useCallback, Fragment, useRef, useEffect, useMemo } from 'rea
 import CatalogOps from '@/components/CatalogOps';
 import GraphStylePicker from '@/components/GraphStylePicker';
 import CalculationsTabs, { CalcTab, CalcTabNotice } from '@/components/CalculationsTabs';
-import { parseCalcMethods, logicLabel, analysisLabel } from '@/lib/calcMethods';
+import { parseCalcMethods, analysisLabel } from '@/lib/calcMethods';
 import { getPalette, type ThemeName } from '@/lib/graph-styles';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
@@ -4397,12 +4397,62 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </div>
                   ))}
                 </div>
+                <div data-help-id="calc.contours" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-3)', flex: 1 }}>Свод контуров: календарный и вероятностный</div>
+                    <HelpButton articleId="calc-guide" title="Путеводитель: методы и режимы" />
+                  </div>
+                  {(() => {
+                    const chHours = lastCalcRun && lastCalcRun.result && lastCalcRun.result.project_duration_hours != null ? Number(lastCalcRun.result.project_duration_hours) : null;
+                    const pct = (lastCalcRun && lastCalcRun.result && lastCalcRun.result.percentiles) || null;
+                    const hasPct = !!(pct && pct.p50 !== undefined);
+                    const estCount = estimateOps.filter((o: any) => o.to_optimistic != null && o.tm_likely != null && o.tp_pessimistic != null).length;
+                    return (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>Календарный контур (график)</div>
+                            <div style={{ fontSize: 14, color: 'var(--fg-2)', margin: '3px 0' }}>{chHours != null ? hoursText(chHours) : 'нет расчёта'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>режимы работы, ресурсы, события мощности; критический путь</div>
+                            <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 3 }}>
+                              {lastCalcRun ? `источник: расчёт от ${runDateText(lastCalcRun.data_date) || '—'} · версия ${lastCalcRun.data_fingerprint || '—'}` : 'источник: нужен «Рассчитать проект»'}
+                            </div>
+                          </div>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>Вероятностный контур (оценки)</div>
+                            <div style={{ fontSize: 14, color: 'var(--fg-2)', margin: '3px 0' }}>
+                              {hasPct ? `${hoursText(pct.p50)} / ${hoursText(pct.p80)} / ${hoursText(pct.p95)}` : goalBasis ? `${hoursText(goalBasis.expected)} ± ${hoursText(goalBasis.sigma)}` : 'нет данных'}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--fg-4)' }}>
+                              {hasPct ? 'p50 / p80 / p95 — Монте-Карло (последний запуск)' : goalBasis ? 'ожидаемый срок и разброс — PERT; точнее — Монте-Карло' : 'нужны тройные оценки O/M/P'}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 3 }}>календарь и ресурсы здесь не учтены · оценок: {estCount} из {estimateOps.length}</div>
+                          </div>
+                        </div>
+                        {chHours != null && goalBasis ? (
+                          <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                            Расхождение: календарный {hoursText(chHours)} · ожидаемый {hoursText(goalBasis.expected)} — числа не смешиваются; разница — вклад календаря и разброса оценок.
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
+                            Числа контуров не смешиваются.{chHours == null ? ' Для календарного нужен «Рассчитать проект».' : ''}{!hasPct && !goalBasis ? ' Для вероятностного нужны тройные оценки (вкладка «Оценки»).' : ''}
+                          </div>
+                        )}
+                        {!hasPct && !goalBasis && estimateOps.length > 0 ? (
+                          <div>
+                            <button className="btn btn-secondary btn-sm" onClick={() => { setCalcTab('estimates'); setView('calculations'); }}>Открыть «Оценки» →</button>
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+                </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
-                  <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Методы расчёта — две независимые оси</div>
-                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{logicLabel(calcMethods.logic)}</div>
-                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{analysisLabel(calcMethods.analysis)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Методы расчёта</div>
+                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>Метод — по объекту: простой куст считается по CPM, кластер — по CCM</div>
+                  <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 2 }}>{analysisLabel(calcMethods.analysis)}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 6 }}>
-                    Значения берутся из настроек проекта — изменить можно на вкладке «Настройки расчёта».
+                    Ручной выбор метода убран; выбор остаётся только для модели оценки — на вкладке «Настройки расчёта».
                   </div>
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
