@@ -225,6 +225,9 @@ export default function AppShell() {
 
   // ── Запуски расчёта (блок 6.16.3): реестр расчётов проекта ──
   const [calcRuns, setCalcRuns] = useState<any[]>([]);
+  // 30.09.2026: «Настройки расчёта» открываются как вкладка раздела — показываем только расчётные секции;
+  // полная страница настроек (имя, статус, общие ресурсы, этапы, удаление) — из меню ⚙️ Настройки.
+  const [settingsCalc, setSettingsCalc] = useState(false);
   const [calcRunsFor, setCalcRunsFor] = useState<string | null>(null);
   const loadCalcRuns = async (projectId: string) => {
     try {
@@ -1038,7 +1041,7 @@ export default function AppShell() {
       if (typeof t !== 'string' || !t) return;
       if (t === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); else setView('project-gantt'); return; }
       if (t === 'network') { if (selectedProject) loadProjectNetwork(selectedProject); setView('network'); return; }
-      if (t === 'settings') { setView('settings'); return; }
+      if (t === 'settings') { setSettingsCalc(true); setView('settings'); return; }
       setCalcTab(t as any); setView('calculations');
     };
     window.addEventListener(CALC_NAV_EVENT, onCalcNav as any);
@@ -2667,6 +2670,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
   const onRefresh = () => { if (selectedProject) refresh(); else load(); };
 
   const navTo = (v: View) => {
+    if (v === 'settings') setSettingsCalc(false); // из меню — полная страница настроек
     // Справочники при «Окна (MDI)» — открываются окнами (как карточки раздела «Справочники»)
     if (panelMode === 'window') {
       if (['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations'].includes(v)) {
@@ -4058,7 +4062,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         setDirectoryModal={setDirectoryModal}
         openDirectory={openDirectory}
         setSelectedProject={setSelectedProject}
-        setView={setView}
+        setView={(v: any) => { if (v === 'settings') setSettingsCalc(false); setView(v); }}
         collapsed={effCollapsed}
         menuMode={menuMode}
         onAutoHide={() => { if (autoEnabled) setSidebarCollapsed(true); }}
@@ -4201,7 +4205,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     <button className="btn btn-primary btn-sm" onClick={() => loadProjectDashboard(p)}>Открыть</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => setImportProjectId(p.id)}>📥 Импорт</button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedProject(p); setView('settings'); }}>⚙️</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedProject(p); setSettingsCalc(false); setView('settings'); }}>⚙️</button>
                     <button className="btn btn-danger btn-sm" onClick={() => deleteProject(p)}>🗑</button>
                   </div>
                 </div>
@@ -4314,7 +4318,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               dataVersion={lastCalcRun?.data_fingerprint || null}
               dirty={false}
               onRecalculate={selectedProject ? () => { createCalcRun(); } : undefined}
-              onOpenSettings={() => setView('settings')}
+              onOpenSettings={() => { setSettingsCalc(true); setView('settings'); }}
             />
           )}
 
@@ -4888,13 +4892,13 @@ const changeOrderStatus = async (o: any, status: string) => {
                 onOpenTab={(t: string) => { setCalcTab(t as any); setView('calculations'); }}
               />
             ) : (
-              <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
+              <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => { setSettingsCalc(true); setView('settings'); }} onBack={() => setCalcTab('overview')} />
             )
           ) : calcTab === 'pert' ? (
             calcMethods.analysis === 'pert' ? (
               <PertPage operations={estimateOps.length ? estimateOps : []} dependencies={estimateDeps} resources={opResources} orders={areaOrders} onAreaChange={(id, label) => { setCalcAreaId(id); setCalcAreaLabel(label); }} onOpenTab={(t: string) => { setCalcTab(t as any); setView('calculations'); }} />
             ) : (
-              <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
+              <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => { setSettingsCalc(true); setView('settings'); }} onBack={() => setCalcTab('overview')} />
             )
           ) : calcTab === 'estimates' ? (
             <>
@@ -4949,7 +4953,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               onOpenRuns={() => setCalcTab('runs')}
             />
           ) : (
-            <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
+            <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => { setSettingsCalc(true); setView('settings'); }} onBack={() => setCalcTab('overview')} />
           ))}
 
           {/* ═══ PROJECT GANTT ═══ */}
@@ -5933,17 +5937,22 @@ const changeOrderStatus = async (o: any, status: string) => {
                 onRecalculate={selectedProject ? () => { createCalcRun(); } : undefined}
                 onOpenSettings={() => setView('settings')}
               />
+              {settingsCalc ? (
+                <div style={{ fontSize: 11.5, color: 'var(--fg-4)', margin: '0 0 10px' }}>
+                  Показаны настройки расчёта. Имя проекта, статус, общие ресурсы, этапы и удаление — в полной странице настроек (меню: ⚙️ Настройки).
+                </div>
+              ) : null}
               <div className="panel">
-                <div className="panel-hdr"><span className="panel-title">⚙️ Настройки проекта</span><span className="panel-sub">{selectedProject.name}</span></div>
+                <div className="panel-hdr"><span className="panel-title">{settingsCalc ? '⚙️ Настройки расчёта' : '⚙️ Настройки проекта'}</span><span className="panel-sub">{selectedProject.name}</span></div>
                 <div style={{ display: 'grid', gap: 16, maxWidth: 500 }}>
-                  <div>
+                  <div style={{ display: settingsCalc ? 'none' : undefined }}>
                     <label style={{ display: 'block', fontSize: 12, color: '#5A7090', marginBottom: 6 }}>Название</label>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input id="proj-name-input" defaultValue={selectedProject.name} style={{ flex: 1, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '8px 12px', fontSize: 14 }} onKeyDown={e => { if (e.key === 'Enter') renameProject(selectedProject, (e.target as HTMLInputElement).value); }} />
                       <button className="btn btn-primary btn-sm" onClick={() => renameProject(selectedProject, (document.getElementById('proj-name-input') as HTMLInputElement)?.value || '')}>Сохранить</button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                  <div style={{ display: settingsCalc ? 'none' : 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedProject.status === 'archived' ? '📦 В архиве' : '📁 Активный'}</div>
@@ -5957,7 +5966,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginBottom: 12 }}>
+                                          <div style={{ display: settingsCalc ? 'none' : 'flex', alignItems: 'center', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginBottom: 12 }}>
                     <input type="checkbox" id="pp-use-shared" checked={selectedProject.use_shared_resources !== false}
                       onChange={async (e) => {
                         try {
@@ -6210,10 +6219,10 @@ const changeOrderStatus = async (o: any, status: string) => {
                       </div>
                     </div>
                   </div>
-<div style={{ fontWeight: 600, fontSize: 14 }}>🧩 Этапы проекта</div>
-                        <div style={{ fontSize: 12, color: '#5A7090' }}>Регистр этапов для группировки операций маршрутов</div>
+<div style={{ fontWeight: 600, fontSize: 14, display: settingsCalc ? 'none' : undefined }}>🧩 Этапы проекта</div>
+                        <div style={{ fontSize: 12, color: '#5A7090', display: settingsCalc ? 'none' : undefined }}>Регистр этапов для группировки операций маршрутов</div>
                       </div>
-                      <button className="btn btn-primary btn-sm" onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {
+                      <button className="btn btn-primary btn-sm" style={{ display: settingsCalc ? 'none' : undefined }} onClick={() => win.openDirWin('stages', '🧩 Этапы проекта', DIR_COLUMNS.stages.columns, undefined, undefined, undefined, {
                         endpoints: {
                           list: `${API_ORIGIN}/api/v1/projects/${selectedProject.id}/stages/`,
                           create: `${API_ORIGIN}/api/v1/projects/${selectedProject.id}/stages/`,
@@ -6223,14 +6232,14 @@ const changeOrderStatus = async (o: any, status: string) => {
                       })}>Этапы</button>
                     </div>
                   </div>
-                  <div style={{ paddingTop: 12, borderTop: '1px solid #1E3252' }}>
+                  <div style={{ paddingTop: 12, borderTop: '1px solid #1E3252', display: settingsCalc ? 'none' : undefined }}>
                     <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 12 }} onClick={() => deleteProject(selectedProject)}>
                       🗑 Удалить проект
                     </button>
                   </div>
                 </div>
               </div>
-              <div style={{ marginTop: 16 }}>
+              <div style={{ marginTop: 16, display: settingsCalc ? 'none' : undefined }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => navTo('projects')}>← К проектам</button>
               </div>
             </>
