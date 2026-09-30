@@ -644,6 +644,18 @@ export default function EstimateTable({
           >
             {confirmClear ? 'Подтвердить очистку' : 'Очистить все'}
           </button>
+          {confirmClear ? (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setConfirmClear(false);
+                setNote('Очистка отменена — данные не тронуты');
+              }}
+              title="Снять подтверждение — оценки останутся как были"
+            >
+              Отмена
+            </button>
+          ) : null}
           <input
             ref={fileRef}
             type="file"
@@ -692,7 +704,7 @@ export default function EstimateTable({
                   : 'нет данных — заполните «Факт, ч» у завершённых операций'}
             </div>
             {useHistory && calStats ? (
-              <button className="btn btn-secondary btn-sm" onClick={() => setCalOpen((v) => !v)} title="Показать наблюдения и применение коэффициента к оценкам">
+              <button className="btn btn-secondary btn-sm" onClick={() => { if (calOpen && calConfirm) { setCalConfirm(false); setCalNote(''); } setCalOpen((v) => !v); }} title="Показать наблюдения и применение коэффициента к оценкам">
                 {calOpen ? 'Свернуть' : 'Развернуть'}
               </button>
             ) : null}
@@ -735,6 +747,18 @@ export default function EstimateTable({
               >
                 {savingId === 'cal' ? 'Применяю…' : calConfirm ? `Подтвердить умножение` : `Применить ${fmtRatio(calStats.median)} к оценкам`}
               </button>
+              {calConfirm ? (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setCalConfirm(false);
+                    setCalNote('Умножение отменено — оценки не тронуты.');
+                  }}
+                  title="Снять подтверждение — ничего не будет применено"
+                >
+                  Отмена
+                </button>
+              ) : null}
               <span style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>источник оценок станет «коэффициент»; это пересчёт, а не новое измерение</span>
             </div>
             {calNote ? <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{calNote}</div> : null}

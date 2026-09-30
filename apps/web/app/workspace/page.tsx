@@ -4632,6 +4632,15 @@ const changeOrderStatus = async (o: any, status: string) => {
                         >
                           {confirmCalcDate ? 'Подтвердить' : 'из расчёта'}
                         </button>
+                        {confirmCalcDate ? (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => { setConfirmCalcDate(false); setMsg('Отменено — рабочая дата не менялась.'); }}
+                            title="Снять подтверждение"
+                          >
+                            Отмена
+                          </button>
+                        ) : null}
                       </span>
                     </label>
                   </div>
@@ -4693,6 +4702,9 @@ const changeOrderStatus = async (o: any, status: string) => {
                               ? <>Крупнейшие операции критического пути: {gapAnalysis.critTop.map((o) => `${o.name} (${Math.round(o.duration)} ч)`).join(' · ')}. Сжатие или уточнение нормы — во вкладке «Оценки». Ориентир: −10 % по «{gapAnalysis.critTop[0].name}» ≈ −{Math.round((gapAnalysis.critTop[0].duration / 24) * 10) / 10} дн к сроку.{' '}
                                 <input type="number" min={1} max={90} value={gapApplyPct} onChange={(e) => setGapApplyPct(Math.min(90, Math.max(1, Number(e.target.value) || 10)))} title="На сколько сжать оценки операции, %" style={{ width: 50, marginLeft: 6, padding: '3px 6px', fontSize: 11.5, background: '#0B1B33', color: 'var(--fg)', border: '1px solid var(--border-2)', borderRadius: 6 }} />{' '}
                               <button className="btn btn-sm" style={{ marginLeft: 4, padding: '4px 12px', fontSize: 11.5, fontWeight: 600, background: confirmGapApply ? 'rgba(245,158,11,0.18)' : 'rgba(59,130,246,0.16)', border: confirmGapApply ? '1px solid #F59E0B' : '1px solid #3B82F6', borderRadius: 6, color: confirmGapApply ? '#FCD34D' : '#93C5FD', cursor: 'pointer' }} onClick={applyTopCompression}>{confirmGapApply ? 'Изменить и пересчитать' : `Применить −${gapApplyPct} %`}</button>
+                              {confirmGapApply ? (
+                                <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4, padding: '4px 12px', fontSize: 11.5 }} onClick={() => { setConfirmGapApply(false); setMsg('Отменено — оценки не тронуты.'); }} title="Снять подтверждение — сжатие не будет применено">Отмена</button>
+                              ) : null}
                               </>
                               : 'Критический путь не определён — нужны связи между операциями.'}
                             {gapAnalysis.nearCrit.length > 0 && (
@@ -4797,6 +4809,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                       Взять расчётные
                     </button>
                     {projectGoals.some((g) => g.fixed && g.area_type !== 'project') ? (
+                      <>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={unfixRows}
@@ -4805,6 +4818,16 @@ const changeOrderStatus = async (o: any, status: string) => {
                       >
                         {confirmUnfix ? 'Подтвердить снятие' : 'Снять построчные фиксации'}
                       </button>
+                      {confirmUnfix ? (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setConfirmUnfix(false); setMsg('Отменено — фиксации не сняты.'); }}
+                          title="Снять подтверждение"
+                        >
+                          Отмена
+                        </button>
+                      ) : null}
+                      </>
                     ) : null}
                   </div>
                   <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
