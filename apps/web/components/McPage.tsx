@@ -9,7 +9,7 @@
  * Честные границы: ресурсы внутри прогонов НЕ пересчитываются (это отдельный, дорогой режим),
  * поэтому результат оптимистичнее реальности — это написано прямо на странице.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export type McResult = {
   iterations?: number;
@@ -34,9 +34,13 @@ function hoursText(hours: number | undefined | null): string {
 export default function McPage({
   onRun,
   onOpenTab,
+  lastRun,
+  projectId,
 }: {
   onRun: (iterations: number, seed: number | null) => Promise<McResult>;
   onOpenTab?: (tab: string) => void;
+  lastRun?: any;
+  projectId?: string;
 }) {
   const [iterations, setIterations] = useState(10000);
   const [seed, setSeed] = useState('');
@@ -45,6 +49,36 @@ export default function McPage({
   const [error, setError] = useState('');
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);
+
+  // Последний сохранённый запуск (реестр «Запуски»): расчёт не сбрасывается при переходе
+  // на другую вкладку или к другому проекту — возвращаемся, и распределение уже на месте.
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [savedIter, setSavedIter] = useState<number | null>(null);
+  const [savedSeed, setSavedSeed] = useState<string | null>(null);
+
+  const fmtAt = (value: any) => {
+    if (!value) return null;
+    try {
+      return new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return null; }
+  };
+  useEffect(() => {
+    if (lastRun && lastRun.result) {
+      setResult(lastRun.result as McResult);
+      setSavedAt(fmtAt(lastRun.data_date || lastRun.created_at));
+      setSavedIter(Number(lastRun.params?.iterations ?? lastRun.result?.iterations ?? 0) || null);
+      setSavedSeed(lastRun.params?.seed !== undefined && lastRun.params?.seed !== null ? String(lastRun.params.seed) : null);
+    } else {
+      setResult(null);
+      setSavedAt(null);
+      setSavedIter(null);
+      setSavedSeed(null);
+    }
+    setHoverIdx(null);
+    setPickedIdx(null);
+    setError('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastRun?.id, projectId]);
 
   const run = async () => {
     setBusy(true);
@@ -118,6 +152,21 @@ export default function McPage({
           прогонов <b>не пересчитываются</b> — результат оптимистичнее реальности; расчёт с ресурсами — отдельный, более
           долгий режим (блок 6.20).
         </div>
+
+        {savedAt ? (
+          <div style={{ fontSize: 12, color: 'var(--fg-3)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>
+              Последний сохранённый расчёт: <b style={{ color: 'var(--fg-2)' }}>{savedAt}</b>
+              {savedIter ? ` · прогонов: ${savedIter}` : ''}
+              {savedSeed ? ` · зерно: ${savedSeed}` : ' · зерно случайное'} — виден на вкладке «Запуски».
+            </span>
+            {onOpenTab ? (
+              <button type="button" onClick={() => onOpenTab('runs')} className="btn btn-secondary btn-sm" style={{ padding: '1px 8px', fontSize: 11 }}>
+                Открыть «Запуски» →
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {error ? <div style={{ fontSize: 12.5, color: '#F59E0B' }}>Расчёт не выполнен: {error}</div> : null}
 
@@ -251,7 +300,7 @@ export default function McPage({
           </>
         ) : (
           <div style={{ fontSize: 12.5, color: 'var(--fg-3)', display: 'grid', gap: 8 }}>
-            <span>Нажмите «Рассчитать»: покажем распределение срока, процентили и вероятность уложиться в дату. Оценки берутся из вкладки «Оценки» — сейчас это {result ? '' : 'то, что заполнено по операциям проекта'}.</span>
+            <span>Нажмите «Рассчитать»: покажем распределение срока, процентили и вероятность уложиться в дату. Оценки берутся из вкладки «Оценки» — то, что заполнено по операциям проекта.</span>
             {onOpenTab ? (
               <div><button className="btn btn-secondary btn-sm" onClick={() => onOpenTab('estimates')}>Открыть «Оценки» →</button></div>
             ) : null}

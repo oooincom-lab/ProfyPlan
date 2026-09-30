@@ -224,12 +224,15 @@ export default function AppShell() {
 
   // ── Запуски расчёта (блок 6.16.3): реестр расчётов проекта ──
   const [calcRuns, setCalcRuns] = useState<any[]>([]);
+  const [calcRunsFor, setCalcRunsFor] = useState<string | null>(null);
   const loadCalcRuns = async (projectId: string) => {
     try {
       const data: any = await apiF(`/projects/${projectId}/calculation-runs?limit=20`);
       setCalcRuns(data?.items || []);
+      setCalcRunsFor(projectId);
     } catch {
       setCalcRuns([]);
+      setCalcRunsFor(projectId);
     }
   };
   const createCalcRun = async () => {
@@ -246,7 +249,15 @@ export default function AppShell() {
       setMsg('Не удалось запустить расчёт: ' + (e?.message || String(e)));
     }
   };
-  const lastCalcRun = calcRuns[0] || null;
+  // Пока реестр не догружен для выбранного проекта, данные прошлого проекта не показываем —
+  // числа не смешиваются: до загрузки «нет данных», после — запуски своего проекта.
+  const lastCalcRun = calcRunsFor === selectedProject?.id ? calcRuns[0] || null : null;
+  // Последний выполненный запуск Монте-Карло: страница МК восстанавливает по нему результат,
+  // параметры и дату, чтобы расчёт не терялся при переходе между вкладками и проектами.
+  // Пока реестр не догружен для текущего проекта — ничего не подставляем (расчёты не смешиваются).
+  const lastMcRun = calcRunsFor === selectedProject?.id
+    ? calcRuns.find((r) => r?.params?.mode === 'monte-carlo' || (Array.isArray(r?.result?.histogram) && r?.result?.percentiles)) || null
+    : null;
 
   // ── Экспертная таблица оценок (блок 6.17) ──
   const [estimateOps, setEstimateOps] = useState<any[]>([]);
@@ -4846,6 +4857,8 @@ const changeOrderStatus = async (o: any, status: string) => {
           ) : calcTab === 'monte-carlo' ? (
             calcMethods.analysis === 'mc' ? (
               <McPage
+                lastRun={lastMcRun}
+                projectId={selectedProject?.id}
                 onRun={async (iterations, seed) => {
                   if (!selectedProject) return {};
                   const qs = `/ccm/projects/${selectedProject.id}/monte-carlo?iterations=${iterations}` + (seed !== null ? `&seed=${seed}` : '');
