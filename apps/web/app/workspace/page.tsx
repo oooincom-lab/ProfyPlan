@@ -38,6 +38,7 @@ import { HelpButton } from '@/components/HelpWindow';
 import EstimateTable from '@/components/EstimateTable';
 import PertPage from '@/components/PertPage';
 import McPage from '@/components/McPage';
+import ComparePage from '@/components/ComparePage';
 import { CALC_NAV_EVENT, HELP_EVENT, articleIdForView, helpElement } from '@/lib/help';
 import { cpm as netCpm, scenario as netScenario } from '@/lib/network';
 import { CALC_MODES, modeRequirements, recommendMode, ModeContext } from '@/lib/calcModes';
@@ -821,7 +822,10 @@ export default function AppShell() {
     const opsTotal = estimateOps.length;
     const opsWithEst = estimateOps.filter((o: any) => o.to_optimistic != null && o.tm_likely != null && o.tp_pessimistic != null && Number.isFinite(Number(o.to_optimistic)) && Number.isFinite(Number(o.tm_likely)) && Number.isFinite(Number(o.tp_pessimistic))).length;
     const deps = estimateDeps.length;
-    const mcOn = !!(selectedProject && selectedProject.uncertainty_analysis === 'monte_carlo');
+    // Ось хранится как 'mc' (значение 'monte_carlo' — для совместимости): раньше шаг ошибочно
+    // показывал «выключен в настройках» при включённом Монте-Карло — исправлено 30.09.2026.
+    const ua = String(selectedProject?.uncertainty_analysis || 'none');
+    const mcOn = ua === 'mc' || ua === 'monte_carlo';
     const runHours = lastCalcRun && lastCalcRun.result && lastCalcRun.result.project_duration_hours != null ? Number(lastCalcRun.result.project_duration_hours) : null;
     const goalSet = !!(projectGoalRec && (projectGoalRec.contract_date || projectGoalRec.working_date));
     const steps: { key: string; title: string; caption: string; state: 'ok' | 'warn' | 'off'; tab: string | null; hint: string }[] = [
@@ -4850,7 +4854,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Что уже доступно в разделе</div>
-                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант, Сетевой график, Оценки, PERT, Монте-Карло и Запуски — готовы. Сравнение появится позже, слой CCM — в «Сетевом графике»; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
+                  <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>Гант, Сетевой график, Оценки, PERT, Монте-Карло, Сравнение и Запуски — готовы. Слой CCM — в «Сетевом графике»; вкладка выключенного метода не скрывается, а показывается неактивной с причиной.</div>
                 </div>
               </div>
             </div>
@@ -4939,6 +4943,11 @@ const changeOrderStatus = async (o: any, status: string) => {
                 )}
               </div>
             </div>
+          ) : calcTab === 'compare' ? (
+            <ComparePage
+              runs={calcRunsFor === selectedProject?.id ? calcRuns : []}
+              onOpenRuns={() => setCalcTab('runs')}
+            />
           ) : (
             <CalcTabNotice tab={calcTab} methods={calcMethods} onOpenSettings={() => setView('settings')} onBack={() => setCalcTab('overview')} />
           ))}

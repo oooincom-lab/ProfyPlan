@@ -49,7 +49,7 @@ export const CALC_TAB_BLOCK: Record<CalcTab, { block: string; needs: string }> =
 };
 
 export function calcTabState(tab: CalcTab, methods: CalcMethods): CalcTabState {
-  if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'estimates' || tab === 'runs') return 'ready';
+  if (tab === 'overview' || tab === 'gantt' || tab === 'network' || tab === 'estimates' || tab === 'runs' || tab === 'compare') return 'ready';
   if (tab === 'pert') return methods.analysis === 'pert' ? 'ready' : 'method-off';
   if (tab === 'monte-carlo') return methods.analysis === 'mc' ? 'ready' : 'method-off';
   return 'planned';
