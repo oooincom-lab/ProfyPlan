@@ -499,16 +499,32 @@ export function useWindows(sidebarWidth: number = 260) {
     window.addEventListener('pointerup', up);
   };
 
-  const startResize = (e: any, w: WinRec) => {
+  const startResize = (e: any, w: WinRec, dir: string = 'se') => {
     e.preventDefault(); e.stopPropagation();
     focusWin(w.id);
     const sx = e.clientX, sy = e.clientY, sw = w.w, sh = w.h;
     const move = (ev: PointerEvent) => {
-      setWins(prev => prev.map(x => x.id === w.id ? { ...x, w: Math.max(280, sw + ev.clientX - sx), h: Math.max(160, sh + ev.clientY - sy) } : x));
+      const d = deskRect();
+      const maxW = Math.max(280, d.x + d.w - w.x);
+      const maxH = Math.max(160, d.y + d.h - w.y);
+      const nw = dir.indexOf('e') >= 0 ? Math.max(280, Math.min(sw + ev.clientX - sx, maxW)) : sw;
+      const nh = dir.indexOf('s') >= 0 ? Math.max(160, Math.min(sh + ev.clientY - sy, maxH)) : sh;
+      setWins(prev => prev.map(x => x.id === w.id ? { ...x, w: nw, h: nh } : x));
     };
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  };
+
+  // Изменение размера с клавиатуры (стрелки на ручке): доступность и точная подгонка.
+  const resizeWinBy = (id: string, dw: number, dh: number) => {
+    const d = deskRect();
+    setWins(prev => prev.map(x => {
+      if (x.id !== id) return x;
+      const maxW = Math.max(280, d.x + d.w - x.x);
+      const maxH = Math.max(160, d.y + d.h - x.y);
+      return { ...x, w: Math.max(280, Math.min(x.w + dw, maxW)), h: Math.max(160, Math.min(x.h + dh, maxH)) };
+    }));
   };
 
   const pickLay = (cols: number, rows: number) => {
@@ -646,6 +662,6 @@ export function useWindows(sidebarWidth: number = 260) {
     wins, setWins, lay, setLay, snapZone,
     openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
     openWschedEdit, openHelpWin, setHelpArticle,
-    startDrag, startResize, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
+    startDrag, startResize, resizeWinBy, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

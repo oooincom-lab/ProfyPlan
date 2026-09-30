@@ -111,7 +111,8 @@ type WindowsLayerProps = {
   onReset: (id: string) => void;
   onToggleMax: (id: string) => void;
   onDrag: (e: any, w: WinRec) => void;
-  onResize: (e: any, w: WinRec) => void;
+  onResize: (e: any, w: WinRec, dir?: string) => void;
+  onResizeBy: (id: string, dw: number, dh: number) => void;
   onApplyCell: (colCount: number, colIndex: number, rowCount: number, rowIndex: number) => void;
   onSaveEdit: (w: WinRec) => void;
   onAnchorChange?: (orderId: string, value: string | null) => Promise<void>;
@@ -209,7 +210,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onDirManageEdit, onDirManageDelete, dirRefreshKey = 0, onOrderFocus,
     onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById, onNodeNomenclatureChange,
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
-    onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onApplyCell, onSaveEdit,
+    onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onResizeBy, onApplyCell, onSaveEdit,
   onAnchorChange, onAnchorRollback, anchorGhost,
   onConflictsLoad, onConflictResolve, conflictsData, interleavePlan, conflictGhost,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
@@ -1581,6 +1582,30 @@ export default function WindowsLayer(props: WindowsLayerProps) {
           </div>
         );
       })}
+
+      {/* Ручки изменения размера (30.09.2026): общий слой — у всех окон: угол и края */}
+      {wins.map((w: WinRec) => (w.min || w.max) ? null : (
+        <div key={'rz-' + w.id} style={{ position: 'fixed', left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z + 1, pointerEvents: 'none' }}>
+          <button
+            type="button"
+            className="pp-resize"
+            aria-label="Изменить размер окна"
+            title="Изменить размер окна: потяните или используйте стрелки (Shift — крупнее)"
+            style={{ pointerEvents: 'auto', border: 0, padding: 0 }}
+            onPointerDown={(e) => { try { (e.currentTarget as HTMLElement).focus(); } catch { /* noop */ } onResize(e, w, 'se'); }}
+            onClick={(e) => { try { (e.currentTarget as HTMLElement).focus(); } catch { /* noop */ } }}
+            onKeyDown={(e) => {
+              const step = (e as any).shiftKey ? 80 : 24;
+              if (e.key === 'ArrowLeft') { e.preventDefault(); onResizeBy(w.id, -step, 0); }
+              else if (e.key === 'ArrowRight') { e.preventDefault(); onResizeBy(w.id, step, 0); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); onResizeBy(w.id, 0, -step); }
+              else if (e.key === 'ArrowDown') { e.preventDefault(); onResizeBy(w.id, 0, step); }
+            }}
+          />
+          <div style={{ position: 'absolute', right: 0, top: 18, bottom: 18, width: 6, cursor: 'ew-resize', pointerEvents: 'auto' }} title="Изменить ширину" onPointerDown={(e) => onResize(e, w, 'e')} />
+          <div style={{ position: 'absolute', bottom: 0, left: 18, right: 18, height: 6, cursor: 'ns-resize', pointerEvents: 'auto' }} title="Изменить высоту" onPointerDown={(e) => onResize(e, w, 's')} />
+        </div>
+      ))}
 
       {lay && !lay.cols && (() => {
         const PRESETS: { n: string; c: number; r: number }[] = [

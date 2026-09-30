@@ -6435,6 +6435,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         onToggleMax={win.toggleMaxWin}
         onDrag={win.startDrag}
         onResize={win.startResize}
+        onResizeBy={win.resizeWinBy}
         onApplyCell={win.applySnapCell}
         onSaveEdit={saveWinEdit}
         onAnchorChange={changeOrderAnchor}
