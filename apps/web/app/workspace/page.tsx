@@ -829,18 +829,21 @@ export default function AppShell() {
     // показывал «выключен в настройках» при включённом Монте-Карло — исправлено 30.09.2026.
     const ua = String(selectedProject?.uncertainty_analysis || 'none');
     const mcOn = ua === 'mc' || ua === 'monte_carlo';
+    // Шаги зеркалят настройки метода (как вкладки): PERT-шаг не может быть «сделан», если метод выключен.
+    const pertOn = ua === 'pert';
+    const mcRun = !!(lastMcRun && lastMcRun.result) || !!(lastCalcRun && lastCalcRun.result && lastCalcRun.result.percentiles);
     const runHours = lastCalcRun && lastCalcRun.result && lastCalcRun.result.project_duration_hours != null ? Number(lastCalcRun.result.project_duration_hours) : null;
     const goalSet = !!(projectGoalRec && (projectGoalRec.contract_date || projectGoalRec.working_date));
     const steps: { key: string; title: string; caption: string; state: 'ok' | 'warn' | 'off'; tab: string | null; hint: string }[] = [
       { key: 'data', title: 'Данные и связи', caption: deps > 1 ? `связей: ${deps}` : 'связей пока нет', state: deps > 1 ? 'ok' : 'warn', tab: 'network', hint: deps > 1 ? 'Структура заведена — можно смотреть сеть' : 'Добавьте последовательность операций: без связей сеть не строится' },
       { key: 'base', title: 'Срок и резервы', caption: runHours != null ? `срок ≈ ${Math.round(runHours / 24)} дн` : 'не рассчитан', state: runHours != null ? 'ok' : 'warn', tab: 'gantt', hint: runHours != null ? 'Последний расчёт есть' : 'Сначала выполните «Рассчитать проект» на вкладке «Гант»' },
       { key: 'est', title: 'Оценки', caption: opsTotal ? `${opsWithEst} из ${opsTotal}` : 'нет операций', state: opsWithEst > 0 ? (opsWithEst >= opsTotal ? 'ok' : 'warn') : 'warn', tab: 'estimates', hint: opsWithEst > 0 ? 'Тройные оценки — вкладка «Оценки»' : 'Заполните оценки — вручную или «Заполнить пустые» профилем' },
-      { key: 'pert', title: 'PERT', caption: opsWithEst > 0 && deps > 1 ? 'интервалы 68/95 %' : 'нужны оценки и связи', state: opsWithEst > 0 && deps > 1 ? 'ok' : 'warn', tab: 'pert', hint: opsWithEst > 0 && deps > 1 ? 'Доступен: ожидаемый срок и интервалы' : 'PERT без оценок и связей не считается' },
-      { key: 'mc', title: 'Монте-Карло', caption: mcOn ? (opsWithEst > 0 ? 'прогоны и процентили' : 'нужны оценки') : 'выключен в настройках', state: mcOn ? (opsWithEst > 0 ? 'ok' : 'warn') : 'off', tab: 'settings', hint: mcOn ? 'Прогоны дадут вероятности по датам' : 'Включите метод в «Настройках расчёта», чтобы получить вероятности' },
+      { key: 'pert', title: 'PERT', caption: !pertOn ? 'выключен в настройках' : opsWithEst > 0 && deps > 1 ? 'интервалы 68/95 %' : 'нужны оценки и связи', state: !pertOn ? 'off' : opsWithEst > 0 && deps > 1 ? 'ok' : 'warn', tab: 'pert', hint: !pertOn ? 'Метод выключен в настройках расчёта: включите, если нужна отдельная страница интервалов; интервалы для целей считаются по оценкам' : opsWithEst > 0 && deps > 1 ? 'Доступен: ожидаемый срок и интервалы' : 'PERT без оценок и связей не считается' },
+      { key: 'mc', title: 'Монте-Карло', caption: mcOn ? (opsWithEst > 0 ? (mcRun ? 'прогоны и процентили' : 'нужен запуск') : 'нужны оценки') : 'выключен в настройках', state: mcOn ? (opsWithEst > 0 ? (mcRun ? 'ok' : 'warn') : 'warn') : 'off', tab: 'monte-carlo', hint: mcOn ? (mcRun ? 'Прогоны дадут вероятности по датам' : 'Откройте «Монте-Карло» и нажмите «Рассчитать»') : 'Включите метод в «Настройках расчёта», чтобы получить вероятности' },
       { key: 'goal', title: 'Цель и разбор', caption: goalSet ? 'даты заданы' : 'дата цели не задана', state: goalSet ? 'ok' : 'warn', tab: 'overview', hint: 'Цели и разрыв — в блоке «Цель» ниже; разбор подскажет, что сжать' },
     ];
     return steps;
-  }, [estimateOps, estimateDeps, selectedProject, lastCalcRun, projectGoalRec]);
+  }, [estimateOps, estimateDeps, selectedProject, lastCalcRun, projectGoalRec, lastMcRun]);
 
   // Статья для кнопки в шапке панели: ровно то, что открыто в рабочей области (блок 6.27)
   const viewHelpId = articleIdForView(view, calcTab);
@@ -4345,6 +4348,9 @@ const changeOrderStatus = async (o: any, status: string) => {
                         key={s.key}
                         onClick={() => {
                           if (!s.tab) return;
+                          // Выключенный шаг ведёт не в пустую страницу, а прямо в настройки расчёта (кнопка устранения).
+                          if (s.state === 'off') { setSettingsCalc(true); setView('settings'); return; }
+                          if (s.tab === 'settings') { setSettingsCalc(true); setView('settings'); return; }
                           if (s.tab === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); return; }
                           if (s.tab === 'network') { setView('network'); return; }
                           setCalcTab(s.tab as any);

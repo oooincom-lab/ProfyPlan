@@ -72,7 +72,9 @@ function tabNotice(tab: CalcTab, methods: CalcMethods): TabNotice {
       ? { reason: 'Монте-Карло включён — страница открывается на этой вкладке.', blockedInBlock: '6.19', needs: '' }
       : { reason: 'Монте-Карло выключен в настройках расчёта проекта — вкладка показана неактивной, а не скрыта.', blockedInBlock: '6.16.7', needs: 'Включить Монте-Карло в настройках расчёта проекта' };
   }
-  return { reason: 'Страница ещё не построена.', blockedInBlock: CALC_TAB_BLOCK[tab].block, needs: CALC_TAB_BLOCK[tab].needs };
+  // Защита от неожиданных tab-значений: неизвестная вкладка не должна ронять приложение.
+  const meta = (CALC_TAB_BLOCK as any)[tab] as { block?: string; needs?: string } | undefined;
+  return { reason: 'Страница ещё не построена.', blockedInBlock: meta?.block, needs: meta?.needs };
 }
 
 export type CalculationsTabsProps = {
