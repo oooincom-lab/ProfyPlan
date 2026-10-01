@@ -68,7 +68,7 @@ export default function CatalogOpsImport({ apiBase, onDone }: { apiBase: string;
   }, [parsed.header]);
   const map = Object.keys(mapping).length ? mapping : autoMap;
   const nameIdx = Object.entries(map).find(([, v]) => v === 'name')?.[0];
-  const auth = () => ({ 'Content-Type': 'application/json', Authorization: '***' + 'rer ' + (localStorage.getItem('profyplan_token') || '') });
+  const auth = () => ({ 'Content-Type': 'application/json', Authorization: 'Bea' + 'rer ' + (localStorage.getItem('profyplan_token') || '') });
 
   const rowBody = (r: string[]): any => {
     const body: any = {};

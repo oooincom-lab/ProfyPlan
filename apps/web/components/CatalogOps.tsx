@@ -267,7 +267,7 @@ export function CatalogOpEditForm({ item, onSaved, onClose }: { item?: any; onSa
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const api = process.env.NEXT_PUBLIC_API_URL || '';
-  const headers = () => ({ 'Content-Type': 'application/json', Authorization: '***' + 'rer ' + (localStorage.getItem('profyplan_token') || '') });
+  const headers = () => ({ 'Content-Type': 'application/json', Authorization: 'Bea' + 'rer ' + (localStorage.getItem('profyplan_token') || '') });
   const num = (v: any) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
 
   const save = async () => {

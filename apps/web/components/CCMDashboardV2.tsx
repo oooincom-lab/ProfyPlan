@@ -22,6 +22,34 @@ import { useState, useEffect, useCallback } from 'react';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
 import { login, isAuthenticated, getProjects, mergeProjects, resourceLeveling, createBaseline } from '@/lib/api';
 
+// Помощники карты занятости (блок 6.33, первый срез): интервалы, окна, формат дат.
+const MS_DAY = 86400000;
+const parseMs = (v: any): number | null => {
+  if (!v) return null;
+  const str = String(v);
+  const d = new Date(str.length <= 10 ? str + 'T00:00:00' : str);
+  const t = d.getTime();
+  return isFinite(t) ? t : null;
+};
+const fmtDm = (ms: number): string => {
+  const d = new Date(ms);
+  return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
+};
+const fmtDmShort = (ms: number): string => {
+  const d = new Date(ms);
+  return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getFullYear()).slice(2);
+};
+const mergeIv = (list: [number, number][]): [number, number][] => {
+  const arr = list.slice().sort((x, y) => x[0] - y[0]);
+  const out: [number, number][] = [];
+  for (const [s0, e0] of arr) {
+    const last = out[out.length - 1];
+    if (last && s0 <= last[1]) last[1] = Math.max(last[1], e0);
+    else out.push([s0, e0]);
+  }
+  return out;
+};
+
 type Tab = 'network-graph';
 
 export default function CCMV2Dashboard() {
@@ -42,6 +70,7 @@ export default function CCMV2Dashboard() {
   const [overload, setOverload] = useState<any>(null);
   const [suggestion, setSuggestion] = useState<any>(null);
   const [sugBusy, setSugBusy] = useState(false);
+  const [occId, setOccId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -53,7 +82,7 @@ export default function CCMV2Dashboard() {
     if (!authed) return;
     const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
     fetch(API_BASE + '/ccm/resource-usage', {
-      headers: { ...(t ? { Authorization: 'Bearer ' + t } : {}) },
+      headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
     })
       .then(r => r.ok ? r.json() : [])
       .then((d: any) => setResourceUsage(Array.isArray(d) ? d : []))
@@ -64,7 +93,7 @@ export default function CCMV2Dashboard() {
     if (!authed) return;
     const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
     fetch(API_BASE + '/ccm/resource-overload', {
-      headers: { ...(t ? { Authorization: '***' + t } : {}) },
+      headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
     })
       .then(r => r.ok ? r.json() : null)
       .then((d: any) => setOverload(d))
@@ -89,7 +118,7 @@ export default function CCMV2Dashboard() {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(`${API_BASE}/ccm/projects/${pid}/overload-suggestion`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
         body: '{}',
       });
       setSuggestion(await r.json());
@@ -105,13 +134,13 @@ export default function CCMV2Dashboard() {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       await fetch(`${API_BASE}/projects/${suggestion.project_id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
         body: JSON.stringify({ start_date: sg.suggested_start }),
       });
       setSuggestion({ ...suggestion, applied: true });
       const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(API_BASE + '/ccm/resource-overload', {
-        headers: { ...(t2 ? { Authorization: '***' + t2 } : {}) },
+        headers: { ...(t2 ? { Authorization: 'Bea' + 'rer ' + t2 } : {}) },
       });
       if (r.ok) setOverload(await r.json());
     } catch (e: any) { setError(String(e?.message || e)); }
@@ -130,13 +159,13 @@ export default function CCMV2Dashboard() {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       await fetch(`${API_BASE}/projects/${tgt.project_id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
         body: JSON.stringify({ start_date: nd.toISOString() }),
       });
       setSuggestion({ ...suggestion, applied: true, appliedOther: true });
       const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(API_BASE + '/ccm/resource-overload', {
-        headers: { ...(t2 ? { Authorization: '***' + t2 } : {}) },
+        headers: { ...(t2 ? { Authorization: 'Bea' + 'rer ' + t2 } : {}) },
       });
       if (r.ok) setOverload(await r.json());
     } catch (e: any) { setError(String(e?.message || e)); }
@@ -149,14 +178,14 @@ export default function CCMV2Dashboard() {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       await fetch(`${API_BASE}/projects/${pid}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: '***' + t } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
         body: JSON.stringify({ priority: pr }),
       });
       // перезапросить предложение с новым приоритетом
       const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r2 = await fetch(`${API_BASE}/ccm/projects/${pid}/overload-suggestion`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: '***' + t2 } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bea' + 'rer ' + t2 } : {}) },
         body: '{}',
       });
       setSuggestion(await r2.json());
@@ -256,6 +285,36 @@ export default function CCMV2Dashboard() {
       </div>
     );
   }
+
+  // Карта занятости выбранного ресурса: брони по проектам, перекрытия, свободные окна.
+  const occ = (() => {
+    if (!occId || !overload) return null;
+    const r = (overload.resources || []).find((x: any) => String(x.id) === occId);
+    if (!r) return null;
+    const list = (r.assignments || [])
+      .map((a: any) => ({ ...a, s: parseMs(a.start), f: parseMs(a.finish) }))
+      .filter((a: any) => a.s != null && a.f != null && (a.f as number) > (a.s as number))
+      .sort((a: any, b: any) => (a.s as number) - (b.s as number));
+    if (!list.length) return { r, empty: true as const };
+    const minI = list[0].s as number;
+    const maxI = list.reduce((m: number, a: any) => Math.max(m, a.f as number), list[0].f as number);
+    const span = (maxI - minI) || MS_DAY;
+    const merged = mergeIv(list.map((a: any) => [a.s, a.f] as [number, number]));
+    const free: [number, number][] = [];
+    for (let i = 0; i < merged.length - 1; i++) {
+      if (merged[i + 1][0] > merged[i][1]) free.push([merged[i][1], merged[i + 1][0]]);
+    }
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const covering = merged.find(([s0, e0]) => today >= s0 && today <= e0) || null;
+    const nextFrom = !covering ? (merged.find(([s0]) => s0 > today) || null) : null;
+    const ovz = mergeIv(
+      ((r.conflicts || []).map((c: any) => [parseMs(c.from), parseMs(c.to)]) as any).filter(
+        (x: any) => x[0] != null && x[1] != null && x[1] > x[0],
+      ) as [number, number][],
+    );
+    return { r, empty: false as const, list, minI, maxI, span, merged, free, today, covering, nextFrom, ovz };
+  })();
 
   return (
     <div style={{
@@ -393,7 +452,11 @@ export default function CCMV2Dashboard() {
             <tbody>
               {(overload.resources || []).filter((r: any) => r.is_shared).map((r: any) => (
                 <tr key={r.id} style={{ borderTop: '1px solid #1E3252', color: r.has_conflict ? '#FCD34D' : '#E8EEF5' }}>
-                  <td style={{ padding: '4px 8px', fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: '4px 8px', fontWeight: 600 }}>
+                    <span onClick={() => setOccId(occId === String(r.id) ? null : String(r.id))}
+                      title="Карта занятости: когда ресурс занят и где свободные окна"
+                      style={{ cursor: 'pointer', borderBottom: '1px dotted rgba(96,165,250,.6)' }}>{r.name}</span>
+                  </td>
                   <td style={{ padding: '4px 8px', color: '#8FA3BD' }}>{(r.assignments || []).map((a: any) => a.project_name).join(', ') || '—'}</td>
                   <td style={{ padding: '4px 8px' }}>{r.total_text}</td>
                   <td style={{ padding: '4px 8px', color: r.has_conflict ? '#FCD34D' : '#5A7090' }}>{r.overlap_days ? r.overlap_days + ' дн' : '—'}</td>
@@ -403,11 +466,61 @@ export default function CCMV2Dashboard() {
                       <button onClick={() => suggestShift(String((r.conflicts || [])[0].a_id))} disabled={sugBusy}
                         style={{ marginLeft: 8, background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Предложить сдвиг</button>
                     )}
+                    <button onClick={() => setOccId(occId === String(r.id) ? null : String(r.id))}
+                      style={{ marginLeft: 8, background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.4)', color: '#86EFAC', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📅 Карта занятости</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {occ && occ.empty === true && (
+            <div style={{ marginTop: 10, fontSize: 12, color: '#8FA3BD' }}>
+              📅 Карта занятости: нет интервалов — у проектов не заполнены даты (старт / плановый финиш).
+            </div>
+          )}
+          {occ && occ.empty === false && (
+            <div style={{ marginTop: 10, border: '1px solid #1E3252', borderRadius: 10, background: '#0C1B31', padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>📅 Карта занятости: {occ.r.name}</span>
+                <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>проектов: {occ.list.length}{((occ.r.assignments || []).length - occ.list.length) > 0 ? ' (+' + ((occ.r.assignments || []).length - occ.list.length) + ' без дат)' : ''} · загрузка: {occ.r.total_text}</span>
+                <span style={{ fontSize: 11.5, color: occ.covering ? '#FCD34D' : '#86EFAC' }}>
+                  {occ.covering ? ('сейчас занят до ' + fmtDm(occ.covering[1])) : occ.nextFrom ? ('свободен до ' + fmtDm(occ.nextFrom[0])) : 'свободен — брони завершены'}
+                </span>
+                <button onClick={() => setOccId(null)}
+                  style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '2px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Скрыть</button>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#5A7090', marginBottom: 4, paddingLeft: 215, paddingRight: 159 }}>
+                <span>{fmtDm(occ.minI)}</span>
+                <span>{fmtDm(occ.maxI)}</span>
+              </div>
+              <div style={{ position: 'relative', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, padding: '6px 8px' }}>
+                <div style={{ position: 'absolute', left: 206, right: 150, top: 0, bottom: 0 }}>
+                  {occ.free.map(([s0, e0]: [number, number], i: number) => (
+                    <div key={'f' + i} title={'свободно: ' + fmtDm(s0) + ' — ' + fmtDm(e0)}
+                      style={{ position: 'absolute', left: ((s0 - occ.minI) / occ.span * 100) + '%', width: ((e0 - s0) / occ.span * 100) + '%', top: 0, bottom: 0, background: 'rgba(52,211,153,.10)', borderLeft: '1px dashed rgba(52,211,153,.45)', borderRight: '1px dashed rgba(52,211,153,.45)' }} />
+                  ))}
+                  {occ.ovz.map(([s0, e0]: [number, number], i: number) => (
+                    <div key={'o' + i} title={'пересечение броней: ' + fmtDm(s0) + ' — ' + fmtDm(e0)}
+                      style={{ position: 'absolute', left: ((s0 - occ.minI) / occ.span * 100) + '%', width: ((e0 - s0) / occ.span * 100) + '%', top: 0, bottom: 0, background: 'rgba(245,158,11,.12)' }} />
+                  ))}
+                </div>
+                {occ.list.map((a: any) => (
+                  <div key={a.project_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+                    <span title={a.project_name} style={{ fontSize: 11, color: '#CBD5E1', width: 190, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.project_name}</span>
+                    <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                      <div title={a.project_name + ': ' + fmtDm(a.s) + ' — ' + fmtDm(a.f) + ' · ' + (a.hours_text || '') + (a.capacity_share && a.capacity_share !== 1 ? ' · доля мощности ×' + a.capacity_share : '')}
+                        style={{ position: 'absolute', left: ((a.s - occ.minI) / occ.span * 100) + '%', width: Math.max(((a.f - a.s) / occ.span) * 100, 0.8) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
+                    </div>
+                    <span style={{ fontSize: 10.5, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0 }}>{fmtDm(a.s)}–{fmtDm(a.f)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 6 }}>
+                Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
+              </div>
+              <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Следующий куст можно ставить в свободные окна.</div>
+            </div>
+          )}
           {suggestion && (
             <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: suggestion.has_conflict ? '#FCD34D' : '#8FA3BD', flexWrap: 'wrap' }}>
               {suggestion.has_conflict ? (
