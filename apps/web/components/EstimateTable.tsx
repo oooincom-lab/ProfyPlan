@@ -54,6 +54,7 @@ export default function EstimateTable({
   calLog,
   onCalRecord,
   onCalRevert,
+  onCalRevertAll,
 }: {
   operations: EstimateOp[];
   onSave: (id: string, patch: Record<string, number | string | null>) => Promise<void>;
@@ -74,6 +75,7 @@ export default function EstimateTable({
     items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[];
   }) => Promise<void> | void;
   onCalRevert?: (entryId: string) => Promise<void> | void;
+  onCalRevertAll?: (entryIds: string[]) => Promise<number> | void;
 }) {
   const [draft, setDraft] = useState<Record<string, { to: string; tm: string; tp: string; src: string; fact: string; factDate: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -217,6 +219,8 @@ export default function EstimateTable({
   const [calTypeConfirm, setCalTypeConfirm] = useState<string | null>(null);
   // Журнал применений: возвращённые записи хранятся, но скрыты по умолчанию (галочка).
   const [showRevertedCal, setShowRevertedCal] = useState(false);
+  const [revAllConfirm, setRevAllConfirm] = useState(false);
+  const [revAllBusy, setRevAllBusy] = useState(false);
   const [calNote, setCalNote] = useState('');
   const [calOpen, setCalOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -327,6 +331,37 @@ export default function EstimateTable({
   const calActiveCount = (calLog || []).length - calLogRevertedCount;
   const newestActiveCalId = (calLog || []).find((e) => !e.reverted)?.id ?? null;
 
+  /** Суммарный множитель активных применений: насколько оценки уже пересчитаны. */
+  const calActiveFactor = useMemo(() => {
+    let f = 1;
+    for (const e of calLog || []) if (!e.reverted) f *= Number(e.coefficient) || 1;
+    return f;
+  }, [calLog]);
+  const calFactorColor = calActiveFactor > 1.5 ? '#F87171' : calActiveFactor > 1.15 ? '#FCD34D' : '#34D399';
+
+  /** «Вернуть все»: откат активных применений по порядку — от последнего к первому. */
+  const revertAllCalibration = async () => {
+    if (!calLog || !calActiveCount) return;
+    const ids = calLog.filter((e) => !e.reverted).map((e) => e.id);
+    setRevAllBusy(true);
+    let done = 0;
+    try {
+      if (onCalRevertAll) {
+        const res = await onCalRevertAll(ids);
+        done = typeof res === 'number' ? res : ids.length;
+      } else if (onCalRevert) {
+        for (const id of ids) {
+          await onCalRevert(id);
+          done += 1;
+        }
+      }
+    } finally {
+      setRevAllBusy(false);
+      setRevAllConfirm(false);
+      setCalNote(`Возвращено применений: ${done} из ${ids.length}. Оценки восстановлены.`);
+    }
+  };
+
   const toggleHistory = async (v: boolean) => {
     if (!onToggleHistory) return;
     setToggling(true);
@@ -395,7 +430,7 @@ export default function EstimateTable({
     }
     setSavingId(null);
     setCalNote(
-      `${meta.label}: строк ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).${logNote}`,
+      `${meta.label}: строк ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).${logNote} Дальше: «Пересчитать» — график и аналитика учтут поправку.`,
     );
   };
 
@@ -407,10 +442,14 @@ export default function EstimateTable({
       setCalTypeConfirm(null);
       setCalConfirm(true);
       setCalNote(
+        (calActiveCount > 0
+          ? `Внимание: уже применено ${calActiveCount} (суммарно ${fmtRatio(calActiveFactor)}); ещё одно применение сделает ${fmtRatio(calActiveFactor * k)}. `
+          : '') +
         `Умножить оценки на медиану ${fmtRatio(k)}? Строк: ${calTargets.length}` +
           (calSkipHistory ? ` (заполненные из истории пропускаются: ${calSkipHistory})` : '') +
           (calSkipNoTriple ? ` (без полной тройки пропустятся: ${calSkipNoTriple})` : '') +
           (calImpact ? `. Суммарная ожидаемая длительность этих строк: ${calImpact.before.toFixed(1)} → ${calImpact.after.toFixed(1)} ч (${calImpact.pct} %)` : '') +
+          (calActiveCount > 0 && calActiveFactor * k > 1.5 ? ' Отклонение станет сильным — лишние применения можно вернуть в журнале.' : '') +
           `. Завершённые строки не трогаем. Повторное применение умножит ещё раз — коэффициент применяйте один раз.`,
       );
       return;
@@ -875,6 +914,14 @@ export default function EstimateTable({
                 достоверность: {calRel.label}
               </div>
             ) : null}
+            {calActiveCount > 0 ? (
+              <div
+                style={{ fontSize: 11.5, fontWeight: 700, color: calFactorColor }}
+                title={`Активных применений: ${calActiveCount} · суммарный множитель ${fmtRatio(calActiveFactor)}. Лишние применения можно вернуть в журнале («Вернуть все»).`}
+              >
+                применено: {calActiveCount} · {fmtRatio(calActiveFactor)}
+              </div>
+            ) : null}
             {(useHistory && calStats) || (calLog && calLog.length) ? (
               <button className="btn btn-secondary btn-sm" onClick={() => { if (calOpen && (calConfirm || calTypeConfirm)) { setCalConfirm(false); setCalTypeConfirm(null); setCalNote(''); } setCalOpen((v) => !v); }} title="Показать наблюдения и применение коэффициента к оценкам">
                 {calOpen ? 'Свернуть' : 'Развернуть'}
@@ -886,6 +933,7 @@ export default function EstimateTable({
           <div style={{ border: '1px solid var(--border-2)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 14px', display: 'grid', gap: 8, margin: '0 0 10px' }}>
             {useHistory && calStats ? (
               <>
+            <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>Смысл: коэффициент переносит систематическое отклонение «факт / оценка» с завершённых работ на оценки оставшихся — это поправка к нашим оценкам, а не измерение.</div>
             <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
               Наблюдений: <b>{calStats.n}</b> · период: {fmtDateRu(calStats.from)} — {fmtDateRu(calStats.to)} · медиана отношения
               «факт / оценка»: <b>{fmtRatio(calStats.median)}</b> (среднее {fmtRatio(calStats.mean)}) · факт больше оценки: {calStats.over}, меньше: {calStats.under}
@@ -898,6 +946,12 @@ export default function EstimateTable({
                     {calRel.notes.map((t, i) => (<div key={i}>• {t}</div>))}
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+            {calActiveCount > 0 ? (
+              <div style={{ fontSize: 12, color: calActiveFactor > 1.5 ? '#F87171' : '#FCD34D' }}>
+                Применено сейчас: {calActiveCount} · суммарный множитель {fmtRatio(calActiveFactor)}.
+                {calActiveFactor > 1.5 ? ' Это сильное отклонение от исходных оценок — лишние применения верните в журнале («Вернуть все»).' : ''}
               </div>
             ) : null}
             {calGroups.length > 1 ? (
@@ -1018,6 +1072,36 @@ export default function EstimateTable({
               <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <span>Применения (журнал): {calLog.length}</span>
+                  {calActiveCount > 0 ? (
+                    revAllConfirm ? (
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={revAllBusy}
+                          onClick={revertAllCalibration}
+                          style={{ borderColor: '#F59E0B', color: '#FCD34D' }}
+                          title="Вернуть все активные применения по порядку — от последнего к первому"
+                        >
+                          {revAllBusy ? 'Возвращаю…' : `Подтвердить возврат (${calActiveCount})`}
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setRevAllConfirm(false)}
+                          title="Снять подтверждение — ничего не будет возвращено"
+                        >
+                          Отмена
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { setCalConfirm(false); setCalTypeConfirm(null); setRevAllConfirm(true); }}
+                        title="Вернуть все активные применения по порядку — от последнего к первому"
+                      >
+                        Вернуть все ({calActiveCount})
+                      </button>
+                    )
+                  ) : null}
                   {calLogRevertedCount ? (
                     <label
                       style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-3)', cursor: 'pointer' }}

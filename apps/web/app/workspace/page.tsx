@@ -354,6 +354,23 @@ export default function AppShell() {
     await loadEstimates(selectedProject.id);
   };
 
+  /** Пакетный возврат: откат активных применений калибровки по порядку (от последнего к первому). */
+  const revertAllCalibration = async (entryIds: string[]) => {
+    if (!selectedProject || !entryIds.length) return 0;
+    let done = 0;
+    for (const id of entryIds) {
+      try {
+        await apiF(`/calibration-applications/${id}/revert`, { method: 'POST' });
+        done += 1;
+      } catch {
+        break;
+      }
+    }
+    await loadCalLog(selectedProject.id);
+    await loadEstimates(selectedProject.id);
+    return done;
+  };
+
   // Выгрузка CSV (остаток 6.22): реестр запусков и сравнение открываются в Excel без настроек
   // (разделитель «;», BOM для кириллицы).
   const downloadCsv = (filename: string, rows: (string | number | null | undefined)[][]) => {
@@ -5106,6 +5123,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 calLog={calLog}
                 onCalRecord={recordCalibration}
                 onCalRevert={revertCalibration}
+                onCalRevertAll={revertAllCalibration}
               />
             </>
           ) : calcTab === 'runs' ? (
