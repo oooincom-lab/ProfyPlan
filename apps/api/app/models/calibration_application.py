@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,9 @@ class CalibrationApplication(BaseModel):
     # Сколько строк пропущено: заполненные из истории и без полной тройки.
     skipped_history: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_no_triple: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Охват применения: None — все строки проекта, иначе «тип: производство» и т.п.
+    scope: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
 
     # Строки применения: [{op_id, op_name, before: {to, tm, tp, source}, after: {to, tm, tp}}]
     items: Mapped[list] = mapped_column(JSON, nullable=False)

@@ -16,7 +16,7 @@
  * меняются только по нажатию человека, с подтверждением.
  */
 import React, { useMemo, useState } from 'react';
-import { calibrationGroups, calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
+import { CalibrationGroup, calibrationGroups, calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
 
 export type EstimateOp = {
   id: string;
@@ -28,6 +28,7 @@ export type EstimateOp = {
   estimate_source?: string | null;
   fact_hours?: number | string | null;
   fact_finished_on?: string | null;
+  operation_type?: string | null;
 };
 
 /** Ожидаемая длительность и разброс по трём оценкам (PERT). */
@@ -60,7 +61,7 @@ export default function EstimateTable({
   schedAt?: string | null;
   useHistory?: boolean;
   onToggleHistory?: (value: boolean) => void | Promise<void>;
-  calLog?: { id: string; at: string; coefficient: number; observations: number; appliedCount: number; reverted: boolean }[];
+  calLog?: { id: string; at: string; coefficient: number; observations: number; appliedCount: number; reverted: boolean; scope?: string | null }[];
   onCalRecord?: (payload: {
     coefficient: number;
     observationsCount: number;
@@ -69,6 +70,7 @@ export default function EstimateTable({
     appliedCount: number;
     skippedHistory: number;
     skippedNoTriple: number;
+    scope?: string | null;
     items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[];
   }) => Promise<void> | void;
   onCalRevert?: (entryId: string) => Promise<void> | void;
@@ -212,6 +214,7 @@ export default function EstimateTable({
   const obs = useMemo(() => factObservations(operations), [operations]);
   const calStats = useMemo(() => calibrationStats(obs), [obs]);
   const [calConfirm, setCalConfirm] = useState(false);
+  const [calTypeConfirm, setCalTypeConfirm] = useState<string | null>(null);
   const [calNote, setCalNote] = useState('');
   const [calOpen, setCalOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -265,6 +268,30 @@ export default function EstimateTable({
   /** Разбивка по типам операций — показывается, когда типов больше одного. */
   const calGroups = useMemo(() => calibrationGroups(obs), [obs]);
 
+  /** Строки к применению и пропуски — в разрезе типов операций (для выборочного применения). */
+  const calByType = useMemo(() => {
+    const m = new Map<string, { targets: EstimateOp[]; skipHistory: number; skipNoTriple: number }>();
+    if (!calStats) return m;
+    const take = (k2: string) => {
+      if (!m.has(k2)) m.set(k2, { targets: [], skipHistory: 0, skipNoTriple: 0 });
+      return m.get(k2)!;
+    };
+    for (const op of operations) {
+      if (draft[op.id]) continue;
+      const key = op.operation_type ? String(op.operation_type) : 'other';
+      const to = num(op.to_optimistic);
+      const tm = num(op.tm_likely);
+      const tp = num(op.tp_pessimistic);
+      const hasFact = num(op.fact_hours) !== null;
+      const full = to !== null && tm !== null && tp !== null;
+      const b = take(key);
+      if (full && !hasFact && op.estimate_source !== 'fact') b.targets.push(op);
+      else if (full && !hasFact && op.estimate_source === 'fact') b.skipHistory += 1;
+      else if (!hasFact) b.skipNoTriple += 1;
+    }
+    return m;
+  }, [operations, draft, calStats]);
+
   const toggleHistory = async (v: boolean) => {
     if (!onToggleHistory) return;
     setToggling(true);
@@ -275,27 +302,26 @@ export default function EstimateTable({
     }
   };
 
-  /** Применение медианного коэффициента к строкам с полной тройкой без факта. */
-  const applyCalibration = async () => {
-    if (!calStats || savingId === 'cal') return;
-    const k = calStats.median;
-    if (!calConfirm) {
-      setCalConfirm(true);
-      setCalNote(
-        `Умножить оценки на медиану ${fmtRatio(k)}? Строк: ${calTargets.length}` +
-          (calSkipHistory ? ` (заполненные из истории пропускаются: ${calSkipHistory})` : '') +
-          (calSkipNoTriple ? ` (без полной тройки пропустятся: ${calSkipNoTriple})` : '') +
-          `. Завершённые строки не трогаем. Повторное применение умножит ещё раз — коэффициент применяйте один раз.`,
-      );
-      return;
-    }
-    setCalConfirm(false);
+  /** Общий проход применения: сохраняет строки и пишет запись в журнал. */
+  const runCalibrationApply = async (
+    k: number,
+    targets: EstimateOp[],
+    meta: {
+      observationsCount: number;
+      from: string | null;
+      to: string | null;
+      skippedHistory: number;
+      skippedNoTriple: number;
+      scope: string | null;
+      label: string;
+    },
+  ) => {
     setSavingId('cal');
     let done = 0;
     let failed = 0;
     let firstErr = '';
     const items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
-    for (const op of calTargets) {
+    for (const op of targets) {
       const toNew = Math.round(Number(op.to_optimistic) * k * 100) / 100;
       const tmNew = Math.round(Number(op.tm_likely) * k * 100) / 100;
       const tpNew = Math.round(Number(op.tp_pessimistic) * k * 100) / 100;
@@ -318,12 +344,13 @@ export default function EstimateTable({
       try {
         await onCalRecord({
           coefficient: k,
-          observationsCount: calStats.n,
-          periodFrom: calStats.from,
-          periodTo: calStats.to,
+          observationsCount: meta.observationsCount,
+          periodFrom: meta.from,
+          periodTo: meta.to,
           appliedCount: done,
-          skippedHistory: calSkipHistory,
-          skippedNoTriple: calSkipNoTriple,
+          skippedHistory: meta.skippedHistory,
+          skippedNoTriple: meta.skippedNoTriple,
+          scope: meta.scope,
           items,
         });
         logNote = ' Запись добавлена в журнал применений.';
@@ -333,8 +360,64 @@ export default function EstimateTable({
     }
     setSavingId(null);
     setCalNote(
-      `Применено к строкам: ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).${logNote}`,
+      `${meta.label}: строк ${done}${failed ? `, ошибок: ${failed} — первая: ${firstErr}` : ''}. Источник оценок — «коэффициент» (пересчёт, не измерение).${logNote}`,
     );
+  };
+
+  /** Применение медианного коэффициента ко всем строкам с полной тройкой без факта. */
+  const applyCalibration = async () => {
+    if (!calStats || savingId === 'cal') return;
+    const k = calStats.median;
+    if (!calConfirm) {
+      setCalTypeConfirm(null);
+      setCalConfirm(true);
+      setCalNote(
+        `Умножить оценки на медиану ${fmtRatio(k)}? Строк: ${calTargets.length}` +
+          (calSkipHistory ? ` (заполненные из истории пропускаются: ${calSkipHistory})` : '') +
+          (calSkipNoTriple ? ` (без полной тройки пропустятся: ${calSkipNoTriple})` : '') +
+          `. Завершённые строки не трогаем. Повторное применение умножит ещё раз — коэффициент применяйте один раз.`,
+      );
+      return;
+    }
+    setCalConfirm(false);
+    await runCalibrationApply(k, calTargets, {
+      observationsCount: calStats.n,
+      from: calStats.from,
+      to: calStats.to,
+      skippedHistory: calSkipHistory,
+      skippedNoTriple: calSkipNoTriple,
+      scope: null,
+      label: 'Применено ко всем строкам',
+    });
+  };
+
+  /** Выборочное применение: коэффициент типа операции — только к строкам этого типа. */
+  const applyCalibrationType = async (g: CalibrationGroup) => {
+    if (savingId === 'cal') return;
+    const bucket = calByType.get(g.key);
+    const targets = bucket ? bucket.targets : [];
+    if (!targets.length) return;
+    if (calTypeConfirm !== g.key) {
+      setCalConfirm(false);
+      setCalTypeConfirm(g.key);
+      setCalNote(
+        `Умножить оценки типа «${g.label}» на медиану ${fmtRatio(g.median)}? Строк: ${targets.length}` +
+          (bucket && bucket.skipHistory ? ` (заполненные из истории пропускаются: ${bucket.skipHistory})` : '') +
+          (bucket && bucket.skipNoTriple ? ` (без полной тройки пропустятся: ${bucket.skipNoTriple})` : '') +
+          `. Завершённые строки не трогаем.`,
+      );
+      return;
+    }
+    setCalTypeConfirm(null);
+    await runCalibrationApply(g.median, targets, {
+      observationsCount: g.n,
+      from: g.from,
+      to: g.to,
+      skippedHistory: bucket ? bucket.skipHistory : 0,
+      skippedNoTriple: bucket ? bucket.skipNoTriple : 0,
+      scope: `тип: ${g.label}`,
+      label: `Применено (тип «${g.label}»)`,
+    });
   };
 
   // ── Выгрузка и загрузка таблицы оценок (блок 6.17) ──
@@ -749,7 +832,7 @@ export default function EstimateTable({
                     : 'нет данных — заполните «Факт, ч» у завершённых операций'}
             </div>
             {(useHistory && calStats) || (calLog && calLog.length) ? (
-              <button className="btn btn-secondary btn-sm" onClick={() => { if (calOpen && calConfirm) { setCalConfirm(false); setCalNote(''); } setCalOpen((v) => !v); }} title="Показать наблюдения и применение коэффициента к оценкам">
+              <button className="btn btn-secondary btn-sm" onClick={() => { if (calOpen && (calConfirm || calTypeConfirm)) { setCalConfirm(false); setCalTypeConfirm(null); setCalNote(''); } setCalOpen((v) => !v); }} title="Показать наблюдения и применение коэффициента к оценкам">
                 {calOpen ? 'Свернуть' : 'Развернуть'}
               </button>
             ) : null}
@@ -765,7 +848,62 @@ export default function EstimateTable({
             </div>
             {calGroups.length > 1 ? (
               <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-                По типам операций: {calGroups.map((g) => `${g.label} — ${g.n} набл., медиана ${fmtRatio(g.median)}`).join(' · ')}
+                <div style={{ marginBottom: 4 }}>По типам операций — можно применять выборочно (одна кнопка — один тип):</div>
+                <table className="tbl" style={{ maxWidth: 860 }}>
+                  <thead>
+                    <tr><th>Тип</th><th>Наблюдений</th><th>Медиана</th><th>Строк к применению</th><th /></tr>
+                  </thead>
+                  <tbody>
+                    {calGroups.map((g) => {
+                      const bucket = calByType.get(g.key);
+                      const targets = bucket ? bucket.targets : [];
+                      const confirming = calTypeConfirm === g.key;
+                      return (
+                        <tr key={g.key}>
+                          <td>{g.label}</td>
+                          <td className="t-mono">{g.n}</td>
+                          <td className="t-mono">{fmtRatio(g.median)}</td>
+                          <td className="t-mono" title={`из истории пропустятся: ${bucket ? bucket.skipHistory : 0}; без полной тройки: ${bucket ? bucket.skipNoTriple : 0}`}>{targets.length}</td>
+                          <td>
+                            {targets.length === 0 ? (
+                              <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>— нет строк</span>
+                            ) : confirming ? (
+                              <span style={{ display: 'inline-flex', gap: 6 }}>
+                                <button
+                                  className="btn btn-primary btn-sm"
+                                  disabled={savingId === 'cal'}
+                                  onClick={() => applyCalibrationType(g)}
+                                  style={{ borderColor: '#F59E0B', color: '#FCD34D' }}
+                                >
+                                  Подтвердить ×{g.median.toFixed(2)}
+                                </button>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => {
+                                    setCalTypeConfirm(null);
+                                    setCalNote('');
+                                  }}
+                                  title="Снять подтверждение"
+                                >
+                                  Отмена
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                disabled={savingId === 'cal'}
+                                onClick={() => applyCalibrationType(g)}
+                                title={`Умножить оценки строк типа «${g.label}» на медиану типа`}
+                              >
+                                Применить ×{g.median.toFixed(2)}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : null}
             <table className="tbl" style={{ maxWidth: 860 }}>
@@ -826,13 +964,14 @@ export default function EstimateTable({
                 Применения (журнал): {calLog.length}
                 <table className="tbl" style={{ maxWidth: 860, marginTop: 4 }}>
                   <thead>
-                    <tr><th>Когда</th><th>Коэффициент</th><th>Строк</th><th>Наблюдений</th><th>Статус</th><th /></tr>
+                    <tr><th>Когда</th><th>Коэффициент</th><th>Охват</th><th>Строк</th><th>Наблюдений</th><th>Статус</th><th /></tr>
                   </thead>
                   <tbody>
                     {calLog.map((e) => (
                       <tr key={e.id}>
                         <td className="t-mono">{e.at}</td>
                         <td className="t-mono">{fmtRatio(e.coefficient)}</td>
+                        <td>{e.scope || 'все строки'}</td>
                         <td className="t-mono">{e.appliedCount}</td>
                         <td className="t-mono">{e.observations}</td>
                         <td>{e.reverted ? '(возвращено)' : 'применено'}</td>

@@ -114,6 +114,8 @@ export type CalibrationGroup = {
   n: number;
   median: number;
   mean: number;
+  from: string | null;
+  to: string | null;
 };
 
 /** Группировка наблюдений по типу операции: сколько и какая медиана у каждого типа. */
@@ -130,7 +132,12 @@ export function calibrationGroups(obs: CalibrationObs[]): CalibrationGroup[] {
     const n = ratios.length;
     const median = n % 2 === 1 ? ratios[(n - 1) / 2] : (ratios[n / 2 - 1] + ratios[n / 2]) / 2;
     const mean = ratios.reduce((s, r) => s + r, 0) / n;
-    out.push({ key, label: typeLabel(key), n, median, mean });
+    const dates = obs
+      .filter((o) => (o.opType || 'other') === key)
+      .map((o) => o.finishedOn)
+      .filter((d): d is string => !!d)
+      .sort();
+    out.push({ key, label: typeLabel(key), n, median, mean, from: dates[0] || null, to: dates[dates.length - 1] || null });
   }
   out.sort((a, b) => b.n - a.n || a.key.localeCompare(b.key));
   return out;

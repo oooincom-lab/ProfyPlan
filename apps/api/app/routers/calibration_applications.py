@@ -44,6 +44,7 @@ class CalibrationApplicationCreate(BaseModel):
 
     coefficient: float = Field(gt=0)
     observations_count: int = Field(ge=0)
+    scope: Optional[str] = Field(default=None, max_length=80)
     period_from: Optional[date] = None
     period_to: Optional[date] = None
     applied_count: int = Field(ge=0)
@@ -59,6 +60,7 @@ class CalibrationApplicationOut(BaseModel):
     project_id: UUID
     coefficient: float
     observations_count: int
+    scope: Optional[str] = None
     period_from: Optional[date] = None
     period_to: Optional[date] = None
     applied_count: int
@@ -134,6 +136,7 @@ async def create_calibration_application(
         project_id=project_id,
         coefficient=body.coefficient,
         observations_count=body.observations_count,
+        scope=body.scope,
         period_from=body.period_from,
         period_to=body.period_to,
         applied_count=body.applied_count,

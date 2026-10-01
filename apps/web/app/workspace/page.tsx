@@ -310,6 +310,7 @@ export default function AppShell() {
           observations: Number(e.observations_count) || 0,
           appliedCount: Number(e.applied_count) || 0,
           reverted: !!e.reverted,
+          scope: e.scope || null,
         })),
       );
     } catch {
@@ -325,6 +326,7 @@ export default function AppShell() {
     appliedCount: number;
     skippedHistory: number;
     skippedNoTriple: number;
+    scope?: string | null;
     items: { op_id: string; op_name: string; before: Record<string, unknown>; after: Record<string, unknown> }[];
   }) => {
     if (!selectedProject) return;
@@ -338,6 +340,7 @@ export default function AppShell() {
         applied_count: payload.appliedCount,
         skipped_history: payload.skippedHistory,
         skipped_no_triple: payload.skippedNoTriple,
+        scope: payload.scope ?? null,
         items: payload.items,
       }),
     });
@@ -774,7 +777,7 @@ export default function AppShell() {
   const [confirmGapApply, setConfirmGapApply] = useState(false);
   const [gapAppliedLog, setGapAppliedLog] = useState<{ id?: string; at: string; name: string; opId: string; from: string; to: string; before: [number, number, number]; gapBefore: number | null; gapAfter: number | null; reverted?: boolean }[]>([]);
   // Журнал применений калибровки по истории (блок 6.24): серверный, лимит 100 записей на проект.
-  const [calLog, setCalLog] = useState<{ id: string; at: string; coefficient: number; observations: number; appliedCount: number; reverted: boolean }[]>([]);
+  const [calLog, setCalLog] = useState<{ id: string; at: string; coefficient: number; observations: number; appliedCount: number; reverted: boolean; scope?: string | null }[]>([]);
   // Шаг сжатия из разбора, % (по умолчанию 10).
   const [gapApplyPct, setGapApplyPct] = useState(10);
   const unfixRows = async () => {
