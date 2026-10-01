@@ -143,6 +143,69 @@ export function calibrationGroups(obs: CalibrationObs[]): CalibrationGroup[] {
   return out;
 }
 
+// ── Достоверность коэффициента (блок 6.24): насколько можно доверять медиане ──
+// Правила простые и проверяемые: «высокая» — от 5 наблюдений при узком разбросе,
+// «средняя» — от 3, иначе «низкая». Дополнительно — предупреждения: слабая выборка,
+// заметный/большой разброс, расхождение медиан по типам, давность наблюдений.
+
+export type CalibrationReliability = {
+  level: 'high' | 'medium' | 'low';
+  label: string;
+  n: number;
+  min: number;
+  max: number;
+  spread: number; // max / min
+  daysSinceLast: number | null;
+  notes: string[]; // предупреждения для панели
+};
+
+/** Достоверность медианного коэффициента: уровень + честные оговорки. */
+export function calibrationReliability(
+  obs: CalibrationObs[],
+  groups: CalibrationGroup[],
+  now?: Date,
+): CalibrationReliability | null {
+  if (!obs.length) return null;
+  const ratios = obs.map((o) => o.ratio);
+  const n = ratios.length;
+  const min = Math.min(...ratios);
+  const max = Math.max(...ratios);
+  const spread = min > 0 ? max / min : max;
+  let level: CalibrationReliability['level'] = 'low';
+  if (n >= 5 && spread <= 1.5) level = 'high';
+  else if (n >= 3 && spread <= 2) level = 'medium';
+  const label = level === 'high' ? 'высокая' : level === 'medium' ? 'средняя' : 'низкая';
+
+  let daysSinceLast: number | null = null;
+  const dates = obs
+    .map((o) => o.finishedOn)
+    .filter((d): d is string => !!d)
+    .sort();
+  if (dates.length) {
+    const last = new Date(dates[dates.length - 1] + 'T00:00:00Z');
+    daysSinceLast = Math.floor(((now || new Date()).getTime() - last.getTime()) / 86400000);
+  }
+
+  const notes: string[] = [];
+  if (n <= 2) notes.push(`Наблюдений мало (${n}) — коэффициент может быть случайным.`);
+  if (spread > 2) notes.push(`Разброс большой: ${fmtRatio(min)}–${fmtRatio(max)} — по части строк поправка будет сильной.`);
+  else if (spread > 1.5) notes.push(`Разброс заметный: ${fmtRatio(min)}–${fmtRatio(max)} — часть строк сместится сильнее медианы.`);
+  if (groups.length > 1) {
+    const meds = groups.map((g) => g.median);
+    const dmin = Math.min(...meds);
+    const dmax = Math.max(...meds);
+    if (dmin > 0 && dmax / dmin > 1.1) {
+      const parts = groups.map((g) => `${g.label} ${fmtRatio(g.median)} (${g.n})`).join(', ');
+      notes.push(`Типы расходятся: ${parts} — надёжнее применять по типам отдельно.`);
+    }
+  }
+  if (daysSinceLast !== null && daysSinceLast > 180) {
+    notes.push(`Последнее наблюдение ${daysSinceLast} дн назад — данные могут быть неактуальны.`);
+  }
+
+  return { level, label, n, min, max, spread, daysSinceLast, notes };
+}
+
 /** «01.10.2026» — дата для человека; null → «—». */
 export function fmtDateRu(d: string | null): string {
   return d ? d.split('-').reverse().join('.') : '—';

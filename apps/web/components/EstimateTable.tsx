@@ -16,7 +16,7 @@
  * меняются только по нажатию человека, с подтверждением.
  */
 import React, { useMemo, useState } from 'react';
-import { CalibrationGroup, calibrationGroups, calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
+import { CalibrationGroup, calibrationGroups, calibrationReliability, calibrationStats, factObservations, fmtDateRu, fmtRatio } from '@/lib/calibration';
 
 export type EstimateOp = {
   id: string;
@@ -270,6 +270,32 @@ export default function EstimateTable({
   /** Разбивка по типам операций — показывается, когда типов больше одного. */
   const calGroups = useMemo(() => calibrationGroups(obs), [obs]);
 
+  /** Достоверность коэффициента (срез «надёжность»): уровень + предупреждения. */
+  const calRel = useMemo(() => calibrationReliability(obs, calGroups), [obs, calGroups]);
+  const calRelColor = calRel
+    ? calRel.level === 'high'
+      ? '#34D399'
+      : calRel.level === 'medium'
+        ? '#FCD34D'
+        : '#F87171'
+    : 'var(--fg-4)';
+
+  /** Масштаб: сколько строк затронет применение медианы и как изменится сумма ожидаемых длительностей. */
+  const calImpact = useMemo(() => {
+    if (!calStats || !calTargets.length) return null;
+    let before = 0;
+    for (const op of calTargets) {
+      const o = num(op.to_optimistic);
+      const m = num(op.tm_likely);
+      const p = num(op.tp_pessimistic);
+      if (o === null || m === null || p === null) continue;
+      before += (o + 4 * m + p) / 6;
+    }
+    const k = calStats.median;
+    const pct = Math.round((k - 1) * 100);
+    return { rows: calTargets.length, before, after: before * k, pct: (pct > 0 ? '+' : '') + pct };
+  }, [calTargets, calStats]);
+
   /** Строки к применению и пропуски — в разрезе типов операций (для выборочного применения). */
   const calByType = useMemo(() => {
     const m = new Map<string, { targets: EstimateOp[]; skipHistory: number; skipNoTriple: number }>();
@@ -384,6 +410,7 @@ export default function EstimateTable({
         `Умножить оценки на медиану ${fmtRatio(k)}? Строк: ${calTargets.length}` +
           (calSkipHistory ? ` (заполненные из истории пропускаются: ${calSkipHistory})` : '') +
           (calSkipNoTriple ? ` (без полной тройки пропустятся: ${calSkipNoTriple})` : '') +
+          (calImpact ? `. Суммарная ожидаемая длительность этих строк: ${calImpact.before.toFixed(1)} → ${calImpact.after.toFixed(1)} ч (${calImpact.pct} %)` : '') +
           `. Завершённые строки не трогаем. Повторное применение умножит ещё раз — коэффициент применяйте один раз.`,
       );
       return;
@@ -840,6 +867,14 @@ export default function EstimateTable({
                     ? `наблюдений нет · применений: ${calLog.length}`
                     : 'нет данных — заполните «Факт, ч» у завершённых операций'}
             </div>
+            {useHistory && calStats && calRel ? (
+              <div
+                style={{ fontSize: 11.5, fontWeight: 600, color: calRelColor }}
+                title={calRel.notes.length ? calRel.notes.join(' ') : 'Число наблюдений и разброс в норме.'}
+              >
+                достоверность: {calRel.label}
+              </div>
+            ) : null}
             {(useHistory && calStats) || (calLog && calLog.length) ? (
               <button className="btn btn-secondary btn-sm" onClick={() => { if (calOpen && (calConfirm || calTypeConfirm)) { setCalConfirm(false); setCalTypeConfirm(null); setCalNote(''); } setCalOpen((v) => !v); }} title="Показать наблюдения и применение коэффициента к оценкам">
                 {calOpen ? 'Свернуть' : 'Развернуть'}
@@ -855,6 +890,16 @@ export default function EstimateTable({
               Наблюдений: <b>{calStats.n}</b> · период: {fmtDateRu(calStats.from)} — {fmtDateRu(calStats.to)} · медиана отношения
               «факт / оценка»: <b>{fmtRatio(calStats.median)}</b> (среднее {fmtRatio(calStats.mean)}) · факт больше оценки: {calStats.over}, меньше: {calStats.under}
             </div>
+            {calRel ? (
+              <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+                Достоверность коэффициента: <b style={{ color: calRelColor }}>{calRel.label}</b> — наблюдений {calRel.n}, разброс отношений {fmtRatio(calRel.min)}–{fmtRatio(calRel.max)}.
+                {calRel.notes.length ? (
+                  <div style={{ marginTop: 4, display: 'grid', gap: 2, color: '#FCD34D' }}>
+                    {calRel.notes.map((t, i) => (<div key={i}>• {t}</div>))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {calGroups.length > 1 ? (
               <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
                 <div style={{ marginBottom: 4 }}>По типам операций — можно применять выборочно (одна кнопка — один тип):</div>
@@ -936,6 +981,7 @@ export default function EstimateTable({
               Предложение: умножить оценки на медиану {fmtRatio(calStats.median)} — строк с полной тройкой без факта: {calTargets.length}
               {calSkipHistory ? `, заполнены из истории (не трогаем): ${calSkipHistory}` : ''}
               {calSkipNoTriple ? `, без полной тройки пропустятся: ${calSkipNoTriple}` : ''}. Завершённые строки не трогаем: их оценка уже история.
+              {calImpact ? ` Суммарная ожидаемая длительность этих строк: ${calImpact.before.toFixed(1)} → ${calImpact.after.toFixed(1)} ч (${calImpact.pct} %).` : ''}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
