@@ -215,6 +215,8 @@ export default function EstimateTable({
   const calStats = useMemo(() => calibrationStats(obs), [obs]);
   const [calConfirm, setCalConfirm] = useState(false);
   const [calTypeConfirm, setCalTypeConfirm] = useState<string | null>(null);
+  // Журнал применений: возвращённые записи хранятся, но скрыты по умолчанию (галочка).
+  const [showRevertedCal, setShowRevertedCal] = useState(false);
   const [calNote, setCalNote] = useState('');
   const [calOpen, setCalOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -291,6 +293,13 @@ export default function EstimateTable({
     }
     return m;
   }, [operations, draft, calStats]);
+
+  /** Журнал применений: счётчик возвращённых и видимый список (по галочке). */
+  const calLogRevertedCount = (calLog || []).filter((e) => e.reverted).length;
+  const calLogVisible = (calLog || []).filter((e) => showRevertedCal || !e.reverted);
+  // Возврат идёт по порядку (как undo): активна кнопка только у самой свежей неприменённой записи.
+  const calActiveCount = (calLog || []).length - calLogRevertedCount;
+  const newestActiveCalId = (calLog || []).find((e) => !e.reverted)?.id ?? null;
 
   const toggleHistory = async (v: boolean) => {
     if (!onToggleHistory) return;
@@ -961,13 +970,39 @@ export default function EstimateTable({
             )}
             {calLog && calLog.length ? (
               <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-                Применения (журнал): {calLog.length}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span>Применения (журнал): {calLog.length}</span>
+                  {calLogRevertedCount ? (
+                    <label
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-3)', cursor: 'pointer' }}
+                      title="Возвращённые записи хранятся в журнале, но скрыты по умолчанию"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showRevertedCal}
+                        onChange={(e) => setShowRevertedCal(e.target.checked)}
+                        style={{ accentColor: '#3B82F6', width: 13, height: 13, cursor: 'pointer' }}
+                      />
+                      Показывать возвращённые ({calLogRevertedCount})
+                    </label>
+                  ) : null}
+                </div>
+                {calActiveCount > 1 ? (
+                  <div style={{ marginTop: 4, color: 'var(--fg-4)' }}>
+                    Применений в работе: {calActiveCount} — возврат идёт по порядку, от последнего к предыдущим.
+                  </div>
+                ) : null}
+                {calLogVisible.length === 0 ? (
+                  <div style={{ marginTop: 4, color: 'var(--fg-4)' }}>
+                    Активных применений нет. Возвращённые записи сохранены — включите «Показывать возвращённые».
+                  </div>
+                ) : (
                 <table className="tbl" style={{ maxWidth: 860, marginTop: 4 }}>
                   <thead>
                     <tr><th>Когда</th><th>Коэффициент</th><th>Охват</th><th>Строк</th><th>Наблюдений</th><th>Статус</th><th /></tr>
                   </thead>
                   <tbody>
-                    {calLog.map((e) => (
+                    {calLogVisible.map((e) => (
                       <tr key={e.id}>
                         <td className="t-mono">{e.at}</td>
                         <td className="t-mono">{fmtRatio(e.coefficient)}</td>
@@ -979,7 +1014,7 @@ export default function EstimateTable({
                           {!e.reverted && onCalRevert ? (
                             <button
                               className="btn btn-secondary btn-sm"
-                              disabled={savingId === 'calrev-' + e.id}
+                              disabled={savingId === 'calrev-' + e.id || e.id !== newestActiveCalId}
                               onClick={async () => {
                                 setSavingId('calrev-' + e.id);
                                 try {
@@ -991,7 +1026,9 @@ export default function EstimateTable({
                                   setSavingId(null);
                                 }
                               }}
-                              title="Вернуть оценки, которые были до этого применения"
+                              title={e.id !== newestActiveCalId
+                                ? 'Возврат идёт по порядку: сначала верните более поздние применения'
+                                : 'Вернуть оценки, которые были до этого применения'}
                             >
                               {savingId === 'calrev-' + e.id ? '…' : 'Вернуть'}
                             </button>
@@ -1001,6 +1038,7 @@ export default function EstimateTable({
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             ) : null}
             {calNote ? <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{calNote}</div> : null}
