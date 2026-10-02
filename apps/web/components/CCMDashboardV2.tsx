@@ -50,9 +50,10 @@ const fmtDT = (v: any): string => {
   return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 };
 const orderLabel = (o: any): string => {
+  const code = o?.ext_id ? String(o.ext_id) + ' · ' : '';
   const nm = o?.specification_name || o?.ext_id || 'Заказ';
   const q = o?.quantity != null ? String(o.quantity).replace(/\.00$/, '') : '';
-  return q ? nm + ' · ' + q + (o?.unit ? ' ' + o.unit : '') : nm;
+  return code + nm + (q ? ' · ' + q + (o?.unit ? ' ' + o.unit : '') : '');
 };
 const mergeIv = (list: [number, number][]): [number, number][] => {
   const arr = list.slice().sort((x, y) => x[0] - y[0]);
@@ -872,7 +873,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                               {(ords || []).map((o: any) => (
                                 <button key={o.id} onClick={() => { if (onOpenOrder) onOpenOrder(o); }}
                                   title="Открыть окно заказа"
-                                  style={{ background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.35)', color: '#93C5FD', borderRadius: 6, padding: '1px 8px', fontSize: 11, cursor: onOpenOrder ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+                                  style={{ background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.35)', color: '#93C5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: onOpenOrder ? 'pointer' : 'default', fontFamily: 'inherit' }}>
                                   {orderLabel(o)}
                                 </button>
                               ))}
