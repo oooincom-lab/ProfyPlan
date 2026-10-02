@@ -6702,7 +6702,7 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {/* ═══ CCM ═══ */}
           {view === 'ccm' && (
-            <CCMDashboardV2 onOpenResourceEdit={openResourceEditById} />
+            <CCMDashboardV2 onOpenResourceEdit={openResourceEditById} onOpenOrder={(o: any) => win.openWin(o)} />
           )}
 
           {/* ═══ REPORTS ═══ */}

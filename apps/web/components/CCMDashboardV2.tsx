@@ -49,6 +49,11 @@ const fmtDT = (v: any): string => {
   const p = (x: number) => String(x).padStart(2, '0');
   return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 };
+const orderLabel = (o: any): string => {
+  const nm = o?.specification_name || o?.ext_id || 'Заказ';
+  const q = o?.quantity != null ? String(o.quantity).replace(/\.00$/, '') : '';
+  return q ? nm + ' · ' + q + (o?.unit ? ' ' + o.unit : '') : nm;
+};
 const mergeIv = (list: [number, number][]): [number, number][] => {
   const arr = list.slice().sort((x, y) => x[0] - y[0]);
   const out: [number, number][] = [];
@@ -62,7 +67,7 @@ const mergeIv = (list: [number, number][]): [number, number][] => {
 
 type Tab = 'network-graph';
 
-export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceEdit?: (id: string) => void } = {}) {
+export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { onOpenResourceEdit?: (id: string) => void; onOpenOrder?: (order: any) => void } = {}) {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('network-graph');
@@ -86,6 +91,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
   const [shiftsLog, setShiftsLog] = useState<any[]>([]);
   const [autoRecalc, setAutoRecalc] = useState(false);
   const [recalcList, setRecalcList] = useState<any[]>([]);
+  const [ordersByProject, setOrdersByProject] = useState<Record<string, any[]>>({});
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [sugFor, setSugFor] = useState<string | null>(null);
   const occRef = useRef<HTMLDivElement | null>(null);
   const sugRef = useRef<HTMLDivElement | null>(null);
@@ -113,6 +120,32 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
       }
     } catch { /* панель не критична */ }
   }, []);
+
+  /** Заказы проектов для карточки карты: ленивая загрузка, кэш по проекту. */
+  const loadOrdersForProjects = async (ids: string[]) => {
+    const missing = ids.filter((id) => !(id in ordersByProject));
+    if (!missing.length) return;
+    setOrdersLoading(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const next: Record<string, any[]> = {};
+      for (const id of missing) {
+        try {
+          const r = await fetch(API_BASE + '/production-orders/?project_id=' + id, { headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) } });
+          if (r.ok) {
+            const d = await r.json();
+            const arr = Array.isArray(d) ? d : (Array.isArray(d?.items) ? d.items : []);
+            next[id] = arr.slice().sort((x: any, y: any) => String(x.start_date || '9999').localeCompare(String(y.start_date || '9999')));
+          } else {
+            next[id] = [];
+          }
+        } catch { next[id] = []; }
+      }
+      setOrdersByProject((prev) => ({ ...prev, ...next }));
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
 
   /** После сдвига/возврата обновляем перегрузку, список проектов и журнал сдвигов. */
   const reloadPortfolioData = async () => {
@@ -151,6 +184,14 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
       try { sugRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
     }
   }, [suggestion]);
+
+  // Карточка карты открыта — подтянуть заказы показанных проектов (лениво, из кэша).
+  useEffect(() => {
+    if (!occId || !overload) return;
+    const res = ((overload.resources || []) as any[]).find((x: any) => String(x.id) === occId);
+    const ids = Array.from(new Set(((res?.assignments || []) as any[]).map((a: any) => String(a.project_id))));
+    if (ids.length) loadOrdersForProjects(ids);
+  }, [occId, overload]);
 
   useEffect(() => {
     if (!authed) return;
@@ -816,6 +857,29 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
                       Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
                     </div>
                     <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Следующий куст можно ставить в свободные окна.</div>
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте{ordersLoading ? ' · загрузка…' : ''}</div>
+                      {occ.list.map((a: any) => {
+                        const ords = ordersByProject[String(a.project_id)];
+                        return (
+                          <div key={'ord-' + a.project_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 11.5, flexWrap: 'wrap' }}>
+                            <span style={{ minWidth: 180, color: '#CBD5E1', fontWeight: 600 }}>{a.project_name}</span>
+                            <span style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {!ords && <span style={{ color: '#5A7090' }}>загрузка…</span>}
+                              {ords && ords.length === 0 && <span style={{ color: '#5A7090' }}>нет заказов</span>}
+                              {(ords || []).map((o: any) => (
+                                <button key={o.id} onClick={() => { if (onOpenOrder) onOpenOrder(o); }}
+                                  title="Открыть окно заказа"
+                                  style={{ background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.35)', color: '#93C5FD', borderRadius: 6, padding: '1px 8px', fontSize: 11, cursor: onOpenOrder ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+                                  {orderLabel(o)}
+                                </button>
+                              ))}
+                            </span>
+                            <span style={{ color: '#8FA3BD', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmtDm(a.s)}–{fmtDm(a.f)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 {!occ && (
