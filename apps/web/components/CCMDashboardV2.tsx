@@ -18,7 +18,7 @@ function resolveApiBase(): string {
 }
 const API_BASE = resolveApiBase() + '/v1';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
 import { login, isAuthenticated, getProjects, mergeProjects, resourceLeveling, createBaseline } from '@/lib/api';
 
@@ -71,12 +71,27 @@ export default function CCMV2Dashboard() {
   const [suggestion, setSuggestion] = useState<any>(null);
   const [sugBusy, setSugBusy] = useState(false);
   const [occId, setOccId] = useState<string | null>(null);
+  const [sugFor, setSugFor] = useState<string | null>(null);
+  const occRef = useRef<HTMLDivElement | null>(null);
+  const sugRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isAuthenticated()) {
       setAuthed(true);
     }
   }, []);
+
+  // Результат показываем сразу: прокрутка к карте занятости и к предложению сдвига.
+  useEffect(() => {
+    if (occId && occRef.current) {
+      try { occRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
+    }
+  }, [occId]);
+  useEffect(() => {
+    if (suggestion && sugRef.current) {
+      try { sugRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
+    }
+  }, [suggestion]);
 
   useEffect(() => {
     if (!authed) return;
@@ -114,6 +129,7 @@ export default function CCMV2Dashboard() {
 
   const suggestShift = useCallback(async (pid: string) => {
     setSugBusy(true);
+    setSugFor(pid);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(`${API_BASE}/ccm/projects/${pid}/overload-suggestion`, {
@@ -124,6 +140,7 @@ export default function CCMV2Dashboard() {
       setSuggestion(await r.json());
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
+    setSugFor(null);
   }, []);
 
   const applyShift = useCallback(async () => {
@@ -464,22 +481,22 @@ export default function CCMV2Dashboard() {
                     {(r.conflicts || []).slice(0, 2).map((c: any) => c.a + ' × ' + c.b + ' (' + c.days + ' дн)').join('; ') || '—'}
                     {r.has_conflict && (r.conflicts || [])[0] && (
                       <button onClick={() => suggestShift(String((r.conflicts || [])[0].a_id))} disabled={sugBusy}
-                        style={{ marginLeft: 8, background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Предложить сдвиг</button>
+                        style={{ marginLeft: 8, background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>{sugBusy && sugFor === String((r.conflicts || [])[0].a_id) ? 'Считаю…' : 'Предложить сдвиг'}</button>
                     )}
                     <button onClick={() => setOccId(occId === String(r.id) ? null : String(r.id))}
-                      style={{ marginLeft: 8, background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.4)', color: '#86EFAC', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📅 Карта занятости</button>
+                      style={{ marginLeft: 8, background: occId === String(r.id) ? 'rgba(52,211,153,.28)' : 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.7)', color: '#86EFAC', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📅 Карта занятости</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {occ && occ.empty === true && (
-            <div style={{ marginTop: 10, fontSize: 12, color: '#8FA3BD' }}>
+            <div ref={occRef} style={{ marginTop: 10, fontSize: 12, color: '#8FA3BD' }}>
               📅 Карта занятости: нет интервалов — у проектов не заполнены даты (старт / плановый финиш).
             </div>
           )}
           {occ && occ.empty === false && (
-            <div style={{ marginTop: 10, border: '1px solid #1E3252', borderRadius: 10, background: '#0C1B31', padding: '10px 12px' }}>
+            <div ref={occRef} style={{ marginTop: 10, border: '1px solid #1E3252', borderRadius: 10, background: '#0C1B31', padding: '10px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>📅 Карта занятости: {occ.r.name}</span>
                 <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>проектов: {occ.list.length}{((occ.r.assignments || []).length - occ.list.length) > 0 ? ' (+' + ((occ.r.assignments || []).length - occ.list.length) + ' без дат)' : ''} · загрузка: {occ.r.total_text}</span>
@@ -522,7 +539,7 @@ export default function CCMV2Dashboard() {
             </div>
           )}
           {suggestion && (
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: suggestion.has_conflict ? '#FCD34D' : '#8FA3BD', flexWrap: 'wrap' }}>
+            <div ref={sugRef} style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: suggestion.has_conflict ? '#FCD34D' : '#8FA3BD', flexWrap: 'wrap' }}>
               {suggestion.has_conflict ? (
                 <>
                   <span>💡 {suggestion.suggestion?.message}</span>
