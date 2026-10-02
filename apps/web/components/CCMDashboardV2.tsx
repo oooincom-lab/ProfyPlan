@@ -121,25 +121,27 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     } catch { /* панель не критична */ }
   }, []);
 
-  /** Заказы проектов для карточки карты: ленивая загрузка, кэш по проекту. */
-  const loadOrdersForProjects = async (ids: string[]) => {
-    const missing = ids.filter((id) => !(id in ordersByProject));
+  /** Заказы проектов для карточки карты — только с выбранным ресурсом в маршруте; кэш по проекту и ресурсу. */
+  const loadOrdersForProjects = async (ids: string[], resourceId: string) => {
+    const key = (id: string) => id + '|' + resourceId;
+    const missing = ids.filter((id) => !(key(id) in ordersByProject));
     if (!missing.length) return;
     setOrdersLoading(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const encoded = encodeURIComponent(resourceId);
       const next: Record<string, any[]> = {};
       for (const id of missing) {
         try {
-          const r = await fetch(API_BASE + '/production-orders/?project_id=' + id, { headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) } });
+          const r = await fetch(API_BASE + '/production-orders/?project_id=' + id + '&resource_id=' + encoded, { headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) } });
           if (r.ok) {
             const d = await r.json();
             const arr = Array.isArray(d) ? d : (Array.isArray(d?.items) ? d.items : []);
-            next[id] = arr.slice().sort((x: any, y: any) => String(x.start_date || '9999').localeCompare(String(y.start_date || '9999')));
+            next[key(id)] = arr.slice().sort((x: any, y: any) => String(x.start_date || '9999').localeCompare(String(y.start_date || '9999')));
           } else {
-            next[id] = [];
+            next[key(id)] = [];
           }
-        } catch { next[id] = []; }
+        } catch { next[key(id)] = []; }
       }
       setOrdersByProject((prev) => ({ ...prev, ...next }));
     } finally {
@@ -190,7 +192,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     if (!occId || !overload) return;
     const res = ((overload.resources || []) as any[]).find((x: any) => String(x.id) === occId);
     const ids = Array.from(new Set(((res?.assignments || []) as any[]).map((a: any) => String(a.project_id))));
-    if (ids.length) loadOrdersForProjects(ids);
+    if (ids.length) loadOrdersForProjects(ids, occId);
   }, [occId, overload]);
 
   useEffect(() => {
@@ -858,15 +860,15 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     </div>
                     <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Следующий куст можно ставить в свободные окна.</div>
                     <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте{ordersLoading ? ' · загрузка…' : ''}</div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте — только заказы с этим ресурсом в маршруте{ordersLoading ? ' · загрузка…' : ''}</div>
                       {occ.list.map((a: any) => {
-                        const ords = ordersByProject[String(a.project_id)];
+                        const ords = ordersByProject[String(a.project_id) + '|' + String(occId)];
                         return (
                           <div key={'ord-' + a.project_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 11.5, flexWrap: 'wrap' }}>
                             <span style={{ minWidth: 180, color: '#CBD5E1', fontWeight: 600 }}>{a.project_name}</span>
                             <span style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               {!ords && <span style={{ color: '#5A7090' }}>загрузка…</span>}
-                              {ords && ords.length === 0 && <span style={{ color: '#5A7090' }}>нет заказов</span>}
+                              {ords && ords.length === 0 && <span style={{ color: '#5A7090' }}>нет заказов с этим ресурсом</span>}
                               {(ords || []).map((o: any) => (
                                 <button key={o.id} onClick={() => { if (onOpenOrder) onOpenOrder(o); }}
                                   title="Открыть окно заказа"

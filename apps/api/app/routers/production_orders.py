@@ -1113,13 +1113,27 @@ async def _import_routes(
 @router.get("/", response_model=list[ProductionOrderOut])
 async def list_orders(
     project_id: Optional[str] = None,
+    resource_id: Optional[str] = None,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Список заказов на производство, опционально отфильтрованный по проекту."""
+    """Список заказов на производство.
+
+    Фильтры: по проекту (project_id) и по ресурсу маршрута (resource_id):
+    остаются только заказы, у которых в маршруте (операциях) есть этот ресурс.
+    """
     stmt = select(ProductionOrder).where(ProductionOrder.tenant_id == tenant_id)
     if project_id:
         stmt = stmt.where(ProductionOrder.project_id == UUID(project_id))
+    if resource_id:
+        op_subq = (
+            select(Operation.order_id)
+            .join(OperationResource, OperationResource.operation_id == Operation.id)
+            .where(OperationResource.resource_id == UUID(resource_id))
+            .where(Operation.order_id.isnot(None))
+            .distinct()
+        )
+        stmt = stmt.where(ProductionOrder.id.in_(op_subq))
     stmt = stmt.order_by(ProductionOrder.created_at.desc())
     res = await db.execute(stmt)
     orders = res.scalars().all()
