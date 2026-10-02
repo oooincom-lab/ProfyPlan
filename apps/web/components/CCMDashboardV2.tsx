@@ -84,6 +84,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
   const [tab, setTab] = useState<'overview' | 'resources' | 'occupancy' | 'graph'>('overview');
   const [onlyConflicts, setOnlyConflicts] = useState(false);
   const [shiftsLog, setShiftsLog] = useState<any[]>([]);
+  const [autoRecalc, setAutoRecalc] = useState(false);
+  const [recalcList, setRecalcList] = useState<any[]>([]);
   const [sugFor, setSugFor] = useState<string | null>(null);
   const occRef = useRef<HTMLDivElement | null>(null);
   const sugRef = useRef<HTMLDivElement | null>(null);
@@ -100,6 +102,18 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
     } catch { /* журнал не критичен для работы раздела */ }
   }, []);
 
+  /** Статусы пересчёта проектов сдвига (панель «Пересчёт проектов сдвига»). */
+  const loadRecalc = useCallback(async () => {
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(API_BASE + '/ccm/shift-recalc', { headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) } });
+      if (r.ok) {
+        const d = await r.json();
+        setRecalcList(Array.isArray(d?.items) ? d.items : []);
+      }
+    } catch { /* панель не критична */ }
+  }, []);
+
   /** После сдвига/возврата обновляем перегрузку, список проектов и журнал сдвигов. */
   const reloadPortfolioData = async () => {
     try {
@@ -112,12 +126,21 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
       setProjects(ps?.items || (Array.isArray(ps) ? ps : []));
     } catch { /* noop */ }
     await loadShifts();
+    await loadRecalc();
   };
+
+  // Галка «Автопересчёт после сдвигов»: по умолчанию выключена (ручной режим).
+  useEffect(() => {
+    try {
+      setAutoRecalc(localStorage.getItem('profyplan_ccm_autorecalc') === '1');
+    } catch { /* noop */ }
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated()) {
       setAuthed(true);
       loadShifts();
+      loadRecalc();
     }
   }, []);
 
@@ -188,7 +211,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
       const r = await fetch(API_BASE + '/ccm/shifts/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
-        body: JSON.stringify({ project_id: suggestion.project_id, new_start: sg.suggested_start, kind: 'self', shift_days: sg.shift_days || 0 }),
+        body: JSON.stringify({ project_id: suggestion.project_id, new_start: sg.suggested_start, kind: 'self', shift_days: sg.shift_days || 0, auto_recalc: autoRecalc }),
       });
       const d = await r.json().catch(() => null);
       setSuggestion({ ...suggestion, applied: true, shiftRecordId: d?.record?.id || null, recalc: d?.recalc || null });
@@ -210,7 +233,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
       const r = await fetch(API_BASE + '/ccm/shifts/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
-        body: JSON.stringify({ project_id: tgt.project_id, new_start: nd.toISOString(), kind: 'other', shift_days: days }),
+        body: JSON.stringify({ project_id: tgt.project_id, new_start: nd.toISOString(), kind: 'other', shift_days: days, auto_recalc: autoRecalc }),
       });
       const d = await r.json().catch(() => null);
       setSuggestion({ ...suggestion, applied: true, appliedOther: true, shiftRecordId: d?.record?.id || null, recalc: d?.recalc || null });
@@ -226,10 +249,47 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(API_BASE + '/ccm/shifts/' + shiftId + '/revert', {
         method: 'POST',
-        headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+        body: JSON.stringify({ auto_recalc: autoRecalc }),
       });
       if (!r.ok) throw new Error('Не удалось вернуть сдвиг');
       await reloadPortfolioData();
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  };
+
+  /** Пересчитать один проект списка (создать запуск расчёта). */
+  const recalcProject = async (projectId: string) => {
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(API_BASE + '/projects/' + projectId + '/calculation-runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+        body: '{}',
+      });
+      if (!r.ok) throw new Error('Не удалось пересчитать проект');
+      await loadRecalc();
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  };
+
+  /** Пересчитать все проекты сдвига сверху вниз (по хронологии). */
+  const recalcAllShiftProjects = async () => {
+    const active = recalcList.filter((r: any) => r.state !== 'reverted');
+    if (!active.length) return;
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      for (const it of active) {
+        const r = await fetch(API_BASE + '/projects/' + it.project_id + '/calculation-runs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+          body: '{}',
+        });
+        if (!r.ok) break;
+      }
+      await loadRecalc();
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
   };
@@ -608,6 +668,36 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
                   );
                 })}
                 <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>После каждого сдвига и возврата проект пересчитывается автоматически — свежий запуск виден в «Запусках» проекта.</div>
+              </div>
+            )}
+
+            {recalcList.length > 0 && (
+              <div style={{ marginTop: 16, maxWidth: 980 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>⟳ Пересчёт проектов сдвига — по хронологии занятости ресурсов</div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: autoRecalc ? '#86EFAC' : '#8FA3BD', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={autoRecalc} onChange={(e) => { const v = e.target.checked; setAutoRecalc(v); try { localStorage.setItem('profyplan_ccm_autorecalc', v ? '1' : ''); } catch { /* noop */ } }} />
+                    Автопересчёт после сдвигов {autoRecalc ? '(включён)' : '(ручной режим)'}
+                  </label>
+                  <button onClick={recalcAllShiftProjects} disabled={sugBusy || !recalcList.some((x: any) => x.state !== 'reverted')}
+                    style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Пересчитать все по порядку</button>
+                </div>
+                {recalcList.map((r: any, i: number) => (
+                  <div key={r.project_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 2px', borderBottom: '1px solid #14263F', fontSize: 12, color: r.state === 'reverted' ? '#5A7090' : '#CBD5E1', flexWrap: 'wrap' }}>
+                    <span style={{ width: 22, color: '#5A7090' }}>{i + 1}.</span>
+                    <span style={{ minWidth: 180, fontWeight: 600 }}>«{r.project_name}»</span>
+                    <span style={{ color: '#8FA3BD' }}>занимает ресурсы с {fmtD(r.start_date)}</span>
+                    <span style={{ color: r.state === 'reverted' ? '#5A7090' : (r.needs_recalc ? '#FCD34D' : '#86EFAC') }}>
+                      {r.state === 'reverted' ? 'сдвиг возвращён' : r.needs_recalc ? '⚠ требует пересчёта' : '✓ пересчитан ' + fmtDT(r.last_run_at)}
+                    </span>
+                    <span style={{ marginLeft: 'auto' }}>
+                      <button onClick={() => recalcProject(r.project_id)} disabled={sugBusy}
+                        title="Пересчитать проект (создать запуск расчёта)"
+                        style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Пересчитать</button>
+                    </span>
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Пересчитывать сверху вниз: более ранние проекты задают занятость общих ресурсов для более поздних. Галка «Автопересчёт» делает это автоматически после каждого сдвига.</div>
               </div>
             )}
 
