@@ -39,6 +39,16 @@ const fmtDmShort = (ms: number): string => {
   const d = new Date(ms);
   return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getFullYear()).slice(2);
 };
+const fmtD = (v: any): string => {
+  const ms = parseMs(v);
+  return ms == null ? '—' : fmtDm(ms);
+};
+const fmtDT = (v: any): string => {
+  if (!v) return '—';
+  const d = new Date(v);
+  const p = (x: number) => String(x).padStart(2, '0');
+  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+};
 const mergeIv = (list: [number, number][]): [number, number][] => {
   const arr = list.slice().sort((x, y) => x[0] - y[0]);
   const out: [number, number][] = [];
@@ -73,13 +83,41 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
   const [occId, setOccId] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'resources' | 'occupancy' | 'graph'>('overview');
   const [onlyConflicts, setOnlyConflicts] = useState(false);
+  const [shiftsLog, setShiftsLog] = useState<any[]>([]);
   const [sugFor, setSugFor] = useState<string | null>(null);
   const occRef = useRef<HTMLDivElement | null>(null);
   const sugRef = useRef<HTMLDivElement | null>(null);
 
+  /** Журнал сдвигов: последние записи (переживают перезагрузку). */
+  const loadShifts = useCallback(async () => {
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(API_BASE + '/ccm/shifts', { headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) } });
+      if (r.ok) {
+        const d = await r.json();
+        setShiftsLog(Array.isArray(d?.items) ? d.items : []);
+      }
+    } catch { /* журнал не критичен для работы раздела */ }
+  }, []);
+
+  /** После сдвига/возврата обновляем перегрузку, список проектов и журнал сдвигов. */
+  const reloadPortfolioData = async () => {
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(API_BASE + '/ccm/resource-overload', { headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) } });
+      if (r.ok) setOverload(await r.json());
+    } catch { /* noop */ }
+    try {
+      const ps: any = await getProjects();
+      setProjects(ps?.items || (Array.isArray(ps) ? ps : []));
+    } catch { /* noop */ }
+    await loadShifts();
+  };
+
   useEffect(() => {
     if (isAuthenticated()) {
       setAuthed(true);
+      loadShifts();
     }
   }, []);
 
@@ -147,17 +185,14 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      await fetch(`${API_BASE}/projects/${suggestion.project_id}`, {
-        method: 'PUT',
+      const r = await fetch(API_BASE + '/ccm/shifts/apply', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
-        body: JSON.stringify({ start_date: sg.suggested_start }),
+        body: JSON.stringify({ project_id: suggestion.project_id, new_start: sg.suggested_start, kind: 'self', shift_days: sg.shift_days || 0 }),
       });
-      setSuggestion({ ...suggestion, applied: true });
-      const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch(API_BASE + '/ccm/resource-overload', {
-        headers: { ...(t2 ? { Authorization: 'Bea' + 'rer ' + t2 } : {}) },
-      });
-      if (r.ok) setOverload(await r.json());
+      const d = await r.json().catch(() => null);
+      setSuggestion({ ...suggestion, applied: true, shiftRecordId: d?.record?.id || null, recalc: d?.recalc || null });
+      await reloadPortfolioData();
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
   }, [suggestion]);
@@ -172,20 +207,32 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      await fetch(`${API_BASE}/projects/${tgt.project_id}`, {
-        method: 'PUT',
+      const r = await fetch(API_BASE + '/ccm/shifts/apply', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
-        body: JSON.stringify({ start_date: nd.toISOString() }),
+        body: JSON.stringify({ project_id: tgt.project_id, new_start: nd.toISOString(), kind: 'other', shift_days: days }),
       });
-      setSuggestion({ ...suggestion, applied: true, appliedOther: true });
-      const t2 = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch(API_BASE + '/ccm/resource-overload', {
-        headers: { ...(t2 ? { Authorization: 'Bea' + 'rer ' + t2 } : {}) },
-      });
-      if (r.ok) setOverload(await r.json());
+      const d = await r.json().catch(() => null);
+      setSuggestion({ ...suggestion, applied: true, appliedOther: true, shiftRecordId: d?.record?.id || null, recalc: d?.recalc || null });
+      await reloadPortfolioData();
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
   }, [suggestion, projects]);
+
+  /** Возврат сдвига: восстановить дату старта и пересчитать проект. */
+  const revertShift = async (shiftId: string) => {
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(API_BASE + '/ccm/shifts/' + shiftId + '/revert', {
+        method: 'POST',
+        headers: { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+      });
+      if (!r.ok) throw new Error('Не удалось вернуть сдвиг');
+      await reloadPortfolioData();
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  };
 
   const setMyPriority = useCallback(async (pid: string, pr: string) => {
     setSugBusy(true);
@@ -536,6 +583,33 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
               )}
             </div>
           )}
+
+            {shiftsLog.length > 0 && (
+              <div style={{ marginTop: 16, maxWidth: 980 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>↔ Сдвиги (журнал): {shiftsLog.length}</div>
+                {shiftsLog.map((s: any) => {
+                  const blocked = !s.reverted && shiftsLog.some((o: any) => !o.reverted && o.project_id === s.project_id && String(o.created_at) > String(s.created_at));
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 2px', borderBottom: '1px solid #14263F', fontSize: 12, color: s.reverted ? '#5A7090' : '#CBD5E1', flexWrap: 'wrap' }}>
+                      <span style={{ width: 118, color: '#8FA3BD' }}>{fmtDT(s.created_at)}</span>
+                      <span style={{ minWidth: 170, fontWeight: 600 }}>«{s.project_name}»</span>
+                      <span style={{ color: s.kind === 'other' ? '#FCD34D' : '#93C5FD' }}>{s.kind === 'other' ? 'сдвиг другому' : 'свой сдвиг'} · +{s.shift_days} дн</span>
+                      <span style={{ color: '#8FA3BD' }}>старт {fmtD(s.old_start)} → {fmtD(s.new_start)}</span>
+                      <span style={{ marginLeft: 'auto' }}>
+                        {s.reverted ? (
+                          <span style={{ color: '#5A7090' }}>(возвращено)</span>
+                        ) : (
+                          <button onClick={() => revertShift(s.id)} disabled={blocked || sugBusy}
+                            title={blocked ? 'Сначала верните более поздние сдвиги этого проекта' : 'Вернуть дату старта как было (с автопересчётом)'}
+                            style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: blocked ? 'default' : 'pointer', fontFamily: 'inherit', opacity: blocked ? 0.5 : 1 }}>Вернуть</button>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>После каждого сдвига и возврата проект пересчитывается автоматически — свежий запуск виден в «Запусках» проекта.</div>
+              </div>
+            )}
 
             <details style={{ marginTop: 18 }}>
               <summary style={{ cursor: 'pointer', color: '#8FA3BD', fontSize: 12.5, fontWeight: 600 }}>Статистика по всем ресурсам ({resourceUsage.length}) — план, события, потери, выработка</summary>

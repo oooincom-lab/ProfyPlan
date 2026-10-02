@@ -107,33 +107,30 @@ def _fingerprint(operations, dependencies, project: Project) -> str:
     return h.hexdigest()[:24]
 
 
-@runs_router.post(
-    "/v1/projects/{project_id}/calculation-runs",
-    response_model=RunOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_run(
-    project_id: UUID,
-    body: Optional[RunRequest] = None,
-    db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
-    user: User = Depends(get_current_user),
-):
-    """Запустить расчёт и сохранить его как объект (основание сравнения и истории)."""
-    project = (
-        await db.execute(
-            select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
-        )
-    ).scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Проект не найден")
+async def perform_project_run(
+    db: AsyncSession,
+    project: Project,
+    tenant_id: UUID,
+    area: str = "project",
+    area_ref: Optional[UUID] = None,
+    author_id: Optional[UUID] = None,
+    auto_note: Optional[str] = None,
+    provided: Optional[dict] = None,
+    extra_params: Optional[dict] = None,
+) -> CalculationRun:
+    """Выполнить и сохранить расчёт проекта.
 
-    area = body.area if body and body.area else "project"
-    operations, dependencies = await _load_inputs(db, project_id, tenant_id)
+    Используется кнопкой «Пересчитать» (create_run) и автопересчётом после сдвигов
+    старта проекта (журнал сдвигов CCM): расчёт идёт тем же движком и сохраняется
+    объектом в реестре запусков.
+    """
+    operations, dependencies = await _load_inputs(db, project.id, tenant_id)
     fingerprint = _fingerprint(operations, dependencies, project)
     now = datetime.now(timezone.utc)
 
     notes: list[str] = []
+    if auto_note:
+        notes.append(auto_note)
     if project.planning_logic == "ccm":
         notes.append(
             "Логика планирования CCM: межпроектное объединение считается в блоке 6.20. Здесь сохранён расчёт по проекту."
@@ -155,14 +152,6 @@ async def create_run(
         "areas": 1,
         "notes": notes,
     }
-
-    # Если страница расчёта уже получила результат (Монте-Карло), записываем именно его:
-    # в реестре должны лежать те числа, которые человек видел на экране.
-    provided = body.result if body else None
-    if provided:
-        summary.update(provided)
-        if provided.get("notes"):
-            summary["notes"] = list(notes) + list(provided.get("notes") or [])
 
     try:
         if len(operations) < 2:
@@ -198,8 +187,8 @@ async def create_run(
         run_status = "failed"
         error_text = str(exc)
 
-    # Результат, полученный на странице расчёта (Монте-Карло), главнее локальной сводки:
-    # на экране человек видел именно эти числа, они и должны лежать в реестре.
+    # Результат, полученный на странице расчёта (Монте-Карло), главнее локальной
+    # сводки: на экране человек видел именно эти числа — они и попадают в реестр.
     if provided:
         summary.update(provided)
         if provided.get("notes"):
@@ -209,16 +198,16 @@ async def create_run(
 
     run = CalculationRun(
         tenant_id=tenant_id,
-        project_id=project_id,
+        project_id=project.id,
         area=area,
-        area_ref=body.area_ref if body else None,
+        area_ref=area_ref,
         planning_logic=project.planning_logic,
         uncertainty_analysis=project.uncertainty_analysis,
         params={
             "monte_carlo_runs": project.monte_carlo_runs,
             "confidence_level": project.confidence_level,
             "use_history": project.use_history,
-            **(body.params or {} if body else {}),
+            **(extra_params or {}),
         },
         data_fingerprint=fingerprint,
         data_date=now,
@@ -226,11 +215,45 @@ async def create_run(
         result=summary,
         error=error_text,
         finished_at=now,
-        created_by=user.id,
+        created_by=author_id,
     )
     db.add(run)
     await db.commit()
     await db.refresh(run)
+    return run
+
+
+@runs_router.post(
+    "/v1/projects/{project_id}/calculation-runs",
+    response_model=RunOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_run(
+    project_id: UUID,
+    body: Optional[RunRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user: User = Depends(get_current_user),
+):
+    """Запустить расчёт и сохранить его как объект (основание сравнения и истории)."""
+    project = (
+        await db.execute(
+            select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не найден")
+
+    run = await perform_project_run(
+        db,
+        project,
+        tenant_id,
+        area=(body.area if body and body.area else "project"),
+        area_ref=body.area_ref if body else None,
+        author_id=user.id,
+        provided=body.result if body else None,
+        extra_params=(body.params if body else None),
+    )
     return RunOut.model_validate(run)
 
 
