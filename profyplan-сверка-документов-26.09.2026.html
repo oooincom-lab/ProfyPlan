@@ -1855,6 +1855,29 @@
     
   </div>
 </div>
+<h3>03.10.2026 (ночь-13) — пересчёт проектов сдвига: панель, ручной/авто режимы (ecf7894)</h3>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">Сделано (ecf7894):</div>
+    <div class="task-detail">панель «Пересчёт проектов сдвига» — список по хронологии занятости ресурсов (по дате старта), статусы («требует пересчёта» / «пересчитан», «сдвиг возвращён» — вниз серым), кнопки «Пересчитать» и «Пересчитать все по порядку»; галочка «Автопересчёт после сдвигов» (по умолчанию ВЫКЛЮЧЕНА; localStorage). Сервер: <code>GET /v1/ccm/shift-recalc</code> (статусы), флаг <code>auto_recalc</code> у apply/revert — при включении пересчитываются ВСЕ проекты сдвига в хронологическом порядке (<code>perform_shift_recalcs</code>).</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Проверено (localhost):</div>
+    <div class="task-detail">ручной цикл (apply → «требует пересчёта» → кнопка → «✓ пересчитан»); авто (apply с флагом → пересчёт всех, «шаг 1/1»); UI: нумерация, серые возвращённые, примечание про порядок.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Прод:</div>
+    <div class="task-detail">маршруты <code>/v1/ccm/shifts/apply</code>, <code>/v1/ccm/shifts</code>, <code>/v1/ccm/shift-recalc</code>, <code>/v1/ccm/shifts/{id}/revert</code> подтверждены в API; иголки в сборке; GET shift-recalc → 200 (пусто); сайт/API 200; alembic 0015.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Примечание:</div>
+    <div class="task-detail">локальный api-контейнер обновлён точечно (docker cp, без пересборки образа) — при следующей пересборке подхватится из репозитория.</div>
+    
+  </div>
+</div>
 <footer>
   Файл собран автоматически — правьте текстовый план и запускайте <code>node scripts/render_plan.mjs</code>.
   Любая правка прямо в этом файле будет потеряна при следующей сборке.
