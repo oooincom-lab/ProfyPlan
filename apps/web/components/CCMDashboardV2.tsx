@@ -83,12 +83,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
     }
   }, []);
 
-  // Результат показываем сразу: прокрутка к карте занятости и к предложению сдвига.
-  useEffect(() => {
-    if (occId && occRef.current) {
-      try { occRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
-    }
-  }, [occId]);
+  // Результат «Предложить сдвиг» показываем сразу; карта — на своей вкладке (без автопрокрутки).
+
   useEffect(() => {
     if (suggestion && sugRef.current) {
       try { sugRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
@@ -345,7 +341,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceE
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh',
+      display: 'flex', flexDirection: 'column', height: 'calc(100vh - 146px)',
       background: '#0A1628', color: '#E8EEF5', fontFamily: 'Inter, sans-serif',
     }}>
       {/* Header + вкладки */}
