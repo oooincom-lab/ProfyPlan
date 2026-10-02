@@ -1520,6 +1520,18 @@ const [chainDialog, setChainDialog] = useState<null | {
     return r ? r.name : String(rid).slice(0, 8) + '…';
   };
 
+  // Карточка ресурса из «CCM · Портфель»: открыть MDI-окно редактирования.
+  const openResourceEditById = async (id: string) => {
+    let res = resourcesList.find((r: any) => String(r.id) === String(id));
+    if (!res) {
+      try {
+        const rs = await apiF<any[]>('/resources');
+        res = (rs || []).find((r: any) => String(r.id) === String(id));
+      } catch { /* нет данных — откроем с одним id */ }
+    }
+    win.openResEdit(res || { id });
+  };
+
   const openDirEditWindow = (entity: string, row: any) => {
     if (entity === 'resources') { win.openResEdit(row); return; }
     const dirEndpoints = (entity === 'departments' || entity === 'organizations')
@@ -6690,7 +6702,7 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {/* ═══ CCM ═══ */}
           {view === 'ccm' && (
-            <CCMDashboardV2 />
+            <CCMDashboardV2 onOpenResourceEdit={openResourceEditById} />
           )}
 
           {/* ═══ REPORTS ═══ */}

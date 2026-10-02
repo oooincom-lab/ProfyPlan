@@ -52,7 +52,7 @@ const mergeIv = (list: [number, number][]): [number, number][] => {
 
 type Tab = 'network-graph';
 
-export default function CCMV2Dashboard() {
+export default function CCMV2Dashboard({ onOpenResourceEdit }: { onOpenResourceEdit?: (id: string) => void } = {}) {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('network-graph');
@@ -478,8 +478,8 @@ export default function CCMV2Dashboard() {
                   {sharedRes.filter((r: any) => !onlyConflicts || r.has_conflict).map((r: any) => (
                     <tr key={r.id} style={{ borderTop: '1px solid #1E3252', color: r.has_conflict ? '#FCD34D' : '#E8EEF5' }}>
                       <td style={{ padding: '6px 8px', fontWeight: 600 }}>
-                        <span onClick={() => { setOccId(String(r.id)); setTab('occupancy'); }}
-                          title="Карта занятости: когда ресурс занят и где свободные окна"
+                        <span onClick={() => { if (onOpenResourceEdit) { onOpenResourceEdit(String(r.id)); } else { setOccId(String(r.id)); setTab('occupancy'); } }}
+                          title="Карточка ресурса: открыть и отредактировать"
                           style={{ cursor: 'pointer', borderBottom: '1px dotted rgba(96,165,250,.6)' }}>{r.name}</span>
                       </td>
                       <td style={{ padding: '6px 8px', color: '#8FA3BD' }}>{(r.assignments || []).map((a: any) => a.project_name).join(', ') || '—'}</td>
