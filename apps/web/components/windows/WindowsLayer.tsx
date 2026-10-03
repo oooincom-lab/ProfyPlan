@@ -136,7 +136,7 @@ type WindowsLayerProps = {
   /** Привязки ресурса к проектам (resedit): {resourceId: items[]} */
   resAssign?: Record<string, any[]>;
   onResAssignLoad?: (resourceId: string) => void;
-  onResAssignAdd?: (resourceId: string, projectId: string, capacityShare: number) => void;
+  onResAssignAdd?: (resourceId: string, projectId: string, capacityShare: number, exclusive?: boolean) => void;
   onResAssignDel?: (resourceId: string, assignmentId: string) => void;
 
   /** Ресурсы заказа (Шаг 5): {orderId: items[]} — из операций маршрутов + переопределения */
@@ -1764,11 +1764,12 @@ function ResAssignSection({ resourceId, projects, assignments, onAdd, onDel }: {
   resourceId: string;
   projects: any[];
   assignments: any[];
-  onAdd?: (resourceId: string, projectId: string, capacityShare: number) => void;
+  onAdd?: (resourceId: string, projectId: string, capacityShare: number, exclusive?: boolean) => void;
   onDel?: (resourceId: string, assignmentId: string) => void;
 }) {
   const [selProj, setSelProj] = useState('');
   const [selShare, setSelShare] = useState('1');
+  const [selExcl, setSelExcl] = useState(false);
   const avail = (projects || []).filter((p2: any) => !assignments.some((a: any) => a.project_id === p2.id));
   return (
     <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
@@ -1777,6 +1778,7 @@ function ResAssignSection({ resourceId, projects, assignments, onAdd, onDel }: {
       {assignments.map((a: any) => (
         <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px dashed rgba(30,58,95,.5)', fontSize: 12.5 }}>
           <span style={{ flex: 1 }}>{a.project_name || a.project_id}</span>
+          {a.exclusive ? <span title="Эксклюзивная бронь — занимает ресурс целиком" style={{ color: '#FCA5A5', fontWeight: 700, fontSize: 11 }}>Э</span> : null}
           <span style={{ color: '#34D399', fontWeight: 600 }}>{Math.round((a.capacity_share ?? 1) * 100)}%</span>
           <button className="pp-wbtn" title="Отвязать" onClick={() => onDel?.(resourceId, a.id)}>✕</button>
         </div>
@@ -1788,8 +1790,13 @@ function ResAssignSection({ resourceId, projects, assignments, onAdd, onDel }: {
         </select>
         <input type="number" min="0" max="1" step="0.05" value={selShare} onChange={e => setSelShare(e.target.value)} title="Доля мощности (0–1)"
           style={{ width: 70, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit' }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: selExcl ? '#FCA5A5' : '#8FA3BD', cursor: 'pointer' }}
+          title="Эксклюзивная бронь: ресурс занят целиком (нужен весь кран / переналадка участка); пересечение — всегда конфликт">
+          <input type="checkbox" checked={selExcl} onChange={e => setSelExcl(e.target.checked)} />
+          Эксклюзивная бронь
+        </label>
         <button className="btn btn-primary btn-sm" disabled={!selProj}
-          onClick={() => { if (selProj) { onAdd?.(resourceId, selProj, parseFloat(String(selShare).replace(',', '.')) || 1); setSelProj(''); setSelShare('1'); } }}
+          onClick={() => { if (selProj) { onAdd?.(resourceId, selProj, parseFloat(String(selShare).replace(',', '.')) || 1, selExcl); setSelProj(''); setSelShare('1'); setSelExcl(false); } }}
           style={{ opacity: selProj ? 1 : .5 }}>+ Привязать</button>
       </div>
     </div>

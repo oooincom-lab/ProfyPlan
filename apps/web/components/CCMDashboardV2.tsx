@@ -661,7 +661,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <td style={{ padding: '6px 8px' }}>{r.total_text}</td>
                       <td style={{ padding: '6px 8px', color: r.has_conflict ? '#FCD34D' : '#5A7090' }}>{r.overlap_days ? r.overlap_days + ' дн' : '—'}</td>
                       <td style={{ padding: '6px 8px', color: '#8FA3BD' }}>
-                        {(r.conflicts || []).slice(0, 2).map((c: any) => c.a + ' × ' + c.b + ' (' + c.days + ' дн)').join('; ') || '—'}
+                        {(r.conflicts || []).slice(0, 2).map((c: any) => c.a + ' × ' + c.b + ' (' + c.days + ' дн' + ((c.a_exclusive || c.b_exclusive) ? ', экскл.' : '') + ')').join('; ') || '—'}
                         {r.has_conflict && (r.conflicts || [])[0] && (
                           <button onClick={() => suggestShift(String((r.conflicts || [])[0].a_id))} disabled={sugBusy}
                             style={{ marginLeft: 8, background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>{sugBusy && sugFor === String((r.conflicts || [])[0].a_id) ? 'Считаю…' : 'Предложить сдвиг'}</button>
@@ -955,7 +955,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                                 {ords && ords.length > 0 ? <span style={{ color: '#5A7090', fontSize: 10 }}> · {ords.length}</span> : null}
                               </button>
                               <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
-                                <div title={a.project_name + ': ' + fmtDm(a.s) + ' — ' + fmtDm(a.f) + ' · ' + (a.hours_text || '') + (a.capacity_share && a.capacity_share !== 1 ? ' · доля мощности ×' + a.capacity_share : '')}
+                                <div title={a.project_name + ': ' + fmtDm(a.s) + ' — ' + fmtDm(a.f) + ' · ' + (a.hours_text || '') + (a.capacity_share && a.capacity_share !== 1 ? ' · доля мощности ×' + a.capacity_share : '') + (a.exclusive ? ' · эксклюзивная бронь' : '')}
                                   style={{ position: 'absolute', left: ((a.s - occ.minI) / occ.span * 100) + '%', width: Math.max(((a.f - a.s) / occ.span) * 100, 0.8) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
                               </div>
                               <span style={{ fontSize: 10.5, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0 }}>{fmtDm(a.s)}–{fmtDm(a.f)}</span>

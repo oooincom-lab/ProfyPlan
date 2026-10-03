@@ -1412,12 +1412,14 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
     }
 
     share_map: dict = {}
+    excl_map: dict = {}
     for pr in (await db.execute(select(ProjectResource).where(ProjectResource.tenant_id == tenant_id))).scalars().all():
         try:
             v = float(pr.capacity_share) if pr.capacity_share is not None else 1.0
         except Exception:
             v = 1.0
         share_map[(str(pr.project_id), str(pr.resource_id))] = v
+        excl_map[(str(pr.project_id), str(pr.resource_id))] = bool(getattr(pr, "exclusive", False))
 
     quota_map: dict = {}
     for q in (await db.execute(
@@ -1527,6 +1529,7 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
                 "hours": round(hours, 2),
                 "hours_text": format_duration(hours * 60, 8.0),
                 "capacity_share": round(share, 4),
+                "exclusive": excl_map.get((pid, str(gid)), False),
                 "quota_share": round(quota, 4),
                 "effective_days": round(eff_days, 2),
                 "start": start.isoformat() if start else None,
@@ -1547,7 +1550,13 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
                 o0 = max(a0, b0)
                 o1 = min(a1, b1)
                 days = (o1 - o0).days
-                if days > 0:
+                excl_a = bool(a.get("exclusive"))
+                excl_b = bool(b.get("exclusive"))
+                need_a = 1.0 if excl_a else float(a.get("capacity_share") or 0.0)
+                need_b = 1.0 if excl_b else float(b.get("capacity_share") or 0.0)
+                # Семантика брони: базовая — по фактической ёмкости (сумма долей больше 100%);
+                # эксклюзивная бронь занимает ресурс целиком — любое пересечение конфликт.
+                if days > 0 and (excl_a or excl_b or need_a + need_b > 1.0 + 1e-9):
                     conflicts.append({
                         "a": a["project_name"],
                         "a_id": a["project_id"],
@@ -1556,7 +1565,9 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
                         "from": o0.date().isoformat(),
                         "to": o1.date().isoformat(),
                         "days": days,
-                        "severity": "high" if days >= 14 else ("medium" if days >= 5 else "low"),
+                        "severity": "high" if (days >= 14 or excl_a or excl_b) else ("medium" if days >= 5 else "low"),
+                        "a_exclusive": excl_a,
+                        "b_exclusive": excl_b,
                     })
         conflicts.sort(key=lambda x: -x["days"])
         max_days = conflicts[0]["days"] if conflicts else 0

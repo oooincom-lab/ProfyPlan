@@ -2702,9 +2702,9 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       setResAssign(prev => ({ ...prev, [resourceId]: data }));
     } catch { }
   };
-  const handleResAssignAdd = async (resourceId: string, projectId: string, capacityShare: number) => {
+  const handleResAssignAdd = async (resourceId: string, projectId: string, capacityShare: number, exclusive?: boolean) => {
     try {
-      await apiF(`/projects/${projectId}/project-resources`, { method: 'POST', body: JSON.stringify({ resource_id: resourceId, capacity_share: capacityShare }) });
+      await apiF(`/projects/${projectId}/project-resources`, { method: 'POST', body: JSON.stringify({ resource_id: resourceId, capacity_share: capacityShare, exclusive: !!exclusive }) });
       await loadResAssign(resourceId);
     } catch (e: any) { setMsg('Ошибка привязки: ' + (e.message || String(e))); }
   };

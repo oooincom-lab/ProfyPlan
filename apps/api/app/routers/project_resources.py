@@ -48,6 +48,7 @@ async def list_assignments(
                 resource_id=str(pr.resource_id),
                 schedule_id=str(pr.schedule_id) if pr.schedule_id else None,
                 capacity_share=pr.capacity_share,
+                exclusive=bool(pr.exclusive),
                 date_from=pr.date_from,
                 date_to=pr.date_to,
                 resource_name=rname,
@@ -90,6 +91,7 @@ async def assign_resource(
         resource_id=UUID(body.resource_id),
         schedule_id=UUID(body.schedule_id) if body.schedule_id else None,
         capacity_share=body.capacity_share,
+        exclusive=bool(body.exclusive),
         date_from=body.date_from,
         date_to=body.date_to,
     )
@@ -102,6 +104,7 @@ async def assign_resource(
         resource_id=str(pr.resource_id),
         schedule_id=str(pr.schedule_id) if pr.schedule_id else None,
         capacity_share=pr.capacity_share,
+        exclusive=bool(pr.exclusive),
         date_from=pr.date_from,
         date_to=pr.date_to,
         resource_name=resource.name,
@@ -134,6 +137,8 @@ async def update_assignment(
         pr.schedule_id = UUID(data["schedule_id"]) if data["schedule_id"] else None
     if "capacity_share" in data:
         pr.capacity_share = data["capacity_share"]
+    if "exclusive" in data:
+        pr.exclusive = bool(data["exclusive"])
     if "date_from" in data:
         pr.date_from = data["date_from"]
     if "date_to" in data:
@@ -153,6 +158,7 @@ async def update_assignment(
         resource_id=str(pr.resource_id),
         schedule_id=str(pr.schedule_id) if pr.schedule_id else None,
         capacity_share=pr.capacity_share,
+        exclusive=bool(pr.exclusive),
         date_from=pr.date_from,
         date_to=pr.date_to,
         resource_name=rname,

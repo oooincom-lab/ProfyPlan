@@ -367,6 +367,7 @@ async def resource_project_assignments(
             "project_name": pname,
             "schedule_id": str(pr.schedule_id) if pr.schedule_id else None,
             "capacity_share": float(pr.capacity_share) if pr.capacity_share is not None else None,
+            "exclusive": bool(pr.exclusive),
             "date_from": str(pr.date_from) if pr.date_from else None,
             "date_to": str(pr.date_to) if pr.date_to else None,
         }

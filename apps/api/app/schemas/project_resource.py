@@ -12,6 +12,7 @@ class ProjectResourceCreate(BaseModel):
     resource_id: str
     schedule_id: Optional[str] = None
     capacity_share: Decimal = Field(default=1.0, ge=0, le=1)
+    exclusive: bool = False
     date_from: Optional[date] = None
     date_to: Optional[date] = None
 
@@ -19,6 +20,7 @@ class ProjectResourceCreate(BaseModel):
 class ProjectResourceUpdate(BaseModel):
     schedule_id: Optional[str] = None
     capacity_share: Optional[Decimal] = Field(default=None, ge=0, le=1)
+    exclusive: Optional[bool] = None
     date_from: Optional[date] = None
     date_to: Optional[date] = None
 
@@ -29,6 +31,7 @@ class ProjectResourceOut(BaseModel):
     resource_id: str
     schedule_id: Optional[str] = None
     capacity_share: Decimal = 1.0
+    exclusive: bool = False
     date_from: Optional[date] = None
     date_to: Optional[date] = None
     resource_name: Optional[str] = None
