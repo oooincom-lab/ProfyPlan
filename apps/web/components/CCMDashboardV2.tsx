@@ -93,6 +93,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [autoRecalc, setAutoRecalc] = useState(false);
   const [recalcList, setRecalcList] = useState<any[]>([]);
   const [ordersByProject, setOrdersByProject] = useState<Record<string, any[]>>({});
+  /** Раскрытие проекта в карте занятости: список заказов с этим ресурсом. */
+  const [expOrders, setExpOrders] = useState<Record<string, boolean>>({});
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [sugFor, setSugFor] = useState<string | null>(null);
   const occRef = useRef<HTMLDivElement | null>(null);
@@ -845,21 +847,62 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                             style={{ position: 'absolute', left: ((s0 - occ.minI) / occ.span * 100) + '%', width: ((e0 - s0) / occ.span * 100) + '%', top: 0, bottom: 0, background: 'rgba(245,158,11,.12)' }} />
                         ))}
                       </div>
-                      {occ.list.map((a: any) => (
-                        <div key={a.project_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
-                          <span title={a.project_name} style={{ fontSize: 11, color: '#CBD5E1', width: 190, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.project_name}</span>
-                          <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
-                            <div title={a.project_name + ': ' + fmtDm(a.s) + ' — ' + fmtDm(a.f) + ' · ' + (a.hours_text || '') + (a.capacity_share && a.capacity_share !== 1 ? ' · доля мощности ×' + a.capacity_share : '')}
-                              style={{ position: 'absolute', left: ((a.s - occ.minI) / occ.span * 100) + '%', width: Math.max(((a.f - a.s) / occ.span) * 100, 0.8) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
+                      {occ.list.map((a: any) => {
+                        const ords = ordersByProject[String(a.project_id) + '|' + String(occId)];
+                        const exp = !!expOrders[String(a.project_id)];
+                        return (
+                          <div key={a.project_id}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+                              <button onClick={() => setExpOrders((m) => ({ ...m, [String(a.project_id)]: !exp }))}
+                                title={a.project_name + ' — нажмите, чтобы раскрыть заказы с этим ресурсом'}
+                                style={{ fontSize: 11, color: '#CBD5E1', width: 190, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', background: 'transparent', border: 'none', textAlign: 'left', padding: 0, fontFamily: 'inherit' }}>
+                                <span style={{ color: '#5A7090', fontSize: 9 }}>{exp ? '▼' : '▶'} </span>{a.project_name}
+                                {ords && ords.length > 0 ? <span style={{ color: '#5A7090', fontSize: 10 }}> · {ords.length}</span> : null}
+                              </button>
+                              <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                                <div title={a.project_name + ': ' + fmtDm(a.s) + ' — ' + fmtDm(a.f) + ' · ' + (a.hours_text || '') + (a.capacity_share && a.capacity_share !== 1 ? ' · доля мощности ×' + a.capacity_share : '')}
+                                  style={{ position: 'absolute', left: ((a.s - occ.minI) / occ.span * 100) + '%', width: Math.max(((a.f - a.s) / occ.span) * 100, 0.8) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
+                              </div>
+                              <span style={{ fontSize: 10.5, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0 }}>{fmtDm(a.s)}–{fmtDm(a.f)}</span>
+                            </div>
+                            {exp && (
+                              <div style={{ margin: '2px 0 4px' }}>
+                                {!ords && <div style={{ padding: '1px 0 1px 14px', fontSize: 10.5, color: '#5A7090' }}>загрузка…</div>}
+                                {ords && ords.length === 0 && <div style={{ padding: '1px 0 1px 14px', fontSize: 10.5, color: '#5A7090' }}>нет заказов с этим ресурсом</div>}
+                                {(ords || []).map((o: any) => {
+                                  const s0 = parseMs(o.start_date);
+                                  const f0 = parseMs(o.due_date);
+                                  const has = s0 != null && f0 != null && (f0 as number) > (s0 as number);
+                                  const vs = has ? Math.max(s0 as number, occ.minI) : 0;
+                                  const vf = has ? Math.min(f0 as number, occ.maxI) : 0;
+                                  const vis = has && vf > vs;
+                                  return (
+                                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '1px 0' }}>
+                                      <span style={{ width: 190, flexShrink: 0, paddingLeft: 14, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                        <span style={{ color: '#5A7090', fontSize: 10 }}>↳ </span>
+                                        <span onClick={() => { if (onOpenOrder) onOpenOrder(o); }} title="Открыть окно заказа"
+                                          style={{ fontSize: 10.5, color: '#93C5FD', cursor: onOpenOrder ? 'pointer' : 'default', borderBottom: '1px dotted rgba(96,165,250,.6)' }}>{orderLabel(o)}</span>
+                                      </span>
+                                      <div style={{ position: 'relative', flex: 1, height: 8, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                                        {vis && <div title={orderLabel(o) + ': ' + fmtDm(s0 as number) + ' — ' + fmtDm(f0 as number) + ((s0 as number) < occ.minI ? ' · начало до окна карты' : '') + ((f0 as number) > occ.maxI ? ' · финиш после окна карты' : '')}
+                                          style={{ position: 'absolute', left: ((vs - occ.minI) / occ.span * 100) + '%', width: Math.max(((vf - vs) / occ.span) * 100, 0.5) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(34,211,238,.32)', border: '1px solid rgba(34,211,238,.65)' }} />}
+                                        {!has && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>нет дат</span>}
+                                        {has && !vis && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>вне окна карты ({fmtDmShort(s0 as number)}–{fmtDmShort(f0 as number)})</span>}
+                                      </div>
+                                      <span style={{ fontSize: 10, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{has ? fmtDm(s0 as number) + '–' + fmtDm(f0 as number) : '—'}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <span style={{ fontSize: 10.5, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0 }}>{fmtDm(a.s)}–{fmtDm(a.f)}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 6 }}>
                       Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
                     </div>
-                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Следующий куст можно ставить в свободные окна.</div>
+                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа). Следующий куст можно ставить в свободные окна.</div>
                     <div style={{ marginTop: 10 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте — только заказы с этим ресурсом в маршруте{ordersLoading ? ' · загрузка…' : ''}</div>
                       {occ.list.map((a: any) => {
