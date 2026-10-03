@@ -92,6 +92,10 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [shiftsLog, setShiftsLog] = useState<any[]>([]);
   const [autoRecalc, setAutoRecalc] = useState(false);
   const [recalcList, setRecalcList] = useState<any[]>([]);
+  /** Сдвиг: «сразу, без шагов» или мастер из двух шагов (по умолчанию — мастер). */
+  const [shiftAuto, setShiftAuto] = useState(false);
+  /** Мастер сдвига: шаг 1 — проверка, шаг 2 — применение, шаг 3 — итог. */
+  const [stepPanel, setStepPanel] = useState<any>(null);
   const [ordersByProject, setOrdersByProject] = useState<Record<string, any[]>>({});
   /** Раскрытие проекта в карте занятости: список заказов с этим ресурсом. */
   const [expOrders, setExpOrders] = useState<Record<string, boolean>>({});
@@ -171,6 +175,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   useEffect(() => {
     try {
       setAutoRecalc(localStorage.getItem('profyplan_ccm_autorecalc') === '1');
+      try { setShiftAuto(localStorage.getItem('profyplan_ccm_shift_auto') === '1'); } catch { /* noop */ }
     } catch { /* noop */ }
   }, []);
 
@@ -248,23 +253,53 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     setSugFor(null);
   }, []);
 
-  const applyShift = useCallback(async () => {
-    const sg = suggestion?.suggestion;
-    if (!sg?.suggested_start || !suggestion?.project_id) return;
+  /** Применение сдвига контура: проект (опц.) + заказы выбранных кустов/всех. */
+  const applyContourShift = useCallback(async (projectId: string, newStartIso: string, kind: 'self' | 'other', days: number, moveProject: boolean, scopeRootIds: string[] | null) => {
     setSugBusy(true);
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(API_BASE + '/ccm/shifts/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
-        body: JSON.stringify({ project_id: suggestion.project_id, new_start: sg.suggested_start, kind: 'self', shift_days: sg.shift_days || 0, auto_recalc: autoRecalc }),
+        body: JSON.stringify({ project_id: projectId, new_start: newStartIso, kind, shift_days: days, auto_recalc: autoRecalc, move_project: moveProject, scope_root_ids: scopeRootIds }),
       });
       const d = await r.json().catch(() => null);
-      setSuggestion({ ...suggestion, applied: true, shiftRecordId: d?.record?.id || null, recalc: d?.recalc || null });
+      if (!r.ok) throw new Error((d && d.detail) || 'Не удалось применить сдвиг');
+      const rec = (d && d.record) || null;
+      setStepPanel((p: any) => (p ? { ...p, step: 3, result: rec } : p));
+      setSuggestion((prev: any) => (prev ? { ...prev, applied: true, appliedOther: kind === 'other', shiftRecordId: (rec && rec.id) || null, recalc: (d && d.recalc) || null, ordersInfo: (d && d.orders) || null } : prev));
+      setOrdersByProject({});
       await reloadPortfolioData();
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
-  }, [suggestion]);
+  }, [autoRecalc]);
+
+  /** Запуск сдвига: «сразу, без шагов» или мастер (шаг 1 — проверка). */
+  const startShiftFlow = useCallback(async (projectId: string, newStartIso: string, kind: 'self' | 'other', days: number) => {
+    setSugBusy(true);
+    try {
+      if (shiftAuto) {
+        await applyContourShift(projectId, newStartIso, kind, days, true, null);
+      } else {
+        const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+        const r = await fetch(API_BASE + '/ccm/shifts/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+          body: JSON.stringify({ project_id: projectId, new_start: newStartIso }),
+        });
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error((d && d.detail) || 'Не удалось подготовить сдвиг');
+        setStepPanel({ step: 1, preview: d, project_id: projectId, new_start: newStartIso, kind, days });
+      }
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  }, [shiftAuto, applyContourShift]);
+
+  const applyShift = useCallback(async () => {
+    const sg = suggestion?.suggestion;
+    if (!sg?.suggested_start || !suggestion?.project_id) return;
+    await startShiftFlow(suggestion.project_id, sg.suggested_start, 'self', sg.shift_days || 0);
+  }, [suggestion, startShiftFlow]);
 
   const applyShiftOther = useCallback(async () => {
     const tgt = suggestion?.priority?.target_project;
@@ -273,20 +308,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     const pr = projects.find((x: any) => x.id === tgt.project_id);
     const base = pr?.start_date ? new Date(pr.start_date) : new Date();
     const nd = new Date(base.getTime() + days * 86400000);
-    setSugBusy(true);
-    try {
-      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch(API_BASE + '/ccm/shifts/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
-        body: JSON.stringify({ project_id: tgt.project_id, new_start: nd.toISOString(), kind: 'other', shift_days: days, auto_recalc: autoRecalc }),
-      });
-      const d = await r.json().catch(() => null);
-      setSuggestion({ ...suggestion, applied: true, appliedOther: true, shiftRecordId: d?.record?.id || null, recalc: d?.recalc || null });
-      await reloadPortfolioData();
-    } catch (e: any) { setError(String(e?.message || e)); }
-    setSugBusy(false);
-  }, [suggestion, projects]);
+    await startShiftFlow(tgt.project_id, nd.toISOString(), 'other', days);
+  }, [suggestion, projects, startShiftFlow]);
 
   /** Возврат сдвига: восстановить дату старта и пересчитать проект. */
   const revertShift = async (shiftId: string) => {
@@ -300,6 +323,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       });
       if (!r.ok) throw new Error('Не удалось вернуть сдвиг');
       await reloadPortfolioData();
+      setOrdersByProject({});
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
   };
@@ -672,6 +696,10 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <button onClick={applyShift} disabled={sugBusy}
                       style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Применить сдвиг мне</button>
                   )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: shiftAuto ? '#86EFAC' : '#8FA3BD', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={shiftAuto} onChange={(e) => { const v = e.target.checked; setShiftAuto(v); try { localStorage.setItem('profyplan_ccm_shift_auto', v ? '1' : ''); } catch { /* noop */ } }} />
+                    Сдвигать сразу, вместе с заказами {shiftAuto ? '(без шагов)' : '(по шагам)'}
+                  </label>
                   <span style={{ color: '#5A7090', fontSize: 11.5 }}>мой приоритет:</span>
                   <select value={(suggestion.priority?.mine || 'normal')} disabled={sugBusy}
                     onChange={(e) => setMyPriority(String(suggestion.project_id), e.target.value)}
@@ -680,12 +708,77 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <option value="normal">обычный</option>
                     <option value="high">высокий</option>
                   </select>
-                  {suggestion.applied && <span style={{ color: '#86EFAC' }}>{suggestion.appliedOther ? 'сдвинут другой проект' : 'сдвиг применён'}</span>}
+                  {suggestion.applied && <span style={{ color: '#86EFAC' }}>{suggestion.appliedOther ? 'сдвинут другой проект' : 'сдвиг применён'}{suggestion.ordersInfo?.shifted ? ' · заказов: ' + suggestion.ordersInfo.shifted : ''}{suggestion.ordersInfo?.skipped ? ' · пропущено: ' + suggestion.ordersInfo.skipped : ''}</span>}
                   <button onClick={() => setSuggestion(null)}
                     style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Скрыть</button>
                 </>
               ) : (
                 <span>Для этого проекта конфликтов по общим ресурсам нет.</span>
+              )}
+            </div>
+          )}
+
+          {stepPanel && (
+            <div style={{ marginTop: 10, maxWidth: 980, border: '1px solid #1E3252', borderRadius: 10, background: '#0C1B31', padding: '10px 14px' }}>
+              {stepPanel.step === 1 && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD' }}>↔ Сдвиг с заказами · шаг 1 — проверка</span>
+                    <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>«{stepPanel.preview?.project_name}» · старт {fmtD(stepPanel.preview?.old_start)} → {fmtD(stepPanel.preview?.new_start)} (+{stepPanel.preview?.days ?? 0} дн)</span>
+                  </div>
+                  {stepPanel.preview?.warning ? (<div style={{ fontSize: 11.5, color: '#FCD34D', marginBottom: 4 }}>⚠ {stepPanel.preview.warning}</div>) : null}
+                  {(stepPanel.preview?.bushes || []).map((b: any) => (
+                    <div key={b.root_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 12, flexWrap: 'wrap' }}>
+                      <span style={{ minWidth: 230, fontWeight: 600, color: '#CBD5E1' }}>🌳 {b.title}</span>
+                      <span style={{ color: '#8FA3BD' }}>заказов: {b.orders_total}</span>
+                      <span style={{ color: '#93C5FD' }}>{b.window_before ? fmtD(b.window_before[0]) + ' – ' + fmtD(b.window_before[1]) : '—'} → {b.window_after ? fmtD(b.window_after[0]) + ' – ' + fmtD(b.window_after[1]) : '—'}</span>
+                      {b.orders_skipped > 0 ? <span style={{ color: '#FCD34D' }}>не поедет: {b.orders_skipped}</span> : <span style={{ color: '#86EFAC' }}>поедет весь</span>}
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Перенесётся заказов: {stepPanel.preview?.totals?.orders_shifted ?? 0} · пропустится: {stepPanel.preview?.totals?.orders_skipped ?? 0}</span>
+                    <button onClick={() => setStepPanel((p: any) => ({ ...p, step: 2 }))} disabled={sugBusy}
+                      style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Дальше: применение</button>
+                    <button onClick={() => setStepPanel(null)}
+                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+                  </div>
+                </>
+              )}
+              {stepPanel.step === 2 && (
+                <>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD', marginBottom: 6 }}>↔ Сдвиг с заказами · шаг 2 — что сдвигаем</div>
+                  {(stepPanel.preview?.bushes || []).map((b: any) => (
+                    <div key={b.root_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 12, flexWrap: 'wrap' }}>
+                      <span style={{ minWidth: 230, fontWeight: 600, color: '#CBD5E1' }}>🌳 {b.title}</span>
+                      <span style={{ color: '#93C5FD' }}>{b.window_before ? fmtD(b.window_before[0]) + ' – ' + fmtD(b.window_before[1]) : '—'} → {b.window_after ? fmtD(b.window_after[0]) + ' – ' + fmtD(b.window_after[1]) : '—'}</span>
+                      <span style={{ marginLeft: 'auto' }}>
+                        <button onClick={() => applyContourShift(stepPanel.project_id, stepPanel.new_start, stepPanel.kind, stepPanel.days, false, [b.root_id])} disabled={sugBusy || !b.orders_shifted}
+                          title="Перенести только этот куст (дата старта проекта не меняется)"
+                          style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: b.orders_shifted ? 1 : 0.5 }}>Сдвинуть куст</button>
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button onClick={() => applyContourShift(stepPanel.project_id, stepPanel.new_start, stepPanel.kind, stepPanel.days, true, null)} disabled={sugBusy}
+                      style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 12px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Сдвинуть всё (проект + заказы)</button>
+                    <button onClick={() => setStepPanel((p: any) => ({ ...p, step: 1 }))} disabled={sugBusy}
+                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Назад</button>
+                    <button onClick={() => setStepPanel(null)} disabled={sugBusy}
+                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+                  </div>
+                </>
+              )}
+              {stepPanel.step === 3 && (
+                <>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#86EFAC', marginBottom: 4 }}>✓ Сдвиг применён</div>
+                  <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>
+                    Перенесено заказов: {stepPanel.result?.orders_shifted ?? 0}{stepPanel.result?.scope === 'roots' ? ' (выборочно — куст)' : ' (весь проект)'} · пропущено: {stepPanel.result?.orders_skipped ?? 0}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <button onClick={() => setStepPanel(null)}
+                      style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 12px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Готово</button>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -699,14 +792,14 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 2px', borderBottom: '1px solid #14263F', fontSize: 12, color: s.reverted ? '#5A7090' : '#CBD5E1', flexWrap: 'wrap' }}>
                       <span style={{ width: 118, color: '#8FA3BD' }}>{fmtDT(s.created_at)}</span>
                       <span style={{ minWidth: 170, fontWeight: 600 }}>«{s.project_name}»</span>
-                      <span style={{ color: s.kind === 'other' ? '#FCD34D' : '#93C5FD' }}>{s.kind === 'other' ? 'сдвиг другому' : 'свой сдвиг'} · +{s.shift_days} дн</span>
-                      <span style={{ color: '#8FA3BD' }}>старт {fmtD(s.old_start)} → {fmtD(s.new_start)}</span>
+                      <span style={{ color: s.kind === 'other' ? '#FCD34D' : '#93C5FD' }}>{s.kind === 'other' ? 'сдвиг другому' : 'свой сдвиг'} · +{s.shift_days} дн{s.orders_shifted ? ' · заказов: ' + s.orders_shifted + (s.scope === 'roots' ? ' (куст)' : '') : ''}{s.orders_skipped ? ' · пропущено: ' + s.orders_skipped : ''}</span>
+                      {s.scope === 'roots' ? <span style={{ color: '#8FA3BD' }} title="Сдвиг куста не меняет дату старта проекта">старт проекта не менялся</span> : <span style={{ color: '#8FA3BD' }}>старт {fmtD(s.old_start)} → {fmtD(s.new_start)}</span>}
                       <span style={{ marginLeft: 'auto' }}>
                         {s.reverted ? (
                           <span style={{ color: '#5A7090' }}>(возвращено)</span>
                         ) : (
                           <button onClick={() => revertShift(s.id)} disabled={blocked || sugBusy}
-                            title={blocked ? 'Сначала верните более поздние сдвиги этого проекта' : 'Вернуть дату старта как было (с автопересчётом)'}
+                            title={blocked ? 'Сначала верните более поздние сдвиги этого проекта' : (s.scope === 'roots' ? 'Вернуть даты заказов куста как было (с автопересчётом)' : 'Вернуть старт и даты заказов как было (с автопересчётом)')}
                             style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: blocked ? 'default' : 'pointer', fontFamily: 'inherit', opacity: blocked ? 0.5 : 1 }}>Вернуть</button>
                         )}
                       </span>
@@ -876,6 +969,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                                   const vs = has ? Math.max(s0 as number, occ.minI) : 0;
                                   const vf = has ? Math.min(f0 as number, occ.maxI) : 0;
                                   const vis = has && vf > vs;
+                                  const outPrj = has && ((s0 as number) < a.s || (f0 as number) > a.f);
                                   return (
                                     <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '1px 0' }}>
                                       <span style={{ width: 190, flexShrink: 0, paddingLeft: 14, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
@@ -889,7 +983,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                                         {!has && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>нет дат</span>}
                                         {has && !vis && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>вне окна карты ({fmtDmShort(s0 as number)}–{fmtDmShort(f0 as number)})</span>}
                                       </div>
-                                      <span style={{ fontSize: 10, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{has ? fmtDm(s0 as number) + '–' + fmtDm(f0 as number) : '—'}</span>
+                                      <span style={{ fontSize: 10, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{outPrj ? <span title={'Заказ выходит за окно проекта (' + fmtDm(a.s) + ' – ' + fmtDm(a.f) + ')'} style={{ color: '#FCD34D', marginRight: 4 }}>⚠</span> : null}{has ? fmtDm(s0 as number) + '–' + fmtDm(f0 as number) : '—'}</span>
                                     </div>
                                   );
                                 })}
@@ -902,7 +996,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 6 }}>
                       Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
                     </div>
-                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа). Следующий куст можно ставить в свободные окна.</div>
+                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа); ⚠ — заказ выходит за окно проекта. Следующий куст можно ставить в свободные окна.</div>
                     <div style={{ marginTop: 10 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте — только заказы с этим ресурсом в маршруте{ordersLoading ? ' · загрузка…' : ''}</div>
                       {occ.list.map((a: any) => {

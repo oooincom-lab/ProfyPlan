@@ -1,18 +1,25 @@
 """Журнал сдвигов CCM: применение сдвига, откат и пересчёт проектов (блок 6.33).
 
-«Применить сдвиг» (мне или другому проекту) меняет дату старта проекта и пишет
-запись в журнал (проект, направление, дней, старт до→после). Пересчёт проектов
-сдвига управляется флагом auto_recalc: по умолчанию выключен — «ручной режим»,
-список проектов и кнопки на странице; при включении после каждого сдвига/возврата
-пересчитываются все проекты сдвига в порядке хронологии занятости общих ресурсов
-(по дате старта проекта: более ранние первыми — так более поздние видят актуальную
-занятость). «Вернуть» восстанавливает прежнюю дату старта и помечает запись
-«(возвращено)». Хранятся последние 100 записей на организацию.
+«Применить сдвиг» (мне или другому проекту) меняет дату старта проекта и вместе с
+ней переносит контур: даты заказов проекта на +N дней (куст целиком — дети едут
+вместе с родителем). Сдвиг применяется ко всему проекту («Сдвинуть всё») или
+выборочно — к отдельным кустам («Сдвинуть куст»: scope_root_ids = корни, переносятся
+их поддеревья; при этом дата старта проекта не меняется — move_project=false).
+Закреплённые заказы (якорь) и заказы без дат не переносятся — попадают в «пропущено».
+Запись журнала хранит охват, число перенесённых и пропущенных заказов, старые даты
+перенесённых заказов — для точного возврата. «Проверка» перед сдвигом — отдельный
+маршрут /v1/ccm/shifts/preview: показывает кусты, окна «до → после» и пропуски, ничего
+не записывая.
 
-Запрос параметра пересчёта — только у сдвига/возврата; статус для панели отдаёт
-GET /v1/ccm/shift-recalc (кто сдвинут, кого нужно пересчитать).
+Пересчёт проектов сдвига управляется флагом auto_recalc: по умолчанию выключен —
+«ручной режим», список проектов и кнопки на странице; при включении после каждого
+сдвига/возврата пересчитываются все проекты сдвига в порядке хронологии занятости
+общих ресурсов (по дате старта проекта: более ранние первыми — так более поздние
+видят актуальную занятость). «Вернуть» восстанавливает прежнюю дату старта проекта
+и прежние даты заказов, помечает запись «(возвращено)». Хранятся последние 100
+записей на организацию. Статус для панели отдаёт GET /v1/ccm/shift-recalc.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -25,6 +32,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user
 from app.models.calculation_run import CalculationRun
 from app.models.ccm_shift_application import CcmShiftApplication
+from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.tenant import User
 from app.routers.calculation_runs import perform_project_run
@@ -35,7 +43,11 @@ LIMIT_PER_TENANT = 100  # лимит журнала сдвигов на орга
 
 
 class ShiftApplyRequest(BaseModel):
-    """Применение сдвига: какой проект, новая дата старта, направление, дней."""
+    """Применение сдвига: какой проект, новая дата старта, направление, дней.
+
+    move_project=false — «Сдвинуть куст»: дата старта проекта не меняется, едут
+    только заказы выбранных кустов (scope_root_ids — корни; едут их поддеревья).
+    """
 
     project_id: UUID
     new_start: datetime
@@ -43,6 +55,16 @@ class ShiftApplyRequest(BaseModel):
     shift_days: int = Field(default=0, ge=0, le=3650)
     # Автопересчёт (по умолчанию выключен — ручной режим со списком и кнопками).
     auto_recalc: bool = False
+    # Сдвиг с контуром (03.10.2026): двигать ли старт проекта и охват кустов.
+    move_project: bool = True
+    scope_root_ids: Optional[list[UUID]] = None
+
+
+class ShiftPreviewRequest(BaseModel):
+    """Проверка перед сдвигом: что перенесётся и что пропустится (без записи)."""
+
+    project_id: UUID
+    new_start: datetime
 
 
 class ShiftRevertRequest(BaseModel):
@@ -64,11 +86,161 @@ class ShiftOut(BaseModel):
     reverted: bool
     reverted_at: Optional[datetime] = None
     created_at: datetime
+    # Сдвиг с контуром (03.10.2026): охват и перенесённые заказы.
+    scope: str = "project"
+    orders_shifted: int = 0
+    orders_skipped: int = 0
 
 
 class ShiftList(BaseModel):
     items: list[ShiftOut]
     total: int
+
+
+def _iso_d(d: Optional[date]) -> Optional[str]:
+    return d.isoformat() if d else None
+
+
+async def _load_project_orders(db: AsyncSession, tenant_id: UUID, project_id: UUID) -> list:
+    """Все заказы проекта (корни и потомки) в стабильном порядке."""
+    rows = (
+        (
+            await db.execute(
+                select(ProductionOrder)
+                .where(
+                    ProductionOrder.project_id == project_id,
+                    ProductionOrder.tenant_id == tenant_id,
+                )
+                .order_by(ProductionOrder.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
+
+
+def _order_children_map(orders: list) -> dict:
+    """Карта «родитель → дети»; корни — ключ пустой строки."""
+    m: dict = {}
+    for o in orders:
+        key = str(o.parent_order_id) if o.parent_order_id else ""
+        m.setdefault(key, []).append(o)
+    return m
+
+
+def _bush_orders(root, children_of: dict) -> list:
+    """Куст: корень и все его потомки (дети едут вместе с родителем)."""
+    res: list = []
+    stack = [root]
+    seen: set = set()
+    while stack:
+        cur = stack.pop()
+        if str(cur.id) in seen:
+            continue
+        seen.add(str(cur.id))
+        res.append(cur)
+        stack.extend(children_of.get(str(cur.id), []))
+    return res
+
+
+def _shift_preview(project: Project, orders: list, new_start: datetime) -> dict:
+    """Проверка сдвига: кусты, окна «до → после», пропуски. Ничего не пишет."""
+    old_start = project.start_date
+    days = (new_start.date() - old_start.date()).days if old_start else 0
+    children_of = _order_children_map(orders)
+    bushes: list = []
+    skipped_all: list = []
+    for root in children_of.get("", []):
+        tree = _bush_orders(root, children_of)
+        shifted = []
+        skipped = []
+        for o in tree:
+            if o.priority_anchor_at is not None:
+                skipped.append({"id": str(o.id), "ext_id": o.ext_id, "reason": "закреплён"})
+            elif o.start_date is None and o.due_date is None:
+                skipped.append({"id": str(o.id), "ext_id": o.ext_id, "reason": "без дат"})
+            else:
+                shifted.append(o)
+        starts = [o.start_date for o in tree if o.start_date]
+        dues = [o.due_date for o in tree if o.due_date]
+        after_starts = [o.start_date + timedelta(days=days) for o in shifted if o.start_date]
+        after_dues = [o.due_date + timedelta(days=days) for o in shifted if o.due_date]
+        title = ((root.ext_id + " · ") if root.ext_id else "") + (root.specification_name or "Заказ")
+        bushes.append(
+            {
+                "root_id": str(root.id),
+                "title": title,
+                "orders_total": len(tree),
+                "orders_shifted": len(shifted),
+                "orders_skipped": len(skipped),
+                "window_before": [_iso_d(min(starts)), _iso_d(max(dues))] if starts and dues else None,
+                "window_after": [_iso_d(min(after_starts)), _iso_d(max(after_dues))]
+                if after_starts and after_dues
+                else None,
+            }
+        )
+        skipped_all.extend(skipped)
+    return {
+        "project_id": str(project.id),
+        "project_name": project.name,
+        "old_start": old_start.isoformat() if old_start else None,
+        "new_start": new_start.isoformat(),
+        "days": days,
+        "bushes": bushes,
+        "totals": {
+            "orders_total": sum(b["orders_total"] for b in bushes),
+            "orders_shifted": sum(b["orders_shifted"] for b in bushes),
+            "orders_skipped": sum(b["orders_skipped"] for b in bushes),
+            "skipped": skipped_all,
+        },
+        "warning": (
+            None
+            if old_start
+            else "У проекта не задан старт — заказы не сдвинутся (0 дней). Сначала задайте старт сдвигом проекта."
+        ),
+    }
+
+
+def _apply_contour(project: Project, orders: list, body: ShiftApplyRequest):
+    """Перенести даты заказов (весь проект или выбранные кусты).
+
+    Возвращает (moved, skipped, scope, days). Закреплённые и бездатные — в skipped.
+    """
+    old_start = project.start_date
+    days = (body.new_start.date() - old_start.date()).days if old_start else int(body.shift_days or 0)
+    children_of = _order_children_map(orders)
+    if body.scope_root_ids:
+        scope_ids = {str(x) for x in body.scope_root_ids}
+        selected: list = []
+        seen: set = set()
+        for root in children_of.get("", []):
+            if str(root.id) not in scope_ids:
+                continue
+            for o in _bush_orders(root, children_of):
+                if str(o.id) not in seen:
+                    seen.add(str(o.id))
+                    selected.append(o)
+        scope = "roots"
+    else:
+        selected = list(orders)
+        scope = "project"
+    moved: list = []
+    skipped: list = []
+    for o in selected:
+        if o.priority_anchor_at is not None:
+            skipped.append({"id": str(o.id), "ext_id": o.ext_id, "reason": "закреплён"})
+            continue
+        if o.start_date is None and o.due_date is None:
+            skipped.append({"id": str(o.id), "ext_id": o.ext_id, "reason": "без дат"})
+            continue
+        entry = {"id": str(o.id), "old_start": _iso_d(o.start_date), "old_due": _iso_d(o.due_date)}
+        if o.start_date is not None:
+            o.start_date = o.start_date + timedelta(days=days)
+        if o.due_date is not None:
+            o.due_date = o.due_date + timedelta(days=days)
+        moved.append(entry)
+    return moved, skipped, scope, days
 
 
 async def _trim(db: AsyncSession, tenant_id: UUID) -> None:
@@ -155,6 +327,28 @@ async def perform_shift_recalcs(
     return out
 
 
+@router.post("/v1/ccm/shifts/preview")
+async def preview_shift(
+    body: ShiftPreviewRequest,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user: User = Depends(get_current_user),
+):
+    """Проверка перед сдвигом: кусты проекта, окна «до → после», пропуски.
+
+    Ничего не записывает — безопасный шаг 1 мастера сдвига.
+    """
+    project = (
+        await db.execute(
+            select(Project).where(Project.id == body.project_id, Project.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не найден")
+    orders = await _load_project_orders(db, tenant_id, project.id)
+    return _shift_preview(project, orders, body.new_start)
+
+
 @router.post("/v1/ccm/shifts/apply")
 async def apply_shift(
     body: ShiftApplyRequest,
@@ -162,7 +356,11 @@ async def apply_shift(
     tenant_id: UUID = Depends(get_current_tenant_id),
     user: User = Depends(get_current_user),
 ):
-    """Применить сдвиг: запись в журнал, сдвиг старта, пересчёт (по флагу)."""
+    """Применить сдвиг: журнал, перенос контура (проект и заказы), пересчёт (по флагу).
+
+    «Сдвинуть всё» — move_project=true: старт проекта + весь контур.
+    «Сдвинуть куст» — move_project=false и scope_root_ids: только выбранные кусты.
+    """
     project = (
         await db.execute(
             select(Project).where(Project.id == body.project_id, Project.tenant_id == tenant_id)
@@ -172,17 +370,25 @@ async def apply_shift(
         raise HTTPException(status_code=404, detail="Проект не найден")
 
     old_start = project.start_date
-    project.start_date = body.new_start
+    orders = await _load_project_orders(db, tenant_id, project.id)
+    moved, skipped, scope, days = _apply_contour(project, orders, body)
+    if body.move_project:
+        project.start_date = body.new_start
 
     rec = CcmShiftApplication(
         tenant_id=tenant_id,
         project_id=project.id,
         project_name=project.name,
         kind=body.kind,
-        shift_days=int(body.shift_days or 0),
+        shift_days=int(days or 0),
         old_start=old_start,
         new_start=body.new_start,
         reverted=False,
+        scope=scope,
+        orders_shifted=len(moved),
+        orders_skipped=len(skipped),
+        orders_moved=moved or None,
+        skipped_details=skipped or None,
         created_by=user.id,
     )
     db.add(rec)
@@ -198,7 +404,11 @@ async def apply_shift(
             "note": "Автопересчёт выключен: пересчитайте проекты сдвига в списке (по порядку).",
         }
 
-    return {"record": ShiftOut.model_validate(rec), "recalc": recalc}
+    return {
+        "record": ShiftOut.model_validate(rec),
+        "recalc": recalc,
+        "orders": {"shifted": len(moved), "skipped": len(skipped), "scope": scope},
+    }
 
 
 @router.get("/v1/ccm/shifts", response_model=ShiftList)
@@ -320,7 +530,7 @@ async def revert_shift(
     tenant_id: UUID = Depends(get_current_tenant_id),
     user: User = Depends(get_current_user),
 ):
-    """Вернуть сдвиг: восстановить прежнюю дату старта и пересчитать (по флагу)."""
+    """Вернуть сдвиг: прежняя дата старта и прежние даты заказов, пересчёт (по флагу)."""
     rec = (
         await db.execute(
             select(CcmShiftApplication).where(
@@ -343,8 +553,38 @@ async def revert_shift(
     if not project:
         raise HTTPException(status_code=404, detail="Проект не найден")
 
-    if rec.old_start is not None:
-        project.start_date = rec.old_start
+    # Вернуть даты заказов — по старым значениям, сохранённым в записи журнала.
+    if rec.orders_moved:
+        ids: list = []
+        for m in rec.orders_moved:
+            try:
+                ids.append(UUID(str(m.get("id"))))
+            except Exception:
+                continue
+        if ids:
+            rows = (
+                (
+                    await db.execute(
+                        select(ProductionOrder).where(
+                            ProductionOrder.id.in_(ids),
+                            ProductionOrder.tenant_id == tenant_id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            by_id = {str(o.id): o for o in rows}
+            for m in rec.orders_moved:
+                o = by_id.get(str(m.get("id")))
+                if not o:
+                    continue
+                if m.get("old_start"):
+                    o.start_date = date.fromisoformat(str(m["old_start"]))
+                if m.get("old_due"):
+                    o.due_date = date.fromisoformat(str(m["old_due"]))
+
+    project.start_date = rec.old_start
     rec.reverted = True
     rec.reverted_at = datetime.now(timezone.utc)
     await db.commit()
