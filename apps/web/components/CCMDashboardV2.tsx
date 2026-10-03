@@ -995,6 +995,21 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                         );
                       })}
                     </div>
+                    {(occ.r.queue || []).length >= 2 && (
+                      <div style={{ marginTop: 8, borderTop: '1px solid #1E3252', paddingTop: 6 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 3 }}>Очередь на ресурс — приоритет заказа (Срочный → Высокий → обычные) → ранний старт → FIFO</div>
+                        {(occ.r.queue || []).map((q: any, i: number) => (
+                          <div key={q.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 11.5, padding: '1px 0', flexWrap: 'wrap' }}>
+                            <span style={{ color: '#5A7090', minWidth: 16 }}>{i + 1}.</span>
+                            <button onClick={() => { if (onOpenOrder) onOpenOrder(q); }} title="Открыть окно заказа"
+                              style={{ color: '#93C5FD', cursor: onOpenOrder ? 'pointer' : 'default', background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 'inherit', borderBottom: '1px dotted rgba(96,165,250,.6)' }}>{orderLabel(q)}</button>
+                            <span style={{ color: '#8FA3BD' }}>{q.project_name}</span>
+                            <span style={{ color: q.priority === 'critical' ? '#FCA5A5' : (q.priority === 'high' ? '#86EFAC' : (q.priority === 'low' ? '#5A7090' : '#CBD5E1')) }}>{q.priority_label || q.priority}</span>
+                            <span style={{ color: '#5A7090' }}>{q.start_date ? 'с ' + fmtDm(parseMs(q.start_date) as number) : 'без дат'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 6 }}>
                       Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
                     </div>

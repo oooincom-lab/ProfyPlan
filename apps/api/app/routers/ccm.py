@@ -1450,6 +1450,60 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
         if gid in globals_map:
             usage[gid][str(pid)] += float(hours or 0)
 
+    # Очередь заказов на ресурс — кто «первый в очереди» при конфликте.
+    # Правило (Дополнение 20): приоритет заказа (critical → high → обычные) → ранний старт → FIFO.
+    from app.models.operation import Operation, OperationResource
+    from app.models.production_order import ProductionOrder
+    from app.services.order_priority import priority_label as _priority_label
+    queue_by_res: dict = {}
+    _q_seen: set = set()
+    for _rr in (await db.execute(
+        select(
+            OperationResource.resource_id,
+            ProductionOrder.id,
+            ProductionOrder.ext_id,
+            ProductionOrder.specification_name,
+            ProductionOrder.quantity,
+            ProductionOrder.unit,
+            ProductionOrder.priority,
+            ProductionOrder.start_date,
+            ProductionOrder.due_date,
+            ProductionOrder.project_id,
+            ProductionOrder.created_at,
+        )
+        .join(Operation, Operation.id == OperationResource.operation_id)
+        .join(ProductionOrder, ProductionOrder.id == Operation.order_id)
+        .where(Operation.tenant_id == tenant_id, Operation.order_id.isnot(None))
+    )).all():
+        rid = str(_rr[0]) if _rr[0] else ""
+        gid = parent_of.get(rid, rid)
+        oid = str(_rr[1])
+        if gid not in globals_map or (gid, oid) in _q_seen:
+            continue
+        _q_seen.add((gid, oid))
+        proj = projects.get(str(_rr[9])) if _rr[9] else None
+        queue_by_res.setdefault(gid, []).append({
+            "id": oid,
+            "ext_id": _rr[2],
+            "specification_name": _rr[3],
+            "quantity": float(_rr[4]) if _rr[4] is not None else None,
+            "unit": _rr[5],
+            "priority": (_rr[6] or "normal"),
+            "priority_label": _priority_label(_rr[6]),
+            "start_date": _rr[7].isoformat() if _rr[7] else None,
+            "due_date": _rr[8].isoformat() if _rr[8] else None,
+            "project_id": str(_rr[9]) if _rr[9] else None,
+            "project_name": (proj.name if proj else "—"),
+            "created_at": _rr[10].isoformat() if _rr[10] else None,
+        })
+    _q_rank = {"critical": 3, "high": 2, "normal": 1, "low": 0}
+    for _k in queue_by_res:
+        queue_by_res[_k].sort(key=lambda it: (
+            -_q_rank.get(str(it["priority"]).lower(), 1),
+            it["start_date"] or "9999-12-31",
+            it["created_at"] or "",
+        ))
+
     out = []
     for gid, per_project in usage.items():
         r = globals_map.get(gid)
@@ -1520,6 +1574,7 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
             "has_conflict": bool(conflicts),
             "overlap_days": max_days,
             "severity": ("high" if max_days >= 14 else ("medium" if max_days >= 5 else ("low" if max_days > 0 else "none"))),
+            "queue": queue_by_res.get(gid, []),
         })
 
     out.sort(key=lambda x: (-(x["overlap_days"] or 0), -x["project_count"], -x["total_hours"]))
