@@ -324,6 +324,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       if (!r.ok) throw new Error('Не удалось вернуть сдвиг');
       await reloadPortfolioData();
       setOrdersByProject({});
+      // Панель предложения могла держать статус «сдвиг применён» — после возврата он устаревший.
+      setSuggestion((p: any) => (p && p.shiftRecordId === shiftId ? null : p));
     } catch (e: any) { setError(String(e?.message || e)); }
     setSugBusy(false);
   };
@@ -683,7 +685,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   {suggestion.suggestion?.new_finish ? <span>· новый финиш: {String(suggestion.suggestion.new_finish).slice(0, 10)}</span> : null}
                   {(suggestion.plan || []).length > 0 && (
                     <div style={{ width: '100%', fontSize: 11.5, color: '#8FA3BD' }}>
-                      План: {(suggestion.plan || []).map((x: any) => `${x.resource_name} (освободится ${x.free_at ? String(x.free_at).slice(0, 10) : '?'}, с ${x.other_projects.join('/')}, перекрытие ${x.overlap_days} дн)`).join('; ')}
+                      План: {(suggestion.plan || []).map((x: any) => `${x.resource_name} (освободится ${(x.busy_until || x.free_at) ? String(x.busy_until || x.free_at).slice(0, 10) : '?'}, с ${x.other_projects.join('/')}, перекрытие ${x.overlap_days} дн)`).join('; ')}
                     </div>
                   )}
                   {suggestion.priority?.recommendation === 'shift_other' && suggestion.priority?.target_project && !suggestion.applied ? (
@@ -978,10 +980,10 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                                           style={{ fontSize: 10.5, color: '#93C5FD', cursor: onOpenOrder ? 'pointer' : 'default', borderBottom: '1px dotted rgba(96,165,250,.6)' }}>{orderLabel(o)}</span>
                                       </span>
                                       <div style={{ position: 'relative', flex: 1, height: 8, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
-                                        {vis && <div title={orderLabel(o) + ': ' + fmtDm(s0 as number) + ' — ' + fmtDm(f0 as number) + ((s0 as number) < occ.minI ? ' · начало до окна карты' : '') + ((f0 as number) > occ.maxI ? ' · финиш после окна карты' : '')}
+                                        {vis && <div title={orderLabel(o) + ': ' + fmtDm(s0 as number) + ' — ' + fmtDm(f0 as number) + ((s0 as number) < occ.minI ? ' · начало раньше диапазона карты' : '') + ((f0 as number) > occ.maxI ? ' · финиш позже диапазона карты' : '')}
                                           style={{ position: 'absolute', left: ((vs - occ.minI) / occ.span * 100) + '%', width: Math.max(((vf - vs) / occ.span) * 100, 0.5) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(34,211,238,.32)', border: '1px solid rgba(34,211,238,.65)' }} />}
                                         {!has && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>нет дат</span>}
-                                        {has && !vis && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>вне окна карты ({fmtDmShort(s0 as number)}–{fmtDmShort(f0 as number)})</span>}
+                                        {has && !vis && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>вне диапазона карты ({fmtDmShort(s0 as number)}–{fmtDmShort(f0 as number)})</span>}
                                       </div>
                                       <span style={{ fontSize: 10, color: '#8FA3BD', width: 142, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{outPrj ? <span title={'Заказ выходит за окно проекта (' + fmtDm(a.s) + ' – ' + fmtDm(a.f) + ')'} style={{ color: '#FCD34D', marginRight: 4 }}>⚠</span> : null}{has ? fmtDm(s0 as number) + '–' + fmtDm(f0 as number) : '—'}</span>
                                     </div>

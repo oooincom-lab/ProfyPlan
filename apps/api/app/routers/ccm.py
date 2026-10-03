@@ -1586,6 +1586,12 @@ async def overload_suggestion(
                 continue
             other_name = c.get("b") if c.get("a") == my_name else c.get("a")
             other_id = c.get("b_id") if c.get("a") == my_name else c.get("a_id")
+            # Реальное освобождение ресурса чужим проектом — конец его окна на этом ресурсе.
+            other_finish = None
+            for a in (r.get("assignments") or []):
+                if a.get("project_name") == other_name and a.get("finish"):
+                    other_ends.append(a["finish"])
+                    other_finish = a["finish"] if not other_finish else max(other_finish, a["finish"])
             my_conflicts.append({
                 "resource_id": r.get("id"),
                 "resource_name": r.get("name"),
@@ -1595,11 +1601,9 @@ async def overload_suggestion(
                 "to": c.get("to"),
                 "days": c.get("days"),
                 "severity": c.get("severity"),
+                "other_finish": other_finish,
             })
             res_names.add(r.get("name"))
-            for a in (r.get("assignments") or []):
-                if a.get("project_name") == other_name and a.get("finish"):
-                    other_ends.append(a["finish"])
 
     if not my_conflicts:
         return {"project_id": str(project_id), "has_conflict": False, "conflicts": [], "suggestion": None}
@@ -1634,15 +1638,21 @@ async def overload_suggestion(
     by_res: dict = {}
     for c in my_conflicts:
         k = c.get("resource_name") or "—"
-        e = by_res.setdefault(k, {"resource_name": k, "free_at": None, "others": set(), "max_days": 0})
+        e = by_res.setdefault(k, {"resource_name": k, "free_at": None, "release_at": None, "others": set(), "max_days": 0})
         e["others"].add(c.get("other_project_name"))
         if c.get("to"):
             e["free_at"] = c["to"] if not e["free_at"] else max(e["free_at"], c["to"])
+        rf = c.get("other_finish")
+        if rf:
+            e["release_at"] = rf if not e["release_at"] else max(e["release_at"], rf)
         e["max_days"] = max(e["max_days"], int(c.get("days") or 0))
     plan = [
         {
             "resource_name": v["resource_name"],
-            "free_at": v["free_at"],
+            # «Освободится» — реальное освобождение (конец окна чужого проекта); запасной вариант — конец пересечения.
+            "free_at": v["release_at"] or v["free_at"],
+            "busy_until": v["release_at"] or v["free_at"],
+            "overlap_end": v["free_at"],
             "other_projects": sorted(v["others"]),
             "overlap_days": v["max_days"],
         }
