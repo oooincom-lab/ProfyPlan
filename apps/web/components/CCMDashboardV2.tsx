@@ -81,6 +81,11 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [baselineNodes, setBaselineNodes] = useState<any>(null);
   /** Слой «было» на сводном графике: пометки узлов проектов с активными сдвигами. */
   const [showGraphShifts, setShowGraphShifts] = useState(false);
+  /** «Сводный график»: все проекты со сдвигами на одной шкале (последняя запись каждого). */
+  const [sgTabData, setSgTabData] = useState<any>(null);
+  const [sgTabExp, setSgTabExp] = useState<Record<string, boolean>>({});
+  const [sgTabOpOpen, setSgTabOpOpen] = useState<Record<string, boolean>>({});
+  const [sgTabOps, setSgTabOps] = useState<Record<string, any>>({});
   const [authed, setAuthed] = useState(false);
   const [loginEmail, setLoginEmail] = useState(DEMO_EMAIL);
   const [loginPass, setLoginPass] = useState(DEMO_PASSWORD);
@@ -179,6 +184,64 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       setSgOpsData({ byOrder });
     } catch (e: any) { setSgOpsData({ err: String(e?.message || e) }); }
   }, [sgOpsData, shiftGraph]);
+
+  /** «Сводный график»: собрать последние записи по каждому проекту — заказы, шкала. */
+  const loadShiftSummary = useCallback(async () => {
+    if (sgTabData && (sgTabData.loading || sgTabData.blocks)) return;
+    setSgTabData({ loading: true });
+    try {
+      const latest: Record<string, any> = {};
+      for (const s of shiftsLog) {
+        const pid = String(s.project_id || '');
+        if (!pid) continue;
+        if (!latest[pid] || String(s.created_at || '') > String(latest[pid].created_at || '')) latest[pid] = s;
+      }
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const h = { ...(t ? { Authorization: 'Be' + 'arer ' + t } : {}) };
+      const blocks: any[] = [];
+      let mn: number | null = null; let mx: number | null = null;
+      for (const rec of Object.values(latest)) {
+        const r = await fetch(API_BASE + '/ccm/shifts/' + rec.id, { headers: h });
+        const d = r.ok ? await r.json() : null;
+        let ords: any[] = [];
+        try { const r2 = await fetch(API_BASE + '/production-orders/?project_id=' + rec.project_id, { headers: h }); if (r2.ok) ords = await r2.json(); } catch { /* подписи будут по коду */ }
+        const byId: Record<string, any> = {};
+        for (const o of ords || []) byId[String(o.id)] = o;
+        const days = Number(d && d.record ? d.record.shift_days : (rec.shift_days || 0));
+        const moved = ((d && d.orders_moved) || []).map((m: any) => {
+          const oldS = parseMs(m.old_start); const oldD = parseMs(m.old_due);
+          const nw = [oldS != null ? oldS + days * MS_DAY : null, oldD != null ? oldD + days * MS_DAY : null];
+          return { o: byId[String(m.id)] || { id: m.id, ext_id: m.ext_id }, old: [oldS, oldD], new: nw };
+        });
+        const skipped = ((d && d.orders_skipped) || []).map((s2: any) => ({ o: byId[String(s2.id)] || { id: s2.id, ext_id: s2.ext_id }, reason: s2.reason || 'пропущен' }));
+        for (const m of moved) {
+          for (const v of (m.old || [])) { if (v != null && (mn == null || v < mn)) mn = v; }
+          for (const v of (m.new || [])) { if (v != null && (mx == null || v > mx)) mx = v; }
+        }
+        blocks.push({ rec, projectId: String(rec.project_id), projectName: String(rec.project_name || ''), days, reverted: !!rec.reverted, moved, skipped });
+      }
+      setSgTabData({ blocks, mn, mx });
+    } catch (e: any) { setSgTabData({ err: String(e && e.message ? e.message : e), blocks: [] }); }
+  }, [shiftsLog, sgTabData]);
+
+  /** Операции для «Сводного графика»: один расчёт на проект (лениво). */
+  const loadTabOps = useCallback(async (pid: string) => {
+    if (!pid || sgTabOps[pid]) return;
+    setSgTabOps((m: any) => ({ ...m, [pid]: { loading: true } }));
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const h = { ...(t ? { Authorization: 'Be' + 'arer ' + t } : {}) };
+      const sr = await fetch(API_BASE + '/projects/' + String(pid) + '/calculate/schedule', { method: 'POST', headers: { ...h, 'Content-Type': 'application/json' }, body: '{}' });
+      const sched = sr.ok ? await sr.json() : null;
+      const byOrder: Record<string, any[]> = {};
+      for (const n of ((sched && sched.nodes) || [])) {
+        const oid = n.order_id ? String(n.order_id) : '';
+        if (!oid) continue;
+        (byOrder[oid] = byOrder[oid] || []).push({ id: String(n.id), name: n.name || '—', start: n.start_datetime || (n.early_start_date ? n.early_start_date + 'T08:00' : null), finish: n.finish_datetime || (n.early_finish_date ? n.early_finish_date + 'T18:00' : null), crit: !!n.is_critical });
+      }
+      setSgTabOps((m: any) => ({ ...m, [pid]: { byOrder } }));
+    } catch (e: any) { setSgTabOps((m: any) => ({ ...m, [pid]: { err: String(e && e.message ? e.message : e) } })); }
+  }, [sgTabOps]);
   const openShiftGraph = useCallback(async (rec: any) => {
     if (!rec || sgBusy) return;
     setSgBusy(true);
@@ -313,6 +376,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     await loadRecalc();
     setGhostsData(null);
     setMapFocus(null);
+    setSgTabData(null);
+    setSgTabOps({});
   };
 
   // Галка «Автопересчёт после сдвигов»: по умолчанию выключена (ручной режим).
@@ -354,6 +419,13 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     if (tab !== 'occupancy' || !ghosts || ghostsData) return;
     loadGhosts();
   }, [tab, ghosts, ghostsData]);
+
+  // «Сводный график»: собрать картину по последним записям проектов (один раз на данные).
+  useEffect(() => {
+    if (tab !== 'shiftgraph' || !shiftsLog.length) return;
+    if (sgTabData && (sgTabData.loading || sgTabData.blocks)) return;
+    loadShiftSummary();
+  }, [tab, shiftsLog, sgTabData]);
 
   useEffect(() => {
     if (!authed) return;
@@ -1288,40 +1360,155 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
         {tab === 'shiftgraph' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Сводный график сдвигов — «было → стало»</div>
-              <span style={{ fontSize: 11.5, color: '#5A7090' }}>все записи журнала: откройте дерево заказов и операций по любой из них</span>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Сводный график сдвигов — все проекты на одном таймлайне</div>
+              <span style={{ fontSize: 11.5, color: '#5A7090' }}>по последней записи каждого проекта: пунктир — «было», плотная полоса — «стало»; «▸ оп.» — операции</span>
             </div>
             {shiftsLog.length === 0 && (
               <div style={{ marginTop: 10, border: '1px dashed #2B405E', borderRadius: 10, padding: '18px 16px', fontSize: 12.5, color: '#8FA3BD' }}>
-                Сдвигов пока нет — записи появятся здесь после применения сдвига («Ресурсы и конфликты» → «Предложить сдвиг»).
+                Сдвигов пока нет — картина появится здесь после применения сдвига («Ресурсы и конфликты» → «Предложить сдвиг»).
               </div>
             )}
-            <div style={{ display: 'grid', gap: 4, marginTop: 10, maxWidth: 980 }}>
-              {shiftsLog.map((s: any) => {
-                const dt = parseMs(s.created_at);
+            {shiftsLog.length > 0 && (!sgTabData || sgTabData.loading) && (
+              <div style={{ fontSize: 12, color: '#8FA3BD', padding: '12px 2px' }}>Загрузка сдвигов…</div>
+            )}
+            {sgTabData && sgTabData.err && (
+              <div style={{ fontSize: 12, color: '#FCA5A5', padding: '12px 2px' }}>Не удалось собрать картину: {sgTabData.err}</div>
+            )}
+            {sgTabData && sgTabData.blocks && sgTabData.blocks.length > 0 && (() => {
+              const b = sgTabData;
+              const mn0 = b.mn != null ? b.mn : 0;
+              const mx0 = b.mx != null ? b.mx : (b.mn != null ? b.mn + MS_DAY : MS_DAY);
+              const span0 = (mx0 - mn0) || MS_DAY;
+              const pos = (v: number) => ((v - mn0) / span0) * 100;
+              const pr = (arr: any) => {
+                const s0 = arr && arr[0] != null ? arr[0] : (arr && arr[1] != null ? arr[1] : null);
+                const f0 = arr && arr[1] != null ? arr[1] : s0;
+                return (s0 == null || f0 == null) ? null : [s0, f0];
+              };
+              const blockRows = (blk: any) => {
+                const all: any[] = [];
+                (blk.moved || []).forEach((m: any) => all.push({ o: m.o, old: pr(m.old), neww: pr(m.new) }));
+                (blk.skipped || []).forEach((s2: any) => all.push({ o: s2.o, old: null, neww: null, skippedText: s2.reason }));
+                const byId: Record<string, any> = {};
+                all.forEach((r2) => { if (r2.o) byId[String(r2.o.id)] = r2; });
+                const kids: Record<string, any[]> = {};
+                const roots: any[] = [];
+                for (const r2 of all) {
+                  const p2 = r2.o && r2.o.parent_order_id ? String(r2.o.parent_order_id) : '';
+                  if (p2 && byId[p2]) (kids[p2] = kids[p2] || []).push(r2); else roots.push(r2);
+                }
+                const build = (r2: any, d: number): any => ({ ...r2, depth: d, kids: (kids[String(r2.o && r2.o.id)] || []).map((k2: any) => build(k2, d + 1)) });
+                return roots.map((r2) => build(r2, 0));
+              };
+              const orderRow = (blk: any, r2: any, key: string): any => {
+                const o = r2.o;
+                const isOpen = !(o && sgTabExp[String(o.id)] === false);
+                const ops = sgTabOps[blk.projectId];
                 return (
-                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', border: '1px solid #1E3252', borderRadius: 8, background: '#0C1B31', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: '#5A7090', width: 96, fontVariantNumeric: 'tabular-nums' }}>{dt != null ? fmtDm(dt) : '—'}</span>
-                    <span style={{ fontSize: 12, color: '#CBD5E1', fontWeight: 600, minWidth: 200 }}>« {String(s.project_name || '')} »</span>
-                    <span style={{ fontSize: 11.5, color: s.reverted ? '#5A7090' : '#FCD34D' }}>+{s.shift_days} дн{s.scope === 'roots' ? ' · куст' : ''}{s.reverted ? ' · (возвращено)' : ''}</span>
-                    <span style={{ fontSize: 11, color: '#8FA3BD' }}>заказов: {s.orders_shifted}{s.orders_skipped ? ' · пропущено: ' + s.orders_skipped : ''}</span>
-                    {s.old_start || s.new_start ? (
-                      <span style={{ fontSize: 11, color: '#5A7090', fontVariantNumeric: 'tabular-nums' }}>
-                        старт {s.old_start ? fmtDmShort(parseMs(s.old_start) as number) : '—'} → {s.new_start ? fmtDmShort(parseMs(s.new_start) as number) : '—'}
+                  <div key={key}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+                      <span style={{ width: 16, flexShrink: 0, textAlign: 'center' }}>
+                        {r2.kids && r2.kids.length > 0 ? (
+                          <button onClick={() => setSgTabExp((m2: any) => ({ ...m2, [String(o.id)]: !isOpen }))} title={isOpen ? 'Свернуть' : 'Развернуть'}
+                            style={{ background: 'transparent', border: 'none', color: '#8FA3BD', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, padding: 0 }}>{isOpen ? '▼' : '▶'}</button>
+                        ) : null}
                       </span>
-                    ) : null}
-                    <button onClick={() => openShiftGraph(s)} disabled={sgBusy}
-                      title="Дерево «было → стало»: заказы (родитель → дети) и операции"
-                      style={{ marginLeft: 'auto', background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.5)', color: '#86EFAC', borderRadius: 6, padding: '3px 12px', fontSize: 11.5, cursor: sgBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-                      📊 Открыть дерево «было → стало»
-                    </button>
+                      <span style={{ width: 186, flexShrink: 0, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: (r2.depth || 0) * 12 }}>
+                        {o ? (
+                          <button onClick={() => { if (onOpenOrder) onOpenOrder(o); }} title="Открыть окно заказа"
+                            style={{ background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 11, color: r2.skippedText ? '#8FA3BD' : '#93C5FD', cursor: 'pointer', borderBottom: '1px dotted rgba(96,165,250,.6)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{orderLabel(o)}</button>
+                        ) : <span style={{ color: '#CBD5E1' }}>{r2.label}</span>}
+                        {r2.skippedText ? <span style={{ color: '#FCD34D', fontSize: 10 }}> · не поедет: {r2.skippedText}</span> : null}
+                      </span>
+                      {o ? (
+                        <button onClick={() => { if (!sgTabOpOpen[String(o.id)]) loadTabOps(blk.projectId); setSgTabOpOpen((m2: any) => ({ ...m2, [String(o.id)]: !m2[String(o.id)] })); }}
+                          title="Операции заказа: «было → стало»"
+                          style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 5, padding: '0px 6px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          {sgTabOpOpen[String(o.id)] ? '▾ оп.' : '▸ оп.'}
+                        </button>
+                      ) : null}
+                      <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                        {r2.old && r2.neww && (
+                          <div title={'зона сдвига: +' + Math.round((r2.neww[0] - r2.old[0]) / MS_DAY) + ' дн'}
+                            style={{ position: 'absolute', top: 0, bottom: 0, left: Math.min(pos(r2.old[0]), pos(r2.neww[0])) + '%', width: Math.max(Math.abs(pos(r2.neww[0]) - pos(r2.old[0])), 0.6) + '%', background: 'rgba(245,158,11,.10)', borderLeft: '1px dashed rgba(245,158,11,.5)', borderRight: '1px dashed rgba(245,158,11,.5)' }} />
+                        )}
+                        {r2.old && (
+                          <div title={orderLabel(o) + ' · было: ' + fmtDm(r2.old[0]) + ' — ' + fmtDm(r2.old[1])}
+                            style={{ position: 'absolute', top: 1, bottom: 1, left: pos(r2.old[0]) + '%', width: Math.max(((r2.old[1] - r2.old[0]) / span0) * 100, 0.5) + '%', borderRadius: 3, border: '1px dashed rgba(148,163,184,.75)', background: 'rgba(148,163,184,.10)' }} />
+                        )}
+                        {r2.neww && (
+                          <div title={orderLabel(o) + ' · стало: ' + fmtDm(r2.neww[0]) + ' — ' + fmtDm(r2.neww[1])}
+                            style={{ position: 'absolute', top: 1, bottom: 1, left: pos(r2.neww[0]) + '%', width: Math.max(((r2.neww[1] - r2.neww[0]) / span0) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
+                        )}
+                      </div>
+                      <span style={{ width: 170, textAlign: 'right', flexShrink: 0, fontSize: 10, color: '#8FA3BD', fontVariantNumeric: 'tabular-nums' }}>
+                        {r2.old && r2.neww ? (fmtDmShort(r2.old[0]) + '–' + fmtDmShort(r2.old[1]) + ' → ' + fmtDmShort(r2.neww[0]) + '–' + fmtDmShort(r2.neww[1])) : (r2.skippedText ? 'не поедет' : '—')}
+                      </span>
+                    </div>
+                    {isOpen && r2.kids && r2.kids.map((k2: any, ki: number) => orderRow(blk, k2, key + '-' + ki))}
+                    {o && sgTabOpOpen[String(o.id)] && (
+                      <div>
+                        {!ops || ops.loading ? <div style={{ padding: '1px 0 1px 258px', fontSize: 10.5, color: '#5A7090' }}>операции: загрузка…</div>
+                          : ops.err ? <div style={{ padding: '1px 0 1px 258px', fontSize: 10.5, color: '#FCA5A5' }}>операции: {ops.err}</div>
+                          : (() => {
+                              const list = (ops.byOrder || {})[String(o.id)] || [];
+                              if (!list.length) return <div style={{ padding: '1px 0 1px 258px', fontSize: 10.5, color: '#5A7090' }}>нет операций в расчёте</div>;
+                              return list.map((op2: any, oi: number) => {
+                                const cs = parseMs(op2.start); const cf = parseMs(op2.finish);
+                                const NN = Number(blk.days || 0);
+                                const isMoved = (blk.moved || []).some((m2: any) => String(m2.o && m2.o.id) === String(o.id));
+                                const gS = isMoved && !blk.reverted ? -NN : 0;
+                                const sS = isMoved && blk.reverted ? NN : 0;
+                                const ow2 = cs != null && cf != null ? [cs + gS * MS_DAY, cf + gS * MS_DAY] : null;
+                                const nw2 = cs != null && cf != null ? [cs + sS * MS_DAY, cf + sS * MS_DAY] : null;
+                                const noMove = !isMoved || NN === 0;
+                                return (
+                                  <div key={key + '-op' + oi} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '1px 0' }}>
+                                    <span style={{ width: 200, flexShrink: 0, paddingLeft: 30 + (r2.depth || 0) * 12, fontSize: 10.5, color: '#B0C4DE', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
+                                    <div style={{ position: 'relative', flex: 1, height: 8, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                                      {noMove && nw2 && <div title={op2.name + ': ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + ' (не двигался)'} style={{ position: 'absolute', top: 1, bottom: 1, left: pos(nw2[0]) + '%', width: Math.max(((nw2[1] - nw2[0]) / span0) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.35)', border: '1px dashed rgba(148,163,184,.6)' }} />}
+                                      {!noMove && ow2 && <div title={'было: ' + fmtDm(ow2[0]) + ' — ' + fmtDm(ow2[1])} style={{ position: 'absolute', top: 1, bottom: 1, left: pos(ow2[0]) + '%', width: Math.max(((ow2[1] - ow2[0]) / span0) * 100, 0.5) + '%', borderRadius: 3, border: '1px dashed rgba(148,163,184,.75)', background: 'rgba(148,163,184,.10)' }} />}
+                                      {!noMove && nw2 && <div title={'стало: ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1])} style={{ position: 'absolute', top: 1, bottom: 1, left: pos(nw2[0]) + '%', width: Math.max(((nw2[1] - nw2[0]) / span0) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />}
+                                    </div>
+                                    <span style={{ width: 170, textAlign: 'right', flexShrink: 0, fontSize: 10, color: '#8FA3BD', fontVariantNumeric: 'tabular-nums' }}>
+                                      {nw2 == null ? '—' : noMove ? (fmtDmShort(nw2[0]) + '–' + fmtDmShort(nw2[1])) : (ow2 == null ? '—' : (fmtDmShort(ow2[0]) + '–' + fmtDmShort(ow2[1]) + ' → ' + fmtDmShort(nw2[0]) + '–' + fmtDmShort(nw2[1])))}
+                                    </span>
+                                  </div>
+                                );
+                              });
+                            })()}
+                      </div>
+                    )}
                   </div>
                 );
-              })}
-            </div>
-            <div style={{ fontSize: 11, color: '#5A7090', marginTop: 12 }}>
-              В окне: пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; стрелками раскрываются заказы (родитель → дети), «▸ оп.» — операции из расчёта; клик по заказу открывает его окно; внизу — «🗺 Показать на карте».
-            </div>
+              };
+              return (
+                <div style={{ marginTop: 10, border: '1px solid #1E3252', borderRadius: 10, background: '#0C1B31', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#5A7090', marginBottom: 4, paddingLeft: 208, paddingRight: 170 }}>
+                    <span>{fmtDm(mn0)}</span>
+                    <span>{fmtDm(mx0)}</span>
+                  </div>
+                  {b.blocks.map((blk: any) => (
+                    <div key={blk.rec && blk.rec.id ? blk.rec.id : blk.projectId} style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.7)', marginBottom: 3 }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#CBD5E1' }}>« {blk.projectName} »</span>
+                        <span style={{ fontSize: 11, color: blk.reverted ? '#5A7090' : '#FCD34D' }}>+{blk.days} дн{blk.rec && blk.rec.scope === 'roots' ? ' · куст (старт проекта не менялся)' : ''}{blk.reverted ? ' · (возвращено)' : ''}</span>
+                        <span style={{ fontSize: 10.5, color: '#5A7090', fontVariantNumeric: 'tabular-nums' }}>старт {blk.rec && blk.rec.old_start ? fmtDmShort(parseMs(blk.rec.old_start) as number) : '—'} → {blk.rec && blk.rec.new_start ? fmtDmShort(parseMs(blk.rec.new_start) as number) : '—'}</span>
+                        <button onClick={() => openShiftGraph(blk.rec)} disabled={sgBusy} title="Отдельное окно записи (с кнопкой «Показать на карте»)"
+                          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '1px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit' }}>📊 окно записи</button>
+                      </div>
+                      {(blk.moved || []).length === 0 && <div style={{ fontSize: 11, color: '#5A7090', padding: '2px 0' }}>перенесённых заказов в записи нет</div>}
+                      {blockRows(blk).map((r2: any, i: number) => orderRow(blk, r2, blk.projectId + '-r' + i))}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            {sgTabData && sgTabData.blocks && sgTabData.blocks.length > 0 && (
+              <div style={{ fontSize: 11, color: '#5A7090', marginTop: 8 }}>
+                Пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; «▸ оп.» — операции из расчёта; клик по заказу открывает его окно; «📊 окно записи» — отдельное окно записи с «🗺 Показать на карте».
+              </div>
+            )}
           </div>
         )}
 
