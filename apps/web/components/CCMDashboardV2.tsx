@@ -1417,9 +1417,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 const SGC_LEFT = 268;
                 const SGC_RIGHT = 216;
                 const RULER_H = 36;
-                const H_ORDER = 19;
+                const H_ORDER = 28;
                 const H_OPSMSG = 15;
-                const H_OP = 14;
+                const H_OP = 24;
                 const H_BLOCK = 28;
                 const H_START = 15;
                 const H_EMPTY = 17;
@@ -1569,9 +1569,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     const nw2 = cs != null && cf != null ? [cs + sS * MS_DAY, cf + sS * MS_DAY] : null;
                     const noMove = !isMoved || NN === 0;
                     return cell(<>
-                      {noMove && nw2 && <div title={op2.name + ': ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + ' (не двигался' + (op2.crit ? ', критическая' : '') + ')'} style={{ position: 'absolute', top: 4, bottom: 4, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.30)' : 'rgba(59,130,246,.35)', border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.75)' : 'rgba(148,163,184,.6)') }} />}
-                      {!noMove && ow2 && <div title={'было: ' + fmtDm(ow2[0]) + ' — ' + fmtDm(ow2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 4, bottom: 4, left: ((ow2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(ow2[1]) - px(ow2[0]), 0.5) + 'px', borderRadius: 3, border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.8)' : 'rgba(148,163,184,.75)'), background: op2.crit ? 'rgba(245,158,11,.10)' : 'rgba(148,163,184,.10)' }} />}
-                      {!noMove && nw2 && <div title={'стало: ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 4, bottom: 4, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)', border: '1px solid ' + (op2.crit ? 'rgba(252,211,77,.9)' : 'rgba(96,165,250,.7)') }} />}
+                      {noMove && nw2 && <div title={op2.name + ': ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + ' (не двигался' + (op2.crit ? ', критическая' : '') + ')'} style={{ position: 'absolute', top: 8, bottom: 8, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.30)' : 'rgba(59,130,246,.35)', border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.75)' : 'rgba(148,163,184,.6)') }} />}
+                      {!noMove && ow2 && <div title={'было: ' + fmtDm(ow2[0]) + ' — ' + fmtDm(ow2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 8, bottom: 8, left: ((ow2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(ow2[1]) - px(ow2[0]), 0.5) + 'px', borderRadius: 3, border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.8)' : 'rgba(148,163,184,.75)'), background: op2.crit ? 'rgba(245,158,11,.10)' : 'rgba(148,163,184,.10)' }} />}
+                      {!noMove && nw2 && <div title={'стало: ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 8, bottom: 8, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)', border: '1px solid ' + (op2.crit ? 'rgba(252,211,77,.9)' : 'rgba(96,165,250,.7)') }} />}
                     </>);
                   }
                   const r2 = d.r2; const o = r2.o;
@@ -1603,9 +1603,13 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   }
                   if (d.t === 'order') {
                     const r2 = d.r2;
+                    const critRow = !!(r2.o && (() => { const bb0 = sgTabOps[d.blk.projectId]; const ll0 = bb0 && bb0.byOrder ? bb0.byOrder[String(r2.o.id)] : null; return ll0 && ll0.some((x: any) => x && x.crit); })());
                     return (
-                      <div key={key} style={{ height: h, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8, fontSize: 10, color: '#8FA3BD', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        {r2.old && r2.neww ? (fmtDmShort(r2.old[0]) + '–' + fmtDmShort(r2.old[1]) + ' → ' + fmtDmShort(r2.neww[0]) + '–' + fmtDmShort(r2.neww[1])) : (r2.skippedText ? 'не поедет' : '—')}
+                      <div key={key} style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 8, fontSize: 9.5, lineHeight: '11px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {r2.old && r2.neww ? (<>
+                          <span style={{ color: critRow ? 'rgba(252,211,77,.7)' : '#7C8DA6' }}>было · {fmtDmShort(r2.old[0])}–{fmtDmShort(r2.old[1])}</span>
+                          <span style={{ color: critRow ? '#FCD34D' : '#93C5FD' }}>стало · {fmtDmShort(r2.neww[0])}–{fmtDmShort(r2.neww[1])}</span>
+                        </>) : (<span style={{ color: '#8FA3BD' }}>{r2.skippedText ? 'не поедет' : '—'}</span>)}
                       </div>
                     );
                   }
@@ -1620,8 +1624,13 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     const nw2 = cs != null && cf != null ? [cs + sS * MS_DAY, cf + sS * MS_DAY] : null;
                     const noMove = !isMoved || NN === 0;
                     return (
-                      <div key={key} style={{ height: h, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8, fontSize: 10, color: op2.crit ? '#FCD34D' : '#8FA3BD', fontWeight: op2.crit ? 600 : 400, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        {nw2 == null ? '—' : noMove ? (fmtDmShort(nw2[0]) + '–' + fmtDmShort(nw2[1])) : (ow2 == null ? '—' : (fmtDmShort(ow2[0]) + '–' + fmtDmShort(ow2[1]) + ' → ' + fmtDmShort(nw2[0]) + '–' + fmtDmShort(nw2[1])))}
+                      <div key={key} style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 8, fontSize: 9, lineHeight: '10px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {nw2 == null ? (<span style={{ color: '#5A7090' }}>—</span>) : noMove ? (
+                          <span style={{ color: op2.crit ? '#FCD34D' : '#93C5FD', fontWeight: op2.crit ? 600 : 400 }}>{fmtDmShort(nw2[0])}–{fmtDmShort(nw2[1])}</span>
+                        ) : (ow2 == null ? (<span style={{ color: '#5A7090' }}>—</span>) : (<>
+                          <span style={{ color: op2.crit ? 'rgba(252,211,77,.7)' : '#7C8DA6' }}>было · {fmtDmShort(ow2[0])}–{fmtDmShort(ow2[1])}</span>
+                          <span style={{ color: op2.crit ? '#FCD34D' : '#93C5FD', fontWeight: op2.crit ? 600 : 400 }}>стало · {fmtDmShort(nw2[0])}–{fmtDmShort(nw2[1])}</span>
+                        </>))}
                       </div>
                     );
                   }
@@ -1655,7 +1664,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
               })()}
             </div>
             <div style={{ fontSize: 11, color: '#5A7090' }}>
-              Пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; ◆ — критические операции (от них зависит срок сдвига); слева имена и кнопки закреплены, справа колонка «было → стало» — после графика; прокручивается только график (таймлайн с датами/часами/минутами закреплён сверху); масштаб «−/＋», «⤢ Авто» — весь период по ширине.
+              Пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; ◆ — критические операции (от них зависит срок сдвига); даты справа — двумя строками: «было» серым, «стало» синим (у критических — янтарным); слева имена и кнопки закреплены, справа колонка «было → стало» — после графика; прокручивается только график (таймлайн с датами/часами/минутами закреплён сверху); масштаб «−/＋», «⤢ Авто» — весь период по ширине.
             </div>
           </div>
         )}
