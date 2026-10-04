@@ -20,6 +20,7 @@ const API_BASE = resolveApiBase() + '/v1';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import NetworkGraphV2 from '@/components/NetworkGraphV2';
+import GanttChart from '@/components/ganttchart';
 import { login, isAuthenticated, getProjects, mergeProjects, resourceLeveling, createBaseline } from '@/lib/api';
 
 // Помощники карты занятости (блок 6.33, первый срез): интервалы, окна, формат дат.
@@ -89,7 +90,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [suggestion, setSuggestion] = useState<any>(null);
   const [sugBusy, setSugBusy] = useState(false);
   const [occId, setOccId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'resources' | 'occupancy' | 'graph'>('overview');
+  const [tab, setTab] = useState<'overview' | 'resources' | 'occupancy' | 'gantt' | 'graph'>('overview');
   const [onlyConflicts, setOnlyConflicts] = useState(false);
   const [shiftsLog, setShiftsLog] = useState<any[]>([]);
   const [autoRecalc, setAutoRecalc] = useState(false);
@@ -547,7 +548,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     try {
       const result = await mergeProjects(selectedIds);
       setCcmResult(result);
-      setTab('graph');
+      setTab('gantt');
       if (selectedIds.length === 1) {
         try {
           const lr = await resourceLeveling(selectedIds[0], false);
@@ -709,6 +710,10 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     })
     .join(' · ');
 
+  // Имена проектов для сводной диаграммы Ганта.
+  const ganttNames: Record<string, string> = {};
+  for (const p0 of (projects || [])) ganttNames[String(p0.id)] = String(p0.name || '');
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: 'calc(100vh - 146px)',
@@ -721,7 +726,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
           <span style={{ fontSize: 12, color: '#5A7090' }}>Межпроектное планирование: ресурсы, конфликты, карта занятости</span>
         </div>
         <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-          {([['overview', 'Обзор'], ['resources', 'Ресурсы и конфликты'], ['occupancy', 'Карта занятости'], ['graph', 'Сводный график']] as const).map(([k, label]) => (
+          {([['overview', 'Обзор'], ['resources', 'Ресурсы и конфликты'], ['occupancy', 'Карта занятости'], ['gantt', 'Сводный график'], ['graph', 'Сводный сетевой график']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)} style={{
               padding: '7px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
               background: 'transparent', border: 'none',
@@ -1276,6 +1281,26 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'gantt' && (
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '10px 20px 12px', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Сводный график — диаграмма Ганта</div>
+              <span style={{ fontSize: 11.5, color: '#5A7090' }}>
+                {selectedIds.length > 0 ? ('проектов выбрано: ' + selectedIds.length + ' — на «Обзоре»') : 'выберите проекты на вкладке «Обзор»'}
+              </span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, border: '1px solid #1E3252', borderRadius: 10, overflow: 'hidden', background: '#0A1628' }}>
+              {selectedIds.length > 0 ? (
+                <GanttChart projectIds={selectedIds} projectNames={ganttNames} />
+              ) : (
+                <div style={{ padding: 48, textAlign: 'center', color: '#5A7090', fontSize: 13 }}>
+                  Выберите один или несколько проектов на вкладке «Обзор» — здесь появится сводная диаграмма Ганта по ним.
+                </div>
+              )}
             </div>
           </div>
         )}

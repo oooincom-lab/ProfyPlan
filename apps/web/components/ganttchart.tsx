@@ -5,7 +5,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { mergeProjects, resourceLeveling } from '@/lib/api';
+import { mergeProjects } from '@/lib/api';
 
 interface GanttOperation {
   id: string;
@@ -43,7 +43,7 @@ const HEADER_HEIGHT = 52;
 const GROUP_HEADER_HEIGHT = 30;
 const LEFT_PANEL_WIDTH = 260;
 
-export default function GanttChart({ projectIds }: { projectIds: string[] }) {
+export default function GanttChart({ projectIds, projectNames }: { projectIds: string[]; projectNames?: Record<string, string>; }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [groups, setGroups] = useState<ProjectGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,36 +57,39 @@ export default function GanttChart({ projectIds }: { projectIds: string[] }) {
     try {
       const merged = await mergeProjects(projectIds);
       const nodes: any[] = merged.nodes || [];
-      const projMap = new Map<string, { name: string; color: string }>();
+      const colorByPid: Record<string, string> = {};
+      const nameOf = (pid: string) => {
+        const nm = projectNames && projectNames[pid];
+        if (nm) return nm;
+        const idx = projectIds.indexOf(pid);
+        return idx >= 0 ? `Проект ${idx + 1}` : pid.slice(0, 8);
+      };
+      projectIds.forEach((pid, i) => { colorByPid[pid] = PROJECT_COLORS[i % PROJECT_COLORS.length]; });
 
-      projectIds.forEach((pid, i) => {
-        projMap.set(pid, {
-          name: `Проект ${i + 1}`,
-          color: PROJECT_COLORS[i % PROJECT_COLORS.length],
-        });
+      // Реальная привязка операций к проектам (project_id из /ccm/merge); запасной вариант — по индексу.
+      const ops: GanttOperation[] = nodes.map((n: any, i: number) => {
+        const pid = String(n.project_id || projectIds[i % projectIds.length]);
+        return {
+          id: n.id,
+          name: n.name,
+          projectName: nameOf(pid),
+          projectId: pid,
+          earlyStart: n.early_start || 0,
+          earlyFinish: n.early_finish || 0,
+          duration: n.duration || (n.early_finish || 0) - (n.early_start || 0),
+          isCritical: n.is_critical || false,
+          totalFloat: n.total_float || 0,
+          color: colorByPid[pid] || '#8B5CF6',
+        };
       });
 
-      const ops: GanttOperation[] = nodes.map((n: any, i: number) => ({
-        id: n.id,
-        name: n.name,
-        projectName: `Проект ${(i % projectIds.length) + 1}`,
-        projectId: projectIds[i % projectIds.length],
-        earlyStart: n.early_start || 0,
-        earlyFinish: n.early_finish || 0,
-        duration: n.duration || (n.early_finish || 0) - (n.early_start || 0),
-        isCritical: n.is_critical || false,
-        totalFloat: n.total_float || 0,
-        color: projMap.get(projectIds[i % projectIds.length])?.color,
-      }));
-
-      // Group by project
+      // Группировка по проектам
       const grouped = new Map<string, ProjectGroup>();
       for (const pid of projectIds) {
-        const info = projMap.get(pid) || { name: pid.slice(0, 8), color: '#666' };
         grouped.set(pid, {
           id: pid,
-          name: info.name,
-          color: info.color,
+          name: nameOf(pid),
+          color: colorByPid[pid] || '#666',
           operations: ops.filter((o) => o.projectId === pid),
         });
       }
@@ -157,17 +160,7 @@ export default function GanttChart({ projectIds }: { projectIds: string[] }) {
       ctx.fillText(`${t}ч`, x, HEADER_HEIGHT - 12);
     }
 
-    // Today line
-    const now = new Date();
-    const nowX = LEFT_PANEL_WIDTH + 100; // relative position
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(nowX, HEADER_HEIGHT);
-    ctx.lineTo(nowX, canvasH);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // (псевдо-«линия сегодня» из старого прототипа убрана: ось топологическая — часы от старта, календарь здесь не отображается)
 
     // Draw bars
     let y = HEADER_HEIGHT;
