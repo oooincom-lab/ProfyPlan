@@ -101,6 +101,11 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [expOrders, setExpOrders] = useState<Record<string, boolean>>({});
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [sugFor, setSugFor] = useState<string | null>(null);
+  /** «Показать „как было"»: призраки полос заказов до активных сдвигов (журнал). */
+  const [ghosts, setGhosts] = useState(false);
+  const [ghostsData, setGhostsData] = useState<any>(null);
+  /** Фокус из окна «График сдвига»: подсветить заказы записи на карте. */
+  const [mapFocus, setMapFocus] = useState<any>(null);
   const occRef = useRef<HTMLDivElement | null>(null);
   const sugRef = useRef<HTMLDivElement | null>(null);
 
@@ -114,6 +119,35 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
         setShiftsLog(Array.isArray(d?.items) ? d.items : []);
       }
     } catch { /* журнал не критичен для работы раздела */ }
+  }, []);
+
+  /** Призраки «как было»: активные записи журнала → старые даты заказов (для карты занятости). */
+  const loadGhosts = useCallback(async () => {
+    setGhostsData({ loading: true });
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const h = { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) };
+      const r = await fetch(API_BASE + '/ccm/shifts', { headers: h });
+      const d = r.ok ? await r.json() : null;
+      const items = (Array.isArray(d) ? d : (d?.items || [])).filter((x: any) => !x.reverted);
+      const byOrder: Record<string, any[]> = {};
+      let n = 0;
+      for (const it of items.slice(0, 20)) {
+        try {
+          const r2 = await fetch(API_BASE + '/ccm/shifts/' + it.id, { headers: h });
+          if (!r2.ok) continue;
+          const dd = await r2.json();
+          const rec = dd?.record || it;
+          for (const m of (dd?.orders_moved || [])) {
+            const oid = String(m.id || '');
+            if (!oid) continue;
+            (byOrder[oid] = byOrder[oid] || []).push({ oldStart: m.old_start, oldDue: m.old_due, projectName: rec.project_name || it.project_name || '', created: rec.created_at || it.created_at || '', recordId: it.id });
+            n++;
+          }
+        } catch { /* запись пропускаем */ }
+      }
+      setGhostsData({ byOrder, n, active: items.length });
+    } catch (e: any) { setGhostsData({ err: String(e?.message || e), byOrder: {}, n: 0, active: 0 }); }
   }, []);
 
   /** График сдвига («призрак» до/после): окно поверх раздела. */
@@ -163,6 +197,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       setSgExp({}); setSgOpOpen({}); setSgOpsData(null);
       setShiftGraph({
         mode: 'record',
+        recordId: rec.id,
         projectId: rec.project_id,
         title: 'График сдвига — «' + String(d?.record?.project_name || rec.project_name) + '»',
         meta: { days, scope: d?.record?.scope || rec.scope, reverted: !!rec.reverted, kind: rec.kind, created: rec.created_at },
@@ -200,6 +235,25 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       skippedList: (p.totals?.skipped || []),
     });
   }, [stepPanel]);
+
+  /** «Показать на карте»: закрыть график, открыть карту с призраками и подсветкой заказов записи. */
+  const showOnMap = useCallback(() => {
+    const g = shiftGraph;
+    if (!g || g.mode !== 'record') return;
+    const pid = g.projectId ? String(g.projectId) : '';
+    const oids = Array.from(new Set((g.moved || []).map((m: any) => (m.o && m.o.id ? String(m.o.id) : '')).filter(Boolean)));
+    setGhosts(true);
+    try { localStorage.setItem('profyplan_ccm_ghosts', '1'); } catch { /* noop */ }
+    setShiftGraph(null);
+    setTab('occupancy');
+    if (!occId && overload) {
+      const rr = ((overload.resources || []) as any[]).find((x: any) => ((x.assignments || []) as any[]).some((a: any) => String(a.project_id) === pid));
+      if (rr) setOccId(String(rr.id));
+    }
+    if (pid) setExpOrders((mm: any) => ({ ...mm, [pid]: true }));
+    setMapFocus({ projectId: pid, orderIds: oids, recordId: g.recordId || null, title: g.title });
+    setTimeout(() => { try { occRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ } }, 300);
+  }, [shiftGraph, occId, overload]);
 
   /** Статусы пересчёта проектов сдвига (панель «Пересчёт проектов сдвига»). */
   const loadRecalc = useCallback(async () => {
@@ -254,6 +308,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     } catch { /* noop */ }
     await loadShifts();
     await loadRecalc();
+    setGhostsData(null);
+    setMapFocus(null);
   };
 
   // Галка «Автопересчёт после сдвигов»: по умолчанию выключена (ручной режим).
@@ -261,6 +317,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     try {
       setAutoRecalc(localStorage.getItem('profyplan_ccm_autorecalc') === '1');
       try { setShiftAuto(localStorage.getItem('profyplan_ccm_shift_auto') === '1'); } catch { /* noop */ }
+      try { setGhosts(localStorage.getItem('profyplan_ccm_ghosts') === '1'); } catch { /* noop */ }
     } catch { /* noop */ }
   }, []);
 
@@ -287,6 +344,12 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     const ids = Array.from(new Set(((res?.assignments || []) as any[]).map((a: any) => String(a.project_id))));
     if (ids.length) loadOrdersForProjects(ids, occId);
   }, [occId, overload]);
+
+  // Галка «Показать „как было"»: разовая загрузка активных записей журнала (призраки).
+  useEffect(() => {
+    if (tab !== 'occupancy' || !ghosts || ghostsData) return;
+    loadGhosts();
+  }, [tab, ghosts, ghostsData]);
 
   useEffect(() => {
     if (!authed) return;
@@ -576,8 +639,27 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       .filter((a: any) => a.s != null && a.f != null && (a.f as number) > (a.s as number))
       .sort((a: any, b: any) => (a.s as number) - (b.s as number));
     if (!list.length) return { r, empty: true as const };
-    const minI = list[0].s as number;
-    const maxI = list.reduce((m: number, a: any) => Math.max(m, a.f as number), list[0].f as number);
+    let minI = list[0].s as number;
+    let maxI = list.reduce((m: number, a: any) => Math.max(m, a.f as number), list[0].f as number);
+    // Призраки «как было»: расширяем диапазон, чтобы старые положения заказов были видны.
+    if (ghosts && ghostsData && ghostsData.byOrder) {
+      const projectIds = new Set(list.map((a: any) => String(a.project_id)));
+      for (const k2 of Object.keys(ordersByProject)) {
+        const sep = k2.indexOf('|');
+        if (sep < 0 || k2.slice(sep + 1) !== occId) continue;
+        if (!projectIds.has(k2.slice(0, sep))) continue;
+        for (const o2 of (ordersByProject[k2] || [])) {
+          const gl = ghostsData.byOrder[String(o2.id)];
+          if (!gl || !gl.length) continue;
+          for (const g0 of gl) {
+            const gs2 = parseMs(g0.oldStart);
+            const gf2 = parseMs(g0.oldDue);
+            if (gs2 != null && gs2 < minI) minI = gs2;
+            if (gf2 != null && gf2 > maxI) maxI = gf2;
+          }
+        }
+      }
+    }
     const span = (maxI - minI) || MS_DAY;
     const merged = mergeIv(list.map((a: any) => [a.s, a.f] as [number, number]));
     const free: [number, number][] = [];
@@ -1017,6 +1099,17 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <span style={{ fontSize: 11.5, color: occ.covering ? '#FCD34D' : '#86EFAC' }}>
                         {occ.covering ? ('сейчас занят до ' + fmtDm(occ.covering[1])) : occ.nextFrom ? ('свободен до ' + fmtDm(occ.nextFrom[0])) : 'свободен — брони завершены'}
                       </span>
+                      {mapFocus && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#93C5FD', border: '1px solid rgba(96,165,250,.4)', borderRadius: 100, padding: '1px 8px' }}>
+                          подсвечены заказы сдвига
+                          <button onClick={() => setMapFocus(null)} title="Снять подсветку" style={{ background: 'transparent', border: 'none', color: '#93C5FD', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, padding: 0 }}>×</button>
+                        </span>
+                      )}
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#CBD5E1', cursor: 'pointer', marginLeft: 'auto' }}
+                        title="Пунктиром — где заказы были до активных сдвигов (по журналу)">
+                        <input type="checkbox" checked={ghosts} onChange={(e) => { const v = e.target.checked; setGhosts(v); try { localStorage.setItem('profyplan_ccm_ghosts', v ? '1' : '0'); } catch { /* noop */ } }} style={{ accentColor: '#94A3B8' }} />
+                        Показать «как было»{ghosts && ghostsData ? (ghostsData.loading ? ' · загрузка…' : (ghostsData.n ? ' · заказов: ' + ghostsData.n : ' · активных сдвигов нет')) : ''}
+                      </label>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#5A7090', marginBottom: 4, paddingLeft: 215, paddingRight: 159 }}>
                       <span>{fmtDm(occ.minI)}</span>
@@ -1064,13 +1157,26 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                                   const vis = has && vf > vs;
                                   const outPrj = has && ((s0 as number) < a.s || (f0 as number) > a.f);
                                   return (
-                                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '1px 0' }}>
+                                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '1px 0', ...(mapFocus && mapFocus.orderIds && mapFocus.orderIds.indexOf(String(o.id)) >= 0 ? { background: 'rgba(96,165,250,.07)', borderRadius: 4, boxShadow: '0 0 0 1px rgba(96,165,250,.35)' } : {}) }}>
                                       <span style={{ width: 190, flexShrink: 0, paddingLeft: 14, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                                         <span style={{ color: '#5A7090', fontSize: 10 }}>↳ </span>
                                         <span onClick={() => { if (onOpenOrder) onOpenOrder(o); }} title="Открыть окно заказа"
                                           style={{ fontSize: 10.5, color: '#93C5FD', cursor: onOpenOrder ? 'pointer' : 'default', borderBottom: '1px dotted rgba(96,165,250,.6)' }}>{orderLabel(o)}</span>
                                       </span>
                                       <div style={{ position: 'relative', flex: 1, height: 8, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                                        {ghosts && has && (() => {
+                                          const gl = ghostsData?.byOrder?.[String(o.id)];
+                                          if (!gl || !gl.length) return null;
+                                          let g0: any = null;
+                                          for (const gx of gl) { if (!g0 || String(gx.created || '') < String(g0.created || '')) g0 = gx; }
+                                          const gs0 = parseMs(g0.oldStart); const gf0 = parseMs(g0.oldDue);
+                                          if (gs0 == null || gf0 == null || (gf0 as number) <= (gs0 as number)) return null;
+                                          const gvs = Math.max(gs0 as number, occ.minI); const gvf = Math.min(gf0 as number, occ.maxI);
+                                          if (gvf <= gvs) return null;
+                                          const dd0 = Math.round(((s0 as number) - (gs0 as number)) / MS_DAY);
+                                          return <div title={'Было до сдвига' + (gl.length > 1 ? ' (записей: ' + gl.length + ')' : '') + ': ' + fmtDm(gs0 as number) + ' — ' + fmtDm(gf0 as number) + (dd0 ? ' · сдвинуто на ' + (dd0 > 0 ? '+' : '') + dd0 + ' дн' : '')}
+                                            style={{ position: 'absolute', left: ((gvs - occ.minI) / occ.span * 100) + '%', width: Math.max(((gvf - gvs) / occ.span) * 100, 0.4) + '%', top: -2, bottom: -2, borderRadius: 3, background: 'rgba(148,163,184,.08)', border: '1px dashed rgba(148,163,184,.7)' }} />;
+                                        })()}
                                         {vis && <div title={orderLabel(o) + ': ' + fmtDm(s0 as number) + ' — ' + fmtDm(f0 as number) + ((s0 as number) < occ.minI ? ' · начало раньше диапазона карты' : '') + ((f0 as number) > occ.maxI ? ' · финиш позже диапазона карты' : '')}
                                           style={{ position: 'absolute', left: ((vs - occ.minI) / occ.span * 100) + '%', width: Math.max(((vf - vs) / occ.span) * 100, 0.5) + '%', top: 0, height: '100%', borderRadius: 3, background: 'rgba(34,211,238,.32)', border: '1px solid rgba(34,211,238,.65)' }} />}
                                         {!has && <span style={{ position: 'absolute', left: 4, top: -3, fontSize: 9.5, color: '#5A7090' }}>нет дат</span>}
@@ -1104,7 +1210,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 6 }}>
                       Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
                     </div>
-                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа); ⚠ — заказ выходит за окно проекта. Следующий куст можно ставить в свободные окна.</div>
+                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа); ⚠ — заказ выходит за окно проекта. Галка «Показать „как было“» — пунктиром старые положения заказов (до активных сдвигов из журнала). Следующий куст можно ставить в свободные окна.</div>
                     <div style={{ marginTop: 10 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте — только заказы с этим ресурсом в маршруте{ordersLoading ? ' · загрузка…' : ''}</div>
                       {occ.list.map((a: any) => {
@@ -1341,7 +1447,11 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 <span style={{ fontSize: 11.5, color: (g.meta && g.meta.reverted) ? '#5A7090' : '#FCD34D' }}>
                   +{g.meta?.days ?? 0} дн{g.meta?.scope === 'roots' ? ' · куст (старт проекта не менялся)' : ''}{g.meta?.reverted ? ' · (возвращено)' : ''}
                 </span>
-                <button onClick={() => setShiftGraph(null)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Закрыть</button>
+                {g.mode === 'record' && (
+                  <button onClick={showOnMap} title="Открыть карту занятости: призраки «как было» и подсветка заказов этого сдвига"
+                    style={{ marginLeft: 'auto', background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.5)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>🗺 Показать на карте</button>
+                )}
+                <button onClick={() => setShiftGraph(null)} style={{ marginLeft: g.mode === 'record' ? 0 : 'auto', background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Закрыть</button>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px 14px' }}>
                 {!ok && <div style={{ fontSize: 12, color: '#8FA3BD' }}>Нет дат для графика.</div>}
