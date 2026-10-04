@@ -90,7 +90,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [suggestion, setSuggestion] = useState<any>(null);
   const [sugBusy, setSugBusy] = useState(false);
   const [occId, setOccId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'resources' | 'occupancy' | 'gantt' | 'graph'>('overview');
+  const [tab, setTab] = useState<'overview' | 'resources' | 'occupancy' | 'shiftgraph' | 'gantt' | 'graph'>('overview');
   const [onlyConflicts, setOnlyConflicts] = useState(false);
   const [shiftsLog, setShiftsLog] = useState<any[]>([]);
   const [autoRecalc, setAutoRecalc] = useState(false);
@@ -726,7 +726,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
           <span style={{ fontSize: 12, color: '#5A7090' }}>Межпроектное планирование: ресурсы, конфликты, карта занятости</span>
         </div>
         <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-          {([['overview', 'Обзор'], ['resources', 'Ресурсы и конфликты'], ['occupancy', 'Карта занятости'], ['gantt', 'Сводный график'], ['graph', 'Сводный сетевой график']] as const).map(([k, label]) => (
+          {([['overview', 'Обзор'], ['resources', 'Ресурсы и конфликты'], ['occupancy', 'Карта занятости'], ['shiftgraph', 'Сводный график'], ['gantt', 'Диаграмма Ганта'], ['graph', 'Сводный сетевой график']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)} style={{
               padding: '7px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
               background: 'transparent', border: 'none',
@@ -790,7 +790,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   color: (ccmResult && shiftProjectIds.length) ? (showGraphShifts ? '#0A1628' : '#94A3B8') : '#5A7090',
                   fontSize: 12, fontWeight: 600, cursor: (ccmResult && shiftProjectIds.length) ? 'pointer' : 'default',
                 }}>{showGraphShifts ? 'Скрыть сдвиги («было»)' : 'Показать сдвиги («было»)'}</button>
-              <span style={{ fontSize: 11.5, color: '#5A7090' }}>«Объединить» построит сводный график и откроет вкладку «Сводный график»</span>
+              <span style={{ fontSize: 11.5, color: '#5A7090' }}>«Объединить» рассчитает сводный план и откроет вкладку «Диаграмма Ганта»</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginTop: 16, maxWidth: 760 }}>
@@ -1285,10 +1285,50 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
           </div>
         )}
 
+        {tab === 'shiftgraph' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Сводный график сдвигов — «было → стало»</div>
+              <span style={{ fontSize: 11.5, color: '#5A7090' }}>все записи журнала: откройте дерево заказов и операций по любой из них</span>
+            </div>
+            {shiftsLog.length === 0 && (
+              <div style={{ marginTop: 10, border: '1px dashed #2B405E', borderRadius: 10, padding: '18px 16px', fontSize: 12.5, color: '#8FA3BD' }}>
+                Сдвигов пока нет — записи появятся здесь после применения сдвига («Ресурсы и конфликты» → «Предложить сдвиг»).
+              </div>
+            )}
+            <div style={{ display: 'grid', gap: 4, marginTop: 10, maxWidth: 980 }}>
+              {shiftsLog.map((s: any) => {
+                const dt = parseMs(s.created_at);
+                return (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', border: '1px solid #1E3252', borderRadius: 8, background: '#0C1B31', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: '#5A7090', width: 96, fontVariantNumeric: 'tabular-nums' }}>{dt != null ? fmtDm(dt) : '—'}</span>
+                    <span style={{ fontSize: 12, color: '#CBD5E1', fontWeight: 600, minWidth: 200 }}>« {String(s.project_name || '')} »</span>
+                    <span style={{ fontSize: 11.5, color: s.reverted ? '#5A7090' : '#FCD34D' }}>+{s.shift_days} дн{s.scope === 'roots' ? ' · куст' : ''}{s.reverted ? ' · (возвращено)' : ''}</span>
+                    <span style={{ fontSize: 11, color: '#8FA3BD' }}>заказов: {s.orders_shifted}{s.orders_skipped ? ' · пропущено: ' + s.orders_skipped : ''}</span>
+                    {s.old_start || s.new_start ? (
+                      <span style={{ fontSize: 11, color: '#5A7090', fontVariantNumeric: 'tabular-nums' }}>
+                        старт {s.old_start ? fmtDmShort(parseMs(s.old_start) as number) : '—'} → {s.new_start ? fmtDmShort(parseMs(s.new_start) as number) : '—'}
+                      </span>
+                    ) : null}
+                    <button onClick={() => openShiftGraph(s)} disabled={sgBusy}
+                      title="Дерево «было → стало»: заказы (родитель → дети) и операции"
+                      style={{ marginLeft: 'auto', background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.5)', color: '#86EFAC', borderRadius: 6, padding: '3px 12px', fontSize: 11.5, cursor: sgBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                      📊 Открыть дерево «было → стало»
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: '#5A7090', marginTop: 12 }}>
+              В окне: пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; стрелками раскрываются заказы (родитель → дети), «▸ оп.» — операции из расчёта; клик по заказу открывает его окно; внизу — «🗺 Показать на карте».
+            </div>
+          </div>
+        )}
+
         {tab === 'gantt' && (
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '10px 20px 12px', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Сводный график — диаграмма Ганта</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Диаграмма Ганта — по выбранным проектам</div>
               <span style={{ fontSize: 11.5, color: '#5A7090' }}>
                 {selectedIds.length > 0 ? ('проектов выбрано: ' + selectedIds.length + ' — на «Обзоре»') : 'выберите проекты на вкладке «Обзор»'}
               </span>
