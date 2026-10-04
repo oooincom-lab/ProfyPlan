@@ -440,6 +440,30 @@ async def list_shifts(
     return ShiftList(items=[ShiftOut.model_validate(r) for r in rows], total=total)
 
 
+@router.get("/v1/ccm/shifts/{shift_id}")
+async def get_shift(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Детали записи сдвига для графика «до/после»: перенесённые и пропущенные заказы."""
+    rec = (
+        await db.execute(
+            select(CcmShiftApplication).where(
+                CcmShiftApplication.id == shift_id,
+                CcmShiftApplication.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Запись сдвига не найдена")
+    return {
+        "record": ShiftOut.model_validate(rec),
+        "orders_moved": rec.orders_moved or [],
+        "orders_skipped": rec.skipped_details or [],
+    }
+
+
 @router.get("/v1/ccm/shift-recalc")
 async def shift_recalc_status(
     db: AsyncSession = Depends(get_db),

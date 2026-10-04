@@ -116,6 +116,65 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     } catch { /* журнал не критичен для работы раздела */ }
   }, []);
 
+  /** График сдвига («призрак» до/после): окно поверх раздела. */
+  const [shiftGraph, setShiftGraph] = useState<any>(null);
+  const [sgBusy, setSgBusy] = useState(false);
+  const openShiftGraph = useCallback(async (rec: any) => {
+    if (!rec || sgBusy) return;
+    setSgBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const h = { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) };
+      const r = await fetch(API_BASE + '/ccm/shifts/' + rec.id, { headers: h });
+      if (!r.ok) throw new Error('Не удалось получить детали сдвига');
+      const d = await r.json();
+      let ords: any[] = [];
+      try {
+        const r2 = await fetch(API_BASE + '/production-orders/?project_id=' + rec.project_id, { headers: h });
+        if (r2.ok) ords = await r2.json();
+      } catch { /* подписи будут по коду/ид */ }
+      const byId: Record<string, any> = {};
+      for (const o of ords || []) byId[String(o.id)] = o;
+      const days = Number(d?.record?.shift_days ?? rec.shift_days ?? 0);
+      const addDays = (iso: any, n: number) => { const m = parseMs(iso); return m == null ? null : m + n * MS_DAY; };
+      setShiftGraph({
+        mode: 'record',
+        title: 'График сдвига — «' + String(d?.record?.project_name || rec.project_name) + '»',
+        meta: { days, scope: d?.record?.scope || rec.scope, reverted: !!rec.reverted, kind: rec.kind, created: rec.created_at },
+        oldStart: parseMs(d?.record?.old_start),
+        newStart: parseMs(d?.record?.new_start),
+        moved: (d?.orders_moved || []).map((m: any) => ({
+          o: byId[String(m.id)] || { id: m.id, ext_id: m.ext_id },
+          old: [parseMs(m.old_start), parseMs(m.old_due)],
+          new: [addDays(m.old_start, days), addDays(m.old_due, days)],
+        })),
+        skipped: (d?.orders_skipped || []).map((s2: any) => ({
+          o: byId[String(s2.id)] || { id: s2.id, ext_id: s2.ext_id },
+          reason: s2.reason || 'пропущен',
+        })),
+      });
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSgBusy(false);
+  }, [sgBusy]);
+  const openShiftGraphPreview = useCallback(() => {
+    const p = stepPanel?.preview;
+    if (!p) return;
+    setShiftGraph({
+      mode: 'preview',
+      title: 'График сдвига (проверка) — «' + String(p.project_name || '') + '»',
+      meta: { days: Number(p.days || 0) },
+      oldStart: parseMs(p.old_start),
+      newStart: parseMs(p.new_start),
+      bushes: (p.bushes || []).map((b: any) => ({
+        title: b.title,
+        old: [parseMs(b.window_before?.[0]), parseMs(b.window_before?.[1])],
+        new: [parseMs(b.window_after?.[0]), parseMs(b.window_after?.[1])],
+        skipped: b.orders_skipped || 0,
+      })),
+      skippedList: (p.totals?.skipped || []),
+    });
+  }, [stepPanel]);
+
   /** Статусы пересчёта проектов сдвига (панель «Пересчёт проектов сдвига»). */
   const loadRecalc = useCallback(async () => {
     try {
@@ -739,6 +798,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   ))}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>Перенесётся заказов: {stepPanel.preview?.totals?.orders_shifted ?? 0} · пропустится: {stepPanel.preview?.totals?.orders_skipped ?? 0}</span>
+                    <button onClick={openShiftGraphPreview}
+                      title="Посмотреть «до/после» на графике"
+                      style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.45)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>📊 График сдвига</button>
                     <button onClick={() => setStepPanel((p: any) => ({ ...p, step: 2 }))} disabled={sugBusy}
                       style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.4)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Дальше: применение</button>
                     <button onClick={() => setStepPanel(null)}
@@ -797,6 +859,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <span style={{ color: s.kind === 'other' ? '#FCD34D' : '#93C5FD' }}>{s.kind === 'other' ? 'сдвиг другому' : 'свой сдвиг'} · +{s.shift_days} дн{s.orders_shifted ? ' · заказов: ' + s.orders_shifted + (s.scope === 'roots' ? ' (куст)' : '') : ''}{s.orders_skipped ? ' · пропущено: ' + s.orders_skipped : ''}</span>
                       {s.scope === 'roots' ? <span style={{ color: '#8FA3BD' }} title="Сдвиг куста не меняет дату старта проекта">старт проекта не менялся</span> : <span style={{ color: '#8FA3BD' }}>старт {fmtD(s.old_start)} → {fmtD(s.new_start)}</span>}
                       <span style={{ marginLeft: 'auto' }}>
+                        <button onClick={() => openShiftGraph(s)} disabled={sgBusy}
+                          title="График сдвига: было → стало (заказы, зона сдвига)"
+                          style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.45)', color: '#C4B5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>📊 График</button>
                         {s.reverted ? (
                           <span style={{ color: '#5A7090' }}>(возвращено)</span>
                         ) : (
@@ -1085,6 +1150,115 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
             </div>
           </div>
         )}
+
+        {shiftGraph && (() => {
+          const g = shiftGraph;
+          let mn = Infinity, mx = -Infinity;
+          const push = (v: any) => { if (v != null && isFinite(v)) { if (v < mn) mn = v; if (v > mx) mx = v; } };
+          push(g.oldStart); push(g.newStart);
+          const rows: any[] = [];
+          (g.moved || []).forEach((m: any) => { rows.push({ label: orderLabel(m.o), old: m.old, neww: m.new, o: m.o }); (m.old || []).forEach(push); (m.new || []).forEach(push); });
+          (g.bushes || []).forEach((b: any) => { rows.push({ label: '🌳 ' + b.title, old: b.old, neww: b.new, skipped: b.skipped }); (b.old || []).forEach(push); (b.new || []).forEach(push); });
+          const ok = isFinite(mn) && isFinite(mx) && mx > mn;
+          const span = ok ? (mx - mn) : 1;
+          const pos = (v: number) => ((v - mn) / span) * 100;
+          const pair = (arr: any) => {
+            const s0 = arr && arr[0] != null ? arr[0] : (arr && arr[1] != null ? arr[1] : null);
+            const f0 = arr && arr[1] != null ? arr[1] : s0;
+            return (s0 == null || f0 == null) ? null : [s0, f0];
+          };
+          const barRow = (key: string, label: string, oldArr: any, newArr: any, o: any, skipped?: string) => {
+            const ow = pair(oldArr); const nw = pair(newArr);
+            return (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+                <span style={{ width: 190, flexShrink: 0, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {o ? (
+                    <button onClick={() => { if (onOpenOrder) onOpenOrder(o); }} title="Открыть окно заказа"
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 11, color: '#93C5FD', cursor: 'pointer', borderBottom: '1px dotted rgba(96,165,250,.6)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</button>
+                  ) : <span style={{ color: '#CBD5E1' }}>{label}</span>}
+                  {skipped ? <span style={{ color: '#FCD34D' }}> · не поедет: {skipped}</span> : null}
+                </span>
+                <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                  {ow && nw && (
+                    <div title={'зона сдвига: +' + Math.round((nw[0] - ow[0]) / MS_DAY) + ' дн'}
+                      style={{ position: 'absolute', top: 0, bottom: 0, left: Math.min(pos(ow[0]), pos(nw[0])) + '%', width: Math.max(Math.abs(pos(nw[0]) - pos(ow[0])), 0.6) + '%', background: 'rgba(245,158,11,.10)', borderLeft: '1px dashed rgba(245,158,11,.5)', borderRight: '1px dashed rgba(245,158,11,.5)' }} />
+                  )}
+                  {ow && (
+                    <div title={label + ' · было: ' + fmtDm(ow[0]) + ' — ' + fmtDm(ow[1])}
+                      style={{ position: 'absolute', top: 1, bottom: 1, left: pos(ow[0]) + '%', width: Math.max(((ow[1] - ow[0]) / span) * 100, 0.5) + '%', borderRadius: 3, border: '1px dashed rgba(148,163,184,.75)', background: 'rgba(148,163,184,.10)' }} />
+                  )}
+                  {nw && (
+                    <div title={label + ' · стало: ' + fmtDm(nw[0]) + ' — ' + fmtDm(nw[1])}
+                      style={{ position: 'absolute', top: 1, bottom: 1, left: pos(nw[0]) + '%', width: Math.max(((nw[1] - nw[0]) / span) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
+                  )}
+                </div>
+                <span style={{ width: 190, textAlign: 'right', flexShrink: 0, fontSize: 10, color: '#8FA3BD', fontVariantNumeric: 'tabular-nums' }}>
+                  {ow && nw ? (fmtDmShort(ow[0]) + '–' + fmtDmShort(ow[1]) + ' → ' + fmtDmShort(nw[0]) + '–' + fmtDmShort(nw[1])) : '—'}
+                </span>
+              </div>
+            );
+          };
+          const projRow = (g.oldStart != null && g.newStart != null) ? (
+            <div key="proj" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.7)', marginBottom: 3 }}>
+              <span style={{ width: 190, flexShrink: 0, fontSize: 11.5, fontWeight: 700, color: '#CBD5E1' }}>Проект · старт</span>
+              <div style={{ position: 'relative', flex: 1, height: 14 }}>
+                <div title={'старт: было ' + fmtDm(g.oldStart) + ' → стало ' + fmtDm(g.newStart)}
+                  style={{ position: 'absolute', top: 6, left: Math.min(pos(g.oldStart), pos(g.newStart)) + '%', width: Math.max(Math.abs(pos(g.newStart) - pos(g.oldStart)), 0.8) + '%', height: 2, background: 'rgba(245,158,11,.55)' }} />
+                <div title={'было: ' + fmtDm(g.oldStart)}
+                  style={{ position: 'absolute', top: 2, left: pos(g.oldStart) + '%', width: 10, height: 10, marginLeft: -5, transform: 'rotate(45deg)', border: '1.5px dashed #94A3B8', background: 'rgba(148,163,184,.15)' }} />
+                <div title={'стало: ' + fmtDm(g.newStart)}
+                  style={{ position: 'absolute', top: 2, left: pos(g.newStart) + '%', width: 10, height: 10, marginLeft: -5, transform: 'rotate(45deg)', background: '#3B82F6', border: '1px solid #93C5FD' }} />
+              </div>
+              <span style={{ width: 190, textAlign: 'right', flexShrink: 0, fontSize: 10, color: '#8FA3BD' }}>{fmtDm(g.oldStart)} → {fmtDm(g.newStart)}</span>
+            </div>
+          ) : null;
+          return (
+            <div style={{ position: 'fixed', left: 320, top: 64, right: 40, bottom: 70, zIndex: 60, background: '#0C1B31', border: '1px solid #1E3252', borderRadius: 12, boxShadow: '0 18px 60px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid #1E3252', background: '#0E2038', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#93C5FD' }}>📊 {g.title}</span>
+                <span style={{ fontSize: 11.5, color: (g.meta && g.meta.reverted) ? '#5A7090' : '#FCD34D' }}>
+                  +{g.meta?.days ?? 0} дн{g.meta?.scope === 'roots' ? ' · куст (старт проекта не менялся)' : ''}{g.meta?.reverted ? ' · (возвращено)' : ''}
+                </span>
+                <button onClick={() => setShiftGraph(null)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Закрыть</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px 14px' }}>
+                {!ok && <div style={{ fontSize: 12, color: '#8FA3BD' }}>Нет дат для графика.</div>}
+                {ok && (<>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#5A7090', marginBottom: 4, paddingLeft: 200, paddingRight: 200 }}>
+                    <span>{fmtDm(mn)}</span>
+                    <span>{fmtDm(mx)}</span>
+                  </div>
+                  <div style={{ border: '1px solid #1E3252', borderRadius: 6, background: '#0A1628', padding: '6px 8px' }}>
+                    {projRow}
+                    {rows.map((r2, i) => barRow('r' + i, r2.label, r2.old, r2.neww, r2.o, r2.skipped))}
+                    {rows.length === 0 && !projRow && <div style={{ fontSize: 11.5, color: '#5A7090', padding: '4px 0' }}>Нет строк для отображения.</div>}
+                  </div>
+                  {g.mode === 'record' && (g.skipped || []).length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 3 }}>Пропущены (не поехали)</div>
+                      {(g.skipped || []).map((s2: any, i: number) => (
+                        <div key={'sk' + i} style={{ fontSize: 11, color: '#8FA3BD', padding: '1px 0' }}>
+                          — {orderLabel(s2.o)} <span style={{ color: '#5A7090' }}>· {s2.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {g.mode === 'preview' && (g.skippedList || []).length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 3 }}>Пропуски (не поедут)</div>
+                      {(g.skippedList || []).map((s2: any, i: number) => (
+                        <div key={'sk' + i} style={{ fontSize: 11, color: '#8FA3BD', padding: '1px 0' }}>— {s2.ext_id || s2.id} <span style={{ color: '#5A7090' }}>· {s2.reason}</span></div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#5A7090', marginTop: 6 }}>
+                    Пунктир — что было · синяя полоса — что стало · янтарная зона — область сдвига. Клик по заказу — его окно.
+                  </div>
+                </>)}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
