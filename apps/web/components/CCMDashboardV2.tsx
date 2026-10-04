@@ -119,6 +119,29 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   /** График сдвига («призрак» до/после): окно поверх раздела. */
   const [shiftGraph, setShiftGraph] = useState<any>(null);
   const [sgBusy, setSgBusy] = useState(false);
+  const [sgExp, setSgExp] = useState<Record<string, boolean>>({});
+  const [sgOpOpen, setSgOpOpen] = useState<Record<string, boolean>>({});
+  const [sgOpsData, setSgOpsData] = useState<any>(null);
+  /** Операции заказов сдвига: раскрытие «▸ оп.» — расчёт проекта + список операций (один раз на окно). */
+  const loadSgOps = useCallback(async () => {
+    if (sgOpsData && (sgOpsData.loading || sgOpsData.byOrder)) return;
+    const pid = shiftGraph?.projectId;
+    if (!pid) return;
+    setSgOpsData({ loading: true });
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const h = { ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) };
+      const sr = await fetch(API_BASE + '/projects/' + String(pid) + '/calculate/schedule', { method: 'POST', headers: { ...h, 'Content-Type': 'application/json' }, body: '{}' });
+      const sched = sr.ok ? await sr.json() : null;
+      const byOrder: Record<string, any[]> = {};
+      for (const n of ((sched && sched.nodes) || [])) {
+        const oid = n.order_id ? String(n.order_id) : '';
+        if (!oid) continue;
+        (byOrder[oid] = byOrder[oid] || []).push({ id: String(n.id), name: n.name || '—', start: n.start_datetime || (n.early_start_date ? n.early_start_date + 'T08:00' : null), finish: n.finish_datetime || (n.early_finish_date ? n.early_finish_date + 'T18:00' : null), crit: !!n.is_critical });
+      }
+      setSgOpsData({ byOrder });
+    } catch (e: any) { setSgOpsData({ err: String(e?.message || e) }); }
+  }, [sgOpsData, shiftGraph]);
   const openShiftGraph = useCallback(async (rec: any) => {
     if (!rec || sgBusy) return;
     setSgBusy(true);
@@ -137,8 +160,10 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       for (const o of ords || []) byId[String(o.id)] = o;
       const days = Number(d?.record?.shift_days ?? rec.shift_days ?? 0);
       const addDays = (iso: any, n: number) => { const m = parseMs(iso); return m == null ? null : m + n * MS_DAY; };
+      setSgExp({}); setSgOpOpen({}); setSgOpsData(null);
       setShiftGraph({
         mode: 'record',
+        projectId: rec.project_id,
         title: 'График сдвига — «' + String(d?.record?.project_name || rec.project_name) + '»',
         meta: { days, scope: d?.record?.scope || rec.scope, reverted: !!rec.reverted, kind: rec.kind, created: rec.created_at },
         oldStart: parseMs(d?.record?.old_start),
@@ -159,6 +184,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const openShiftGraphPreview = useCallback(() => {
     const p = stepPanel?.preview;
     if (!p) return;
+    setSgExp({}); setSgOpOpen({}); setSgOpsData(null);
     setShiftGraph({
       mode: 'preview',
       title: 'График сдвига (проверка) — «' + String(p.project_name || '') + '»',
@@ -1156,9 +1182,23 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
           let mn = Infinity, mx = -Infinity;
           const push = (v: any) => { if (v != null && isFinite(v)) { if (v < mn) mn = v; if (v > mx) mx = v; } };
           push(g.oldStart); push(g.newStart);
-          const rows: any[] = [];
-          (g.moved || []).forEach((m: any) => { rows.push({ label: orderLabel(m.o), old: m.old, neww: m.new, o: m.o }); (m.old || []).forEach(push); (m.new || []).forEach(push); });
-          (g.bushes || []).forEach((b: any) => { rows.push({ label: '🌳 ' + b.title, old: b.old, neww: b.new, skipped: b.skipped }); (b.old || []).forEach(push); (b.new || []).forEach(push); });
+          const all: any[] = [];
+          (g.moved || []).forEach((m: any) => { all.push({ o: m.o, old: m.old, neww: m.new }); (m.old || []).forEach(push); (m.new || []).forEach(push); });
+          (g.skipped || []).forEach((s2: any) => { all.push({ o: s2.o, old: null, neww: null, skippedText: s2.reason }); });
+          const bushRows: any[] = [];
+          (g.bushes || []).forEach((b: any) => { bushRows.push({ label: '🌳 ' + b.title, old: b.old, neww: b.new, skipped: b.skipped }); (b.old || []).forEach(push); (b.new || []).forEach(push); });
+          // Дерево заказов: родитель → дети (куст едет целиком); операции — раскрытием «▸ оп.»
+          const byId2: Record<string, any> = {};
+          all.forEach((r2) => { if (r2.o) byId2[String(r2.o.id)] = r2; });
+          const kidsMap: Record<string, any[]> = {};
+          const treeRoots: any[] = [];
+          for (const r2 of all) {
+            const pid2 = r2.o && r2.o.parent_order_id ? String(r2.o.parent_order_id) : '';
+            if (pid2 && byId2[pid2]) (kidsMap[pid2] = kidsMap[pid2] || []).push(r2);
+            else treeRoots.push(r2);
+          }
+          const buildTree = (r2: any, d: number): any => ({ ...r2, depth: d, kids: (kidsMap[String(r2.o && r2.o.id)] || []).map((k2: any) => buildTree(k2, d + 1)) });
+          const tree = treeRoots.map((r2) => buildTree(r2, 0));
           const ok = isFinite(mn) && isFinite(mx) && mx > mn;
           const span = ok ? (mx - mn) : 1;
           const pos = (v: number) => ((v - mn) / span) * 100;
@@ -1198,6 +1238,88 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
               </div>
             );
           };
+          const treeRow = (r2: any, key: string): any => {
+            const o = r2.o;
+            const isOpen = !(o && sgExp[String(o.id)] === false);
+            const ow = pair(r2.old); const nw = pair(r2.neww);
+            return (
+              <div key={key}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+                  <span style={{ width: 18, flexShrink: 0, textAlign: 'center' }}>
+                    {r2.kids && r2.kids.length > 0 ? (
+                      <button onClick={() => setSgExp((m2: any) => ({ ...m2, [String(o.id)]: !isOpen }))} title={isOpen ? 'Свернуть' : 'Развернуть'}
+                        style={{ background: 'transparent', border: 'none', color: '#8FA3BD', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, padding: 0 }}>{isOpen ? '▼' : '▶'}</button>
+                    ) : null}
+                  </span>
+                  <span style={{ width: 168, flexShrink: 0, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: (r2.depth || 0) * 12 }}>
+                    {o ? (
+                      <button onClick={() => { if (onOpenOrder) onOpenOrder(o); }} title="Открыть окно заказа"
+                        style={{ background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 11, color: r2.skippedText ? '#8FA3BD' : '#93C5FD', cursor: 'pointer', borderBottom: '1px dotted rgba(96,165,250,.6)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{orderLabel(o)}</button>
+                    ) : <span style={{ color: '#CBD5E1' }}>{r2.label}</span>}
+                  </span>
+                  {o ? (
+                    <button onClick={() => { if (!sgOpOpen[String(o.id)]) loadSgOps(); setSgOpOpen((m2: any) => ({ ...m2, [String(o.id)]: !m2[String(o.id)] })); }}
+                      title="Операции заказа: «было → стало»"
+                      style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 5, padding: '0px 6px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      {sgOpOpen[String(o.id)] ? '▾ оп.' : '▸ оп.'}
+                    </button>
+                  ) : null}
+                  <div style={{ position: 'relative', flex: 1, height: 12, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                    {ow && nw && (
+                      <div title={'зона сдвига: +' + Math.round((nw[0] - ow[0]) / MS_DAY) + ' дн'}
+                        style={{ position: 'absolute', top: 0, bottom: 0, left: Math.min(pos(ow[0]), pos(nw[0])) + '%', width: Math.max(Math.abs(pos(nw[0]) - pos(ow[0])), 0.6) + '%', background: 'rgba(245,158,11,.10)', borderLeft: '1px dashed rgba(245,158,11,.5)', borderRight: '1px dashed rgba(245,158,11,.5)' }} />
+                    )}
+                    {ow && (
+                      <div title={orderLabel(o) + ' · было: ' + fmtDm(ow[0]) + ' — ' + fmtDm(ow[1])}
+                        style={{ position: 'absolute', top: 1, bottom: 1, left: pos(ow[0]) + '%', width: Math.max(((ow[1] - ow[0]) / span) * 100, 0.5) + '%', borderRadius: 3, border: '1px dashed rgba(148,163,184,.75)', background: 'rgba(148,163,184,.10)' }} />
+                    )}
+                    {nw && (
+                      <div title={orderLabel(o) + ' · стало: ' + fmtDm(nw[0]) + ' — ' + fmtDm(nw[1])}
+                        style={{ position: 'absolute', top: 1, bottom: 1, left: pos(nw[0]) + '%', width: Math.max(((nw[1] - nw[0]) / span) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />
+                    )}
+                  </div>
+                  <span style={{ width: 186, textAlign: 'right', flexShrink: 0, fontSize: 10, color: '#8FA3BD', fontVariantNumeric: 'tabular-nums' }}>
+                    {ow && nw ? (fmtDmShort(ow[0]) + '–' + fmtDmShort(ow[1]) + ' → ' + fmtDmShort(nw[0]) + '–' + fmtDmShort(nw[1])) : (r2.skippedText ? 'не поедет: ' + r2.skippedText : '—')}
+                  </span>
+                </div>
+                {r2.kids && r2.kids.length > 0 && isOpen && r2.kids.map((k2: any, ki: number) => treeRow(k2, key + '-' + ki))}
+                {o && sgOpOpen[String(o.id)] && (() => {
+                  if (!sgOpsData || sgOpsData.loading) return <div style={{ padding: '1px 0 1px 250px', fontSize: 10.5, color: '#5A7090' }}>операции: загрузка…</div>;
+                  if (sgOpsData.err) return <div style={{ padding: '1px 0 1px 250px', fontSize: 10.5, color: '#FCA5A5' }}>операции: {sgOpsData.err}</div>;
+                  const list = (sgOpsData.byOrder || {})[String(o.id)] || [];
+                  if (!list.length) return <div style={{ padding: '1px 0 1px 250px', fontSize: 10.5, color: '#5A7090' }}>нет операций в расчёте</div>;
+                  const rev = !!(g.meta && g.meta.reverted);
+                  const NN = Number(g.meta?.days || 0);
+                  const isMoved = (g.moved || []).some((m2: any) => String(m2.o?.id) === String(o.id));
+                  return (
+                    <div>
+                      {list.map((op2: any, oi: number) => {
+                        const cs = parseMs(op2.start); const cf = parseMs(op2.finish);
+                        const gS = isMoved && !rev ? -NN : 0;
+                        const sS = isMoved && rev ? NN : 0;
+                        const ow2 = cs != null && cf != null ? [cs + gS * MS_DAY, cf + gS * MS_DAY] : null;
+                        const nw2 = cs != null && cf != null ? [cs + sS * MS_DAY, cf + sS * MS_DAY] : null;
+                        const noMove = !isMoved || NN === 0 || gS === 0 && sS === 0;
+                        return (
+                          <div key={key + '-op' + oi} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '1px 0' }}>
+                            <span style={{ width: 186, flexShrink: 0, paddingLeft: 24 + (r2.depth || 0) * 12, fontSize: 10.5, color: '#B0C4DE', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
+                            <div style={{ position: 'relative', flex: 1, height: 8, background: 'rgba(15,30,54,.7)', borderRadius: 3 }}>
+                              {noMove && nw2 && <div title={op2.name + ': ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + ' (не двигался)'} style={{ position: 'absolute', top: 1, bottom: 1, left: pos(nw2[0]) + '%', width: Math.max(((nw2[1] - nw2[0]) / span) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.35)', border: '1px dashed rgba(148,163,184,.6)' }} />}
+                              {!noMove && ow2 && <div title={'было: ' + fmtDm(ow2[0]) + ' — ' + fmtDm(ow2[1])} style={{ position: 'absolute', top: 1, bottom: 1, left: pos(ow2[0]) + '%', width: Math.max(((ow2[1] - ow2[0]) / span) * 100, 0.5) + '%', borderRadius: 3, border: '1px dashed rgba(148,163,184,.75)', background: 'rgba(148,163,184,.10)' }} />}
+                              {!noMove && nw2 && <div title={'стало: ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1])} style={{ position: 'absolute', top: 1, bottom: 1, left: pos(nw2[0]) + '%', width: Math.max(((nw2[1] - nw2[0]) / span) * 100, 0.5) + '%', borderRadius: 3, background: 'rgba(59,130,246,.55)', border: '1px solid rgba(96,165,250,.7)' }} />}
+                            </div>
+                            <span style={{ width: 186, textAlign: 'right', flexShrink: 0, fontSize: 10, color: '#8FA3BD', fontVariantNumeric: 'tabular-nums' }}>
+                              {nw2 == null ? '—' : noMove ? (fmtDmShort(nw2[0]) + '–' + fmtDmShort(nw2[1])) : (ow2 == null ? '—' : (fmtDmShort(ow2[0]) + '–' + fmtDmShort(ow2[1]) + ' → ' + fmtDmShort(nw2[0]) + '–' + fmtDmShort(nw2[1])))}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          };
           const projRow = (g.oldStart != null && g.newStart != null) ? (
             <div key="proj" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', borderBottom: '1px dashed rgba(30,58,95,.7)', marginBottom: 3 }}>
               <span style={{ width: 190, flexShrink: 0, fontSize: 11.5, fontWeight: 700, color: '#CBD5E1' }}>Проект · старт</span>
@@ -1230,8 +1352,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   </div>
                   <div style={{ border: '1px solid #1E3252', borderRadius: 6, background: '#0A1628', padding: '6px 8px' }}>
                     {projRow}
-                    {rows.map((r2, i) => barRow('r' + i, r2.label, r2.old, r2.neww, r2.o, r2.skipped))}
-                    {rows.length === 0 && !projRow && <div style={{ fontSize: 11.5, color: '#5A7090', padding: '4px 0' }}>Нет строк для отображения.</div>}
+                    {tree.map((r2: any, i: number) => treeRow(r2, 'r' + i))}
+                    {bushRows.map((r2: any, i: number) => barRow('b' + i, r2.label, r2.old, r2.neww, undefined, r2.skipped))}
+                    {tree.length === 0 && bushRows.length === 0 && !projRow && <div style={{ fontSize: 11.5, color: '#5A7090', padding: '4px 0' }}>Нет строк для отображения.</div>}
                   </div>
                   {g.mode === 'record' && (g.skipped || []).length > 0 && (
                     <div style={{ marginTop: 8 }}>
@@ -1252,7 +1375,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     </div>
                   )}
                   <div style={{ fontSize: 11, color: '#5A7090', marginTop: 6 }}>
-                    Пунктир — что было · синяя полоса — что стало · янтарная зона — область сдвига. Клик по заказу — его окно.
+                    Пунктир — что было · синяя полоса — что стало · янтарная зона — область сдвига. Клик по заказу — его окно; «▸ оп.» — операции заказа из расчёта (раскрываются деревом).
                   </div>
                 </>)}
               </div>
