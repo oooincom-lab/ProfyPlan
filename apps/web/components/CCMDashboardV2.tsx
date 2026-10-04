@@ -1415,7 +1415,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 const span0 = (mx0 - mn0) || MS_DAY;
                 const spanMin = span0 / 60000;
                 const SGC_LEFT = 268;
-                const SGC_RIGHT = 176;
+                const SGC_RIGHT = 148;
                 const RULER_H = 36;
                 const H_ORDER = 28;
                 const H_OPSMSG = 15;
