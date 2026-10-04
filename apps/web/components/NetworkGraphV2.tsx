@@ -57,9 +57,11 @@ interface Props {
   levelResult: ResourceLevelResult | null;
   baselineNodes?: NodePos[] | null;
   showBaseline?: boolean;
+  /** Слой сдвигов: узлы проектов с активными сдвигами (+N дн). */
+  shiftMarks?: { id: string; deltaDays: number }[] | null;
 }
 
-export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, showBaseline }: Props) {
+export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, showBaseline, shiftMarks }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scale, setScale] = useState(0.85);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -199,6 +201,25 @@ export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, 
       });
     }
 
+    // Слой «Было» (сдвиги): узлы проектов с активными сдвигами — янтарный пунктирный ободок и «+N дн»
+    // (позиции графика топологические — календарные сдвиги показываем пометкой, не смещением).
+    if (shiftMarks && shiftMarks.length) {
+      const withText = shiftMarks.length <= 18;
+      shiftMarks.forEach(sm => {
+        const cn = nodes.current.find(n => n.id === sm.id);
+        if (!cn || cn.status === 'completed') return;
+        ctx.strokeStyle = 'rgba(245,158,11,0.55)'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.arc(cn.x, cn.y, NODE_R + 5, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        if (withText) {
+          ctx.fillStyle = 'rgba(245,158,11,0.9)'; ctx.font = '8px IBM Plex Mono';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('+' + sm.deltaDays + 'д', cn.x, cn.y - NODE_R - 11);
+        }
+      });
+      ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    }
+
     // Edges
     edges.current.forEach(e => {
       const fn = nodes.current.find(n => n.id === e.from);
@@ -299,7 +320,7 @@ export default function NetworkGraphV2({ cpmResult, levelResult, baselineNodes, 
       ctx.fillStyle = '#60A5FA'; ctx.font = '9px Inter';
       ctx.fillText('Двойной клик — редактировать | Правый клик — действия', tx + 12, ty + 90);
     }
-  }, [cpmResult, levelResult, scale, offset, hoveredNode, mousePos, actualsMap, showBaseline, baselineNodes]);
+  }, [cpmResult, levelResult, scale, offset, hoveredNode, mousePos, actualsMap, showBaseline, baselineNodes, shiftMarks]);
 
   // Handlers
   const handleWheel = useCallback((e: React.WheelEvent) => {

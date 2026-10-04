@@ -24,6 +24,7 @@ class MergedProjectResult:
     """Результат объединения нескольких проектов."""
     projects: list[UUID]
     nodes: dict[str, OperationNode]
+    op_projects: dict[str, str]
     critical_path: list[str]
     total_duration: Decimal
     node_count: int
@@ -47,6 +48,7 @@ async def merge_projects(
     # 1. Загружаем операции всех проектов
     all_operations = []
     all_deps = []
+    op_projects: dict[str, str] = {}
 
     for pid in project_ids:
         ops_result = await db.execute(
@@ -56,6 +58,8 @@ async def merge_projects(
             )
         )
         ops = ops_result.scalars().all()
+        for op in ops:
+            op_projects[str(op.id)] = str(op.project_id)
 
         deps_result = await db.execute(
             select(OperationDependency).where(
@@ -123,6 +127,7 @@ async def merge_projects(
     return MergedProjectResult(
         projects=project_ids,
         nodes=result.nodes,
+        op_projects=op_projects,
         critical_path=result.critical_path,
         total_duration=result.total_duration,
         node_count=len(result.nodes),
@@ -138,6 +143,7 @@ def format_merged_result(result: MergedProjectResult) -> dict:
         nodes.append(
             {
                 "id": nid,
+                "project_id": result.op_projects.get(nid, ""),
                 "name": node.name,
                 "duration": float(node.total_duration),
                 "early_start": float(node.early_start),

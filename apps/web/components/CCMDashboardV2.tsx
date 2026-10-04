@@ -78,6 +78,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const [error, setError] = useState<string | null>(null);
   const [showBaseline, setShowBaseline] = useState(false);
   const [baselineNodes, setBaselineNodes] = useState<any>(null);
+  /** Слой «было» на сводном графике: пометки узлов проектов с активными сдвигами. */
+  const [showGraphShifts, setShowGraphShifts] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [loginEmail, setLoginEmail] = useState(DEMO_EMAIL);
   const [loginPass, setLoginPass] = useState(DEMO_PASSWORD);
@@ -318,6 +320,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       setAutoRecalc(localStorage.getItem('profyplan_ccm_autorecalc') === '1');
       try { setShiftAuto(localStorage.getItem('profyplan_ccm_shift_auto') === '1'); } catch { /* noop */ }
       try { setGhosts(localStorage.getItem('profyplan_ccm_ghosts') === '1'); } catch { /* noop */ }
+      try { setShowGraphShifts(localStorage.getItem('profyplan_ccm_graph_shifts') === '1'); } catch { /* noop */ }
     } catch { /* noop */ }
   }, []);
 
@@ -685,6 +688,27 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const conflictedN = overload?.totals?.conflicted ?? conflictedRes.length;
   const overlapSum = sharedRes.reduce((acc: number, r: any) => acc + (r.overlap_days || 0), 0);
 
+  // Активные сдвиги по проектам: сумма дней (слой «было» на сводном графике).
+  const shiftDeltaByProject: Record<string, number> = {};
+  for (const s0 of shiftsLog) {
+    if (!s0 || s0.reverted) continue;
+    const pid0 = String(s0.project_id || '');
+    if (!pid0) continue;
+    shiftDeltaByProject[pid0] = (shiftDeltaByProject[pid0] || 0) + Number(s0.shift_days || 0);
+  }
+  const shiftProjectIds = Object.keys(shiftDeltaByProject).filter((k) => shiftDeltaByProject[k] > 0);
+  const shiftMarks = (showGraphShifts && ccmResult && Array.isArray(ccmResult.nodes))
+    ? ccmResult.nodes
+        .map((n: any) => ({ id: String(n.id), deltaDays: shiftDeltaByProject[String(n.project_id || '')] || 0 }))
+        .filter((x: any) => x.deltaDays > 0)
+    : null;
+  const shiftSummary = shiftProjectIds
+    .map((pid0) => {
+      const p0 = (projects || []).find((x: any) => String(x.id) === pid0);
+      return (p0 ? p0.name : pid0) + ' +' + shiftDeltaByProject[pid0] + ' дн';
+    })
+    .join(' · ');
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: 'calc(100vh - 146px)',
@@ -751,6 +775,16 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 border: '1px solid rgba(245,158,11,0.3)', color: showBaseline ? '#0A1628' : '#F59E0B',
                 fontSize: 12, fontWeight: 600, cursor: baselineNodes ? 'pointer' : 'default',
               }}>{showBaseline ? 'Скрыть Baseline' : 'Сравнить с Baseline'}</button>
+              <button onClick={() => { const v = !showGraphShifts; setShowGraphShifts(v); try { localStorage.setItem('profyplan_ccm_graph_shifts', v ? '1' : '0'); } catch { /* noop */ } }}
+                disabled={!ccmResult || shiftProjectIds.length === 0}
+                title={!ccmResult ? 'Сначала «Объединить»' : (shiftProjectIds.length === 0 ? 'Активных сдвигов нет' : 'Пометить на графике узлы проектов с активными сдвигами')}
+                style={{
+                  padding: '6px 16px', borderRadius: 6,
+                  background: showGraphShifts ? '#94A3B8' : 'rgba(148,163,184,0.1)',
+                  border: '1px solid rgba(148,163,184,0.3)',
+                  color: (ccmResult && shiftProjectIds.length) ? (showGraphShifts ? '#0A1628' : '#94A3B8') : '#5A7090',
+                  fontSize: 12, fontWeight: 600, cursor: (ccmResult && shiftProjectIds.length) ? 'pointer' : 'default',
+                }}>{showGraphShifts ? 'Скрыть сдвиги («было»)' : 'Показать сдвиги («было»)'}</button>
               <span style={{ fontSize: 11.5, color: '#5A7090' }}>«Объединить» построит сводный график и откроет вкладку «Сводный график»</span>
             </div>
 
@@ -1250,6 +1284,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '10px 20px 12px', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#8FA3BD' }}>Сводный сетевой график</div>
+              {showGraphShifts && shiftSummary ? <span style={{ fontSize: 11, color: '#94A3B8' }}>активные сдвиги: {shiftSummary} — узлы помечены янтарным ободком</span> : null}
               {!ccmResult && <span style={{ fontSize: 11.5, color: '#5A7090' }}>Выберите проекты на «Обзоре» и нажмите «Объединить»</span>}
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                 <button onClick={runMerge} disabled={loading} style={{
@@ -1270,6 +1305,16 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   border: '1px solid rgba(245,158,11,0.3)', color: showBaseline ? '#0A1628' : '#F59E0B',
                   fontSize: 12, fontWeight: 600, cursor: baselineNodes ? 'pointer' : 'default',
                 }}>{showBaseline ? 'Скрыть Baseline' : 'Сравнить с Baseline'}</button>
+                <button onClick={() => { const v = !showGraphShifts; setShowGraphShifts(v); try { localStorage.setItem('profyplan_ccm_graph_shifts', v ? '1' : '0'); } catch { /* noop */ } }}
+                  disabled={!ccmResult || shiftProjectIds.length === 0}
+                  title={!ccmResult ? 'Сначала «Объединить»' : (shiftProjectIds.length === 0 ? 'Активных сдвигов нет' : 'Пометить на графике узлы проектов с активными сдвигами')}
+                  style={{
+                    padding: '5px 14px', borderRadius: 6,
+                    background: showGraphShifts ? '#94A3B8' : 'rgba(148,163,184,0.1)',
+                    border: '1px solid rgba(148,163,184,0.3)',
+                    color: (ccmResult && shiftProjectIds.length) ? (showGraphShifts ? '#0A1628' : '#94A3B8') : '#5A7090',
+                    fontSize: 12, fontWeight: 600, cursor: (ccmResult && shiftProjectIds.length) ? 'pointer' : 'default',
+                  }}>{showGraphShifts ? 'Скрыть сдвиги («было»)' : 'Показать сдвиги («было»)'}</button>
               </div>
             </div>
             <div style={{ flex: 1, minHeight: 0, border: '1px solid #1E3252', borderRadius: 10, overflow: 'hidden' }}>
@@ -1278,6 +1323,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 levelResult={levelResult}
                 baselineNodes={showBaseline ? baselineNodes : null}
                 showBaseline={showBaseline}
+                shiftMarks={shiftMarks}
               />
             </div>
           </div>
