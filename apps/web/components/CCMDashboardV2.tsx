@@ -246,7 +246,19 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
         if (!oid) continue;
         (byOrder[oid] = byOrder[oid] || []).push({ id: String(n.id), name: n.name || '—', start: n.start_datetime || (n.early_start_date ? n.early_start_date + 'T08:00' : null), finish: n.finish_datetime || (n.early_finish_date ? n.early_finish_date + 'T18:00' : null), crit: !!n.is_critical });
       }
-      setSgTabOps((m: any) => ({ ...m, [pid]: { byOrder } }));
+      // Ресурсы операций проекта — для ссылок на карточки ресурсов (одним запросом).
+      let resByOp: Record<string, any[]> = {};
+      try {
+        const rm = await fetch(API_BASE + '/projects/' + String(pid) + '/operations/resources-map', { headers: h });
+        const rl = rm.ok ? await rm.json() : [];
+        for (const m2 of (Array.isArray(rl) ? rl : [])) {
+          const oid2 = String(m2.operation_id || '');
+          if (!oid2) continue;
+          (resByOp[oid2] = resByOp[oid2] || []).push({ id: m2.resource_id ? String(m2.resource_id) : '', name: String(m2.resource_name || ''), role: String(m2.role || 'primary') });
+        }
+        for (const k2 of Object.keys(resByOp)) resByOp[k2].sort((a: any, b: any) => (a.role === 'primary' ? 0 : 1) - (b.role === 'primary' ? 0 : 1));
+      } catch { /* без ресурсов */ }
+      setSgTabOps((m: any) => ({ ...m, [pid]: { byOrder, resByOp } }));
     } catch (e: any) { setSgTabOps((m: any) => ({ ...m, [pid]: { err: String(e && e.message ? e.message : e) } })); }
   }, [sgTabOps]);
   const openShiftGraph = useCallback(async (rec: any) => {
@@ -1519,8 +1531,23 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   }
                   if (d.t === 'op') {
                     const op2 = d.op2; const r2 = d.r2;
+                    const opsB0 = sgTabOps[d.blk.projectId];
+                    const rr0 = (opsB0 && opsB0.resByOp ? opsB0.resByOp[String(op2.id)] : null) || [];
                     return (
-                      <div key={key} title={op2.crit ? 'Критическая операция — от неё зависит срок сдвига' : undefined} style={{ height: h, display: 'flex', alignItems: 'center', paddingLeft: 32 + (r2.depth || 0) * 10, fontSize: 10.5, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: op2.crit ? '#FCD34D' : '#B0C4DE', fontWeight: op2.crit ? 600 : 400 }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</div>
+                      <div key={key} title={op2.crit ? 'Критическая операция — от неё зависит срок сдвига' : undefined} style={{ height: h, display: 'flex', alignItems: 'center', paddingLeft: 32 + (r2.depth || 0) * 10, fontSize: 10.5, overflow: 'hidden', whiteSpace: 'nowrap', color: op2.crit ? '#FCD34D' : '#B0C4DE', fontWeight: op2.crit ? 600 : 400 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
+                        {rr0.length > 0 && (
+                          <span style={{ marginLeft: 6, flexShrink: 0, fontWeight: 400, color: '#5A7090' }}>
+                            · {rr0.slice(0, 3).map((x: any, xi: number) => (
+                              <span key={xi}>
+                                {xi > 0 ? ', ' : ''}
+                                <button onClick={() => { if (onOpenResourceEdit && x.id) onOpenResourceEdit(x.id); }} title={'Открыть карточку ресурса: ' + (x.name || '')}
+                                  style={{ background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 10.5, color: '#93C5FD', cursor: 'pointer', borderBottom: '1px dotted rgba(147,197,253,.65)' }}>{x.name || (x.id ? x.id.slice(0, 8) : '—')}</button>
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </div>
                     );
                   }
                   const r2 = d.r2; const o = r2.o; const isOpen = !(o && sgTabExp[String(o.id)] === false);
