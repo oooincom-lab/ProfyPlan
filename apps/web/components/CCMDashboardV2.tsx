@@ -93,6 +93,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
   const sgMidRef = useRef<HTMLDivElement | null>(null);
   const sgRightRef = useRef<HTMLDivElement | null>(null);
   const [sgWrapW, setSgWrapW] = useState(1000);
+  /** Ширина левой колонки «Сводного графика сдвигов» (меняется перетаскиванием разделителя). */
+  const [sgLeftW, setSgLeftW] = useState(268);
   const [authed, setAuthed] = useState(false);
   const [loginEmail, setLoginEmail] = useState(DEMO_EMAIL);
   const [loginPass, setLoginPass] = useState(DEMO_PASSWORD);
@@ -261,6 +263,24 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       setSgTabOps((m: any) => ({ ...m, [pid]: { byOrder, resByOp } }));
     } catch (e: any) { setSgTabOps((m: any) => ({ ...m, [pid]: { err: String(e && e.message ? e.message : e) } })); }
   }, [sgTabOps]);
+
+  /** Перетаскивание разделителя — ширина левой колонки сводного графика. */
+  const startSgResize = useCallback((e: any) => {
+    try { e.preventDefault(); } catch { /* noop */ }
+    const move = (ev: any) => {
+      const wrap = sgWrapRef.current;
+      if (!wrap) return;
+      const rect = wrap.getBoundingClientRect();
+      const nw = Math.min(640, Math.max(180, Math.round(ev.clientX - rect.left)));
+      setSgLeftW(nw);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }, []);
   const openShiftGraph = useCallback(async (rec: any) => {
     if (!rec || sgBusy) return;
     setSgBusy(true);
@@ -406,6 +426,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
       try { setShiftAuto(localStorage.getItem('profyplan_ccm_shift_auto') === '1'); } catch { /* noop */ }
       try { setGhosts(localStorage.getItem('profyplan_ccm_ghosts') === '1'); } catch { /* noop */ }
       try { setShowGraphShifts(localStorage.getItem('profyplan_ccm_graph_shifts') === '1'); } catch { /* noop */ }
+      try { const v = Number(localStorage.getItem('profyplan_ccm_sgleft')); if (v >= 180 && v <= 640) setSgLeftW(v); } catch { /* noop */ }
     } catch { /* noop */ }
   }, []);
 
@@ -462,6 +483,11 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     window.addEventListener('resize', f);
     return () => window.removeEventListener('resize', f);
   }, [tab, sgTabData]);
+
+  // Ширина левой колонки сводного графика сохраняется между заходами.
+  useEffect(() => {
+    try { localStorage.setItem('profyplan_ccm_sgleft', String(sgLeftW)); } catch { /* noop */ }
+  }, [sgLeftW]);
 
   useEffect(() => {
     if (!authed) return;
@@ -1426,7 +1452,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 const mx0 = b.mx != null ? b.mx : (b.mn != null ? b.mn + MS_DAY : MS_DAY);
                 const span0 = (mx0 - mn0) || MS_DAY;
                 const spanMin = span0 / 60000;
-                const SGC_LEFT = 268;
+                const SGC_LEFT = sgLeftW;
                 const SGC_RIGHT = 148;
                 const RULER_H = 36;
                 const H_ORDER = 28;
@@ -1534,8 +1560,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     const opsB0 = sgTabOps[d.blk.projectId];
                     const rr0 = (opsB0 && opsB0.resByOp ? opsB0.resByOp[String(op2.id)] : null) || [];
                     return (
-                      <div key={key} title={op2.crit ? 'Критическая операция — от неё зависит срок сдвига' : undefined} style={{ height: h, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingLeft: 32 + (r2.depth || 0) * 10, paddingRight: 4, fontSize: 10.5, overflow: 'hidden', whiteSpace: 'nowrap', color: op2.crit ? '#FCD34D' : '#B0C4DE', fontWeight: op2.crit ? 600 : 400, lineHeight: '12px' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
+                      <div key={key} style={{ height: h, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingLeft: 32 + (r2.depth || 0) * 10, paddingRight: 4, fontSize: 10.5, overflow: 'hidden', whiteSpace: 'nowrap', color: op2.crit ? '#FCD34D' : '#B0C4DE', fontWeight: op2.crit ? 600 : 400, lineHeight: '12px' }}>
+                        <span title={op2.crit ? (op2.name + '\nКритическая операция — от неё зависит срок сдвига') : op2.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
                         {rr0.length > 0 && (
                           <span style={{ fontWeight: 400, color: '#5A7090', fontSize: 9.5, lineHeight: '11px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {rr0.slice(0, 3).map((x: any, xi: number) => (
@@ -1669,6 +1695,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <div style={{ height: RULER_H, background: '#0E2038', borderBottom: '1px solid #1E3252', display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 10.5, color: '#5A7090' }}>Проект · заказ · операции</div>
                       {flat.map((d, i) => renderLeft(d, 'L' + i))}
                     </div>
+                    <div onPointerDown={startSgResize} title="Потяните, чтобы изменить ширину колонки" style={{ width: 6, flexShrink: 0, cursor: 'col-resize', background: 'rgba(40,70,110,.45)', alignSelf: 'stretch' }} />
                     <div ref={sgMidRef} onScroll={(e) => { const st = e.currentTarget.scrollTop; if (sgLeftRef.current) sgLeftRef.current.scrollTop = st; if (sgRightRef.current) sgRightRef.current.scrollTop = st; }}
                       style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
                       <div style={{ width: chartW, position: 'relative' }}>
@@ -1691,7 +1718,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
               })()}
             </div>
             <div style={{ fontSize: 11, color: '#5A7090' }}>
-              Пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; ◆ — критические операции (от них зависит срок сдвига); даты справа — двумя строками: «было» серым, «стало» синим (у критических — янтарным); слева имена и кнопки закреплены, справа колонка «было → стало» — после графика; прокручивается только график (таймлайн с датами/часами/минутами закреплён сверху); масштаб «−/＋», «⤢ Авто» — весь период по ширине.
+              Пунктир — «было», плотная полоса — «стало», янтарная зона — область сдвига; ◆ — критические операции (от них зависит срок сдвига); даты справа — двумя строками: «было» серым, «стало» синим (у критических — янтарным); слева имена и кнопки закреплены, справа колонка «было → стало» — после графика; прокручивается только график (таймлайн с датами/часами/минутами закреплён сверху); масштаб «−/＋», «⤢ Авто» — весь период по ширине; ширину левой колонки можно менять — потяните разделитель.
             </div>
           </div>
         )}
