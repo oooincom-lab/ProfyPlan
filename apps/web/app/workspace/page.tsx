@@ -14,6 +14,7 @@ import CatalogOps from '@/components/CatalogOps';
 import GraphStylePicker from '@/components/GraphStylePicker';
 import CalculationsTabs, { CalcTab, CalcTabNotice } from '@/components/CalculationsTabs';
 import { parseCalcMethods, analysisLabel } from '@/lib/calcMethods';
+import { roleLabel } from '@/lib/roles';
 import { getPalette, type ThemeName } from '@/lib/graph-styles';
 import ClipboardPaste from '@/components/ClipboardPaste';
 import DirectoryTable from '@/components/DirectoryTable';
@@ -188,9 +189,12 @@ export default function AppShell() {
   }, []);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
-  const [authError, setAuthError] = useState(false);
+  // Блок 6.34.1 (срез 1): полноценный вход в рабочей области — экран входа вместо кнопки демо-входа.
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginMsg, setLoginMsg] = useState('');
+  const [authUser, setAuthUser] = useState<{ email?: string; name?: string; tenant_name?: string; role?: string } | null>(null);
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
-  const [loginForm, setLoginForm] = useState({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [view, setView] = useState<View>('dashboard');
   // Расчёты (блок 6.16 плана): активная вкладка хаба. «Гант» и «Сетевой график» — отдельные виды, поэтому вкладка выводится из вида.
   const [calcTab, setCalcTab] = useState<CalcTab>('overview');
@@ -2768,43 +2772,127 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       await load().then(() => { if (selectedProject?.id === p.id) setSelectedProject({ ...selectedProject, name: newName }); });
     } catch (e: any) { alert('Ошибка: ' + (e.message || String(e))); }
   };
+  // ── Блок 6.34.1: вход в рабочей области (срез 1) ──
+  // Есть сохранённая сессия — тихий вход сразу в рабочий стол; нет — экран входа.
+  const fetchMe = useCallback(async () => {
+    try {
+      const me = await apiF<{ email: string; name: string; tenant_name: string; role: string }>('/auth/me');
+      setAuthUser(me);
+    } catch { /* профиль не критичен — входу не мешает */ }
+  }, []);
+
+  const enterWorkspace = useCallback(async () => {
+    const proj = await apiF<{ items: any[] }>('/projects');
+    setProjects(proj.items);
+    setLoaded(true);
+    await fetchMe();
+  }, [fetchMe]);
+
   const load = useCallback(async () => {
     setLoading(true);
-    setAuthError(false);
+    try {
+      await enterWorkspace();
+    } catch (e: any) {
+      if (e.message === 'AUTH_REQUIRED') {
+        setShowLogin(true);
+        setLoginMsg('Сессия истекла — войдите снова.');
+      } else {
+        setMsg(e.message || String(e));
+      }
+    }
+    setLoading(false);
+  }, [enterWorkspace]);
+
+  useEffect(() => {
+    const has = typeof window !== 'undefined' && !!localStorage.getItem('profyplan_token');
+    if (has) load();
+    else setShowLogin(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Вход по форме: реальные email и пароль (блок 6.34.1).
+  const login = async () => {
+    if (loading) return;
+    setLoading(true);
+    setLoginMsg('');
+    try {
+      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: loginForm.email.trim(), password: loginForm.password }) });
+      if (r.status === 401) { setLoginMsg('Неверный email или пароль. Проверьте раскладку и Caps Lock.'); return; }
+      if (r.status === 403) { setLoginMsg('Доступ для этой учётной записи отключён — обратитесь к администратору компании.'); return; }
+      if (!r.ok) { setLoginMsg('Не удалось войти (код ' + r.status + '). Попробуйте ещё раз.'); return; }
+      const data = await r.json();
+      localStorage.setItem('profyplan_token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('profyplan_refresh', data.refresh_token);
+      const tenants = Array.isArray(data.tenants) ? data.tenants : [];
+      if (tenants.length > 1) {
+        localStorage.setItem('profyplan_tenants', JSON.stringify(tenants));
+        setPendingTenants(tenants);
+        setShowLogin(false);
+        await fetchMe();
+        return;
+      }
+      setShowLogin(false);
+      await enterWorkspace();
+    } catch (e: any) {
+      setLoginMsg('Нет связи с сервером — проверьте подключение и попробуйте ещё раз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Демо-доступ: показать продукт без своей учётной записи (экскурсии и стенд).
+  const demoLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    setLoginMsg('');
     try {
       const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD }) });
-      if (!r.ok) throw new Error('LOGIN_FAILED');
+      if (!r.ok) { setLoginMsg('Демо-доступ сейчас недоступен.'); return; }
       const data = await r.json();
       localStorage.setItem('profyplan_token', data.access_token);
       const tenants = Array.isArray(data.tenants) ? data.tenants : [];
       if (tenants.length > 1) {
         localStorage.setItem('profyplan_tenants', JSON.stringify(tenants));
         setPendingTenants(tenants);
-        setLoading(false);
+        setShowLogin(false);
         return;
       }
-      const proj = await apiF<{ items: any[] }>('/projects');
-      setProjects(proj.items);
-      setLoaded(true);
+      setShowLogin(false);
+      await enterWorkspace();
     } catch (e: any) {
-      if (e.message === 'LOGIN_FAILED' || e.message === 'AUTH_REQUIRED') {
-        setAuthError(true);
-      } else {
-        setMsg(e.message || String(e));
-      }
+      setLoginMsg('Нет связи с сервером — проверьте подключение.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  };
+
+  // Выход: сброс сессии и возврат к экрану входа.
+  const logoutUser = async () => {
+    try { await apiF('/auth/logout', { method: 'POST' }); } catch { /* выходим локально в любом случае */ }
+    try {
+      localStorage.removeItem('profyplan_token');
+      localStorage.removeItem('profyplan_refresh');
+      localStorage.removeItem('profyplan_tenants');
+    } catch {}
+    setAuthUser(null);
+    setProjects([]);
+    setSelectedProject(null);
+    setPendingTenants([]);
+    setShowLogin(true);
+    setLoginMsg('');
+    setLoginForm({ email: '', password: '' });
+    setLoaded(false);
+    setView('dashboard');
+  };
 
   const chooseTenant = async (tenantId: string) => {
     setLoading(true);
     try {
       const data = await apiF<any>(`/auth/select-tenant`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
       localStorage.setItem('profyplan_token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('profyplan_refresh', data.refresh_token);
       setPendingTenants([]);
-      const proj = await apiF<{ items: any[] }>('/projects');
-      setProjects(proj.items);
-      setLoaded(true);
+      await enterWorkspace();
     } catch (e: any) {
       setMsg(e.message || String(e));
     }
@@ -4126,37 +4214,47 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>ProfyPlan</h1>
           <p style={{ color: '#5A7090', marginBottom: 24 }}>{msg || 'Рабочий стол'}</p>
           {pendingTenants.length > 0 ? (
-            <div style={{ maxWidth: 360, margin: '0 auto', textAlign: 'left' }}>
+            <div style={{ maxWidth: 380, margin: '0 auto', textAlign: 'left' }}>
               <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 16 }}>Выберите компанию</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 4 }}>Выберите компанию</div>
+                <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 16 }}>{authUser?.email ? 'Вы вошли как ' + authUser.email : 'Аккаунт состоит в нескольких организациях'}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {pendingTenants.map((t: any) => (
                     <button key={t.id} onClick={() => chooseTenant(t.id)} disabled={loading} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 8, color: '#E8EEF5', padding: '12px 14px', fontSize: 14, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
                       <div style={{ fontWeight: 600 }}>{t.name}</div>
-                      <div style={{ fontSize: 12, color: '#5A7090' }}>{t.role === 'owner' ? 'Владелец' : t.role}</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>{roleLabel(t.role)}</div>
                     </button>
                   ))}
                 </div>
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 10 }}>
+                  <button onClick={logoutUser} disabled={loading} style={{ background: 'none', border: 'none', color: '#60A5FA', fontSize: 12.5, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                    ← Войти под другим аккаунтом
+                  </button>
+                </div>
               </div>
             </div>
-          ) : authError ? (
-            <div style={{ maxWidth: 320, margin: '0 auto', textAlign: 'left' }}>
+          ) : showLogin ? (
+            <div style={{ maxWidth: 340, margin: '0 auto', textAlign: 'left' }}>
               <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 16 }}>Вход</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 4 }}>Вход</div>
+                <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 16 }}>Войдите, чтобы открыть рабочий стол вашей компании</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <input value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} placeholder="Email" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
-                  <input value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} type="password" placeholder="Пароль" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} onKeyDown={e => { if (e.key === 'Enter') load(); }} />
-                  <button onClick={load} disabled={loading} className="btn btn-primary" style={{ padding: '10px', fontSize: 14, fontWeight: 600, width: '100%' }}>
+                  <input value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} placeholder="Email" autoFocus style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
+                  <input value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} type="password" placeholder="Пароль" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} onKeyDown={e => { if (e.key === 'Enter') login(); }} />
+                  <button onClick={login} disabled={loading} className="btn btn-primary" style={{ padding: '10px', fontSize: 14, fontWeight: 600, width: '100%' }}>
                     {loading ? 'Вход...' : 'Войти'}
                   </button>
-                  {msg && <div style={{ color: '#EF4444', fontSize: 12, textAlign: 'center' }}>{msg}</div>}
+                  {loginMsg && <div style={{ color: '#EF4444', fontSize: 12, textAlign: 'center' }}>{loginMsg}</div>}
+                </div>
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 10, textAlign: 'center' }}>
+                  <button onClick={demoLogin} disabled={loading} style={{ background: 'none', border: 'none', color: '#60A5FA', fontSize: 12.5, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }} title="Посмотреть продукт на демо-данных, без своей учётной записи">
+                    Демо-доступ — посмотреть без входа →
+                  </button>
                 </div>
               </div>
             </div>
           ) : (
-            <button onClick={load} disabled={loading} className="btn btn-primary" style={{ padding: '12px 36px', fontSize: 15 }}>
-            {loading ? 'Загрузка...' : 'Загрузить рабочий стол'}
-          </button>
+            <div style={{ color: '#5A7090', fontSize: 14 }}>Загрузка…</div>
           )}
         </div>
       </div>
@@ -4269,6 +4367,8 @@ const changeOrderStatus = async (o: any, status: string) => {
         collapsed={effCollapsed}
         menuMode={menuMode}
         onAutoHide={() => { if (autoEnabled) setSidebarCollapsed(true); }}
+        authUser={authUser}
+        onLogout={logoutUser}
         debug={debugMode}
       />
 

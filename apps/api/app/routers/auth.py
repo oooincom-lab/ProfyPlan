@@ -190,12 +190,30 @@ async def me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    ut_result = await db.execute(
+    # Тенант — выбранный в токене (после select-tenant), иначе первая связь пользователя.
+    tenant_id = token.get("tenant_id")
+    if tenant_id:
+        try:
+            tenant_id = uuid.UUID(str(tenant_id))
+        except (ValueError, TypeError):
+            tenant_id = None
+    q = (
         select(UserTenant, Tenant)
         .join(Tenant, UserTenant.tenant_id == Tenant.id)
         .where(UserTenant.user_id == user.id)
     )
+    if tenant_id is not None:
+        q = q.where(UserTenant.tenant_id == tenant_id)
+    ut_result = await db.execute(q)
     row = ut_result.first()
+    if not row and tenant_id is not None:
+        # Токен ссылается на недоступный тенант — честно падаем на первую связь.
+        ut_result = await db.execute(
+            select(UserTenant, Tenant)
+            .join(Tenant, UserTenant.tenant_id == Tenant.id)
+            .where(UserTenant.user_id == user.id)
+        )
+        row = ut_result.first()
     if not row:
         raise HTTPException(status_code=404, detail="No tenant found")
 

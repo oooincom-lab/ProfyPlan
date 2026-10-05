@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import OrderTree, { TreeChevron } from './OrderTree';
 import DebugBadge from './DebugBadge';
+import { roleLabel } from '@/lib/roles';
 
 type View =
   | 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders'
@@ -47,6 +48,9 @@ interface SidebarProps {
   collapsed: boolean;
   menuMode: 'expanded' | 'manual' | 'auto';
   onAutoHide: () => void;
+  /** Блок 6.34.1: текущий пользователь — нижний блок бокового меню */
+  authUser?: { email?: string; name?: string; tenant_name?: string; role?: string } | null;
+  onLogout?: () => void;
   debug?: boolean;
 }
 
@@ -65,6 +69,7 @@ export default function Sidebar(props: SidebarProps) {
     selectedGroup, onSelectGroup,
     onOpenOrder, onOpenGroup, onOpenPool,
     collapsed, menuMode, onAutoHide,
+    authUser, onLogout,
     debug = false,
   } = props;
 
@@ -661,11 +666,26 @@ export default function Sidebar(props: SidebarProps) {
         📋 Отчёты{debug && <DebugBadge debug={debug} text="[nav:reports]" />}
       </button>
 
-      {/* Настройки (bottom) */}
+      {/* Настройки и аккаунт (bottom) */}
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--s-border)', paddingTop: 8 }}>
+        {authUser && (
+          <div style={{ padding: '2px 14px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--s-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={authUser.email}>
+              {authUser.name || authUser.email}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--s-fg-sub)' }}>
+              {roleLabel(authUser.role) || 'Пользователь'}{authUser.tenant_name ? ' · ' + authUser.tenant_name : ''}
+            </span>
+          </div>
+        )}
         <button className={`s-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navTo('settings')}>
           ⚙️ Настройки{debug && <DebugBadge debug={debug} text="[nav:settings]" />}
         </button>
+        {onLogout && (
+          <button className="s-item" onClick={onLogout} title="Выйти из аккаунта">
+            🚪 Выйти
+          </button>
+        )}
       </div>
     </div>
   );

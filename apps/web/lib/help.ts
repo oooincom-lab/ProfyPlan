@@ -62,6 +62,25 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
     links: ['workspace', 'calculations', 'methods'],
   },  {
+    id: 'auth',
+    title: 'Вход и аккаунт',
+    summary: 'Вход по email и паролю, демо-доступ, выбор компании, выход',
+    state: 'verified',
+    purpose:
+      'Вход — часть рабочей области: без активной сессии показывается форма входа, после входа открывается рабочий стол вашей компании. Учётные записи и компании живут внутри продукта (блок 6.34).',
+    steps: [
+      'Введите email и пароль и нажмите «Войти» (или Enter) — откроется рабочий стол.',
+      'Демо-доступ — кнопка под формой: посмотреть продукт без своей учётной записи.',
+      'Если вы состоите в нескольких компаниях, после входа появится экран выбора компании.',
+      'Выйти из аккаунта — в нижней части бокового меню, кнопка «Выйти».',
+    ],
+    fields: [
+      ['Неверный email или пароль', 'Проверьте раскладку клавиатуры и Caps Lock; пароль задаётся при приглашении в компанию.'],
+      ['Доступ отключён', 'Учётная запись отключена администратором компании — обратитесь к нему.'],
+      ['Сессия истекла', 'Сохранённая сессия перестала действовать — войдите снова.'],
+    ],
+    links: ['workspace'],
+  },  {
     id: 'calc-estimates',
     title: 'Расчёты — вкладка «Оценки»',
     summary: 'Экспертная таблица тройных оценок: оптимистичная, вероятная, пессимистичная',
@@ -897,7 +916,7 @@ export function helpArticle(id: string | null | undefined): HelpArticle | null {
 
 /** Разделы справки — дерево слева. Порядок статей в разделах = порядок перехода «дальше». */
 export const HELP_GROUPS: { title: string; ids: string[] }[] = [
-  { title: 'Начало', ids: ['help', 'workspace', 'calculations'] },
+  { title: 'Начало', ids: ['help', 'auth', 'workspace', 'calculations'] },
   { title: 'Проект', ids: ['project-summary', 'orders', 'order-window', 'bom', 'groups', 'scale', 'new-project', 'archive'] },
   { title: 'Раздел «Расчёты»', ids: ['calc-overview', 'calc-goals', 'calc-gap', 'calc-estimates', 'calc-gantt', 'calc-network', 'calc-pert', 'calc-mc', 'calc-compare', 'calc-runs'] },
   { title: 'Методы и режимы', ids: ['calc-guide', 'calc-modes', 'methods'] },
