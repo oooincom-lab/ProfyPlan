@@ -10,7 +10,7 @@ type View =
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
-  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations';
+  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team';
 
 interface SidebarProps {
   view: View;
@@ -678,6 +678,9 @@ export default function Sidebar(props: SidebarProps) {
             </span>
           </div>
         )}
+        <button className={`s-item ${view === 'team' ? 'active' : ''}`} onClick={() => navTo('team')}>
+          👥 Команда{debug && <DebugBadge debug={debug} text="[nav:team]" />}
+        </button>
         <button className={`s-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navTo('settings')}>
           ⚙️ Настройки{debug && <DebugBadge debug={debug} text="[nav:settings]" />}
         </button>

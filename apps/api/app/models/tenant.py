@@ -60,6 +60,8 @@ class UserTenant(BaseModel):
     )  # owner / admin / planner / viewer
     invited_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     joined_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Доступ к организации (блок 6.34): отключение — флаг, история сохраняется.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Связи
     user: Mapped["User"] = relationship(back_populates="tenants")

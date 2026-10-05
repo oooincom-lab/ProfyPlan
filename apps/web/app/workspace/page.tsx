@@ -173,7 +173,14 @@ async function apiF<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations';
+/** Текст сообщения об ошибке API: вытаскиваем detail из JSON. */
+function detailOf(e: any): string {
+  const s = String(e?.message || e);
+  const m = s.match(/"detail":"([^"]+)"/);
+  return m ? m[1] : s;
+}
+
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -205,6 +212,12 @@ export default function AppShell() {
   const [calcTab, setCalcTab] = useState<CalcTab>('overview');
   // Реестр сохранённых видов (блок 6.13а): панель поверх рабочего поля сети CPM.
   const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  // Блок 6.34.2: команда организации (участники, приглашения, роли).
+  const [team, setTeam] = useState<{ members: any[]; invitations: any[]; my_role: string } | null>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamMsg, setTeamMsg] = useState('');
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'planner' });
+  const [inviteResult, setInviteResult] = useState<any>(null);
   const [netData, setNetData] = useState<any>(null);
   const [netLoading, setNetLoading] = useState(false);
   const [netOrderId, setNetOrderId] = useState<string | null>(null);
@@ -2829,6 +2842,11 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       localStorage.setItem('profyplan_token', data.access_token);
       if (data.refresh_token) localStorage.setItem('profyplan_refresh', data.refresh_token);
       const tenants = Array.isArray(data.tenants) ? data.tenants : [];
+      if (tenants.length === 0) {
+        try { localStorage.removeItem('profyplan_token'); } catch {}
+        setLoginMsg('Нет доступных организаций: доступ отключён или приглашение ещё не принято.');
+        return;
+      }
       if (tenants.length > 1) {
         localStorage.setItem('profyplan_tenants', JSON.stringify(tenants));
         setPendingTenants(tenants);
@@ -2890,6 +2908,65 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       setLoading(false);
     }
   };
+
+  // ── Блок 6.34.2: команда организации ──
+  const loadTeam = async () => {
+    setTeamLoading(true);
+    try {
+      const data = await apiF<any>('/team');
+      setTeam(data);
+      setTeamMsg('');
+    } catch (e: any) {
+      setTeamMsg(detailOf(e));
+    }
+    setTeamLoading(false);
+  };
+
+  const inviteMember = async () => {
+    const email = inviteForm.email.trim();
+    if (!email) { setTeamMsg('Укажите email сотрудника.'); return; }
+    setTeamLoading(true);
+    setTeamMsg('');
+    setInviteResult(null);
+    try {
+      const r = await apiF<any>('/team/invite', { method: 'POST', body: JSON.stringify({ email, role: inviteForm.role }) });
+      setInviteForm({ email: '', role: inviteForm.role });
+      await loadTeam();
+      setInviteResult(r);
+    } catch (e: any) {
+      setTeamMsg(detailOf(e));
+    }
+    setTeamLoading(false);
+  };
+
+  const patchMember = async (id: string, patch: any) => {
+    setTeamLoading(true);
+    setTeamMsg('');
+    try {
+      await apiF(`/team/members/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      await loadTeam();
+    } catch (e: any) {
+      setTeamMsg(detailOf(e));
+    }
+    setTeamLoading(false);
+  };
+
+  const revokeInvitation = async (id: string) => {
+    setTeamLoading(true);
+    setTeamMsg('');
+    try {
+      await apiF(`/team/invitations/${id}`, { method: 'DELETE' });
+      await loadTeam();
+    } catch (e: any) {
+      setTeamMsg(detailOf(e));
+    }
+    setTeamLoading(false);
+  };
+
+  useEffect(() => {
+    if (view === 'team') loadTeam();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   // Выход: сброс сессии и возврат к экрану входа.
   const logoutUser = async () => {
@@ -4375,6 +4452,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'scale': 'Шкала дерева заказов',
     'reports': 'Отчёты',
     'settings': 'Настройки',
+    'team': 'Команда',
     'new-project': 'Новый проект',
   };
 
@@ -6872,6 +6950,116 @@ const changeOrderStatus = async (o: any, status: string) => {
               )}
             </div>
           )}
+
+          {/* ═══ TEAM (блок 6.34.2) ═══ */}
+          {view === 'team' && (() => {
+            const canManage = team?.my_role === 'owner' || team?.my_role === 'admin';
+            const inputStyle: any = { background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', padding: '8px 12px', fontSize: 13, fontFamily: 'inherit' };
+            return (
+              <div style={{ padding: '16px 20px 48px', maxWidth: 1000 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>👥 Команда</h2>
+                  <span style={{ fontSize: 12.5, color: 'var(--fg-4)' }}>Сотрудники организации, роли и приглашения</span>
+                  {teamLoading && <span style={{ fontSize: 12, color: 'var(--fg-4)' }}>обновление…</span>}
+                </div>
+
+                {!canManage && team && (
+                  <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--fg-4)' }}>Приглашать сотрудников и менять роли могут владелец и администратор организации.</div>
+                )}
+
+                {canManage && (
+                  <div style={{ margin: '14px 0 18px', padding: '14px 16px', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Пригласить сотрудника</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input value={inviteForm.email} onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} placeholder="Email сотрудника" style={{ ...inputStyle, flex: '1 1 240px' }} />
+                      <select value={inviteForm.role} onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })} style={{ ...inputStyle, width: 180 }}>
+                        <option value="admin">Администратор</option>
+                        <option value="planner">Планировщик</option>
+                        <option value="viewer">Наблюдатель</option>
+                      </select>
+                      <button className="btn btn-primary" onClick={inviteMember} disabled={teamLoading}>Пригласить</button>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 6 }}>Сотрудник получит письмо со ссылкой; пароль он задаёт сам.</div>
+                    {inviteResult && inviteResult.emailed && (
+                      <div style={{ marginTop: 8, fontSize: 12.5, color: '#34D399' }}>Приглашение отправлено: письмо со ссылкой ушло сотруднику.</div>
+                    )}
+                    {inviteResult && !inviteResult.emailed && inviteResult.invite_link && (
+                      <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg-3)' }}>
+                        Почта не настроена — передайте ссылку вручную:
+                        <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                          <input readOnly value={inviteResult.invite_link} onFocus={e => e.currentTarget.select()} style={{ ...inputStyle, flex: 1, fontSize: 12 }} />
+                          <button className="btn btn-secondary btn-sm" onClick={() => { try { navigator.clipboard.writeText(inviteResult.invite_link); setTeamMsg('Ссылка скопирована'); } catch { /* выделите и скопируйте вручную */ } }}>Скопировать</button>
+                        </div>
+                      </div>
+                    )}
+                    {inviteResult && inviteResult.repeat && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--fg-4)' }}>Повторное приглашение: ссылка обновлена.</div>
+                    )}
+                  </div>
+                )}
+
+                <table className="tbl" style={{ width: '100%', marginTop: 8 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Сотрудник</th>
+                      <th style={{ textAlign: 'left' }}>Email</th>
+                      <th style={{ textAlign: 'left' }}>Роль</th>
+                      <th style={{ textAlign: 'left' }}>Состояние</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(team?.members || []).map((m: any) => {
+                      const isSelf = authUser?.email === m.email;
+                      const isOwner = (m.role || '').toLowerCase() === 'owner';
+                      return (
+                        <tr key={m.id}>
+                          <td>{m.name || '—'}{isSelf ? ' · вы' : ''}</td>
+                          <td style={{ color: 'var(--fg-3)' }}>{m.email}</td>
+                          <td>
+                            {canManage && !isSelf && !isOwner ? (
+                              <select value={(m.role || '').toLowerCase()} onChange={e => patchMember(m.id, { role: e.target.value })} style={{ ...inputStyle, padding: '4px 8px', width: 170 }}>
+                                <option value="admin">Администратор</option>
+                                <option value="planner">Планировщик</option>
+                                <option value="viewer">Наблюдатель</option>
+                              </select>
+                            ) : roleLabel(m.role)}
+                          </td>
+                          <td>{m.is_active ? 'Активен' : 'Отключён'}</td>
+                          <td style={{ textAlign: 'right' }}>
+                            {canManage && !isSelf && !isOwner && (
+                              <button className="btn btn-secondary btn-sm" onClick={() => patchMember(m.id, { is_active: !m.is_active })}>
+                                {m.is_active ? 'Отключить' : 'Включить'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {(team?.invitations || []).length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ожидают принятия</div>
+                    {(team?.invitations || []).map((inv: any) => (
+                      <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ flex: 1 }}>{inv.email} <span style={{ color: 'var(--fg-4)', fontSize: 12 }}>· {roleLabel(inv.role)}</span></span>
+                        {canManage && (
+                          <button className="btn btn-secondary btn-sm" onClick={() => revokeInvitation(inv.id)}>Отозвать</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {teamMsg && <div style={{ marginTop: 12, fontSize: 12.5, color: '#F87171' }}>{teamMsg}</div>}
+                {!teamLoading && !team && !teamMsg && (
+                  <div style={{ marginTop: 12, fontSize: 13, color: 'var(--fg-4)' }}>Загрузка команды…</div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ═══ CCM ═══ */}
           {view === 'ccm' && (

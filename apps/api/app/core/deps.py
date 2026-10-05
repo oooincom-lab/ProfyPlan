@@ -47,3 +47,27 @@ async def get_current_tenant_id(
     if not tenant_id:
         raise HTTPException(status_code=401, detail="No tenant in token")
     return UUID(tenant_id)
+
+
+async def get_current_membership(
+    token: dict = Depends(get_current_token),
+    db: AsyncSession = Depends(get_db),
+) -> UserTenant:
+    """Связь пользователя с организацией из токена: роль и статус (блок 6.34)."""
+    user_id = token.get("sub")
+    tenant_id = token.get("tenant_id")
+    if not user_id or not tenant_id:
+        raise HTTPException(status_code=401, detail="No tenant in token")
+    row = (
+        await db.execute(
+            select(UserTenant).where(
+                UserTenant.user_id == user_id,
+                UserTenant.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=403, detail="No access to this tenant")
+    if row.is_active is False:
+        raise HTTPException(status_code=403, detail="Доступ к организации отключён")
+    return row

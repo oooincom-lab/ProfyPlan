@@ -36,7 +36,7 @@ async def _tenants_for(db: AsyncSession, user_id) -> list[TenantInfo]:
     ut_rows = await db.execute(
         select(UserTenant, Tenant)
         .join(Tenant, UserTenant.tenant_id == Tenant.id)
-        .where(UserTenant.user_id == user_id)
+        .where(UserTenant.user_id == user_id, UserTenant.is_active.isnot(False))
     )
     return [
         TenantInfo(id=str(t.id), name=t.name, role=ut.role)
@@ -154,14 +154,18 @@ async def select_tenant(
 ):
     """Выбрать tenant (для пользователя в нескольких компаниях) — новый access-токен."""
     user_id = token.get("sub")
-    ut = await db.execute(
-        select(UserTenant).where(
-            UserTenant.user_id == uuid.UUID(user_id),
-            UserTenant.tenant_id == uuid.UUID(body.tenant_id),
+    ut_row = (
+        await db.execute(
+            select(UserTenant).where(
+                UserTenant.user_id == uuid.UUID(user_id),
+                UserTenant.tenant_id == uuid.UUID(body.tenant_id),
+            )
         )
-    )
-    if not ut.scalar_one_or_none():
+    ).scalar_one_or_none()
+    if not ut_row:
         raise HTTPException(status_code=403, detail="No access to this tenant")
+    if ut_row.is_active is False:
+        raise HTTPException(status_code=403, detail="Доступ к организации отключён")
 
     access_token = create_access_token(user_id, body.tenant_id)
     refresh_token = create_refresh_token(user_id)
@@ -218,6 +222,8 @@ async def me(
         raise HTTPException(status_code=404, detail="No tenant found")
 
     user_tenant, tenant = row
+    if user_tenant.is_active is False:
+        raise HTTPException(status_code=403, detail="Доступ к организации отключён")
     return UserMe(
         id=str(user.id),
         email=user.email,
