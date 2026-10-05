@@ -82,7 +82,7 @@ export type CalculationsTabsProps = {
   active: CalcTab | null;
   onSelect: (tab: CalcTab) => void;
   methods: CalcMethods;
-  /** Область расчёта: проект · куст · группа · пул. */
+  /** Область расчёта: проект · дерево заказов · группа · пул. */
   area?: string;
   /** Имя объекта расчёта — проект или пул. */
   areaName?: string | null;

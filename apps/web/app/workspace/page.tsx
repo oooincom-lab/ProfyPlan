@@ -416,7 +416,7 @@ export default function AppShell() {
       setEstimateDeps([]);
     }
   };
-  // Заказы нужны для отбора области расчёта (весь проект · куст · ветка · заказ)
+  // Заказы нужны для отбора области расчёта (весь проект · дерево заказов · ветка · заказ)
   const [areaOrders, setAreaOrders] = useState<any[]>([]);
   const loadAreaOrders = async (projectId: string) => {
     try {
@@ -1168,6 +1168,8 @@ export default function AppShell() {
   const [interleavePlan, setInterleavePlan] = useState<any>(null);
   const [dirManager, setDirManager] = useState<{ title: string; entity: string; columns: any[]; variant: 'modal' | 'panel' } | null>(null);
   const [routings, setRoutings] = useState<any[]>([]);
+  /** Маршруты по проектам — окнам заказов из других проектов (CCM). */
+  const [routingsByProject, setRoutingsByProject] = useState<Record<string, any[]>>({});
   const [resourcesList, setResourcesList] = useState<any[]>([]);
   const [workSchedules, setWorkSchedules] = useState<any[]>([]);
   // ── Режим «Окна» (как в ОС: перетаскивание, Snap-раскладки, панель задач) ──
@@ -1297,7 +1299,7 @@ export default function AppShell() {
   const [selPoolOrders, setSelPoolOrders] = useState<Set<string>>(new Set());
   const [selFreeOrders, setSelFreeOrders] = useState<Set<string>>(new Set());
 
-  // ── Контроль цепочки заказов (куст) ──
+  // ── Контроль цепочки заказов (дерево заказов) ──
   const [orderChainControl, setOrderChainControl] = useState<'off' | 'warning' | 'control'>(() => {
     if (typeof window === 'undefined') return 'off';
     const v = localStorage.getItem('profyplan_order_chain_control');
@@ -1436,7 +1438,7 @@ const [chainDialog, setChainDialog] = useState<null | {
         apiF<any>(`/bom/routings?page_size=200&project_id=${p.id}`).catch(() => null),
         apiF<any[]>('/resources').catch(() => []),
       ]);
-      if (r && Array.isArray(r.items)) setRoutings(r.items);
+      if (r && Array.isArray(r.items)) { setRoutings(r.items); setRoutingsByProject((m: any) => ({ ...m, [p.id]: r.items })); }
       if (Array.isArray(rs)) setResourcesList(rs);
     } catch {}
   };
@@ -1508,10 +1510,11 @@ const [chainDialog, setChainDialog] = useState<null | {
   };
 
   const routingsFor = (o: any): any[] => {
-    if (!routings.length) return [];
+    const src = (o && o.project_id && routingsByProject[o.project_id]) ? routingsByProject[o.project_id] : routings;
+    if (!src.length) return [];
     const nodes = orderBomNodes(o);
     const ids = Array.from(new Set(nodes.filter((n: any) => n.routing_id && !n._boundary).map((n: any) => n.routing_id)));
-    return routings.filter((r: any) => ids.includes(r.id));
+    return src.filter((r: any) => ids.includes(r.id));
   };
 
   const resName = (rid: any) => {
@@ -1743,7 +1746,7 @@ const [chainDialog, setChainDialog] = useState<null | {
   };
 
   const orderBomNodes = (o: any) => {
-    const all = bomTrees[selectedProject?.id || ''] || [];
+    const all = bomTrees[o.project_id || selectedProject?.id || ''] || [];
     if (!all.length) return [];
     const oid = o.id;
     const specName = (o.specification_name || '').toLowerCase().trim();
@@ -1753,7 +1756,7 @@ const [chainDialog, setChainDialog] = useState<null | {
     const kept = new Set<string>();
     const boundary = new Set<string>();
 
-    // Обход поддерева с учётом границ куста заказов:
+    // Обход поддерева с учётом границ дерева заказов:
     // не переходим в узлы, привязанные через order_id к другому заказу —
     // включаем их как границы-ссылки (без раскрытия материалов и без операций).
     const walk = (start: any) => {
@@ -1769,7 +1772,7 @@ const [chainDialog, setChainDialog] = useState<null | {
       .filter(n => kept.has(n.id))
       .map(n => boundary.has(n.id) ? { ...n, _boundary: true } : n);
 
-    // 0) узлы, напрямую привязанные к заказу через order_id (полуфабрикаты куста)
+    // 0) узлы, напрямую привязанные к заказу через order_id (полуфабрикаты дерева)
     const ownByOrder = all.filter(n => n.order_id && n.order_id === oid);
     if (ownByOrder.length) {
       ownByOrder.forEach(walk);
@@ -1939,9 +1942,16 @@ const [chainDialog, setChainDialog] = useState<null | {
       const projId = pid || selectedProject?.id || '';
       const q = projId ? `?page_size=200&project_id=${projId}` : '?page_size=200';
       const r = await apiF<any>(`/bom/routings${q}`).catch(() => null);
-      if (r && Array.isArray(r.items)) setRoutings(r.items);
+      if (r && Array.isArray(r.items)) { setRoutings(r.items); if (projId) setRoutingsByProject((m: any) => ({ ...m, [projId]: r.items })); }
     } catch {}
   };
+
+  /** Окна заказов из других проектов: дозагрузить BOM и маршруты проекта заказа. */
+  const ensureOrderProjectData = useCallback(async (pid: string) => {
+    if (!pid) return;
+    if (!bomTrees[pid]) { try { await reloadBomTree(pid); } catch { /* noop */ } }
+    if (!routingsByProject[pid]) { try { await reloadRoutings(pid); } catch { /* noop */ } }
+  }, [bomTrees, routingsByProject]);
 
   const handleRoutingOpUpdate = async (opId: string, patch: Record<string, any>) => {
     try {
@@ -2035,13 +2045,13 @@ const [chainDialog, setChainDialog] = useState<null | {
     } catch (e: any) { setMsg('Ошибка удаления операции: ' + (e.message || String(e))); }
   };
 
-  // ── Разрыв связи узла с заказом-производителем: каскадно освобождается весь куст (п.2) ──
+  // ── Разрыв связи узла с заказом-производителем: каскадно освобождается всё дерево заказов (п.2) ──
   const handleBomNodeUnlink = async (nodeId: string, orderId: string | null) => {
     if (!selectedProject) return;
     try {
       const projId = selectedProject.id;
       const allOrders = projectOrders[projId] || orders;
-      // 1) собрать куст заказов: сам заказ + все подчинённые (рекурсивно по parent_order_id)
+      // 1) собрать дерево заказов: сам заказ + все подчинённые (рекурсивно по parent_order_id)
       const subtree: string[] = [];
       if (orderId) {
         const stack = [orderId];
@@ -2052,20 +2062,20 @@ const [chainDialog, setChainDialog] = useState<null | {
           for (const o of allOrders) if (o.parent_order_id === id && !subtree.includes(o.id)) stack.push(o.id);
         }
       }
-      // 2) отвязать сам узел и все BOM-узлы куста (order_id ∈ subtree)
+      // 2) отвязать сам узел и все BOM-узлы дерева (order_id ∈ subtree)
       const allNodes = bomTrees[projId] || [];
       const nodesToFree = allNodes.filter((n: any) => n.id === nodeId || (n.order_id && subtree.includes(n.order_id)));
       for (const n of nodesToFree) {
         await apiF(`/bom/nodes/${n.id}`, { method: 'PATCH', body: JSON.stringify({ order_id: null }) });
       }
-      // 3) весь куст заказов становится свободным (без родителя)
+      // 3) всё дерево заказов становится свободным (без родителя)
       for (const id of subtree) {
         await apiF(`/production-orders/${id}`, { method: 'PUT', body: JSON.stringify({ parent_order_id: null }) });
       }
       await reloadBomTree(projId);
       const o = await apiF<any[]>(`/production-orders/?project_id=${projId}`).catch(() => null);
       if (Array.isArray(o)) { setOrders(o); setProjectOrders(prev => ({ ...prev, [projId]: o })); }
-      setMsg('Связь разорвана: заказ и весь его куст теперь свободные');
+      setMsg('Связь разорвана: заказ и всё его дерево заказов теперь свободны');
     } catch (e: any) { setMsg('Ошибка разрыва связи: ' + (e.message || String(e))); }
   };
 
@@ -2410,7 +2420,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     if (effectiveIds.length === 0) return;
     const firstOrder = allOrders.find((x: any) => x.id === effectiveIds[0]) || { id: effectiveIds[0] };
     try {
-      // Собираем объединённый куст по всем выбранным заказам
+      // Собираем объединённое дерево по всем выбранным заказам
       const clusterUnion: any[] = [];
       const seenIds = new Set<string>();
       for (const oid of effectiveIds) {
@@ -2910,11 +2920,11 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     setSavedViewsOpen(true);
   };
 
-  // ── Шкала куста по ресурсам (шаг 2.3) ──
+  // ── Шкала дерева заказов по ресурсам (шаг 2.3) ──
   const loadProjectScale = async (p: any, power: number = 1.0) => {
     const proj = p || selectedProject;
     if (!proj) return;
-    setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу куста…');
+    setSelectedProject(proj); setView('scale'); setMsg('Считаю шкалу дерева заказов…');
     loadVersions(proj);
     try {
       // каждый запрос отдельно: падение одного не оставит шкалу пустой
@@ -2936,11 +2946,11 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       setScalePower(power);
       setMsg('');
     } catch (e: any) {
-      setMsg('Ошибка шкалы куста: ' + (e?.message || String(e)));
+      setMsg('Ошибка шкалы дерева заказов: ' + (e?.message || String(e)));
     }
   };
 
-  // ── Закрепления из шкалы куста (шаг 2.5) ──
+  // ── Закрепления из шкалы дерева заказов (шаг 2.5) ──
   const scalePin = async (operationId: string, pinType: string, pinAt: string, isHard: boolean, note?: string) => {
     const proj = selectedProject;
     if (!proj) return;
@@ -3820,7 +3830,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                             </div>
                           )}
                           {o && panelTab === 'bom' && (
-                            bomNodes.length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps={panelShowOps} showMaterials resName={resName} addRootOnly rootOpsOnly childExpandable={false} onNodeUnlink={handleBomNodeUnlink} onNodeNomenclatureChange={handleBomNodeNomenclature} />
+                            orderBomNodes(o).length ? <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} currentOrderId={o.id} editable={panelEditing} orders={orders} onNodeOrderChange={handleNodeOrderChange} onNodeQuantityChange={handleBomNodeQuantity} onNodeRemove={handleBomNodeRemove} onNodeAdd={handleBomNodeAdd} onOrderFocus={focusOrderByBom} routings={routings} showOps={panelShowOps} showMaterials resName={resName} addRootOnly rootOpsOnly childExpandable={false} onNodeUnlink={handleBomNodeUnlink} onNodeNomenclatureChange={handleBomNodeNomenclature} />
                             : <div style={{ color: '#5A7090' }}>{bomLoading[selectedProject?.id || ''] ? 'Загрузка состава…' : 'Состав пуст — у заказа нет спецификации (BOM).'}</div>
                           )}
                           {o && panelTab === 'route' && (() => {
@@ -4206,7 +4216,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'ccm': 'CCM · Портфель',
     'tools': 'Инструменты',
     'network': 'Сетевой график',
-    'scale': 'Шкала куста',
+    'scale': 'Шкала дерева заказов',
     'reports': 'Отчёты',
     'settings': 'Настройки',
     'new-project': 'Новый проект',
@@ -4663,7 +4673,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>Методы расчёта</div>
-                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>Метод — по объекту: простой куст считается по CPM, кластер — по CCM</div>
+                  <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>Метод — по объекту: простое дерево заказов считается по CPM, кластер — по CCM</div>
                   <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 2 }}>{analysisLabel(calcMethods.analysis)}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 6 }}>
                     Ручной выбор метода убран; выбор остаётся только для модели оценки — на вкладке «Настройки расчёта».
@@ -5201,7 +5211,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   {ganttData && <span style={{ fontSize: 11, color: '#5A7090' }}>{Number(ganttData.total_duration_days).toFixed(1).replace(".", ",")} раб. дн.</span>}
                   <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
               <button onClick={() => loadProjectNetwork(selectedProject)} className="btn btn-secondary btn-sm">🕸 Сетевой график</button>
-              <button onClick={() => loadProjectScale(selectedProject)} className="btn btn-secondary btn-sm">📐 Шкала куста</button>
+              <button onClick={() => loadProjectScale(selectedProject)} className="btn btn-secondary btn-sm">📐 Шкала дерева заказов</button>
                   <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
                 </div>
               </div>
@@ -6001,11 +6011,11 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🔗 Контроль цепочки заказов</div>
                   <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
-                    При переносе заказа в кластер или группу система может предупреждать о связанных заказах (родительских и дочерних — весь «куст»).
+                    При переносе заказа в кластер или группу система может предупреждать о связанных заказах (родительских и дочерних — дерево заказов целиком).
                   </div>
                   {([
-                    { v: 'control', icon: '🔒', title: 'Контроль', desc: 'Перенос только всем кустом целиком. Вариант один: перенести весь куст или отменить.' },
-                    { v: 'warning', icon: '⚠️', title: 'Предупреждение', desc: 'Показывать куст с выбором: перенести весь куст или только текущий заказ.' },
+                    { v: 'control', icon: '🔒', title: 'Контроль', desc: 'Перенос только всем деревом заказов целиком. Вариант один: перенести всё дерево или отменить.' },
+                    { v: 'warning', icon: '⚠️', title: 'Предупреждение', desc: 'Показывать дерево заказов с выбором: перенести всё дерево или только текущий заказ.' },
                     { v: 'off', icon: '🚫', title: 'Выключен', desc: 'Не предупреждать — переносить как раньше.' },
                   ] as const).map(opt => (
                     <label key={opt.v} style={{
@@ -6022,13 +6032,13 @@ const changeOrderStatus = async (o: any, status: string) => {
                     </label>
                   ))}
                   <div style={{ fontSize: 11.5, color: '#5A7090', marginTop: 8, lineHeight: 1.5, background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.15)', borderRadius: 8, padding: '10px 12px' }}>
-                    💡 Связанные заказы — это те, что связаны через поле «Код заказа» в BOM или «Код заказа родителя». При переносе куста связанные заказы отвязываются от своих прежних групп/кластеров, и расчёты по ним (включая расчёты кластеров) аннулируются.
+                    💡 Связанные заказы — это те, что связаны через поле «Код заказа» в BOM или «Код заказа родителя». При переносе дерева заказов связанные заказы отвязываются от своих прежних групп/кластеров, и расчёты по ним (включая расчёты кластеров) аннулируются.
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🎨 Стиль графиков</div>
                   <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 12, lineHeight: 1.5 }}>
-                    Палитра для графов CPM: рамка и заливка областей кластеров, групп и кустов. Смысловые цвета
+                    Палитра для графов CPM: рамка и заливка областей кластеров, групп и деревьев заказов. Смысловые цвета
                     не меняются — критические операции остаются красными, с резервом синими.
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -6217,13 +6227,13 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid #1E3252', marginTop: 12 }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>🧮 Расчёты</div>
-                      <div style={{ fontSize: 12, color: '#5A7090' }}>Метод (CPM/CCM) определяется объектом: простой куст — CPM, кластер (даже с одним кустом) — CCM. Выбор остаётся для модели оценки. Метод анализа, выключенный здесь, не скрывается в разделе «Расчёты» — вкладка видна неактивной с причиной.</div>
+                      <div style={{ fontSize: 12, color: '#5A7090' }}>Метод (CPM/CCM) определяется объектом: простое дерево заказов — CPM, кластер (даже с одним деревом заказов) — CCM. Выбор остаётся для модели оценки. Метод анализа, выключенный здесь, не скрывается в разделе «Расчёты» — вкладка видна неактивной с причиной.</div>
                     </div>
                     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                       <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4, minWidth: 240, maxWidth: 430 }}>
                         Логика планирования
                         <div style={{ background: '#0B1B33', color: '#C9D6E8', border: '1px dashed #2A4060', borderRadius: 6, padding: '6px 8px', fontSize: 12, lineHeight: 1.5 }}>
-                          Определяется объектом: простой куст — CPM, кластер — CCM. Куст в кластере считается в составе кластера; ручной выбор убран — подробности в справке.
+                          Определяется объектом: простое дерево заказов — CPM, кластер — CCM. Дерево заказов в кластере считается в составе кластера; ручной выбор убран — подробности в справке.
                         </div>
                       </label>
                       <label style={{ fontSize: 12, color: '#8FA3BD', display: 'grid', gap: 4 }}>
@@ -6802,6 +6812,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         onRoutingOpRemove={handleRoutingOpRemove}
         onNodeUnlink={handleBomNodeUnlink}
         openOrderWinById={openOrderWinById}
+        onEnsureOrderProject={ensureOrderProjectData}
         anomalies={bomAnomalies}
         anomaliesLoading={bomAnomaliesLoading}
         onCreateMissingOrders={createMissingOrders}
@@ -7169,7 +7180,7 @@ const changeOrderStatus = async (o: any, status: string) => {
       );
     })()}
 
-    {/* Chain control dialog (куст заказов при перемещении) */}
+    {/* Chain control dialog (дерево заказов при перемещении) */}
     {chainDialog && (() => {
       const { order, selectedIds, targetGroupId, targetPoolId, cluster } = chainDialog;
       const ordersInCluster = cluster.orders || [];
@@ -7245,7 +7256,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             )}
 
             <div style={{ fontSize: 12, color: '#F59E0B', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 8, padding: '10px 12px', marginBottom: 14, lineHeight: 1.5 }}>
-              При переносе всего куста связанные заказы будут отвязаны от своих прежних групп и кластеров, а расчёты по ним (включая расчёты кластеров) будут аннулированы.
+              При переносе всего дерева заказов связанные заказы будут отвязаны от своих прежних групп и кластеров, а расчёты по ним (включая расчёты кластеров) будут аннулированы.
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -7255,7 +7266,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 </button>
               )}
               <button onClick={() => resolveChainMove('all')} style={{ background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' }}>
-                Перенести весь куст ({total})
+                Перенести всё дерево заказов ({total})
               </button>
               <button onClick={() => resolveChainMove('cancel')} style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>
                 Отмена

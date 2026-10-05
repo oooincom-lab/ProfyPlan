@@ -74,6 +74,7 @@ type WindowsLayerProps = {
   routings: any[];
   routingFor: (o: any) => any;
   routingsFor: (o: any) => any[];
+  onEnsureOrderProject?: (pid: string) => void;
   resName: (rid: any) => string;
   onOpenOrder: (o: any) => void;
   onOpenGroup: (g: any) => void;
@@ -205,7 +206,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   const {
     wins, lay, snapZone, setWins, setLay,
     orders, resourcesList, groups, pools, isDyn,
-    orderBomNodes, routingFor, routingsFor, resName, routings,
+    orderBomNodes, routingFor, routingsFor, resName, routings, onEnsureOrderProject,
     onOpenOrder, onOpenGroup, onOpenPool, renderOrdersTable, renderBomWindow, onOpenDirectory,
     onDirManageEdit, onDirManageDelete, dirRefreshKey = 0, onOrderFocus,
     onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById, onNodeNomenclatureChange,
@@ -258,8 +259,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     for (const w of wins) {
       if (!w.min && w.tab === 'res' && w.orderId && onOrderResLoad) onOrderResLoad(w.orderId);
       if (!w.min && w.kind === 'resedit' && w.data?.id && onResAssignLoad) onResAssignLoad(String(w.data.id));
+      if (!w.min && w.kind === 'order' && w.data && (w.data as any).project_id && onEnsureOrderProject) onEnsureOrderProject(String((w.data as any).project_id));
     }
-  }, [wins, onOrderResLoad, onResAssignLoad]);
+  }, [wins, onOrderResLoad, onResAssignLoad, onEnsureOrderProject]);
   // Селектор «Узел» на вкладке «Маршрут» (Шаг 4): фильтр маршрутов по узлу BOM
   const [routeSelNode, setRouteSelNode] = useState<Record<string, string | null>>({});
   // Dropdown «Предш. оп.» (Шаг 4): список операций маршрута с чекбоксами

@@ -539,7 +539,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     setSugFor(null);
   }, []);
 
-  /** Применение сдвига контура: проект (опц.) + заказы выбранных кустов/всех. */
+  /** Применение сдвига контура: проект (опц.) + заказы выбранных деревьев/всех. */
   const applyContourShift = useCallback(async (projectId: string, newStartIso: string, kind: 'self' | 'other', days: number, moveProject: boolean, scopeRootIds: string[] | null) => {
     setSugBusy(true);
     try {
@@ -581,7 +581,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     setSugBusy(false);
   }, [shiftAuto, applyContourShift]);
 
-  /** 6.33.4: постановка куста в окно — всегда пошаговый флоу (без «сдвигать сразу»). */
+  /** 6.33.4: постановка дерева заказов в окно — всегда пошаговый флоу (без «сдвигать сразу»). */
   const startBushFlow = useCallback(async (projectId: string, newStartIso: string, days: number, rootId: string) => {
     setSugBusy(true);
     try {
@@ -1047,15 +1047,15 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   )}
                   {(suggestion.bushes || []).length > 0 && (
                     <div style={{ width: '100%', fontSize: 11.5, color: '#8FA3BD' }}>
-                      📦 Кусты в свободное окно: {(suggestion.bushes || []).map((b: any, bi: number) => (
+                      📦 Деревья заказов в свободное окно: {(suggestion.bushes || []).map((b: any, bi: number) => (
                         <span key={bi} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 12 }}>
                           <span style={{ color: '#CBD5E1', fontWeight: 600 }}>«{b.root_name}»</span>
                           <span>· {b.resource_name}: {b.my_from}–{b.my_to} → окно с {b.until || '?'} (+{b.delta_days} дн)</span>
                           {b.warning ? <span style={{ color: '#FCD34D' }}>⚠ {b.warning}</span> : null}
                           {!suggestion.applied && b.new_start ? (
                             <button onClick={() => startBushFlow(String(suggestion.project_id), b.new_start, b.delta_days, String(b.root_id))} disabled={sugBusy}
-                              title="Пошагово: проверка → «Сдвинуть куст» (дата старта проекта не меняется)"
-                              style={{ background: 'rgba(147,197,253,.10)', border: '1px solid rgba(147,197,253,.45)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📦 Поставить куст в окно</button>
+                              title="Пошагово: проверка → «Сдвинуть дерево заказов» (дата старта проекта не меняется)"
+                              style={{ background: 'rgba(147,197,253,.10)', border: '1px solid rgba(147,197,253,.45)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📦 Поставить дерево заказов в окно</button>
                           ) : null}
                         </span>
                       ))}
@@ -1102,7 +1102,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>«{stepPanel.preview?.project_name}» · старт {fmtD(stepPanel.preview?.old_start)} → {fmtD(stepPanel.preview?.new_start)} (+{stepPanel.preview?.days ?? 0} дн)</span>
                   </div>
                   {stepPanel.preview?.warning ? (<div style={{ fontSize: 11.5, color: '#FCD34D', marginBottom: 4 }}>⚠ {stepPanel.preview.warning}</div>) : null}
-                  {stepPanel.focus_root_id ? (<div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>📦 Цель: поставить куст в окно — на шаге 2 нажмите «Сдвинуть куст» у подсвеченного куста (дата старта проекта не меняется).</div>) : null}
+                  {stepPanel.focus_root_id ? (<div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>📦 Цель: поставить дерево заказов в окно — на шаге 2 нажмите «Сдвинуть дерево заказов» у подсвеченного дерева (дата старта проекта не меняется).</div>) : null}
                   {(stepPanel.preview?.bushes || []).map((b: any) => (
                     <div key={b.root_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 12, flexWrap: 'wrap' }}>
                       <span style={{ minWidth: 230, fontWeight: 600, color: '#CBD5E1' }}>🌳 {b.title}</span>
@@ -1133,8 +1133,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <span style={{ color: '#93C5FD' }}>{b.window_before ? fmtD(b.window_before[0]) + ' – ' + fmtD(b.window_before[1]) : '—'} → {b.window_after ? fmtD(b.window_after[0]) + ' – ' + fmtD(b.window_after[1]) : '—'}</span>
                       <span style={{ marginLeft: 'auto' }}>
                         <button onClick={() => applyContourShift(stepPanel.project_id, stepPanel.new_start, stepPanel.kind, stepPanel.days, false, [b.root_id])} disabled={sugBusy || !b.orders_shifted}
-                          title="Перенести только этот куст (дата старта проекта не меняется)"
-                          style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: b.orders_shifted ? 1 : 0.5 }}>Сдвинуть куст</button>
+                          title="Перенести только это дерево заказов (дата старта проекта не меняется)"
+                          style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: b.orders_shifted ? 1 : 0.5 }}>Сдвинуть дерево заказов</button>
                       </span>
                     </div>
                   ))}
@@ -1152,7 +1152,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 <>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: '#86EFAC', marginBottom: 4 }}>✓ Сдвиг применён</div>
                   <div style={{ fontSize: 11.5, color: '#8FA3BD' }}>
-                    Перенесено заказов: {stepPanel.result?.orders_shifted ?? 0}{stepPanel.result?.scope === 'roots' ? ' (выборочно — куст)' : ' (весь проект)'} · пропущено: {stepPanel.result?.orders_skipped ?? 0}
+                    Перенесено заказов: {stepPanel.result?.orders_shifted ?? 0}{stepPanel.result?.scope === 'roots' ? ' (выборочно — дерево заказов)' : ' (весь проект)'} · пропущено: {stepPanel.result?.orders_skipped ?? 0}
                   </div>
                   <div style={{ marginTop: 8 }}>
                     <button onClick={() => setStepPanel(null)}
@@ -1172,8 +1172,8 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 2px', borderBottom: '1px solid #14263F', fontSize: 12, color: s.reverted ? '#5A7090' : '#CBD5E1', flexWrap: 'wrap' }}>
                       <span style={{ width: 118, color: '#8FA3BD' }}>{fmtDT(s.created_at)}</span>
                       <span style={{ minWidth: 170, fontWeight: 600 }}>«{s.project_name}»</span>
-                      <span style={{ color: s.kind === 'other' ? '#FCD34D' : '#93C5FD' }}>{s.kind === 'other' ? 'сдвиг другому' : 'свой сдвиг'} · +{s.shift_days} дн{s.orders_shifted ? ' · заказов: ' + s.orders_shifted + (s.scope === 'roots' ? ' (куст)' : '') : ''}{s.orders_skipped ? ' · пропущено: ' + s.orders_skipped : ''}</span>
-                      {s.scope === 'roots' ? <span style={{ color: '#8FA3BD' }} title="Сдвиг куста не меняет дату старта проекта">старт проекта не менялся</span> : <span style={{ color: '#8FA3BD' }}>старт {fmtD(s.old_start)} → {fmtD(s.new_start)}</span>}
+                      <span style={{ color: s.kind === 'other' ? '#FCD34D' : '#93C5FD' }}>{s.kind === 'other' ? 'сдвиг другому' : 'свой сдвиг'} · +{s.shift_days} дн{s.orders_shifted ? ' · заказов: ' + s.orders_shifted + (s.scope === 'roots' ? ' (дерево заказов)' : '') : ''}{s.orders_skipped ? ' · пропущено: ' + s.orders_skipped : ''}</span>
+                      {s.scope === 'roots' ? <span style={{ color: '#8FA3BD' }} title="Сдвиг дерева заказов не меняет дату старта проекта">старт проекта не менялся</span> : <span style={{ color: '#8FA3BD' }}>старт {fmtD(s.old_start)} → {fmtD(s.new_start)}</span>}
                       <span style={{ marginLeft: 'auto' }}>
                         <button onClick={() => openShiftGraph(s)} disabled={sgBusy}
                           title="График сдвига: было → стало (заказы, зона сдвига)"
@@ -1182,7 +1182,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                           <span style={{ color: '#5A7090' }}>(возвращено)</span>
                         ) : (
                           <button onClick={() => revertShift(s.id)} disabled={blocked || sugBusy}
-                            title={blocked ? 'Сначала верните более поздние сдвиги этого проекта' : (s.scope === 'roots' ? 'Вернуть даты заказов куста как было (с автопересчётом)' : 'Вернуть старт и даты заказов как было (с автопересчётом)')}
+                            title={blocked ? 'Сначала верните более поздние сдвиги этого проекта' : (s.scope === 'roots' ? 'Вернуть даты дерева заказов как было (с автопересчётом)' : 'Вернуть старт и даты заказов как было (с автопересчётом)')}
                             style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: blocked ? 'default' : 'pointer', fontFamily: 'inherit', opacity: blocked ? 0.5 : 1 }}>Вернуть</button>
                         )}
                       </span>
@@ -1418,7 +1418,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <div style={{ fontSize: 11.5, color: '#8FA3BD', marginTop: 6 }}>
                       Свободные окна: {occ.free.length ? occ.free.map(([s0, e0]: [number, number]) => fmtDm(s0) + ' – ' + fmtDm(e0) + ' (' + Math.round((e0 - s0) / MS_DAY) + ' дн)').join(' · ') : 'нет — ресурс занят весь период'}
                     </div>
-                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа); ⚠ — заказ выходит за окно проекта. Галка «Показать „как было“» — пунктиром старые положения заказов (до активных сдвигов из журнала). Следующий куст можно ставить в свободные окна.</div>
+                    <div style={{ fontSize: 11, color: '#5A7090', marginTop: 4 }}>Бронь — окно проекта (старт → плановый финиш); перекрытия подсвечены. Нажмите на проект — раскроются его заказы с этим ресурсом (полоска — окно заказа); ⚠ — заказ выходит за окно проекта. Галка «Показать „как было“» — пунктиром старые положения заказов (до активных сдвигов из журнала). Следующее дерево заказов можно ставить в свободные окна.</div>
                     <div style={{ marginTop: 10 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: '#8FA3BD', marginBottom: 4 }}>Проекты и заказы на карте — только заказы с этим ресурсом в маршруте{ordersLoading ? ' · загрузка…' : ''}</div>
                       {occ.list.map((a: any) => {
@@ -1580,7 +1580,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     const blk = d.blk;
                     return (
                       <div key={key} style={{ height: h, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 10, color: '#5A7090', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                        старт {blk.rec && blk.rec.old_start ? fmtDmShort(parseMs(blk.rec.old_start) as number) : '—'} → {blk.rec && blk.rec.new_start ? fmtDmShort(parseMs(blk.rec.new_start) as number) : '—'}{blk.rec && blk.rec.scope === 'roots' ? ' · куст' : ''}
+                        старт {blk.rec && blk.rec.old_start ? fmtDmShort(parseMs(blk.rec.old_start) as number) : '—'} → {blk.rec && blk.rec.new_start ? fmtDmShort(parseMs(blk.rec.new_start) as number) : '—'}{blk.rec && blk.rec.scope === 'roots' ? ' · дерево заказов' : ''}
                       </div>
                     );
                   }
@@ -1837,7 +1837,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
           (g.skipped || []).forEach((s2: any) => { all.push({ o: s2.o, old: null, neww: null, skippedText: s2.reason }); });
           const bushRows: any[] = [];
           (g.bushes || []).forEach((b: any) => { bushRows.push({ label: '🌳 ' + b.title, old: b.old, neww: b.new, skipped: b.skipped }); (b.old || []).forEach(push); (b.new || []).forEach(push); });
-          // Дерево заказов: родитель → дети (куст едет целиком); операции — раскрытием «▸ оп.»
+          // Дерево заказов: родитель → дети (дерево едет целиком); операции — раскрытием «▸ оп.»
           const byId2: Record<string, any> = {};
           all.forEach((r2) => { if (r2.o) byId2[String(r2.o.id)] = r2; });
           const kidsMap: Record<string, any[]> = {};
@@ -1989,7 +1989,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid #1E3252', background: '#0E2038', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#93C5FD' }}>📊 {g.title}</span>
                 <span style={{ fontSize: 11.5, color: (g.meta && g.meta.reverted) ? '#5A7090' : '#FCD34D' }}>
-                  +{g.meta?.days ?? 0} дн{g.meta?.scope === 'roots' ? ' · куст (старт проекта не менялся)' : ''}{g.meta?.reverted ? ' · (возвращено)' : ''}
+                  +{g.meta?.days ?? 0} дн{g.meta?.scope === 'roots' ? ' · дерево заказов (старт проекта не менялся)' : ''}{g.meta?.reverted ? ' · (возвращено)' : ''}
                 </span>
                 {g.mode === 'record' && (
                   <button onClick={showOnMap} title="Открыть карту занятости: призраки «как было» и подсветка заказов этого сдвига"

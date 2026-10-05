@@ -58,7 +58,7 @@ export default function BomExpand(props: BomExpandProps) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10, fontSize: 11, color: '#8FA3BD', padding: '8px 12px', background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.18)', borderRadius: 8 }}>
-        <span>🔗 Колонка «Заказ» — какой заказ производит этот узел (связывает куст заказов).</span>
+        <span>🔗 Колонка «Заказ» — какой заказ производит этот узел (связывает заказы в дерево).</span>
         <span style={{ opacity: .85 }}>⛓ Цветные узлы с бейджем заказа — BOM подчинённых заказов цепочки.</span>
         <span style={{ opacity: .85 }}>Переключатель «Только свой BOM / Вся цепочка» — сверху.</span>
       </div>

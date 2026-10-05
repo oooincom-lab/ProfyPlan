@@ -1,6 +1,6 @@
 'use client';
 /**
- * Шкала куста по ресурсам (шаг 2.3).
+ * Шкала дерева заказов по ресурсам (шаг 2.3).
  * Строки — ресурсы, полосы — операции; общие ресурсы подсвечены, закрепления показаны маркерами,
  * события мощности — полосами на строке ресурса, «призрак» прежнего положения — полупрозрачными полосами.
  * Сверху — хлебные крошки контекста и переключатели (шаг 8.3).
@@ -99,7 +99,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
       // закрепление ставим только при реальном перетаскивании, обычный клик лишь открывает панель
       if (moved && d && onPin) {
         const iso = new Date(d).toISOString().slice(0, 16);
-        onPin(drag.id, 'start_not_earlier', iso, true, 'перетаскивание на шкале куста: ' + (drag.label || 'день'));
+        onPin(drag.id, 'start_not_earlier', iso, true, 'перетаскивание на шкале дерева заказов: ' + (drag.label || 'день'));
       }
     };
     window.addEventListener('mousemove', move);
@@ -197,7 +197,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
         <span style={{ color: '#5A7090' }}>Портфель</span><span style={{ color: '#33456B' }}>›</span>
         <span style={{ color: '#93C5FD', cursor: 'pointer' }} onClick={onBack}>{project?.name || 'Проект'}</span>
         <span style={{ color: '#33456B' }}>›</span>
-        <b style={{ color: '#E8EEF5' }}>Куст: {groupName || 'все заказы проекта'}</b>
+        <b style={{ color: '#E8EEF5' }}>Дерево заказов: {groupName || 'все заказы проекта'}</b>
         <span style={{ flex: 1 }} />
         {freedom && Number.isFinite(freedom.freedom_percent as number) && (
           <span title={`Закреплено ${freedom.pinned_operations || 0} из ${freedom.total_operations || 0} операций. Порог предупреждения — ${freedom.threshold_percent || 20}%.`} style={{
@@ -345,7 +345,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
           </label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {([['start_not_earlier', '⏳ Начать не раньше'], ['finish_not_later', '⏱ Закончить не позже'], ['capacity_window', '🪟 Окно мощности']] as const).map(([t, label]) => (
-              <button key={t} disabled={!!busy} onClick={() => onPin && sel && onPin(sel.id, t, when, hard, 'закрепление из шкалы куста')}
+              <button key={t} disabled={!!busy} onClick={() => onPin && sel && onPin(sel.id, t, when, hard, 'закрепление из шкалы дерева заказов')}
                 style={{ background: '#12304F', border: '1px solid #2B5B92', color: '#DBEAFE', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}>
                 {label}
               </button>
@@ -406,7 +406,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: '#8FA3BD' }}>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#EF4444', borderRadius: 3, marginRight: 6 }} />критические</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#3B82F6', borderRadius: 3, marginRight: 6 }} />есть резерв</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#C4B5FD', borderRadius: 3, marginRight: 6 }} />общий ресурс куста</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#C4B5FD', borderRadius: 3, marginRight: 6 }} />общий ресурс дерева заказов</span>
         <span><span style={{ display: 'inline-block', width: 2, height: 10, background: '#22D3EE', marginRight: 6 }} />маркер закрепления</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(248,113,113,.25)', border: '1px solid #F87171', borderRadius: 3, marginRight: 6 }} />ограничение / простой</span>
         <span style={{ color: '#FBBF24' }}>↔ тяните полосу: магнит ловит конец соседней операции, начало следующей или сетку дней (радиус 1 день), на отпускании ставится закрепление</span>

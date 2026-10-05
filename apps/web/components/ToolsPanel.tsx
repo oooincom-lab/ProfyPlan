@@ -39,7 +39,7 @@ export default function ToolsPanel({ projects, selectedProject, onOpenNetwork, o
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Инструменты</div>
         <div style={{ fontSize: 12.5, color: '#8FA3BD' }}>
-          Общие инструменты работают с выбранным контекстом — проектом, кустом или заказом.
+          Общие инструменты работают с выбранным контекстом — проектом, деревом заказов или заказом.
           Из сущности они открываются кнопкой с уже подставленным контекстом.
         </div>
       </div>
@@ -82,7 +82,7 @@ export default function ToolsPanel({ projects, selectedProject, onOpenNetwork, o
         <div style={card}>
           <div style={title}>🎚 Сценарии «что если»</div>
           <div style={desc}>
-            Пробный расчёт с изменёнными условиями: мощность ресурса, ремонт, вторая смена, сдвиг куста.
+            Пробный расчёт с изменёнными условиями: мощность ресурса, ремонт, вторая смена, сдвиг дерева заказов.
             Локальный по умолчанию, с расширением до портфеля.
           </div>
           <span style={badge('в работе', 'wait')}>в работе</span>
