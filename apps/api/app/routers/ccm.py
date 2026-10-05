@@ -22,6 +22,7 @@ from app.services.resource_leveling import resource_leveling_sgs, format_levelin
 from app.services.forecast import recalculate_forecast, format_forecast_result
 from app.services.batch_scheduling import analyze_batches, BatchScheduleResult
 from app.services.bottleneck import analyze_bottlenecks, BottleneckResult
+from app.services.bush_shift_warnings import tree_move_warnings as _tree_move_warnings
 
 ccm_router = APIRouter(prefix="/v1/ccm", tags=["CCM"])
 
@@ -1750,18 +1751,53 @@ async def overload_suggestion(
                 return cur
 
             _orows = (await db.execute(
-                select(_OR.operation_id, _OR.resource_id)
+                select(_OR.operation_id, _OR.resource_id, _Op.order_id)
                 .join(_Op, _Op.id == _OR.operation_id)
                 .where(_Op.project_id == project_id, _Op.tenant_id == tenant_id)
             )).all()
             _op_res: dict = {}
-            for _oid2, _rid2 in _orows:
+            _op_order: dict = {}
+            for _oid2, _rid2, _ordid2 in _orows:
                 _op_res.setdefault(str(_oid2), set()).add(str(_rid2))
+                if _ordid2:
+                    _op_order[str(_oid2)] = str(_ordid2)
 
             _conf_by_res = {}
             for c in my_conflicts:
                 if c.get("resource_id"):
                     _conf_by_res[str(c["resource_id"])] = c
+
+            # 6.33.4 срез 2: предупреждения о других ресурсах дерева после переноса —
+            # по окнам: окно дерева против окон чужих проектов на общих ресурсах дерева.
+            _rows_by_res = {str(r.get("id")): r for r in rows}
+            _res_rows2 = (await db.execute(
+                select(Resource.id, Resource.parent_id).where(Resource.tenant_id == tenant_id)
+            )).all()
+            _res_parent2 = {str(_r1): (str(_r2) if _r2 else None) for _r1, _r2 in _res_rows2}
+            _res_by_order: dict = {}
+            for _oid3, _ordid3 in _op_order.items():
+                for _rid3 in _op_res.get(_oid3, ()):
+                    _res_by_order.setdefault(_ordid3, set()).add(_res_parent2.get(_rid3) or _rid3)
+            _tree_ctx_cache: dict = {}
+
+            def _tree_ctx(_root):
+                _k = str(_root.id)
+                if _k in _tree_ctx_cache:
+                    return _tree_ctx_cache[_k]
+                _tlist = [o for o in _orders if _root_of(str(o.id)) is _root]
+                _starts2 = [o.start_date for o in _tlist if o.start_date]
+                _dues2 = [o.due_date for o in _tlist if o.due_date]
+                _window2 = None
+                if _starts2 and _dues2:
+                    _window2 = (
+                        datetime.combine(min(_starts2), datetime.min.time()),
+                        datetime.combine(max(_dues2), datetime.min.time()),
+                    )
+                _rids2: set = set()
+                for o in _tlist:
+                    _rids2.update(_res_by_order.get(str(o.id), set()))
+                _tree_ctx_cache[_k] = (_window2, _rids2, _tlist)
+                return _tree_ctx_cache[_k]
 
             _sc2 = await run_schedule(project_id, ScheduleRequest(), db, tenant_id)
             _nodes2 = (_sc2 or {}).get("nodes") or []
@@ -1801,9 +1837,11 @@ async def overload_suggestion(
                     delta = 0
                 if delta <= 0:
                     continue
+                _tw2, _trs2, _tlist2 = _tree_ctx(e["root"])
+                _bush_warns = _tree_move_warnings(_tw2, _trs2, _rows_by_res, str(project_id), delta)
                 fixed_cnt = 0
-                for o in _orders:
-                    if _root_of(str(o.id)) is e["root"] and getattr(o, "priority_anchor_at", None) is not None:
+                for o in _tlist2:
+                    if getattr(o, "priority_anchor_at", None) is not None:
                         fixed_cnt += 1
                 _ns = None
                 try:
@@ -1822,6 +1860,7 @@ async def overload_suggestion(
                     "new_start": _ns,
                     "fixed_orders": fixed_cnt,
                     "warning": ("закреплено заказов: %d — останутся на месте" % fixed_cnt) if fixed_cnt else None,
+                    "warnings": _bush_warns,
                 })
             bush_options.sort(key=lambda x: (x["delta_days"], x["root_name"]))
             bush_options = bush_options[:3]

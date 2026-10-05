@@ -1052,6 +1052,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                           <span style={{ color: '#CBD5E1', fontWeight: 600 }}>«{b.root_name}»</span>
                           <span>· {b.resource_name}: {b.my_from}–{b.my_to} → окно с {b.until || '?'} (+{b.delta_days} дн)</span>
                           {b.warning ? <span style={{ color: '#FCD34D' }}>⚠ {b.warning}</span> : null}
+                          {(b.warnings || []).length > 0 ? <span style={{ color: '#FCD34D', fontSize: 10.5 }} title="Оценка по окнам дерева и окна чужого проекта; точные интервалы — на карте занятости">⚠ появится пересечение: {(b.warnings || []).map((w: any) => '«' + w.resource_name + '» × «' + w.project_name + '» (~' + w.days_new + ' дн)').join('; ')}</span> : null}
                           {!suggestion.applied && b.new_start ? (
                             <button onClick={() => startBushFlow(String(suggestion.project_id), b.new_start, b.delta_days, String(b.root_id))} disabled={sugBusy}
                               title="Пошагово: проверка → «Сдвинуть дерево заказов» (дата старта проекта не меняется)"
@@ -1109,6 +1110,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <span style={{ color: '#8FA3BD' }}>заказов: {b.orders_total}</span>
                       <span style={{ color: '#93C5FD' }}>{b.window_before ? fmtD(b.window_before[0]) + ' – ' + fmtD(b.window_before[1]) : '—'} → {b.window_after ? fmtD(b.window_after[0]) + ' – ' + fmtD(b.window_after[1]) : '—'}</span>
                       {b.orders_skipped > 0 ? <span style={{ color: '#FCD34D' }}>не поедет: {b.orders_skipped}</span> : <span style={{ color: '#86EFAC' }}>поедет весь</span>}
+                      {(b.warnings || []).length > 0 ? <span style={{ color: '#FCD34D', fontSize: 11 }} title="Оценка по окнам дерева и окна чужого проекта; точные интервалы — на карте занятости">⚠ появится пересечение: {(b.warnings || []).map((w: any) => '«' + w.resource_name + '» × «' + w.project_name + '» (~' + w.days_new + ' дн)').join('; ')}</span> : null}
                     </div>
                   ))}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
@@ -1131,6 +1133,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       <span style={{ minWidth: 230, fontWeight: 600, color: '#CBD5E1' }}>🌳 {b.title}</span>
                       {stepPanel.focus_root_id === b.root_id ? <span style={{ color: '#93C5FD', fontSize: 11 }}>← цель</span> : null}
                       <span style={{ color: '#93C5FD' }}>{b.window_before ? fmtD(b.window_before[0]) + ' – ' + fmtD(b.window_before[1]) : '—'} → {b.window_after ? fmtD(b.window_after[0]) + ' – ' + fmtD(b.window_after[1]) : '—'}</span>
+                      {(b.warnings || []).length > 0 ? <span style={{ color: '#FCD34D', fontSize: 11 }} title="Оценка по окнам дерева и окна чужого проекта; точные интервалы — на карте занятости">⚠ появится пересечение: {(b.warnings || []).map((w: any) => '«' + w.resource_name + '» × «' + w.project_name + '» (~' + w.days_new + ' дн)').join('; ')}</span> : null}
                       <span style={{ marginLeft: 'auto' }}>
                         <button onClick={() => applyContourShift(stepPanel.project_id, stepPanel.new_start, stepPanel.kind, stepPanel.days, false, [b.root_id])} disabled={sugBusy || !b.orders_shifted}
                           title="Перенести только это дерево заказов (дата старта проекта не меняется)"

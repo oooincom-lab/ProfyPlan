@@ -346,7 +346,25 @@ async def preview_shift(
     if not project:
         raise HTTPException(status_code=404, detail="Проект не найден")
     orders = await _load_project_orders(db, tenant_id, project.id)
-    return _shift_preview(project, orders, body.new_start)
+    data = _shift_preview(project, orders, body.new_start)
+    for _b in (data.get("bushes") or []):
+        _b["warnings"] = []
+    try:
+        _d = int(data.get("days") or 0)
+        if _d > 0:
+            from app.services.bush_shift_warnings import compute_tree_warnings_for_project
+
+            _warns = await compute_tree_warnings_for_project(
+                db,
+                tenant_id,
+                project.id,
+                {_b["root_id"]: _d for _b in (data.get("bushes") or [])},
+            )
+            for _b in (data.get("bushes") or []):
+                _b["warnings"] = _warns.get(_b["root_id"]) or []
+    except Exception:
+        pass
+    return data
 
 
 @router.post("/v1/ccm/shifts/apply")
