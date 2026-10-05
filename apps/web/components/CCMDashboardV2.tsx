@@ -1431,7 +1431,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 const RULER_H = 36;
                 const H_ORDER = 28;
                 const H_OPSMSG = 15;
-                const H_OP = 24;
+                const H_OP = 30;
                 const H_BLOCK = 28;
                 const H_START = 15;
                 const H_EMPTY = 17;
@@ -1534,15 +1534,15 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     const opsB0 = sgTabOps[d.blk.projectId];
                     const rr0 = (opsB0 && opsB0.resByOp ? opsB0.resByOp[String(op2.id)] : null) || [];
                     return (
-                      <div key={key} title={op2.crit ? 'Критическая операция — от неё зависит срок сдвига' : undefined} style={{ height: h, display: 'flex', alignItems: 'center', paddingLeft: 32 + (r2.depth || 0) * 10, fontSize: 10.5, overflow: 'hidden', whiteSpace: 'nowrap', color: op2.crit ? '#FCD34D' : '#B0C4DE', fontWeight: op2.crit ? 600 : 400 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
+                      <div key={key} title={op2.crit ? 'Критическая операция — от неё зависит срок сдвига' : undefined} style={{ height: h, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingLeft: 32 + (r2.depth || 0) * 10, paddingRight: 4, fontSize: 10.5, overflow: 'hidden', whiteSpace: 'nowrap', color: op2.crit ? '#FCD34D' : '#B0C4DE', fontWeight: op2.crit ? 600 : 400, lineHeight: '12px' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{(op2.crit ? '◆ ' : '• ')}{op2.name}</span>
                         {rr0.length > 0 && (
-                          <span style={{ marginLeft: 6, flexShrink: 0, fontWeight: 400, color: '#5A7090' }}>
-                            · {rr0.slice(0, 3).map((x: any, xi: number) => (
+                          <span style={{ fontWeight: 400, color: '#5A7090', fontSize: 9.5, lineHeight: '11px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {rr0.slice(0, 3).map((x: any, xi: number) => (
                               <span key={xi}>
                                 {xi > 0 ? ', ' : ''}
                                 <button onClick={() => { if (onOpenResourceEdit && x.id) onOpenResourceEdit(x.id); }} title={'Открыть карточку ресурса: ' + (x.name || '')}
-                                  style={{ background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 10.5, color: '#93C5FD', cursor: 'pointer', borderBottom: '1px dotted rgba(147,197,253,.65)' }}>{x.name || (x.id ? x.id.slice(0, 8) : '—')}</button>
+                                  style={{ background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 9.5, color: '#93C5FD', cursor: 'pointer', borderBottom: '1px dotted rgba(147,197,253,.65)' }}>{x.name || (x.id ? x.id.slice(0, 8) : '—')}</button>
                               </span>
                             ))}
                           </span>
@@ -1596,9 +1596,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     const nw2 = cs != null && cf != null ? [cs + sS * MS_DAY, cf + sS * MS_DAY] : null;
                     const noMove = !isMoved || NN === 0;
                     return cell(<>
-                      {noMove && nw2 && <div title={op2.name + ': ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + ' (не двигался' + (op2.crit ? ', критическая' : '') + ')'} style={{ position: 'absolute', top: 8, bottom: 8, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.30)' : 'rgba(59,130,246,.35)', border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.75)' : 'rgba(148,163,184,.6)') }} />}
-                      {!noMove && ow2 && <div title={'было: ' + fmtDm(ow2[0]) + ' — ' + fmtDm(ow2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 8, bottom: 8, left: ((ow2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(ow2[1]) - px(ow2[0]), 0.5) + 'px', borderRadius: 3, border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.8)' : 'rgba(148,163,184,.75)'), background: op2.crit ? 'rgba(245,158,11,.10)' : 'rgba(148,163,184,.10)' }} />}
-                      {!noMove && nw2 && <div title={'стало: ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 8, bottom: 8, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)', border: '1px solid ' + (op2.crit ? 'rgba(252,211,77,.9)' : 'rgba(96,165,250,.7)') }} />}
+                      {noMove && nw2 && <div title={op2.name + ': ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + ' (не двигался' + (op2.crit ? ', критическая' : '') + ')'} style={{ position: 'absolute', top: 11, bottom: 11, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.30)' : 'rgba(59,130,246,.35)', border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.75)' : 'rgba(148,163,184,.6)') }} />}
+                      {!noMove && ow2 && <div title={'было: ' + fmtDm(ow2[0]) + ' — ' + fmtDm(ow2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 11, bottom: 11, left: ((ow2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(ow2[1]) - px(ow2[0]), 0.5) + 'px', borderRadius: 3, border: '1px dashed ' + (op2.crit ? 'rgba(252,211,77,.8)' : 'rgba(148,163,184,.75)'), background: op2.crit ? 'rgba(245,158,11,.10)' : 'rgba(148,163,184,.10)' }} />}
+                      {!noMove && nw2 && <div title={'стало: ' + fmtDm(nw2[0]) + ' — ' + fmtDm(nw2[1]) + (op2.crit ? ' · критическая' : '')} style={{ position: 'absolute', top: 11, bottom: 11, left: ((nw2[0] - mn0) / span0) * 100 + '%', width: Math.max(px(nw2[1]) - px(nw2[0]), 0.5) + 'px', borderRadius: 3, background: op2.crit ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)', border: '1px solid ' + (op2.crit ? 'rgba(252,211,77,.9)' : 'rgba(96,165,250,.7)') }} />}
                     </>);
                   }
                   const r2 = d.r2; const o = r2.o;
