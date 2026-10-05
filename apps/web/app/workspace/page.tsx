@@ -195,6 +195,11 @@ export default function AppShell() {
   const [authUser, setAuthUser] = useState<{ email?: string; name?: string; tenant_name?: string; role?: string } | null>(null);
   const [pendingTenants, setPendingTenants] = useState<any[]>([]);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  // Срез 2 (6.34.1): регистрация — онбординг «по заявке».
+  const [showRegister, setShowRegister] = useState(false);
+  const [regForm, setRegForm] = useState({ name: '', company: '', email: '', comment: '' });
+  const [regMsg, setRegMsg] = useState('');
+  const [regDone, setRegDone] = useState(false);
   const [view, setView] = useState<View>('dashboard');
   // Расчёты (блок 6.16 плана): активная вкладка хаба. «Гант» и «Сетевой график» — отдельные виды, поэтому вкладка выводится из вида.
   const [calcTab, setCalcTab] = useState<CalcTab>('overview');
@@ -2866,6 +2871,26 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     }
   };
 
+  // Заявка на создание компании (онбординг «по заявке», блок 6.34).
+  const submitRegister = async () => {
+    if (loading) return;
+    const email = regForm.email.trim();
+    if (!regForm.name.trim() || !regForm.company.trim() || !email) { setRegMsg('Заполните имя, компанию и email.'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setRegMsg('Проверьте адрес email.'); return; }
+    setLoading(true);
+    setRegMsg('');
+    try {
+      const r = await fetch(`${API}/early-access`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name: regForm.name.trim(), company: regForm.company.trim(), comment: regForm.comment.trim() }) });
+      if (!r.ok) { setRegMsg('Не удалось отправить заявку. Попробуйте ещё раз.'); return; }
+      setRegDone(true);
+      setRegForm({ name: '', company: '', email: '', comment: '' });
+    } catch (e: any) {
+      setRegMsg('Нет связи с сервером — попробуйте ещё раз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Выход: сброс сессии и возврат к экрану входа.
   const logoutUser = async () => {
     try { await apiF('/auth/logout', { method: 'POST' }); } catch { /* выходим локально в любом случае */ }
@@ -4233,6 +4258,35 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                 </div>
               </div>
             </div>
+          ) : showRegister ? (
+            <div style={{ maxWidth: 360, margin: '0 auto', textAlign: 'left' }}>
+              <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#E8EEF5', marginBottom: 4 }}>Создать компанию</div>
+                <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 16 }}>Доступ открывается по заявке: оставьте контакты — мы создадим организацию и пригласим вас.</div>
+                {regDone ? (
+                  <div>
+                    <div style={{ fontSize: 13, color: '#34D399', marginBottom: 6 }}>Заявка отправлена ✓</div>
+                    <div style={{ fontSize: 12, color: '#8FA3BD' }}>Мы свяжемся с вами по указанному email.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <input value={regForm.name} onChange={e => setRegForm({ ...regForm, name: e.target.value })} placeholder="Ваше имя" autoFocus style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
+                    <input value={regForm.company} onChange={e => setRegForm({ ...regForm, company: e.target.value })} placeholder="Компания" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
+                    <input value={regForm.email} onChange={e => setRegForm({ ...regForm, email: e.target.value })} placeholder="Email" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
+                    <input value={regForm.comment} onChange={e => setRegForm({ ...regForm, comment: e.target.value })} placeholder="Комментарий (необязательно)" style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '10px 14px', fontSize: 14 }} />
+                    <button onClick={submitRegister} disabled={loading} className="btn btn-primary" style={{ padding: '10px', fontSize: 14, fontWeight: 600, width: '100%' }}>
+                      {loading ? 'Отправка...' : 'Отправить заявку'}
+                    </button>
+                    {regMsg && <div style={{ color: '#EF4444', fontSize: 12, textAlign: 'center' }}>{regMsg}</div>}
+                  </div>
+                )}
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 10 }}>
+                  <button onClick={() => { setShowRegister(false); setShowLogin(true); setRegMsg(''); }} style={{ background: 'none', border: 'none', color: '#60A5FA', fontSize: 12.5, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                    ← Ко входу
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : showLogin ? (
             <div style={{ maxWidth: 340, margin: '0 auto', textAlign: 'left' }}>
               <div style={{ background: 'linear-gradient(135deg, #0F1E36, #162844)', borderRadius: 12, border: '1px solid #1E3252', padding: 24 }}>
@@ -4246,9 +4300,12 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                   </button>
                   {loginMsg && <div style={{ color: '#EF4444', fontSize: 12, textAlign: 'center' }}>{loginMsg}</div>}
                 </div>
-                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 10, textAlign: 'center' }}>
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 10, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <button onClick={() => { setShowRegister(true); setShowLogin(false); setRegMsg(''); setRegDone(false); }} disabled={loading} style={{ background: 'none', border: 'none', color: '#60A5FA', fontSize: 12.5, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }} title="Регистрация по заявке: оставьте контакты — мы создадим организацию и пригласим вас">
+                    Создать компанию →
+                  </button>
                   <button onClick={demoLogin} disabled={loading} style={{ background: 'none', border: 'none', color: '#60A5FA', fontSize: 12.5, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }} title="Посмотреть продукт на демо-данных, без своей учётной записи">
-                    Демо-доступ — посмотреть без входа →
+                    Демо-доступ →
                   </button>
                 </div>
               </div>
