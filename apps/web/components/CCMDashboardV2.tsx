@@ -1684,7 +1684,12 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   if (d.t === 'block') {
                     return (
                       <div key={key} style={{ height: h, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8, background: '#101F38', borderBottom: '1px dashed rgba(30,58,95,.6)' }}>
-                        <button onClick={() => openShiftGraph(d.blk.rec)} disabled={sgBusy} title="Отдельное окно записи (с кнопкой «Показать на карте»)"
+                        {!d.blk.reverted && !!d.blk.rec && (
+                          <button onClick={() => { void revertShift(String(d.blk.rec.id)); }} disabled={sgBusy}
+                            title={d.blk.rec.scope === 'roots' ? 'Вернуть сдвиг: даты дерева заказов как было (с автопересчётом)' : 'Вернуть сдвиг: старт и даты заказов как было (с автопересчётом)'}
+                            style={{ marginRight: 6, background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '1px 7px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>↩</button>
+                        )}
+                        <button onClick={() => openShiftGraph(d.blk.rec)} disabled={sgBusy} title="Отдельное окно записи (кнопки «Показать на карте» и «Вернуть сдвиг»)"
                           style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '1px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>📊 окно записи</button>
                       </div>
                     );
@@ -1992,8 +1997,15 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                   +{g.meta?.days ?? 0} дн{g.meta?.scope === 'roots' ? ' · дерево заказов (старт проекта не менялся)' : ''}{g.meta?.reverted ? ' · (возвращено)' : ''}
                 </span>
                 {g.mode === 'record' && (
-                  <button onClick={showOnMap} title="Открыть карту занятости: призраки «как было» и подсветка заказов этого сдвига"
-                    style={{ marginLeft: 'auto', background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.5)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>🗺 Показать на карте</button>
+                  <>
+                    <button onClick={showOnMap} title="Открыть карту занятости: призраки «как было» и подсветка заказов этого сдвига"
+                      style={{ marginLeft: 'auto', background: 'rgba(52,211,153,.10)', border: '1px solid rgba(52,211,153,.5)', color: '#86EFAC', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>🗺 Показать на карте</button>
+                    {!g.meta?.reverted && !!g.recordId && (
+                      <button onClick={() => { const rid = String(g.recordId); setShiftGraph(null); void revertShift(rid); }}
+                        title={g.meta?.scope === 'roots' ? 'Вернуть даты дерева заказов как было (с автопересчётом): запись пометится «возвращено»' : 'Вернуть старт и даты заказов как было (с автопересчётом): запись пометится «возвращено»'}
+                        style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.4)', color: '#93C5FD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>↩ Вернуть сдвиг</button>
+                    )}
+                  </>
                 )}
                 <button onClick={() => setShiftGraph(null)} style={{ marginLeft: g.mode === 'record' ? 0 : 'auto', background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Закрыть</button>
               </div>
