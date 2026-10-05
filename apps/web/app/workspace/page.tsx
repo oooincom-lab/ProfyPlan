@@ -54,6 +54,7 @@ import ReportsPanel from '@/components/ReportsPanel';
 import CCMDashboardV2 from '@/components/CCMDashboardV2';
 import ToolsPanel from '@/components/ToolsPanel';
 import CpmGraph from '@/components/CpmGraph';
+import CalcLayersStrip from '@/components/CalcLayersStrip';
 import SavedViewsPanel from '@/components/SavedViewsPanel';
 import GroupScale from '@/components/groupscale';
 
@@ -6679,6 +6680,11 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">📊 К Ганту</button>
                 <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
               </div>
+              <CalcLayersStrip
+                projectId={selectedProject?.id ? String(selectedProject.id) : null}
+                refreshKey={netData}
+                onOpenTree={(rid) => { if (selectedProject) { setNetOrderId(rid); loadProjectNetwork(selectedProject, rid); } }}
+              />
               <div style={{ flex: 1, minHeight: 420, position: 'relative', overflow: 'hidden' }}>
                 {netLoading && (
                   <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>Расчёт CPM и построение сети…</div>
