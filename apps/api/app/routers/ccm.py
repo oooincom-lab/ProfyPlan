@@ -1725,6 +1725,109 @@ async def overload_suggestion(
         for v in sorted(by_res.values(), key=lambda x: -x["max_days"])
     ]
 
+    # ── 6.33.4: постановка куста в окно — какие кусты проекта задевают конфликтующие ресурсы ──
+    bush_options: list = []
+    if suggested_start:
+        try:
+            from app.models.production_order import ProductionOrder as _PO
+            from app.models.operation import Operation as _Op, OperationResource as _OR
+            from app.routers.calculations import run_schedule, ScheduleRequest
+
+            _orders = (await db.execute(
+                select(_PO).where(_PO.project_id == project_id, _PO.tenant_id == tenant_id)
+            )).scalars().all()
+            _by_id = {str(o.id): o for o in _orders}
+
+            def _root_of(_oid):
+                cur = _by_id.get(str(_oid))
+                seen: set = set()
+                while cur is not None and getattr(cur, "parent_order_id", None):
+                    nxt = _by_id.get(str(cur.parent_order_id))
+                    if nxt is None or str(nxt.id) in seen:
+                        break
+                    seen.add(str(nxt.id))
+                    cur = nxt
+                return cur
+
+            _orows = (await db.execute(
+                select(_OR.operation_id, _OR.resource_id)
+                .join(_Op, _Op.id == _OR.operation_id)
+                .where(_Op.project_id == project_id, _Op.tenant_id == tenant_id)
+            )).all()
+            _op_res: dict = {}
+            for _oid2, _rid2 in _orows:
+                _op_res.setdefault(str(_oid2), set()).add(str(_rid2))
+
+            _conf_by_res = {}
+            for c in my_conflicts:
+                if c.get("resource_id"):
+                    _conf_by_res[str(c["resource_id"])] = c
+
+            _sc2 = await run_schedule(project_id, ScheduleRequest(), db, tenant_id)
+            _nodes2 = (_sc2 or {}).get("nodes") or []
+            _agg: dict = {}
+            for n in _nodes2:
+                nid = str(n.get("id")); gid = n.get("order_id")
+                if not gid or not n.get("start_datetime") or not n.get("finish_datetime"):
+                    continue
+                _root = _root_of(str(gid))
+                if _root is None:
+                    continue
+                for _rid3 in _op_res.get(nid, ()):  # ресурсы этой операции
+                    _c = _conf_by_res.get(_rid3)
+                    if _c is None:
+                        continue
+                    k = (str(_root.id), _rid3)
+                    e = _agg.setdefault(k, {"root": _root, "conf": _c, "s0": n["start_datetime"], "f0": n["finish_datetime"]})
+                    if str(n["finish_datetime"]) > str(e["f0"]):
+                        e["f0"] = n["finish_datetime"]
+                    if str(n["start_datetime"]) < str(e["s0"]):
+                        e["s0"] = n["start_datetime"]
+
+            for k, e in _agg.items():
+                _c = e["conf"]
+                until = _c.get("other_finish")
+                delta = 0
+                try:
+                    if until:
+                        _u = datetime.fromisoformat(str(until))
+                        _s0 = datetime.fromisoformat(str(e["s0"]))
+                        if _u.tzinfo is not None:
+                            _u = _u.replace(tzinfo=None)
+                        if _s0.tzinfo is not None:
+                            _s0 = _s0.replace(tzinfo=None)
+                        delta = max(0, (_u - _s0).days + 1)
+                except Exception:
+                    delta = 0
+                if delta <= 0:
+                    continue
+                fixed_cnt = 0
+                for o in _orders:
+                    if _root_of(str(o.id)) is e["root"] and getattr(o, "priority_anchor_at", None) is not None:
+                        fixed_cnt += 1
+                _ns = None
+                try:
+                    if proj.start_date:
+                        _ns = (datetime.combine(proj.start_date, datetime.min.time()) + timedelta(days=delta)).isoformat(timespec="minutes")
+                except Exception:
+                    _ns = None
+                bush_options.append({
+                    "root_id": str(e["root"].id),
+                    "root_name": (((e["root"].ext_id + " · ") if e["root"].ext_id else "") + (e["root"].specification_name or "Заказ")),
+                    "resource_name": _c.get("resource_name"),
+                    "my_from": str(e["s0"])[:10],
+                    "my_to": str(e["f0"])[:10],
+                    "until": (str(until)[:10] if until else None),
+                    "delta_days": delta,
+                    "new_start": _ns,
+                    "fixed_orders": fixed_cnt,
+                    "warning": ("закреплено заказов: %d — останутся на месте" % fixed_cnt) if fixed_cnt else None,
+                })
+            bush_options.sort(key=lambda x: (x["delta_days"], x["root_name"]))
+            bush_options = bush_options[:3]
+        except Exception:
+            bush_options = []
+
     # Приоритеты: если мой проект важнее — предлагаем двигать чужой
     rank = {"low": 0, "normal": 1, "high": 2}
     prio_map = {
@@ -1749,6 +1852,7 @@ async def overload_suggestion(
         "has_conflict": True,
         "conflicts": my_conflicts,
         "plan": plan,
+        "bushes": bush_options,
         "priority": {
             "mine": prio_map.get(str(project_id), "normal"),
             "others": sorted({prio_map.get(c["other_project_id"], "normal") for c in my_conflicts if c.get("other_project_id")}),

@@ -581,6 +581,23 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
     setSugBusy(false);
   }, [shiftAuto, applyContourShift]);
 
+  /** 6.33.4: постановка куста в окно — всегда пошаговый флоу (без «сдвигать сразу»). */
+  const startBushFlow = useCallback(async (projectId: string, newStartIso: string, days: number, rootId: string) => {
+    setSugBusy(true);
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(API_BASE + '/ccm/shifts/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bea' + 'rer ' + t } : {}) },
+        body: JSON.stringify({ project_id: projectId, new_start: newStartIso }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((d && d.detail) || 'Не удалось подготовить сдвиг');
+      setStepPanel({ step: 1, preview: d, project_id: projectId, new_start: newStartIso, kind: 'self', days, focus_root_id: rootId });
+    } catch (e: any) { setError(String(e?.message || e)); }
+    setSugBusy(false);
+  }, []);
+
   const applyShift = useCallback(async () => {
     const sg = suggestion?.suggestion;
     if (!sg?.suggested_start || !suggestion?.project_id) return;
@@ -1028,6 +1045,22 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                       План: {(suggestion.plan || []).map((x: any) => `${x.resource_name} (освободится ${(x.busy_until || x.free_at) ? String(x.busy_until || x.free_at).slice(0, 10) : '?'}, с ${x.other_projects.join('/')}, перекрытие ${x.overlap_days} дн)`).join('; ')}
                     </div>
                   )}
+                  {(suggestion.bushes || []).length > 0 && (
+                    <div style={{ width: '100%', fontSize: 11.5, color: '#8FA3BD' }}>
+                      📦 Кусты в свободное окно: {(suggestion.bushes || []).map((b: any, bi: number) => (
+                        <span key={bi} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 12 }}>
+                          <span style={{ color: '#CBD5E1', fontWeight: 600 }}>«{b.root_name}»</span>
+                          <span>· {b.resource_name}: {b.my_from}–{b.my_to} → окно с {b.until || '?'} (+{b.delta_days} дн)</span>
+                          {b.warning ? <span style={{ color: '#FCD34D' }}>⚠ {b.warning}</span> : null}
+                          {!suggestion.applied && b.new_start ? (
+                            <button onClick={() => startBushFlow(String(suggestion.project_id), b.new_start, b.delta_days, String(b.root_id))} disabled={sugBusy}
+                              title="Пошагово: проверка → «Сдвинуть куст» (дата старта проекта не меняется)"
+                              style={{ background: 'rgba(147,197,253,.10)', border: '1px solid rgba(147,197,253,.45)', color: '#93C5FD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📦 Поставить куст в окно</button>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {suggestion.priority?.recommendation === 'shift_other' && suggestion.priority?.target_project && !suggestion.applied ? (
                     <button onClick={applyShiftOther} disabled={sugBusy}
                       style={{ background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1069,6 +1102,7 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                     <span style={{ fontSize: 11.5, color: '#8FA3BD' }}>«{stepPanel.preview?.project_name}» · старт {fmtD(stepPanel.preview?.old_start)} → {fmtD(stepPanel.preview?.new_start)} (+{stepPanel.preview?.days ?? 0} дн)</span>
                   </div>
                   {stepPanel.preview?.warning ? (<div style={{ fontSize: 11.5, color: '#FCD34D', marginBottom: 4 }}>⚠ {stepPanel.preview.warning}</div>) : null}
+                  {stepPanel.focus_root_id ? (<div style={{ fontSize: 11.5, color: '#93C5FD', marginBottom: 4 }}>📦 Цель: поставить куст в окно — на шаге 2 нажмите «Сдвинуть куст» у подсвеченного куста (дата старта проекта не меняется).</div>) : null}
                   {(stepPanel.preview?.bushes || []).map((b: any) => (
                     <div key={b.root_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 12, flexWrap: 'wrap' }}>
                       <span style={{ minWidth: 230, fontWeight: 600, color: '#CBD5E1' }}>🌳 {b.title}</span>
@@ -1093,8 +1127,9 @@ export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { on
                 <>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: '#93C5FD', marginBottom: 6 }}>↔ Сдвиг с заказами · шаг 2 — что сдвигаем</div>
                   {(stepPanel.preview?.bushes || []).map((b: any) => (
-                    <div key={b.root_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 12, flexWrap: 'wrap' }}>
+                    <div key={b.root_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px', borderBottom: '1px solid #14263F', fontSize: 12, flexWrap: 'wrap', ...(stepPanel.focus_root_id === b.root_id ? { background: 'rgba(147,197,253,.08)', boxShadow: '0 0 0 1px rgba(147,197,253,.45)', borderRadius: 6 } : {}) }}>
                       <span style={{ minWidth: 230, fontWeight: 600, color: '#CBD5E1' }}>🌳 {b.title}</span>
+                      {stepPanel.focus_root_id === b.root_id ? <span style={{ color: '#93C5FD', fontSize: 11 }}>← цель</span> : null}
                       <span style={{ color: '#93C5FD' }}>{b.window_before ? fmtD(b.window_before[0]) + ' – ' + fmtD(b.window_before[1]) : '—'} → {b.window_after ? fmtD(b.window_after[0]) + ' – ' + fmtD(b.window_after[1]) : '—'}</span>
                       <span style={{ marginLeft: 'auto' }}>
                         <button onClick={() => applyContourShift(stepPanel.project_id, stepPanel.new_start, stepPanel.kind, stepPanel.days, false, [b.root_id])} disabled={sugBusy || !b.orders_shifted}
