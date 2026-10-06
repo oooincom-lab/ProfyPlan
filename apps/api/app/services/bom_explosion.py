@@ -34,6 +34,7 @@ class ExplodedOperation:
     procurement_lead_time_days: Optional[Decimal] = None
     is_milestone: bool = False
     source_node_path: str = ""  # путь в BOM-дереве "1/1.1/1.1.2"
+    owner_order_id: Optional[str] = None  # заказ-производитель узла (order_id узла BOM)
 
 
 @dataclass
@@ -180,6 +181,7 @@ async def explode_bom_to_operations(
                 output_product=node.nomenclature_id,
                 output_quantity=node.quantity_per_parent * project_quantity,
                 procurement_lead_time_days=lead_days,
+                owner_order_id=str(node.order_id) if node.order_id else None,
                 source_node_path=node_path,
             )
             result.operations.append(op)
@@ -215,6 +217,7 @@ async def explode_bom_to_operations(
             local_to_global: dict[str, str] = {}
             op_ids: list[str] = []
             for op in prod_ops:
+                op.owner_order_id = str(node.order_id) if node.order_id else None
                 new_id = _tid("op")
                 local_to_global[op.temp_id] = new_id
                 op.temp_id = new_id
@@ -256,6 +259,11 @@ async def explode_bom_to_operations(
         result.warnings.append(
             f"Узел '{node.nomenclature_name}' ({node_path}): тип 'make' без маршрута"
         )
+        # Отсутствие маршрута у сборочного узла не должно «съедать» его поддерево:
+        # иначе заказы и материалы ниже по структуре остаются без операций.
+        for child in children_map.get(str(node.id), []):
+            await _traverse(child, node_path)
+        return
 
     for root in root_nodes:
         await _traverse(root, "")

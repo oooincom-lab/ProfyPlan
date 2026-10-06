@@ -228,6 +228,7 @@ export default function AppShell() {
   const [netChainLabel, setNetChainLabel] = useState<string>('');
   const [netChain, setNetChain] = useState<any>(null);
   const [netChainBusy, setNetChainBusy] = useState(false);
+  const [expandingId, setExpandingId] = useState<string | null>(null);
   const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, resIds: {}, pins: [], events: [] });
   const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
   const [scaleBusy, setScaleBusy] = useState(false);
@@ -3233,6 +3234,32 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     setNetLoading(false);
   };
 
+  // Развернуть заказ (и подчинённые) в операции плана (кнопка в списке заказов).
+  const expandOrderClick = async (o: any) => {
+    const kids = (projectOrders[selectedProject?.id || ''] || []).filter((x: any) => String(x.parent_order_id) === String(o.id));
+    const what = kids.length
+      ? 'заказ «' + (o.ext_id || o.specification_name || '') + '» и подчинённые заказы (' + kids.length + ')'
+      : 'заказ «' + (o.ext_id || o.specification_name || '') + '»';
+    if (!window.confirm('Развернуть в операции: ' + what + '?\n\nИз состава и маршрутов будут созданы операции и связи. Заказы, у которых операции уже есть, будут пропущены.')) return;
+    setExpandingId(o.id);
+    try {
+      const r: any = await apiF('/production-orders/' + o.id + '/expand', { method: 'POST' });
+      const parts: string[] = [];
+      if (r.expanded_orders && r.expanded_orders.length) {
+        parts.push('развёрнуто заказов: ' + r.expanded_orders.length + ', операций: ' + (r.operations_created || 0) + ', связей: ' + (r.dependencies_created || 0));
+      } else {
+        parts.push('новых операций не создано');
+      }
+      if (r.skipped_orders && r.skipped_orders.length) parts.push('пропущено заказов: ' + r.skipped_orders.length);
+      if (r.warnings && r.warnings.length) parts.push('⚠ ' + r.warnings[0]);
+      setMsg('Развернуть: ' + parts.join(' · '));
+      const pid = selectedProject?.id;
+      if (pid) { reloadBomTree(pid); reloadRoutings(pid); loadProjectOrders(pid); }
+    } catch (e2: any) {
+      setMsg('Развернуть: ' + detailOf(e2));
+    }
+    setExpandingId(null);
+  };
   // Кластер и критическая цепь (блок 6.20, срез 1): цепь по связям операций кластера.
   const loadClusterChain = async (v: string, label?: string) => {
     setNetChainScope(v);
@@ -3671,6 +3698,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Создать операции из состава и маршрутов заказа; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Развернуть'}</button>
                                     </div>
                                     <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} layerMode onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
@@ -6116,6 +6144,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                   {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                   <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                   <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Создать операции из состава и маршрутов заказа; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Развернуть'}</button>
                                 </div>
                                 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                               </div>
@@ -6232,6 +6261,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                           {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                           <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                           <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Создать операции из состава и маршрутов заказа; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Развернуть'}</button>
                                         </div>
                                         <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                                       </div>
@@ -6272,6 +6302,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                       {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Создать операции из состава и маршрутов заказа; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Развернуть'}</button>
                                     </div>
                                     <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                                   </div>

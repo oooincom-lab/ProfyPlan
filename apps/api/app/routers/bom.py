@@ -849,6 +849,7 @@ async def run_explosion(
                 output_product=node.nomenclature_id,
                 output_quantity=node.quantity_per_parent * body.project_quantity,
                 procurement_lead_time_days=lead_days,
+                owner_order_id=str(node.order_id) if node.order_id else None,
                 source_node_path=node_path,
             )
             result.operations.append(op)
@@ -889,6 +890,7 @@ async def run_explosion(
             local_to_global: dict[str, str] = {}
             op_ids_in_node: list[str] = []
             for op in prod_ops:
+                op.owner_order_id = str(node.order_id) if node.order_id else None
                 new_id = _make_temp_id("op")
                 local_to_global[op.temp_id] = new_id
                 op.temp_id = new_id

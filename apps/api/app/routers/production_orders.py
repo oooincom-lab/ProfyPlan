@@ -1377,10 +1377,17 @@ from app.models.operation import Operation, OperationDependency, OperationResour
 async def expand_order(
     order_id: str,
     replace: bool = False,
+    with_children: bool = True,
     tenant_id: str = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Разворачивает BOM-спецификацию заказа в CPM-операции."""
+    """Разворачивает состав и маршруты заказа в операции плана.
+
+    Если заказ — родитель (есть подчинённые по parent_order_id) и with_children=true,
+    разворачиваются и все подчинённые заказы. Заказы, у которых операции уже есть,
+    пропускаются; replace=true пересобирает операции выбранных заказов.
+    Привязка операций к заказу — по владельцу узла BOM из развёртки.
+    """
     stmt = select(ProductionOrder).where(
         ProductionOrder.id == UUID(order_id),
         ProductionOrder.tenant_id == tenant_id,
@@ -1393,37 +1400,79 @@ async def expand_order(
     if not order.project_id:
         raise HTTPException(400, "У заказа не указан проект (project_id). Сначала импортируйте Excel и укажите project_id.")
 
-    # Идемпотентность (12.09.2026): повторная развёртка не должна плодить дубли операций
+    # 1) Целевые заказы: сам заказ и (при with_children) все подчинённые по parent_order_id
+    targets: list[ProductionOrder] = [order]
+    if with_children:
+        frontier = [order.id]
+        visited = {order.id}
+        while frontier:
+            nxt = []
+            for pid in frontier:
+                rows = (await db.execute(
+                    select(ProductionOrder).where(
+                        ProductionOrder.tenant_id == tenant_id,
+                        ProductionOrder.project_id == order.project_id,
+                        ProductionOrder.parent_order_id == pid,
+                    )
+                )).scalars().all()
+                for c in rows:
+                    if c.id not in visited:
+                        visited.add(c.id)
+                        targets.append(c)
+                        nxt.append(c.id)
+            frontier = nxt
+
+    # 2) Кто уже развёрнут — считаем операции по каждому заказу
+    target_ids = [t.id for t in targets]
     _auto_types = ("production", "procurement")
-    _proj_ops = select(Operation.id).where(
-        Operation.tenant_id == tenant_id,
-        Operation.project_id == order.project_id,
-        Operation.operation_type.in_(_auto_types),
-    )
-    _existing = (await db.execute(
-        select(func.count()).select_from(Operation).where(
+    existing_rows = (await db.execute(
+        select(Operation.order_id, func.count()).where(
             Operation.tenant_id == tenant_id,
             Operation.project_id == order.project_id,
+            Operation.order_id.in_(target_ids),
             Operation.operation_type.in_(_auto_types),
-        )
-    )).scalar() or 0
-    if _existing and not replace:
+        ).group_by(Operation.order_id)
+    )).all()
+    existing_count = {row[0]: row[1] for row in existing_rows}
+
+    to_expand: list[ProductionOrder] = []
+    skipped = []
+    for t in targets:
+        n = existing_count.get(t.id, 0)
+        if n and not replace:
+            skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": int(n), "reason": "уже развёрнут"})
+        else:
+            to_expand.append(t)
+
+    if not to_expand:
         return {
             "order_id": str(order.id),
             "status": order.status,
             "operations_created": 0,
             "dependencies_created": 0,
             "materials_required": 0,
-            "warnings": [f"Операции проекта уже развёрнуты ({_existing} шт.) — повторная развёртка пропущена. "
-                         f"Для пересборки вызовите с replace=true."],
+            "expanded_orders": [],
+            "skipped_orders": skipped,
+            "warnings": ["Все выбранные заказы уже развёрнуты — ничего не изменилось."],
         }
-    if _existing and replace:
-        await db.execute(delete(OperationDependency).where(OperationDependency.predecessor_id.in_(_proj_ops)))
-        await db.execute(delete(OperationDependency).where(OperationDependency.successor_id.in_(_proj_ops)))
-        await db.execute(delete(Operation).where(Operation.id.in_(_proj_ops)))
-        await db.flush()
 
-    # Запускаем развёртку через реальный движок
+    # replace: удаляем операции и связи только переразворачиваемых заказов
+    if replace:
+        _repl_ids = [t.id for t in to_expand if existing_count.get(t.id)]
+        if _repl_ids:
+            _ops = select(Operation.id).where(
+                Operation.tenant_id == tenant_id,
+                Operation.project_id == order.project_id,
+                Operation.order_id.in_(_repl_ids),
+            )
+            await db.execute(delete(OperationDependency).where(OperationDependency.predecessor_id.in_(_ops)))
+            await db.execute(delete(OperationDependency).where(OperationDependency.successor_id.in_(_ops)))
+            await db.execute(delete(Operation).where(Operation.id.in_(_ops)))
+            await db.flush()
+
+    expand_ids = {t.id for t in to_expand}
+
+    # 3) Движок развёртки (проект целиком в памяти; сохраняем только целевые заказы)
     from app.routers.bom import run_explosion
     from app.schemas.bom import BOMExplodeAndSaveRequest
 
@@ -1440,8 +1489,7 @@ async def expand_order(
         for w in result.warnings:
             logging.warning(f"BOM expand warning: {w}")
 
-    # Сохраняем операции
-    # Резолвер ресурса: в маршруте ресурс хранится как ID или как название (12.09.2026)
+    # 4) Сохраняем операции целевых заказов (владелец — order_id узла BOM)
     _res_cache: dict[str, Optional[UUID]] = {}
 
     async def _resolve_resource(tag: Optional[str]):
@@ -1471,9 +1519,20 @@ async def expand_order(
         _res_cache[key] = r.id if r else None
         return _res_cache[key]
 
-    _cat_cache: dict = {}   # кэш справочника операций на время развёртки
-    op_map = {}  # temp_id → Operation.id
+    _cat_cache: dict = {}
+    op_map = {}
+    ops_per_order: dict = {}
+    unbound = 0
     for eop in result.operations:
+        owner = None
+        try:
+            owner = UUID(str(eop.owner_order_id)) if getattr(eop, "owner_order_id", None) else None
+        except Exception:
+            owner = None
+        if owner is None or owner not in expand_ids:
+            unbound += 1
+            continue
+
         _rid = await _resolve_resource(eop.resource_type_id)
         _cat = await _catalog_pick(db, tenant_id, eop.name, _cat_cache,
                                    create_missing=True, norm=eop.duration_base)
@@ -1481,7 +1540,7 @@ async def expand_order(
             id=uuid4(),
             tenant_id=tenant_id,
             project_id=order.project_id,
-            order_id=order.id,
+            order_id=owner,
             catalog_operation_id=(_cat.id if _cat is not None else None),
             name=eop.name,
             duration_base=eop.duration_base,
@@ -1499,8 +1558,8 @@ async def expand_order(
         db.add(op)
         await db.flush()
         op_map[eop.temp_id] = op.id
+        ops_per_order[owner] = ops_per_order.get(owner, 0) + 1
 
-        # Ресурс операции (12.09.2026): маршрутный ресурс переносится в связь операция-ресурс
         if _rid:
             db.add(OperationResource(
                 id=uuid4(),
@@ -1511,7 +1570,8 @@ async def expand_order(
                 capacity_demand=Decimal("1"),
             ))
 
-    # Сохраняем зависимости
+    # Сохраняем зависимости внутри сохранённых операций
+    deps_created = 0
     for dep in result.dependencies:
         if dep.predecessor_temp_id in op_map and dep.successor_temp_id in op_map:
             d = OperationDependency(
@@ -1523,22 +1583,38 @@ async def expand_order(
                 lag_unit="hour",
             )
             db.add(d)
+            deps_created += 1
 
-    # Обновляем заказ
+    # 5) Обновляем статусы заказов, у которых появились операции
     from datetime import datetime, timezone
-    order.status = "planned"
-    order.exploded_at = datetime.now(timezone.utc)
-    order.operations_created = len(result.operations)
+    _now = datetime.now(timezone.utc)
+    expanded_orders = []
+    for t in to_expand:
+        cnt = ops_per_order.get(t.id, 0)
+        if cnt:
+            t.status = "planned"
+            t.exploded_at = _now
+            t.operations_created = cnt
+            expanded_orders.append({"id": str(t.id), "ext_id": t.ext_id, "operations": cnt})
+        else:
+            skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": 0,
+                            "reason": "нечего разворачивать (в составе нет узлов с маршрутами)"})
 
     await db.commit()
+
+    warnings = list(result.warnings or [])
+    if unbound:
+        warnings.append(f"Пропущено операций без привязки к выбранным заказам: {unbound}.")
 
     return {
         "order_id": str(order.id),
         "status": order.status,
-        "operations_created": len(result.operations),
-        "dependencies_created": len(result.dependencies),
+        "operations_created": len(op_map),
+        "dependencies_created": deps_created,
         "materials_required": len(result.materials),
-        "warnings": result.warnings,
+        "expanded_orders": expanded_orders,
+        "skipped_orders": skipped,
+        "warnings": warnings,
     }
 
 
