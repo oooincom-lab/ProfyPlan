@@ -430,6 +430,108 @@ export default function AppShell() {
     const name = (selectedProject?.name || 'проект').replace(/[\\/:*?"<>|]+/g, '').slice(0, 40).trim() || 'проект';
     downloadCsv(`запуски-${name}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   };
+  // Экспорт/импорт реестра запусков целиком (остаток 6.22; механика — как у сохранённых видов).
+  const reportNamePart = (selectedProject?.name || 'проект').replace(/[\\/:*?"<>|]+/g, '').slice(0, 40).trim() || 'проект';
+  const downloadBlob = (filename: string, content: BlobPart, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const exportRunsJson = async () => {
+    if (!selectedProject) return;
+    try {
+      const data: any = await apiF(`/projects/${selectedProject.id}/calculation-runs/export`);
+      downloadBlob(`запуски-${reportNamePart}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json;charset=utf-8');
+      setMsg('Реестр запусков выгружен в JSON');
+    } catch (e: any) {
+      setMsg('Не удалось выгрузить реестр: ' + detailOf(e));
+    }
+  };
+  const importRunsJson = async (file: File) => {
+    if (!selectedProject) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const runs = Array.isArray(data) ? data : (data && Array.isArray(data.runs) ? data.runs : []);
+      if (!runs.length) { setMsg('В файле нет запусков.'); return; }
+      const r: any = await apiF(`/projects/${selectedProject.id}/calculation-runs/import`, { method: 'POST', body: JSON.stringify({ schema_version: (data && data.schema_version) || 1, runs }) });
+      await loadCalcRuns(selectedProject.id);
+      setMsg(`Импортировано запусков: ${r.imported}`);
+    } catch (e: any) {
+      setMsg('Импорт не удался: ' + detailOf(e));
+    }
+  };
+  const openRunsImport = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json,application/json';
+    inp.onchange = () => {
+      const f = inp.files && inp.files[0];
+      if (f) importRunsJson(f);
+    };
+    inp.click();
+  };
+
+  // Итоговый отчёт проекта — самодостаточный HTML-файл (остаток 6.22.6): KPI, шаги расчёта, цели, запуски.
+  const exportFinalReport = () => {
+    if (!selectedProject) return;
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const pct = (lastCalcRun && lastCalcRun.result && lastCalcRun.result.percentiles) || null;
+    const p50text = pct && pct.p50 !== undefined
+      ? `${hoursText(pct.p50)} / ${hoursText(pct.p80)} / ${hoursText(pct.p95)}`
+      : (goalBasis ? `нет процентилей (нужен Монте-Карло); PERT: ожидаемый ${hoursText(goalBasis.expected)}, σ ${hoursText(goalBasis.sigma)}` : 'нет данных');
+    let gapText = 'нет данных';
+    if (goalBasis) {
+      const originRaw = (projectDetail && projectDetail.start_date) || selectedProject.start_date;
+      const origin = originRaw ? new Date(originRaw) : new Date();
+      const base = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
+      const parts: string[] = [];
+      for (const [nm, value] of [
+        ['договорная', projectGoalRec && projectGoalRec.contract_date],
+        ['рабочая', projectGoalRec && projectGoalRec.working_date],
+      ] as [string, string | null | undefined][]) {
+        if (!value) continue;
+        const hours = ((new Date(value).getTime() - base) / 86400000) * 24;
+        const gap = hours - goalBasis.expected;
+        parts.push(`${nm}: ${gap >= 0 ? 'запас' : 'нехватка'} ${hoursText(Math.abs(gap))}`);
+      }
+      gapText = parts.length ? parts.join(' · ') : 'нет данных';
+    }
+    const stepsRows = calcPathSteps.map((s) => `<tr><td>${esc(s.title)}</td><td>${s.state === 'ok' ? '✓ сделан' : s.state === 'warn' ? '⚠ действие' : '○ впереди'}</td><td>${esc(s.caption)}</td></tr>`).join('');
+    const runRows = calcRuns.slice(0, 10).map((r: any) => `<tr><td>${esc(runDateText(r.data_date) || '—')}</td><td>${esc(r.area === 'project' ? 'проект' : r.area)}</td><td>${esc(String(r.planning_logic || '').toUpperCase())}${r.uncertainty_analysis && r.uncertainty_analysis !== 'none' ? ' · ' + esc(String(r.uncertainty_analysis).toUpperCase()) : ''}</td><td>${r.result?.project_duration_hours ? esc(hoursText(Number(r.result.project_duration_hours))) : '—'}</td><td>${esc(r.data_fingerprint || '—')}</td><td>${r.status === 'failed' ? 'не выполнен' : 'выполнен'}${r.imported ? ' · импорт' : ''}</td></tr>`).join('');
+    const goalText = projectGoalRec
+      ? `договорная: ${esc((projectGoalRec.contract_date || '').slice(0, 10) || '—')} · рабочая: ${esc((projectGoalRec.working_date || '').slice(0, 10) || '—')}`
+      : 'цели не заданы';
+    const fp = lastCalcRun && lastCalcRun.data_fingerprint ? lastCalcRun.data_fingerprint : 'нет расчётов';
+    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>ProfyPlan — отчёт · ${esc(selectedProject.name)}</title>` +
+      `<style>body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;max-width:920px;margin:36px auto;padding:0 20px;color:#1a2333;background:#fff}` +
+      `h1{font-size:22px;margin:0 0 6px}h2{font-size:15px;margin:26px 0 8px}.note{color:#6b7a90;font-size:12.5px}` +
+      `.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}` +
+      `.card{border:1px solid #dde3ec;border-radius:10px;padding:12px 14px}.k{font-size:12px;color:#6b7a90}.v{font-size:15px;font-weight:600;margin:2px 0}.w{font-size:11.5px;color:#8b98ab}` +
+      `table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}th,td{border:1px solid #dde3ec;padding:6px 8px;text-align:left}th{background:#f4f7fb}` +
+      `footer{margin-top:28px;border-top:1px solid #dde3ec;padding-top:10px}</style></head><body>` +
+      `<h1>ProfyPlan — итоговый отчёт</h1>` +
+      `<div class="note">Проект: <b>${esc(selectedProject.name)}</b> · сформирован: ${esc(new Date().toLocaleString('ru-RU'))} · версия данных: ${esc(fp)}</div>` +
+      `<h2>Показатели</h2><div class="kpi">` +
+      `<div class="card"><div class="k">Детерминированный срок</div><div class="v">${esc(scenarioRange ? hoursText(scenarioRange.base) : 'нет данных')}</div><div class="w">по базовым продолжительностям и связям, без оценок</div></div>` +
+      `<div class="card"><div class="k">p50 / p80 / p95</div><div class="v">${esc(p50text)}</div><div class="w">${pct && pct.p50 !== undefined ? 'по Монте-Карло (последний запуск)' : 'источник указан в значении'}</div></div>` +
+      `<div class="card"><div class="k">Разрыв к цели</div><div class="v">${esc(gapText)}</div><div class="w">разница между датами цели и ожидаемым сроком</div></div>` +
+      `<div class="card"><div class="k">Конфликты и узкие места</div><div class="v">${modeContext.sharedResources > 0 ? 'общих ресурсов: ' + modeContext.sharedResources : 'общих ресурсов не найдено'}</div><div class="w">полный анализ пересечений — блок 6.20</div></div>` +
+      `</div><h2>Путь расчёта</h2><table><thead><tr><th>Шаг</th><th>Состояние</th><th>Пояснение</th></tr></thead><tbody>${stepsRows}</tbody></table>` +
+      `<h2>Цели</h2><div class="note">${goalText}</div>` +
+      `<h2>Последние запуски</h2>${calcRuns.length ? `<table><thead><tr><th>Когда</th><th>Область</th><th>Метод</th><th>Срок</th><th>Версия данных</th><th>Состояние</th></tr></thead><tbody>${runRows}</tbody></table>` : '<div class="note">Запусков нет.</div>'}` +
+      `<footer class="note">Числа не смешиваются: у каждого показателя свой источник (подписан под значением). Отчёт сформирован в ProfyPlan.</footer>` +
+      `</body></html>`;
+    downloadBlob(`отчёт-${reportNamePart}-${new Date().toISOString().slice(0, 10)}.html`, html, 'text/html;charset=utf-8');
+    setMsg('Итоговый отчёт выгружен в файл');
+  };
+
   // Связи нужны для питающих буферов: без них не видно, какие некритические ветви входят в цепь
   const loadDeps = async (projectId: string) => {
     try {
@@ -4768,6 +4870,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <span className="panel-title">Расчёты — обзор</span>
                   <span className="panel-sub">{selectedProject?.name || 'проект не выбран'}</span>
                 </div>
+                <button className="btn btn-secondary btn-sm" onClick={exportFinalReport} title="Итоговый отчёт по проекту в файл (HTML): показатели, шаги расчёта, цели, последние запуски">Выгрузить отчёт</button>
               </div>
               <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
                 {/* Путь расчёта (блок 6.31): цепочка шагов — ведёт, подсказывает, переходит по клику */}
@@ -5391,9 +5494,15 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <span className="panel-title">Запуски расчёта</span>
                   <span className="panel-sub">{selectedProject?.name || 'проект не выбран'}</span>
                 </div>
-                {calcRuns.length ? (
-                  <button className="btn btn-secondary btn-sm" onClick={exportRunsCsv} title="Выгрузить реестр запусков в CSV (Excel)">Выгрузить CSV</button>
-                ) : null}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {calcRuns.length ? (
+                    <>
+                      <button className="btn btn-secondary btn-sm" onClick={exportRunsCsv} title="Выгрузить реестр запусков в CSV (Excel)">Выгрузить CSV</button>
+                      <button className="btn btn-secondary btn-sm" onClick={exportRunsJson} title="Экспорт реестра запусков в JSON (все запуски проекта одним файлом)">Экспорт JSON</button>
+                    </>
+                  ) : null}
+                  <button className="btn btn-secondary btn-sm" onClick={openRunsImport} title="Импорт реестра запусков из JSON-файла: записи добавятся с пометкой «импорт»">Импорт JSON</button>
+                </div>
               </div>
               <div style={{ padding: '0 16px 14px' }}>
                 {calcRuns.length === 0 ? (
@@ -5417,7 +5526,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                           <td>{r.result?.operations ?? '—'}</td>
                           <td>{r.result?.project_duration_hours ? Math.round(Number(r.result.project_duration_hours) / 24) : '—'}</td>
                           <td>{r.result?.critical_operations ?? '—'}</td>
-                          <td>{r.status === 'failed' ? 'не выполнен' : 'выполнен'}</td>
+                          <td>{r.status === 'failed' ? 'не выполнен' : 'выполнен'}{r.imported ? ' · импорт' : ''}</td>
                         </tr>
                       ))}
                     </tbody>

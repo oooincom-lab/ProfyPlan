@@ -61,6 +61,7 @@ class RunOut(BaseModel):
     error: Optional[str] = None
     finished_at: Optional[datetime] = None
     created_at: datetime
+    imported: bool = False
 
 
 class RunList(BaseModel):
@@ -296,3 +297,112 @@ async def get_run(
     if not run:
         raise HTTPException(status_code=404, detail="Запуск не найден")
     return RunOut.model_validate(run)
+
+
+# ── Экспорт/импорт реестра запусков (остаток блока 6.22) ──────────────────────
+
+RUNS_EXPORT_SCHEMA_VERSION = 1
+
+
+def _parse_dt(value) -> Optional[datetime]:
+    """ISO-дата из файла экспорта (или None, если строка не парсится)."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+class RunsImportIn(BaseModel):
+    schema_version: Optional[int] = None
+    runs: list[dict] = Field(default_factory=list)
+
+
+@runs_router.get("/v1/projects/{project_id}/calculation-runs/export")
+async def export_runs(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Выгрузка реестра запусков: JSON с версией схемы (файл — на клиенте)."""
+    project = (
+        await db.execute(
+            select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не найден")
+    result = await db.execute(
+        select(CalculationRun)
+        .where(
+            CalculationRun.tenant_id == tenant_id,
+            CalculationRun.project_id == project_id,
+        )
+        .order_by(CalculationRun.created_at.asc())
+    )
+    runs = result.scalars().all()
+    items = []
+    for r in runs:
+        item = RunOut.model_validate(r).model_dump(mode="json")
+        items.append(item)
+    return {
+        "schema_version": RUNS_EXPORT_SCHEMA_VERSION,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "project_id": str(project.id),
+        "project_name": project.name,
+        "runs": items,
+    }
+
+
+@runs_router.post("/v1/projects/{project_id}/calculation-runs/import", status_code=201)
+async def import_runs(
+    project_id: UUID,
+    body: RunsImportIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user: User = Depends(get_current_user),
+):
+    """Импорт реестра запусков: записи добавляются с пометкой «импорт»."""
+    project = (
+        await db.execute(
+            select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не найден")
+    if not body.runs:
+        raise HTTPException(status_code=422, detail="Файл не содержит запусков")
+    if len(body.runs) > 500:
+        raise HTTPException(status_code=422, detail="Слишком много запусков в файле (лимит 500)")
+
+    imported_count = 0
+    for raw in body.runs:
+        if not isinstance(raw, dict):
+            continue
+        area = str(raw.get("area") or "project")
+        if area not in ("project", "cluster", "group", "pool"):
+            area = "project"
+        created_at = _parse_dt(raw.get("created_at"))
+        run = CalculationRun(
+            tenant_id=tenant_id,
+            project_id=project.id,
+            area=area,
+            planning_logic=str(raw.get("planning_logic") or "cpm")[:10],
+            uncertainty_analysis=str(raw.get("uncertainty_analysis") or "none")[:10],
+            data_fingerprint=(str(raw.get("data_fingerprint"))[:32] if raw.get("data_fingerprint") else None),
+            data_date=_parse_dt(raw.get("data_date")),
+            params=raw.get("params") if isinstance(raw.get("params"), dict) else None,
+            status=str(raw.get("status") or "done")[:20],
+            result=raw.get("result") if isinstance(raw.get("result"), dict) else None,
+            error=(str(raw.get("error")) if raw.get("error") else None),
+            finished_at=None,
+            created_by=user.id,
+            imported=True,
+        )
+        if created_at is not None:
+            run.created_at = created_at
+        db.add(run)
+        imported_count += 1
+    await db.commit()
+    return {"status": "ok", "imported": imported_count}
