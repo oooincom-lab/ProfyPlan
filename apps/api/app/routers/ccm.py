@@ -2,6 +2,7 @@
 CCM-роутер: multi-project merge, BOM-развёртка, resource leveling, forecast.
 """
 import io
+import math
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -171,6 +172,80 @@ async def cluster_chain(
             }
         )
 
+    # ── Буферы критической цепи (6.20, срез 2): k·σ по тройным оценкам (формула как на «Оценках»)
+    K_BUFFER = 2.0
+    est_var: dict = {}
+    for op in ops:
+        to, tm, tp = op.to_optimistic, op.tm_likely, op.tp_pessimistic
+        if to is not None and tm is not None and tp is not None:
+            sigma = (float(tp) - float(to)) / 6.0
+            est_var[str(op.id)] = sigma * sigma
+
+    chain_set = {c["id"] for c in chain}
+    preds_by_succ: dict = {}
+    for d in deps:
+        preds_by_succ.setdefault(str(d.successor_id), []).append(str(d.predecessor_id))
+
+    chain_var = sum(est_var.get(cid, 0.0) for cid in chain_set)
+    chain_with_est = sum(1 for cid in chain_set if cid in est_var)
+    chain_sigma_h = math.sqrt(chain_var)
+    chain_buffer_h = K_BUFFER * chain_sigma_h if chain_with_est else None
+
+    walk_cache: dict = {}
+    walk_busy: set = set()
+
+    def feed_walk(nid: str) -> float:
+        if nid in walk_cache:
+            return walk_cache[nid]
+        if nid in walk_busy:
+            return 0.0
+        walk_busy.add(nid)
+        best = 0.0
+        for p in preds_by_succ.get(nid, []):
+            if p in chain_set or p not in est_var:
+                continue
+            v = feed_walk(p) + est_var[p]
+            if v > best:
+                best = v
+        walk_busy.discard(nid)
+        walk_cache[nid] = best
+        return best
+
+    feeding = []
+    feeding_ops: set = set()
+    for c in chain:
+        best = 0.0
+        best_preds = []
+        for p in preds_by_succ.get(c["id"], []):
+            if p in chain_set or p not in est_var:
+                continue
+            v = feed_walk(p) + est_var[p]
+            if v > best:
+                best = v
+                best_preds = [p]
+        if best > 0:
+            stack = list(best_preds)
+            branch = []
+            while stack:
+                nid2 = stack.pop()
+                if nid2 in feeding_ops or nid2 in chain_set:
+                    continue
+                feeding_ops.add(nid2)
+                branch.append(nid2)
+                for p2 in preds_by_succ.get(nid2, []):
+                    if p2 not in chain_set and p2 in est_var:
+                        stack.append(p2)
+            feeding.append(
+                {
+                    "chain_op_id": c["id"],
+                    "chain_op_name": c["name"],
+                    "buffer_days": round(K_BUFFER * math.sqrt(best) / 8.0, 2),
+                    "sigma_hours": round(math.sqrt(best), 2),
+                    "ops_count": len(branch),
+                }
+            )
+    feeding.sort(key=lambda x: x["buffer_days"], reverse=True)
+
     return {
         "project_id": str(project_id),
         "scope": "pool" if pool_id else "group",
@@ -182,7 +257,19 @@ async def cluster_chain(
         "hours_per_day": 8.0,
         "chain_duration_days": round(float(result.total_duration or 0) / 8.0, 2),
         "chain": chain,
-        "note": "Дни — по 8-часовому рабочему дню. Цепь по связям операций кластера; ресурсные разрывы и буферы — следующие срезы (6.20).",
+        "buffers": {
+            "k": K_BUFFER,
+            "sigma_hours": round(chain_sigma_h, 2),
+            "chain_buffer_hours": round(chain_buffer_h, 2) if chain_buffer_h is not None else None,
+            "chain_buffer_days": round(chain_buffer_h / 8.0, 2) if chain_buffer_h is not None else None,
+            "chain_ops_with_estimates": chain_with_est,
+            "chain_ops_total": len(chain),
+            "feeding": feeding[:10],
+            "feeding_count": len(feeding),
+            "feeding_ops_count": len(feeding_ops),
+            "note": "Формула как на «Оценках»: σ = (пессимистичная − оптимистичная) / 6, буфер = k·√(Σσ²), k=2; считаются операции с полными тройными оценками.",
+        },
+        "note": "Дни — по 8-часовому рабочему дню. Цепь по связям операций кластера; буферы — k·σ (срез 2); конфликты межзаказных ресурсов — следующий срез (6.20).",
     }
 
 

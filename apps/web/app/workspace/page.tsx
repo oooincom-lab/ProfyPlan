@@ -7102,6 +7102,16 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div style={{ border: '1px solid rgba(34,211,238,0.5)', borderRadius: 8, background: 'rgba(34,211,238,0.08)', padding: '8px 12px', fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 700, color: '#22D3EE' }}>⛓ Критическая цепь кластера</span>
                   <span>«{netChainLabel || 'кластер'}»: {netChain.chain_operations} операций · {netChain.chain_orders} заказов · {Math.round((netChain.chain_duration_days || 0) * 10) / 10} дн — голубым слоем на графике</span>
+                  {netChain.buffers && (
+                    <span title={netChain.buffers.note} style={{ color: '#FBBF24' }}>
+                      {netChain.buffers.chain_buffer_days != null
+                        ? 'буфер цепи: ' + netChain.buffers.chain_buffer_days + ' дн (k·σ)'
+                        : 'буфер цепи: нет полных оценок'}
+                      {netChain.buffers.feeding_count
+                        ? ' · питающих буферов: ' + netChain.buffers.feeding_count + ' (макс. ' + netChain.buffers.feeding[0].buffer_days + ' дн)'
+                        : ''}
+                    </span>
+                  )}
                   {netChainBusy && <span style={{ color: 'var(--fg-4)' }}>обновляю…</span>}
                   <span style={{ color: 'var(--fg-4)', flex: 1 }}>{netChain.note}</span>
                   <button className="btn btn-secondary btn-sm" onClick={() => loadClusterChain('')}>✕ Убрать слой</button>
