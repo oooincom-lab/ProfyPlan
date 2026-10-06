@@ -222,6 +222,12 @@ export default function AppShell() {
   const [netLoading, setNetLoading] = useState(false);
   const [netOrderId, setNetOrderId] = useState<string | null>(null);
   const [netError, setNetError] = useState<string | null>(null);
+  // Кластер и критическая цепь (6.20, срез 1)
+  const [netClusters, setNetClusters] = useState<any[]>([]);
+  const [netChainScope, setNetChainScope] = useState<string>('');
+  const [netChainLabel, setNetChainLabel] = useState<string>('');
+  const [netChain, setNetChain] = useState<any>(null);
+  const [netChainBusy, setNetChainBusy] = useState(false);
   const [scaleData, setScaleData] = useState<any>({ nodes: [], resMap: {}, resIds: {}, pins: [], events: [] });
   const [scaleOpts, setScaleOpts] = useState<{ showPins: boolean; showEvents: boolean; showFlow: boolean }>({ showPins: true, showEvents: true, showFlow: false });
   const [scaleBusy, setScaleBusy] = useState(false);
@@ -3195,6 +3201,22 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
         .then((o) => { if (Array.isArray(o)) setOrders(o); })
         .catch(() => {});
     }
+
+    // кластеры и группы проекта — для селектора «Кластер» и слоя критической цепи (6.20)
+    if (!sameProject) { setNetChain(null); setNetChainScope(''); setNetChainLabel(''); setNetClusters([]); }
+    if (!sameProject || !netClusters.length) {
+      Promise.all([
+        apiF<any>(`/projects/${proj.id}/pools`).catch(() => null),
+        apiF<any>(`/projects/${proj.id}/groups`).catch(() => null),
+      ]).then(([pr, gr]: any[]) => {
+        const pools = (pr && (pr.items || pr)) || [];
+        const groups = (gr && (gr.items || gr)) || [];
+        setNetClusters([
+          ...(Array.isArray(pools) ? pools.map((x: any) => ({ kind: 'pool', id: String(x.id), name: x.name || 'кластер' })) : []),
+          ...(Array.isArray(groups) ? groups.map((x: any) => ({ kind: 'group', id: String(x.id), name: x.name || 'группа' })) : []),
+        ]);
+      }).catch(() => {});
+    }
     try {
       const body: any = oid ? { order_id: oid } : {};
       const r = await apiF<any>('/projects/' + proj.id + '/calculate/cpm', { method: 'POST', body: JSON.stringify(body) });
@@ -3204,6 +3226,27 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       setMsg('Ошибка сети CPM: ' + (e?.message || String(e)));
     }
     setNetLoading(false);
+  };
+
+  // Кластер и критическая цепь (блок 6.20, срез 1): цепь по связям операций кластера.
+  const loadClusterChain = async (v: string, label?: string) => {
+    setNetChainScope(v);
+    setNetChainLabel(label || '');
+    if (!v) { setNetChain(null); return; }
+    const proj = selectedProject;
+    if (!proj) return;
+    const [kind, id] = v.split(':');
+    setNetChainBusy(true);
+    try {
+      const q = kind === 'pool' ? 'pool_id=' + id : 'group_id=' + id;
+      const r: any = await apiF('/ccm/projects/' + proj.id + '/cluster-chain?' + q);
+      setNetChain(r);
+      if (netOrderId) { setNetOrderId(null); await loadProjectNetwork(proj, null); }
+    } catch (e: any) {
+      setNetChain(null);
+      setMsg('Цепь кластера: ' + detailOf(e));
+    }
+    setNetChainBusy(false);
   };
 
   // Реестр сохранённых видов можно открыть из любого места (сайдбар, инструменты):
@@ -7014,7 +7057,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, height: 'calc(100vh - 96px)' }}>
               {calcMethods.logic === 'ccm' && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 12px', fontSize: 12, color: 'var(--fg-2)' }}>
-                  Логика планирования — CCM: критическая цепь кластера появится слоем в этом же графике (блок 6.20). Пока вид показывает расчёт текущей области.
+                  Логика планирования — CCM: выберите кластер в селекторе «Кластер» — критическая цепь кластера подсветится голубым слоем на этом же графике. Ресурсные буферы и разрывы — следующие срезы блока 6.20.
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -7036,11 +7079,34 @@ const changeOrderStatus = async (o: any, status: string) => {
                       ))}
                   </select>
                 </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8FA3BD' }}>
+                  Кластер:
+                  <select
+                    value={netChainScope}
+                    disabled={!selectedProject || netLoading || netChainBusy}
+                    onChange={(e) => { const v = e.target.value; const c = netClusters.find((x: any) => x.kind + ':' + x.id === v); loadClusterChain(v, c ? c.name : ''); }}
+                    style={{ background: '#0F1E36', color: '#E8EEF5', border: '1px solid #26364F', borderRadius: 6, padding: '4px 8px', fontSize: 12, maxWidth: 260 }}
+                  >
+                    <option value="">— не выбран —</option>
+                    {(netClusters || []).map((c: any) => (
+                      <option key={c.kind + ':' + c.id} value={c.kind + ':' + c.id}>{(c.kind === 'pool' ? 'Пул: ' : 'Группа: ') + c.name}</option>
+                    ))}
+                  </select>
+                </label>
                 <span style={{ flex: 1 }} />
                 <button onClick={() => loadProjectNetwork(selectedProject, netOrderId)} disabled={!selectedProject || netLoading} className="btn btn-secondary btn-sm">▶ Рассчитать проект</button>
                 <button onClick={() => loadProjectGantt(selectedProject)} className="btn btn-secondary btn-sm">📊 К Ганту</button>
                 <button onClick={() => loadProjectOrdersView(selectedProject)} className="btn btn-secondary btn-sm">📋 К заказам</button>
               </div>
+              {netChain && (
+                <div style={{ border: '1px solid rgba(34,211,238,0.5)', borderRadius: 8, background: 'rgba(34,211,238,0.08)', padding: '8px 12px', fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, color: '#22D3EE' }}>⛓ Критическая цепь кластера</span>
+                  <span>«{netChainLabel || 'кластер'}»: {netChain.chain_operations} операций · {netChain.chain_orders} заказов · {Math.round((netChain.chain_duration_days || 0) * 10) / 10} дн — голубым слоем на графике</span>
+                  {netChainBusy && <span style={{ color: 'var(--fg-4)' }}>обновляю…</span>}
+                  <span style={{ color: 'var(--fg-4)', flex: 1 }}>{netChain.note}</span>
+                  <button className="btn btn-secondary btn-sm" onClick={() => loadClusterChain('')}>✕ Убрать слой</button>
+                </div>
+              )}
               <CalcLayersStrip
                 projectId={selectedProject?.id ? String(selectedProject.id) : null}
                 refreshKey={netData}
@@ -7064,7 +7130,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ padding: 40, textAlign: 'center', color: '#5A7090' }}>В выбранной области расчёта нет операций.</div>
                 )}
                 {!netLoading && !netError && netData && netData.node_count > 0 && (
-                  <CpmGraph cpmResult={netData} paletteId={paletteId} onOpenSavedViews={() => setSavedViewsOpen(true)} />
+                  <CpmGraph cpmResult={netData} paletteId={paletteId} onOpenSavedViews={() => setSavedViewsOpen(true)} chainIds={netChain ? netChain.chain.map((c: any) => c.id) : undefined} chainLinks={netChain ? netChain.chain.slice(1).map((c: any, i: number) => netChain.chain[i].id + '>' + c.id) : undefined} />
                 )}
               </div>
               {savedViewsOpen && (

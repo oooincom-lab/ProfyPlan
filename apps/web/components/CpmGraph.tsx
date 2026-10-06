@@ -79,6 +79,9 @@ export interface CpmGraphProps {
   onMetrics?: (m: LayoutMetrics) => void;
   /** Открыть реестр сохранённых видов (показывает кнопку «Виды» в шапке графа). */
   onOpenSavedViews?: () => void;
+  /** Критическая цепь кластера (6.20): подсветка операций и шагов цепи голубым слоем. */
+  chainIds?: string[] | null;
+  chainLinks?: string[] | null;
 }
 
 interface GOp {
@@ -654,7 +657,17 @@ export default function CpmGraph(props: CpmGraphProps) {
   const dayToDate = useCallback((day: number): Date | null => (startDate ? addDays(startDate, day) : null), [startDate]);
 
   /* период: операции, чей интервал [es, ef] пересекается с окном */
-  const visibleOps = useMemo(() => {
+    // Критическая цепь кластера (6.20): наборы для подсветки слоя.
+  const chainSetProp = useMemo(
+    () => new Set<string>(((props.chainIds || []) as string[]).map(String)),
+    [props.chainIds],
+  );
+  const chainLinksProp = useMemo(
+    () => new Set<string>((props.chainLinks || []) as string[]),
+    [props.chainLinks],
+  );
+
+const visibleOps = useMemo(() => {
     if (!startDate || (!periodFrom && !periodTo)) return mappedOps;
     const from = periodFrom ? (new Date(periodFrom).getTime() - startDate.getTime()) / 86400000 : -Infinity;
     const to = periodTo ? (new Date(periodTo).getTime() - startDate.getTime()) / 86400000 : Infinity;
@@ -1086,6 +1099,7 @@ export default function CpmGraph(props: CpmGraphProps) {
 
   stateRef.current = {
     ...stateRef.current,   // сохраняем масштаб/смещение между рендерами (иначе canvas остаётся пустым)
+    ...({ chainSet: chainSetProp, chainLinks: chainLinksProp } as any),
     ops: visibleOps,
     allOps: mappedOps,
     deps: allDeps,
@@ -1369,11 +1383,15 @@ export default function CpmGraph(props: CpmGraphProps) {
       ctx.moveTo(ax, ay);
       if (curve) ctx.quadraticCurveTo(ccx, ccy, bx, by);
       else ctx.lineTo(bx, by);
-      ctx.setLineDash(logical ? dashLogical(S) : []);
-      ctx.strokeStyle = bothCrit
-        ? EDGE_STYLE.critical.color
-        : (logical ? EDGE_STYLE.logical.color : (anyBranch ? EDGE_STYLE.branch.color : EDGE_STYLE.wait.color));
-      ctx.lineWidth = bothCrit ? EDGE_STYLE.critical.width : (logical ? EDGE_STYLE.logical.width : EDGE_STYLE.wait.width);
+            const cl = (st as any).chainLinks as Set<string> | undefined;
+      const chainEdge = !!(cl && cl.has(a.id + '>' + b.id));
+      ctx.setLineDash(chainEdge ? [] : (logical ? dashLogical(S) : []));
+      ctx.strokeStyle = chainEdge
+        ? 'rgba(34,211,238,0.95)'
+        : (bothCrit
+          ? EDGE_STYLE.critical.color
+          : (logical ? EDGE_STYLE.logical.color : (anyBranch ? EDGE_STYLE.branch.color : EDGE_STYLE.wait.color)));
+      ctx.lineWidth = chainEdge ? 3.4 : (bothCrit ? EDGE_STYLE.critical.width : (logical ? EDGE_STYLE.logical.width : EDGE_STYLE.wait.width));
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -1383,10 +1401,11 @@ export default function CpmGraph(props: CpmGraphProps) {
       ctx.lineTo(bx - hl * Math.cos(ang - 0.45), by - hl * Math.sin(ang - 0.45));
       ctx.lineTo(bx - hl * Math.cos(ang + 0.45), by - hl * Math.sin(ang + 0.45));
       ctx.closePath();
-      ctx.fillStyle = bothCrit
-        ? EDGE_STYLE.critical.arrow
-        : (logical ? EDGE_STYLE.logical.arrow : (anyBranch ? EDGE_STYLE.branch.arrow : EDGE_STYLE.wait.arrow));
-      ctx.fill();
+            ctx.fillStyle = chainEdge
+        ? 'rgba(34,211,238,0.95)'
+        : (bothCrit
+          ? EDGE_STYLE.critical.arrow
+          : (logical ? EDGE_STYLE.logical.arrow : (anyBranch ? EDGE_STYLE.branch.arrow : EDGE_STYLE.wait.arrow)));
 
       const [lxw, lyw] = curve
         ? quadPt(s[0], s[1], cxw, cyw, e[0], e[1], 0.5)
@@ -1663,6 +1682,34 @@ export default function CpmGraph(props: CpmGraphProps) {
       }
     });
 
+    /* ── слой критической цепи кластера (6.20, срез 1): голубые кольца на операциях цепи ── */
+    const cs = (st as any).chainSet as Set<string> | undefined;
+    if (cs && cs.size) {
+      st.ops.forEach((o: GOp) => {
+        if (!cs.has(o.id)) return;
+        if (st.critOnly && !o.crit) return;
+        const p = st.layout.pos[o.id];
+        if (!p) return;
+        const cx = sx(p[0]);
+        const cy = sy(p[1]);
+        if (cx < -CW * S - 20 || cx > W + CW * S + 20 || cy < -CH * S - 20 || cy > H + CH * S + 20) return;
+        ctx.strokeStyle = 'rgba(34,211,238,0.95)';
+        if (cardMode) {
+          const w = CW * S;
+          const h = CH * S;
+          ctx.beginPath();
+          rrect(ctx, cx - w / 2 - 5 * S, cy - h / 2 - 5 * S, w + 10 * S, h + 10 * S, 10 * S);
+          ctx.lineWidth = Math.max(2, 2.6 * S);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(cx, cy, circR + 5 * S, 0, Math.PI * 2);
+          ctx.lineWidth = Math.max(2, 2.6 * S);
+          ctx.stroke();
+        }
+      });
+    }
+
     /* ── виртуальные события «Старт»/«Финиш» — отдельная форма (капсула) и цвет ──
        Показываются, пока включён тумблер «Старт и Финиш» (по умолчанию включён).
        Обычные связи и критический путь от этого тумблера не зависят. */
@@ -1815,6 +1862,12 @@ export default function CpmGraph(props: CpmGraphProps) {
     fitToContent(0.85, READABLE_MIN_SCALE);
     sigRef.current = sig;
   }, [visibleOps, allDeps, mode, projectId, periodFrom, periodTo, critOnly, layoutOps, fitToContent, draw]);
+
+  /* Критическая цепь кластера (6.20): перерисовать граф при смене слоя цепи. */
+  useEffect(() => {
+    const st = stateRef.current;
+    if (st && st.layout) draw();
+  }, [chainSetProp, chainLinksProp, draw]);
 
   /* «Сброс»: после применения состояния гарантированно перерисовываем вид «по размеру».
      Отдельный счётчик заставляет эффект сработать даже если остальные поля уже в норме;
@@ -2524,6 +2577,13 @@ export default function CpmGraph(props: CpmGraphProps) {
               caption="Критический путь — толстая красная линия"
               desc="Цепочка работ, от которой зависит срок сдачи. Если любая красная работа задержится — сдвинется весь проект. Поэтому она красная и толстая."
             />
+            {((props.chainIds || []) as string[]).length > 0 && (
+              <LegendItem
+                sample={<svg width="58" height="14" aria-hidden="true"><line x1="4" y1="7" x2="54" y2="7" stroke="#22D3EE" strokeWidth="3.4" strokeLinecap="round" /></svg>}
+                caption="Критическая цепь кластера — голубая линия"
+                desc="Цепочка операций кластера (блок 6.20): включается селектором «Кластер» над графиком. Голубые кольца — операции цепи, голубые связи — шаги цепи."
+              />
+            )}
             <LegendItem
               sample={<span style={{ display: 'inline-flex', gap: 6 }}><LegendPill color={startColor} label="Старт" kind="start" /><LegendPill color={finishColor} label="Финиш" kind="finish" /></span>}
               caption="Значки «Старт» и «Финиш»"

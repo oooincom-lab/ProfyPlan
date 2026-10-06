@@ -18,6 +18,8 @@ from app.models.operation import Operation, OperationDependency, OperationResour
 from app.models.project import Project
 from app.models.resource import Resource
 from app.models.plan_version import PlanBaseline, ActualExecution
+from app.models.production_order import ProductionOrder
+from app.services.cpm import calculate_cpm
 from app.services.multi_project import merge_projects, format_merged_result
 from app.services.resource_leveling import resource_leveling_sgs, format_leveling_result
 from app.services.forecast import recalculate_forecast, format_forecast_result
@@ -63,6 +65,125 @@ async def merge_projects_endpoint(
         raise HTTPException(status_code=422, detail=str(e))
 
     return format_merged_result(result)
+
+
+@ccm_router.get("/projects/{project_id}/cluster-chain")
+async def cluster_chain(
+    project_id: UUID,
+    pool_id: Optional[UUID] = Query(None, description="Пул (кластер) — id"),
+    group_id: Optional[UUID] = Query(None, description="Группа заказов — id"),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Критическая цепь кластера (блок 6.20, срез 1).
+
+    Кластер — пул (pool_id) или группа заказов (group_id). Операции всех заказов
+    кластера объединяются в один граф по связям; критическая цепь — самая длинная
+    цепочка. Ресурсные разрывы и буферы — следующие срезы блока.
+    """
+    proj = await db.execute(
+        select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+    )
+    if not proj.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Проект не найден")
+    if not pool_id and not group_id:
+        raise HTTPException(status_code=422, detail="Укажите pool_id или group_id")
+
+    oq = select(ProductionOrder).where(
+        ProductionOrder.project_id == project_id,
+        ProductionOrder.tenant_id == tenant_id,
+    )
+    if pool_id:
+        oq = oq.where(ProductionOrder.pool_id == pool_id)
+    else:
+        oq = oq.where(ProductionOrder.group_id == group_id)
+    orders = (await db.execute(oq)).scalars().all()
+    if not orders:
+        raise HTTPException(status_code=404, detail="В кластере нет заказов")
+
+    order_ids = [o.id for o in orders]
+    ops = (
+        await db.execute(
+            select(Operation).where(
+                Operation.project_id == project_id,
+                Operation.tenant_id == tenant_id,
+                Operation.order_id.in_(order_ids),
+            )
+        )
+    ).scalars().all()
+    if len(ops) < 2:
+        raise HTTPException(status_code=422, detail="В кластере меньше двух операций — цепь не строится")
+
+    op_ids = {o.id for o in ops}
+    deps = (
+        await db.execute(
+            select(OperationDependency).where(
+                OperationDependency.predecessor_id.in_(op_ids)
+            )
+        )
+    ).scalars().all()
+    deps = [d for d in deps if d.successor_id in op_ids]
+
+    ops_dicts = [
+        {
+            "id": str(o.id),
+            "name": o.name,
+            "duration_base": float(o.duration_base),
+            "setup_time": float(o.setup_time),
+            "teardown_time": float(o.teardown_time),
+        }
+        for o in ops
+    ]
+    deps_dicts = [
+        {
+            "predecessor_id": str(d.predecessor_id),
+            "successor_id": str(d.successor_id),
+            "dependency_type": d.dependency_type,
+            "lag_time": float(d.lag_time),
+        }
+        for d in deps
+    ]
+    result = calculate_cpm(ops_dicts, deps_dicts)
+
+    by_id = {str(o.id): o for o in ops}
+    order_by_id = {str(o.id): o for o in orders}
+    chain = []
+    for nid in result.critical_path or []:
+        op = by_id.get(str(nid))
+        if not op:
+            continue
+        nd = result.nodes.get(str(nid))
+        od = order_by_id.get(str(op.order_id)) if op.order_id else None
+        label = None
+        if od:
+            parts = [p for p in [od.ext_id, od.specification_name] if p]
+            label = " · ".join(parts) if parts else None
+        chain.append(
+            {
+                "id": str(op.id),
+                "name": op.name,
+                "order_id": str(op.order_id) if op.order_id else None,
+                "order_label": label,
+                "duration_hours": round(float(nd.total_duration), 2) if nd else None,
+                "duration_days": round(float(nd.total_duration) / 8.0, 2) if nd else None,
+                "es_days": round(float(nd.early_start) / 8.0, 2) if nd else None,
+                "ef_days": round(float(nd.early_finish) / 8.0, 2) if nd else None,
+            }
+        )
+
+    return {
+        "project_id": str(project_id),
+        "scope": "pool" if pool_id else "group",
+        "cluster_id": str(pool_id or group_id),
+        "orders_count": len(orders),
+        "operations_count": len(ops),
+        "chain_operations": len(chain),
+        "chain_orders": len({c["order_id"] for c in chain if c["order_id"]}),
+        "hours_per_day": 8.0,
+        "chain_duration_days": round(float(result.total_duration or 0) / 8.0, 2),
+        "chain": chain,
+        "note": "Дни — по 8-часовому рабочему дню. Цепь по связям операций кластера; ресурсные разрывы и буферы — следующие срезы (6.20).",
+    }
 
 
 @ccm_router.post("/projects/{project_id}/resource-leveling")
