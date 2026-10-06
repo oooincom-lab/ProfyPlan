@@ -60,9 +60,11 @@ function bandOf(list: any[]): Band {
   return { s, f, cnt };
 }
 
-export default function CalcLayersStrip({ projectId, onOpenTree, refreshKey }: {
+export default function CalcLayersStrip({ projectId, onOpenTree, onOpenProject, onOpenCluster, refreshKey }: {
   projectId: string | null;
   onOpenTree?: (rootOrderId: string) => void;
+  onOpenProject?: () => void;
+  onOpenCluster?: (kind: 'pool' | 'group', id: string, name: string) => void;
   refreshKey?: any;
 }) {
   const [open, setOpen] = useState(true);
@@ -205,9 +207,10 @@ export default function CalcLayersStrip({ projectId, onOpenTree, refreshKey }: {
     rows.push({
       key: 'project',
       label: 'Проект',
-      title: 'Проект: заказов ' + model.project.cnt + ' · ' + fmtDm(model.project.s) + ' — ' + fmtDm(model.project.f),
+      title: 'Проект: заказов ' + model.project.cnt + ' · ' + fmtDm(model.project.s) + ' — ' + fmtDm(model.project.f) + (onOpenProject ? ' · клик — показать весь проект' : ''),
       band: model.project,
       kind: 'project',
+      onClick: onOpenProject,
     });
     if (model.groups.length === 0) {
       rows.push({ key: 'g0', label: 'Групп нет', title: '', band: null, kind: 'group', muted: true });
@@ -216,9 +219,10 @@ export default function CalcLayersStrip({ projectId, onOpenTree, refreshKey }: {
         rows.push({
           key: 'g-' + g.id,
           label: 'Группа «' + g.name + '»',
-          title: 'Группа «' + g.name + '»: заказов ' + g.cnt + ' · ' + fmtDm(g.s) + ' — ' + fmtDm(g.f),
+          title: 'Группа «' + g.name + '»: заказов ' + g.cnt + ' · ' + fmtDm(g.s) + ' — ' + fmtDm(g.f) + (onOpenCluster ? ' · клик — критическая цепь группы' : ''),
           band: g,
           kind: 'group',
+          onClick: onOpenCluster ? () => onOpenCluster('group', g.id, g.name) : undefined,
         });
       }
     }
@@ -229,9 +233,10 @@ export default function CalcLayersStrip({ projectId, onOpenTree, refreshKey }: {
         rows.push({
           key: 'p-' + p.id,
           label: 'Кластер «' + p.name + '»',
-          title: 'Кластер «' + p.name + '»: заказов ' + p.cnt + ' · ' + fmtDm(p.s) + ' — ' + fmtDm(p.f),
+          title: 'Кластер «' + p.name + '»: заказов ' + p.cnt + ' · ' + fmtDm(p.s) + ' — ' + fmtDm(p.f) + (onOpenCluster ? ' · клик — критическая цепь кластера' : ''),
           band: p,
           kind: 'pool',
+          onClick: onOpenCluster ? () => onOpenCluster('pool', p.id, p.name) : undefined,
         });
       }
     }
@@ -282,7 +287,7 @@ export default function CalcLayersStrip({ projectId, onOpenTree, refreshKey }: {
       {open && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
           <div style={{ padding: '6px 10px 2px', fontSize: 11, color: 'var(--fg-4)' }}>
-            Полосы — по плановым окнам заказов (старт → договорная дата). Клик по дереву заказов — открыть его расчёт.
+            Полосы — по плановым окнам заказов (старт → договорная дата). Клик: проект — вся сеть проекта; кластер или группа — критическая цепь; дерево заказов — его расчёт.
           </div>
 
           {!loading && !model && (
@@ -318,10 +323,12 @@ export default function CalcLayersStrip({ projectId, onOpenTree, refreshKey }: {
                     <div key={r.key} style={{ display: 'flex', alignItems: 'center', height: 22 }}>
                       <div
                         title={r.title}
+                        onClick={r.onClick}
                         style={{
                           width: LABEL_W, flexShrink: 0, paddingLeft: 10, paddingRight: 8,
                           fontSize: 11, color: r.muted ? 'var(--fg-4)' : 'var(--fg-2)',
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          cursor: r.onClick ? 'pointer' : 'default',
                         }}
                       >
                         {r.label}

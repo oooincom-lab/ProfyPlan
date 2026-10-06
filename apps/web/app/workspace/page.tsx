@@ -3222,8 +3222,13 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       const r = await apiF<any>('/projects/' + proj.id + '/calculate/cpm', { method: 'POST', body: JSON.stringify(body) });
       setNetData(r);
     } catch (e: any) {
-      setNetError(e?.message || String(e));
-      setMsg('Ошибка сети CPM: ' + (e?.message || String(e)));
+      const emsg = e?.message || String(e);
+      if (emsg.indexOf('меньше двух операций') >= 0) {
+        setNetError('В этой области меньше двух операций — сеть не построить. Выберите «— весь проект —», другое дерево заказов или добавьте операции.');
+      } else {
+        setNetError(emsg);
+      }
+      setMsg('Ошибка сети CPM: ' + emsg);
     }
     setNetLoading(false);
   };
@@ -4907,7 +4912,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               active={view === 'project-gantt' ? 'gantt' : view === 'network' ? 'network' : calcTab}
               onSelect={(t) => {
                 if (t === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); else setView('project-gantt'); return; }
-                if (t === 'network') { setView('network'); return; }
+                if (t === 'network') { if (selectedProject) loadProjectNetwork(selectedProject, null); else setView('network'); return; }
                 setCalcTab(t); setView('calculations');
               }}
               methods={calcMethods}
@@ -6571,7 +6576,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 settingsActive
                 onSelect={(t) => {
                   if (t === 'gantt') { if (selectedProject) loadProjectGantt(selectedProject); else setView('project-gantt'); return; }
-                  if (t === 'network') { setView('network'); return; }
+                  if (t === 'network') { if (selectedProject) loadProjectNetwork(selectedProject, null); else setView('network'); return; }
                   setCalcTab(t); setView('calculations');
                 }}
                 methods={calcMethods}
@@ -7101,7 +7106,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               {netChain && (
                 <div style={{ border: '1px solid rgba(34,211,238,0.5)', borderRadius: 8, background: 'rgba(34,211,238,0.08)', padding: '8px 12px', fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 700, color: '#22D3EE' }}>⛓ Критическая цепь кластера</span>
-                  <span>«{netChainLabel || 'кластер'}»: {netChain.chain_operations} операций · {netChain.chain_orders} заказов · {Math.round((netChain.chain_duration_days || 0) * 10) / 10} дн — голубым слоем на графике</span>
+                  <span>«{netChainLabel || 'кластер'}»: {netChain.chain_operations} операций · {netChain.chain_orders} {netChain.chain_orders === 1 ? 'заказ' : 'заказов'} · {Math.round((netChain.chain_duration_days || 0) * 10) / 10} дн — голубым слоем на графике</span>
                   {netChain.buffers && (
                     <span title={netChain.buffers.note} style={{ color: '#FBBF24' }}>
                       {netChain.buffers.chain_buffer_days != null
@@ -7121,6 +7126,8 @@ const changeOrderStatus = async (o: any, status: string) => {
                 projectId={selectedProject?.id ? String(selectedProject.id) : null}
                 refreshKey={netData}
                 onOpenTree={(rid) => { if (selectedProject) { setNetOrderId(rid); loadProjectNetwork(selectedProject, rid); } }}
+                onOpenProject={() => { if (selectedProject) { setNetOrderId(null); loadProjectNetwork(selectedProject, null); } }}
+                onOpenCluster={(kind, id, name) => { loadClusterChain(kind + ':' + id, name); }}
               />
               <div style={{ flex: 1, minHeight: 420, position: 'relative', overflow: 'hidden' }}>
                 {netLoading && (
@@ -7130,7 +7137,12 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <div style={{ padding: 32, textAlign: 'center', color: '#F87171' }}>
                     <div style={{ marginBottom: 10 }}>Не удалось рассчитать сеть:</div>
                     <div style={{ fontSize: 12.5, color: '#FDA4AF', marginBottom: 12 }}>{netError}</div>
-                    <button className="btn btn-secondary btn-sm" onClick={() => loadProjectNetwork(selectedProject, netOrderId)}>Повторить</button>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => loadProjectNetwork(selectedProject, netOrderId)}>Повторить</button>
+                      {netOrderId && (
+                        <button className="btn btn-primary btn-sm" onClick={() => loadProjectNetwork(selectedProject, null)}>Показать весь проект</button>
+                      )}
+                    </div>
                   </div>
                 )}
                 {!netLoading && !netError && !netData && (
