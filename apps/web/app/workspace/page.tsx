@@ -7057,7 +7057,7 @@ const changeOrderStatus = async (o: any, status: string) => {
             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, height: 'calc(100vh - 96px)' }}>
               {calcMethods.logic === 'ccm' && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '8px 12px', fontSize: 12, color: 'var(--fg-2)' }}>
-                  Логика планирования — CCM: выберите кластер в селекторе «Кластер» — критическая цепь кластера подсветится голубым слоем на этом же графике. Ресурсные буферы и разрывы — следующие срезы блока 6.20.
+                  Логика планирования — CCM: выберите кластер в селекторе «Кластер» — критическая цепь кластера подсветится голубым слоем на этом же графике; буферы цепи и питающие буферы — в полосе-сводке. Конфликты межзаказных ресурсов — следующий срез.
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
