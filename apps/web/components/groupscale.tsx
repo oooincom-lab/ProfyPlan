@@ -31,6 +31,7 @@ type Props = {
   versions?: any[];
   versionInfo?: string;
   onSaveVersion?: () => void;
+  onRestoreVersion?: (baselineId: string) => void;
   freedom?: { total_operations?: number; pinned_operations?: number; freedom_percent?: number; threshold_percent?: number } | null;
 };
 
@@ -42,11 +43,12 @@ const parse = (v: any): number => {
 };
 const fmt = (t: number) => (Number.isFinite(t) ? new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—');
 
-export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom, powerFactor, whatIfInfo, onWhatIf, onWhatIfReset, versions, versionInfo, onSaveVersion }: Props) {
+export default function GroupScale({ project, groupName, nodes, resMap, resIds, pins, events, ghost, options, onToggle, onOpenGantt, onBack, pinsByOp, onPin, onUnpin, busy, freedom, powerFactor, whatIfInfo, onWhatIf, onWhatIfReset, versions, versionInfo, onSaveVersion, onRestoreVersion }: Props) {
   const [sel, setSel] = useState<any>(null);
   const [hard, setHard] = useState(true);
   const [when, setWhen] = useState<string>('');
   const [drag, setDrag] = useState<any>(null);
+  const [verSel, setVerSel] = useState<string>('');
 
   const MAGNET_RADIUS_MS = 86400000; // радиус магнита — 1 день (единица настройки magnet.radius_value)
 
@@ -369,7 +371,7 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, borderTop: '1px solid #14263F', paddingTop: 8 }}>
         <span style={{ color: '#8FA3BD' }}>Версии плана:</span>
-        <select defaultValue="" style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 8, color: '#E8EEF5', padding: '3px 8px', fontSize: 12 }}>
+        <select value={verSel} onChange={(e) => setVerSel(e.target.value)} style={{ background: '#0A1628', border: '1px solid #1E3A5F', borderRadius: 8, color: '#E8EEF5', padding: '3px 8px', fontSize: 12 }}>
           <option value="">выберите версию ({(versions || []).length})</option>
           {(versions || []).map((v: any) => (
             <option key={v.id} value={v.id}>
@@ -382,7 +384,18 @@ export default function GroupScale({ project, groupName, nodes, resMap, resIds, 
           💾 Сохранить версию
         </button>
         {versionInfo && <span style={{ color: '#FBBF24' }}>{versionInfo}</span>}
-        <span style={{ color: '#5A7090' }}>сравнение версий и применение сценариев — следующим шагом</span>
+        <button
+          onClick={() => {
+            if (!verSel) return;
+            const v = (versions || []).find((x: any) => x.id === verSel);
+            const ok = window.confirm('Вернуть план к версии' + (v ? ' v' + v.version + ' («' + v.name + '»)' : '') + '?\n\nДлительности, оценки и связи операций будут заменены данными версии. После возврата пересчитайте план.');
+            if (ok && onRestoreVersion) onRestoreVersion(verSel);
+          }}
+          disabled={!verSel || !!busy}
+          style={{ background: '#3A2A12', border: '1px solid #8A6D1F', color: '#FDE68A', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+          ↩ Вернуть к версии
+        </button>
+        <span style={{ color: '#5A7090' }}>возврат восстановит длительности, оценки и связи — затем пересчитайте план</span>
       </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, borderTop: '1px solid #14263F', paddingTop: 8 }}>

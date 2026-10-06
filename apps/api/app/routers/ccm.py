@@ -3,6 +3,7 @@ CCM-роутер: multi-project merge, BOM-развёртка, resource leveling
 """
 import io
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -225,6 +226,28 @@ async def create_baseline(
                     }
                     for nid, node in cpm_result.nodes.items()
                 ],
+                "input_operations": [
+                    {
+                        "id": str(op.id),
+                        "duration_base": float(op.duration_base),
+                        "setup_time": float(op.setup_time),
+                        "teardown_time": float(op.teardown_time),
+                        "to_optimistic": float(op.to_optimistic) if op.to_optimistic is not None else None,
+                        "tm_likely": float(op.tm_likely) if op.tm_likely is not None else None,
+                        "tp_pessimistic": float(op.tp_pessimistic) if op.tp_pessimistic is not None else None,
+                    }
+                    for op in operations
+                ],
+                "input_dependencies": [
+                    {
+                        "id": str(dep.id),
+                        "predecessor_id": str(dep.predecessor_id),
+                        "successor_id": str(dep.successor_id),
+                        "dependency_type": dep.dependency_type,
+                        "lag_time": float(dep.lag_time),
+                    }
+                    for dep in dependencies
+                ],
             }
         except ValueError:
             snapshot = {"error": "CPM-расчёт не выполнен (возможен цикл)"}
@@ -286,6 +309,126 @@ async def list_baselines(
             for bl in baselines
         ],
         "total": len(baselines),
+    }
+
+
+@ccm_router.post("/projects/{project_id}/baselines/{baseline_id}/restore")
+async def restore_baseline(
+    project_id: UUID,
+    baseline_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Вернуть данные плана к сохранённой версии: длительности, оценки и связи операций.
+
+    Доступно для версий, сохранённых со снимком входных данных (input_operations).
+    Результаты расчёта не подменяются: после возврата план нужно пересчитать.
+    """
+    proj = await db.execute(
+        select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+    )
+    if not proj.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Проект не найден")
+
+    bl = (
+        await db.execute(
+            select(PlanBaseline).where(
+                PlanBaseline.id == baseline_id,
+                PlanBaseline.project_id == project_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not bl:
+        raise HTTPException(status_code=404, detail="Версия не найдена")
+
+    snap = bl.snapshot_data or {}
+    ops_rows = snap.get("input_operations")
+    deps_rows = snap.get("input_dependencies")
+    if not ops_rows:
+        raise HTTPException(
+            status_code=409,
+            detail="В этой версии нет снимка данных (сохранена до появления возврата). Сохраните текущий план новой версией — она уже будет со снимком.",
+        )
+
+    cur_ops = (
+        await db.execute(
+            select(Operation).where(
+                Operation.project_id == project_id,
+                Operation.tenant_id == tenant_id,
+            )
+        )
+    ).scalars().all()
+    by_id = {str(o.id): o for o in cur_ops}
+
+    restored = 0
+    skipped = 0
+    for row in ops_rows:
+        op = by_id.get(str(row.get("id")))
+        if not op:
+            skipped += 1
+            continue
+        if row.get("duration_base") is not None:
+            op.duration_base = Decimal(str(row.get("duration_base")))
+        if row.get("setup_time") is not None:
+            op.setup_time = Decimal(str(row.get("setup_time")))
+        if row.get("teardown_time") is not None:
+            op.teardown_time = Decimal(str(row.get("teardown_time")))
+        op.to_optimistic = Decimal(str(row["to_optimistic"])) if row.get("to_optimistic") is not None else None
+        op.tm_likely = Decimal(str(row["tm_likely"])) if row.get("tm_likely") is not None else None
+        op.tp_pessimistic = Decimal(str(row["tp_pessimistic"])) if row.get("tp_pessimistic") is not None else None
+        restored += 1
+
+    cur_deps = (
+        await db.execute(
+            select(OperationDependency).where(
+                OperationDependency.predecessor_id.in_(
+                    select(Operation.id).where(
+                        Operation.project_id == project_id,
+                        Operation.tenant_id == tenant_id,
+                    )
+                )
+            )
+        )
+    ).scalars().all()
+    for dep in cur_deps:
+        await db.delete(dep)
+
+    added = 0
+    for row in (deps_rows or []):
+        pred = by_id.get(str(row.get("predecessor_id")))
+        succ = by_id.get(str(row.get("successor_id")))
+        if not pred or not succ:
+            continue
+        db.add(
+            OperationDependency(
+                predecessor_id=pred.id,
+                successor_id=succ.id,
+                dependency_type=str(row.get("dependency_type") or "FS"),
+                lag_time=Decimal(str(row.get("lag_time") or 0)),
+            )
+        )
+        added += 1
+
+    actives = (
+        await db.execute(
+            select(PlanBaseline).where(
+                PlanBaseline.project_id == project_id,
+                PlanBaseline.is_active == True,
+            )
+        )
+    ).scalars().all()
+    for a in actives:
+        a.is_active = False
+    bl.is_active = True
+
+    await db.commit()
+    return {
+        "status": "ok",
+        "baseline_id": str(bl.id),
+        "version": bl.version,
+        "restored_operations": restored,
+        "skipped_operations": skipped,
+        "restored_dependencies": added,
     }
 
 

@@ -3305,6 +3305,22 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     setScaleBusy(false);
   };
 
+  // Возврат данных плана к версии: длительности, оценки и связи операций.
+  const restoreVersion = async (baselineId: string) => {
+    const proj = selectedProject;
+    if (!proj) return;
+    setScaleBusy(true);
+    try {
+      const r: any = await apiF(`/ccm/projects/${proj.id}/baselines/${baselineId}/restore`, { method: 'POST' });
+      await loadVersions(proj);
+      await loadProjectScale(proj);
+      setScaleVersionInfo(`Вернулись к версии ${r.version}: операций ${r.restored_operations}, связей ${r.restored_dependencies}` + (r.skipped_operations ? `, пропущено ${r.skipped_operations}` : '') + ' — пересчитайте план');
+    } catch (e: any) {
+      setScaleVersionInfo('Не удалось вернуться к версии: ' + detailOf(e));
+    }
+    setScaleBusy(false);
+  };
+
   // ── Gantt ──
   const loadProjectGantt = async (p: any) => {
     setSelectedProject(p); setView('project-gantt');
@@ -6980,6 +6996,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               versions={scaleVersions}
               versionInfo={scaleVersionInfo}
               onSaveVersion={saveVersion}
+              onRestoreVersion={restoreVersion}
               options={scaleOpts}
               onToggle={(k) => setScaleOpts((s) => ({ ...s, [k]: !s[k] }))}
               onOpenGantt={() => loadProjectGantt(selectedProject)}
