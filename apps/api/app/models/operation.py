@@ -69,6 +69,16 @@ class Operation(BaseModel):
     expected_delivery: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
 
+    # Трассировка развёртки (07.10.2026): происхождение операции —
+    # из какого узла состава и какого шага маршрута она создана (для сверки и пересборки).
+    source_node_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("product_structures.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_routing_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("routings.id", ondelete="SET NULL"), nullable=True
+    )
+    source_step_seq: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Связи
     dependencies_as_predecessor: Mapped[list["OperationDependency"]] = relationship(
         foreign_keys="OperationDependency.predecessor_id",

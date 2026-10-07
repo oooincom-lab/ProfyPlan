@@ -35,6 +35,9 @@ class ExplodedOperation:
     is_milestone: bool = False
     source_node_path: str = ""  # путь в BOM-дереве "1/1.1/1.1.2"
     owner_order_id: Optional[str] = None  # заказ-производитель узла (order_id узла BOM)
+    source_node_id: Optional[str] = None  # узел состава-источник (07.10: трассировка)
+    source_routing_id: Optional[str] = None  # маршрут-источник
+    source_step_seq: Optional[int] = None  # номер шага маршрута
 
 
 @dataclass
@@ -182,6 +185,7 @@ async def explode_bom_to_operations(
                 output_quantity=node.quantity_per_parent * project_quantity,
                 procurement_lead_time_days=lead_days,
                 owner_order_id=str(node.order_id) if node.order_id else None,
+                source_node_id=str(node.id),
                 source_node_path=node_path,
             )
             result.operations.append(op)
@@ -218,6 +222,8 @@ async def explode_bom_to_operations(
             op_ids: list[str] = []
             for op in prod_ops:
                 op.owner_order_id = str(node.order_id) if node.order_id else None
+                op.source_node_id = str(node.id)
+                op.source_routing_id = str(node.routing_id)
                 new_id = _tid("op")
                 local_to_global[op.temp_id] = new_id
                 op.temp_id = new_id
@@ -331,6 +337,7 @@ def expand_routing_to_ops(
             alternative_resources=rop.alternative_resource_types,
             input_materials=rop.input_materials,
             source_node_path=node_path,
+            source_step_seq=rop.sequence_number,
         )
         ops.append(op)
         op_map[rop.sequence_number] = op

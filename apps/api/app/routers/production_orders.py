@@ -1533,6 +1533,19 @@ async def expand_order(
             unbound += 1
             continue
 
+        _src_node = None
+        _src_route = None
+        if getattr(eop, "source_node_id", None):
+            try:
+                _src_node = UUID(str(eop.source_node_id))
+            except Exception:
+                _src_node = None
+        if getattr(eop, "source_routing_id", None):
+            try:
+                _src_route = UUID(str(eop.source_routing_id))
+            except Exception:
+                _src_route = None
+
         _rid = await _resolve_resource(eop.resource_type_id)
         _cat = await _catalog_pick(db, tenant_id, eop.name, _cat_cache,
                                    create_missing=True, norm=eop.duration_base)
@@ -1541,6 +1554,9 @@ async def expand_order(
             tenant_id=tenant_id,
             project_id=order.project_id,
             order_id=owner,
+            source_node_id=_src_node,
+            source_routing_id=_src_route,
+            source_step_seq=getattr(eop, "source_step_seq", None),
             catalog_operation_id=(_cat.id if _cat is not None else None),
             name=eop.name,
             duration_base=eop.duration_base,

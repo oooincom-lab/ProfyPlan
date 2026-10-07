@@ -694,6 +694,18 @@ async def explode_and_save_bom(
     # Сохраняем операции (explode endpoint)
     temp_to_real: dict[str, str] = {}
     for op in result.operations:
+        _sn = None
+        _sr = None
+        if getattr(op, "source_node_id", None):
+            try:
+                _sn = UUID(str(op.source_node_id))
+            except Exception:
+                _sn = None
+        if getattr(op, "source_routing_id", None):
+            try:
+                _sr = UUID(str(op.source_routing_id))
+            except Exception:
+                _sr = None
         real_op = Operation(
             tenant_id=tenant_id,
             project_id=project_id,
@@ -702,6 +714,9 @@ async def explode_and_save_bom(
             duration_unit=op.duration_unit,
             setup_time=op.setup_time,
             teardown_time=op.teardown_time,
+            source_node_id=_sn,
+            source_routing_id=_sr,
+            source_step_seq=getattr(op, "source_step_seq", None),
         )
         db.add(real_op)
         await db.flush()
@@ -850,6 +865,7 @@ async def run_explosion(
                 output_quantity=node.quantity_per_parent * body.project_quantity,
                 procurement_lead_time_days=lead_days,
                 owner_order_id=str(node.order_id) if node.order_id else None,
+                source_node_id=str(node.id),
                 source_node_path=node_path,
             )
             result.operations.append(op)
@@ -891,6 +907,8 @@ async def run_explosion(
             op_ids_in_node: list[str] = []
             for op in prod_ops:
                 op.owner_order_id = str(node.order_id) if node.order_id else None
+                op.source_node_id = str(node.id)
+                op.source_routing_id = str(node.routing_id)
                 new_id = _make_temp_id("op")
                 local_to_global[op.temp_id] = new_id
                 op.temp_id = new_id
