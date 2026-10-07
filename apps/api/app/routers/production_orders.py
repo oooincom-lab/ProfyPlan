@@ -1373,35 +1373,9 @@ from app.services.bom_explosion import ExplodedOperation, ExplodedDependency
 from app.models.operation import Operation, OperationDependency, OperationResource
 
 
-@router.post("/{order_id}/expand")
-async def expand_order(
-    order_id: str,
-    replace: bool = False,
-    with_children: bool = True,
-    tenant_id: str = Depends(get_current_tenant_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Разворачивает состав и маршруты заказа в операции плана.
-
-    Если заказ — родитель (есть подчинённые по parent_order_id) и with_children=true,
-    разворачиваются и все подчинённые заказы. Заказы, у которых операции уже есть,
-    пропускаются; replace=true пересобирает операции выбранных заказов.
-    Привязка операций к заказу — по владельцу узла BOM из развёртки.
-    """
-    stmt = select(ProductionOrder).where(
-        ProductionOrder.id == UUID(order_id),
-        ProductionOrder.tenant_id == tenant_id,
-    )
-    res = await db.execute(stmt)
-    order = res.scalar_one_or_none()
-    if not order:
-        raise HTTPException(404, "Заказ не найден")
-
-    if not order.project_id:
-        raise HTTPException(400, "У заказа не указан проект (project_id). Сначала импортируйте Excel и укажите project_id.")
-
-    # 1) Целевые заказы: сам заказ и (при with_children) все подчинённые по parent_order_id
-    targets: list[ProductionOrder] = [order]
+async def _expand_targets(db: AsyncSession, tenant_id: str, order: ProductionOrder, with_children: bool):
+    """Целевые заказы: сам заказ и (при with_children) все подчинённые по parent_order_id."""
+    targets = [order]
     if with_children:
         frontier = [order.id]
         visited = {order.id}
@@ -1421,75 +1395,244 @@ async def expand_order(
                         targets.append(c)
                         nxt.append(c.id)
             frontier = nxt
+    return targets
 
-    # 2) Кто уже развёрнут — считаем операции по каждому заказу
-    target_ids = [t.id for t in targets]
-    _auto_types = ("production", "procurement")
-    existing_rows = (await db.execute(
-        select(Operation.order_id, func.count()).where(
-            Operation.tenant_id == tenant_id,
-            Operation.project_id == order.project_id,
-            Operation.order_id.in_(target_ids),
-            Operation.operation_type.in_(_auto_types),
-        ).group_by(Operation.order_id)
-    )).all()
-    existing_count = {row[0]: row[1] for row in existing_rows}
 
-    to_expand: list[ProductionOrder] = []
-    skipped = []
-    for t in targets:
-        n = existing_count.get(t.id, 0)
-        if n and not replace:
-            skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": int(n), "reason": "уже развёрнут"})
-        else:
-            to_expand.append(t)
+def _round2(x):
+    try:
+        return float(round(Decimal(str(x)), 2))
+    except Exception:
+        return None
 
-    if not to_expand:
-        return {
-            "order_id": str(order.id),
-            "status": order.status,
-            "operations_created": 0,
-            "dependencies_created": 0,
-            "materials_required": 0,
-            "expanded_orders": [],
-            "skipped_orders": skipped,
-            "warnings": ["Все выбранные заказы уже развёрнуты — ничего не изменилось."],
-        }
 
-    # replace: удаляем операции и связи только переразворачиваемых заказов
-    if replace:
-        _repl_ids = [t.id for t in to_expand if existing_count.get(t.id)]
-        if _repl_ids:
-            _ops = select(Operation.id).where(
-                Operation.tenant_id == tenant_id,
-                Operation.project_id == order.project_id,
-                Operation.order_id.in_(_repl_ids),
-            )
-            await db.execute(delete(OperationDependency).where(OperationDependency.predecessor_id.in_(_ops)))
-            await db.execute(delete(OperationDependency).where(OperationDependency.successor_id.in_(_ops)))
-            await db.execute(delete(Operation).where(Operation.id.in_(_ops)))
-            await db.flush()
+async def _build_expand_plan(db: AsyncSession, tenant_id: str, order: ProductionOrder, targets: list):
+    """Сверка «маршрут/состав ↔ план»: что создать, добавить, обновить, удалить.
 
-    expand_ids = {t.id for t in to_expand}
-
-    # 3) Движок развёртки (проект целиком в памяти; сохраняем только целевые заказы)
+    Возвращает (plan, result, ctx): plan — сводка для диалога; result — результат движка;
+    ctx — служебные карты для сохранения (by_owner, existing ops + ключи, deps-pairs).
+    """
     from app.routers.bom import run_explosion
     from app.schemas.bom import BOMExplodeAndSaveRequest
 
-    body = BOMExplodeAndSaveRequest(project_quantity=order.quantity)
     result = await run_explosion(
         db=db,
         tenant_id=tenant_id,
         project_id=order.project_id,
-        body=body,
+        body=BOMExplodeAndSaveRequest(project_quantity=order.quantity),
     )
+
+    by_owner: dict = {}
+    by_temp: dict = {}
+    for eop in result.operations:
+        ow = getattr(eop, "owner_order_id", None)
+        by_temp[eop.temp_id] = eop
+        if ow:
+            by_owner.setdefault(str(ow), []).append(eop)
+
+    target_ids = [t.id for t in targets]
+    _auto_types = ("production", "procurement")
+    rows = (await db.execute(
+        select(Operation).where(
+            Operation.tenant_id == tenant_id,
+            Operation.project_id == order.project_id,
+            Operation.order_id.in_(target_ids),
+            Operation.operation_type.in_(_auto_types),
+        )
+    )).scalars().all()
+    by_order_existing: dict = {}
+    for op in rows:
+        by_order_existing.setdefault(str(op.order_id), []).append(op)
+
+    plan_orders = []
+    totals = {"create": 0, "add": 0, "update": 0, "remove": 0, "keep": 0}
+    ctx_orders = []
+    for t in targets:
+        ex = by_order_existing.get(str(t.id), [])
+        want = by_owner.get(str(t.id), [])
+        ex_by_key = {}
+        ex_legacy = []
+        for op in ex:
+            if op.source_node_id and op.source_step_seq is not None:
+                ex_by_key[(str(op.source_node_id), int(op.source_step_seq))] = op
+            else:
+                ex_legacy.append(op)
+
+        if not ex:
+            po = {"id": str(t.id), "ext_id": t.ext_id, "expanded": False,
+                  "create": len(want), "add": 0, "update": 0, "remove": 0, "keep": 0,
+                  "adds": [], "updates": [], "removes": []}
+            totals["create"] += len(want)
+            plan_orders.append(po)
+            ctx_orders.append({"order": t, "ex": ex, "want": want,
+                               "ex_by_key": ex_by_key, "ex_legacy": list(ex_legacy),
+                               "adds": [], "updates": []})
+            continue
+
+        want_keys = set()
+        adds, updates = [], []
+        legacy_left = list(ex_legacy)
+        for eop in want:
+            node_id = getattr(eop, "source_node_id", None)
+            seq = getattr(eop, "source_step_seq", None)
+            matched_key = None
+            op = None
+            if node_id and seq is not None:
+                matched_key = (str(node_id), int(seq))
+                want_keys.add(matched_key)
+                op = ex_by_key.get(matched_key)
+            if op is None:
+                m = next((x for x in legacy_left if x.name == eop.name), None)
+                if m is not None:
+                    legacy_left.remove(m)
+                    continue
+                adds.append({"name": eop.name, "step_seq": seq})
+            else:
+                if _round2(op.duration_base) != _round2(eop.duration_base) or op.name != eop.name:
+                    updates.append({"key": matched_key, "name": eop.name, "was": op.name,
+                                    "from_h": _round2(op.duration_base), "to_h": _round2(eop.duration_base)})
+        removes = []
+        for key, op in ex_by_key.items():
+            if key not in want_keys:
+                removes.append({"name": op.name, "legacy": False})
+        for op in legacy_left:
+            removes.append({"name": op.name, "legacy": True})
+        keep = len(ex) - len(updates) - len(removes)
+        po = {"id": str(t.id), "ext_id": t.ext_id, "expanded": True,
+              "create": 0, "add": len(adds), "update": len(updates), "remove": len(removes),
+              "keep": max(keep, 0),
+              "adds": adds[:30], "updates": updates[:30], "removes": removes[:30]}
+        totals["add"] += len(adds)
+        totals["update"] += len(updates)
+        totals["remove"] += len(removes)
+        totals["keep"] += max(keep, 0)
+        plan_orders.append(po)
+        ctx_orders.append({"order": t, "ex": ex, "want": want,
+                           "ex_by_key": ex_by_key, "ex_legacy": list(ex_legacy),
+                           "adds": adds, "updates": updates})
+
+    plan = {"order_id": str(order.id), "orders": plan_orders, "totals": totals,
+            "warnings": list(result.warnings or [])}
+    ctx = {"by_owner": by_owner, "by_temp": by_temp, "orders": ctx_orders}
+    return plan, result, ctx
+
+
+@router.get("/{order_id}/expand-inspect")
+async def expand_inspect(
+    order_id: str,
+    with_children: bool = True,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Сверка перед развёрткой/пересборкой: что будет добавлено, обновлено, удалено, сохранено."""
+    res = await db.execute(select(ProductionOrder).where(
+        ProductionOrder.id == UUID(order_id), ProductionOrder.tenant_id == tenant_id))
+    order = res.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    if not order.project_id:
+        raise HTTPException(400, "У заказа не указан проект (project_id).")
+    targets = await _expand_targets(db, tenant_id, order, with_children)
+    plan, _result, _ctx = await _build_expand_plan(db, tenant_id, order, targets)
+    return plan
+
+
+@router.post("/{order_id}/expand")
+async def expand_order(
+    order_id: str,
+    replace: bool = False,
+    with_children: bool = True,
+    update_changed: bool = False,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Развёртка/пересборка состава и маршрутов заказа в операции плана.
+
+    Умный режим (по умолчанию): безопасно добавляет новые шаги и (при update_changed)
+    обновляет изменившиеся; существующие операции не трогает.
+    replace=true — полная пересборка заказов, у которых операции уже есть.
+    Каскад: with_children=true — заказ и все подчинённые заказы.
+    """
+    res = await db.execute(select(ProductionOrder).where(
+        ProductionOrder.id == UUID(order_id), ProductionOrder.tenant_id == tenant_id))
+    order = res.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    if not order.project_id:
+        raise HTTPException(400, "У заказа не указан проект (project_id). Сначала импортируйте Excel и укажите project_id.")
+
+    targets = await _expand_targets(db, tenant_id, order, with_children)
+
+    from app.routers.bom import run_explosion  # noqa: F401 (движок используется внутри _build_expand_plan)
+    plan, result, ctx = await _build_expand_plan(db, tenant_id, order, targets)
 
     if result.warnings:
         import logging
         for w in result.warnings:
             logging.warning(f"BOM expand warning: {w}")
 
-    # 4) Сохраняем операции целевых заказов (владелец — order_id узла BOM)
+    target_ids = [t.id for t in targets]
+    _auto_types = ("production", "procurement")
+
+    # 1) Что удаляем: полная пересборка — все операции целевых заказов; умный — только обновляемые
+    delete_ids: list = []
+    for co in ctx["orders"]:
+        t = co["order"]
+        if not co["ex"]:
+            continue
+        if replace:
+            delete_ids.extend([op.id for op in co["ex"]])
+        elif update_changed:
+            for upd in co["updates"]:
+                op = co["ex_by_key"].get(tuple(upd["key"])) if upd.get("key") else None
+                if op is not None:
+                    delete_ids.append(op.id)
+    if delete_ids:
+        _deps_pred = select(OperationDependency.id).where(OperationDependency.predecessor_id.in_(delete_ids))
+        _deps_succ = select(OperationDependency.id).where(OperationDependency.successor_id.in_(delete_ids))
+        await db.execute(delete(OperationDependency).where(OperationDependency.id.in_(_deps_pred)))
+        await db.execute(delete(OperationDependency).where(OperationDependency.id.in_(_deps_succ)))
+        await db.execute(delete(Operation).where(Operation.id.in_(delete_ids)))
+        await db.flush()
+
+    # карты для привязки связей
+    after_delete_existing: dict = {}
+    legacy_by_name: dict = {}
+    kept_counts: dict = {}
+    for co in ctx["orders"]:
+        t = co["order"]
+        for op in co["ex"]:
+            if replace and co["ex"]:
+                continue
+            if update_changed and op.id in delete_ids:
+                continue
+            if op.source_node_id and op.source_step_seq is not None:
+                after_delete_existing[(str(t.id), str(op.source_node_id), int(op.source_step_seq))] = op.id
+            else:
+                legacy_by_name[(str(t.id), op.name)] = op.id
+
+    # бэкфилл источника для legacy-операций, сопоставленных по имени (07.10: трассировка)
+    if not replace:
+        for co in ctx["orders"]:
+            if not co["ex"]:
+                continue
+            for op in co["ex_legacy"]:
+                if op.id in delete_ids:
+                    continue
+                eop = next((w for w in co["want"] if w.name == op.name), None)
+                if eop is not None and getattr(eop, "source_node_id", None):
+                    try:
+                        op.source_node_id = UUID(str(eop.source_node_id))
+                        if getattr(eop, "source_routing_id", None):
+                            op.source_routing_id = UUID(str(eop.source_routing_id))
+                        op.source_step_seq = getattr(eop, "source_step_seq", None)
+                    except Exception:
+                        pass
+
+    # 2) Что сохраняем: новая операция = у заказа не было операций; добавить; обновить (после удаления)
+    expand_ids = {t.id for t in targets}
+    saved_ids_by_order: dict = {}
+    saved_temp_map: dict = {}
+
     _res_cache: dict[str, Optional[UUID]] = {}
 
     async def _resolve_resource(tag: Optional[str]):
@@ -1520,101 +1663,162 @@ async def expand_order(
         return _res_cache[key]
 
     _cat_cache: dict = {}
-    op_map = {}
-    ops_per_order: dict = {}
+
+    def _should_save(co, eop) -> bool:
+        if not co["ex"]:
+            return True  # заказ ещё не развёрнут — создаём всё
+        if replace:
+            return True
+        node_id = getattr(eop, "source_node_id", None)
+        seq = getattr(eop, "source_step_seq", None)
+        if node_id and seq is not None:
+            key = (str(node_id), int(seq))
+            if key in co["ex_by_key"]:
+                if update_changed:
+                    return any(upd.get("key") == key for upd in co["updates"])
+                return False
+        # fallback: легаси-операция с тем же именем (без источника) — считаем существующей
+        if any(x.name == eop.name for x in co["ex_legacy"]):
+            return False
+        return True
+
     unbound = 0
-    for eop in result.operations:
-        owner = None
-        try:
-            owner = UUID(str(eop.owner_order_id)) if getattr(eop, "owner_order_id", None) else None
-        except Exception:
+    for co in ctx["orders"]:
+        t = co["order"]
+        saved = 0
+        for eop in co["want"]:
             owner = None
-        if owner is None or owner not in expand_ids:
-            unbound += 1
-            continue
-
-        _src_node = None
-        _src_route = None
-        if getattr(eop, "source_node_id", None):
             try:
-                _src_node = UUID(str(eop.source_node_id))
+                owner = UUID(str(eop.owner_order_id)) if getattr(eop, "owner_order_id", None) else None
             except Exception:
-                _src_node = None
-        if getattr(eop, "source_routing_id", None):
-            try:
-                _src_route = UUID(str(eop.source_routing_id))
-            except Exception:
-                _src_route = None
+                owner = None
+            if owner is None or owner not in expand_ids:
+                unbound += 1
+                continue
+            if not _should_save(co, eop):
+                continue
 
-        _rid = await _resolve_resource(eop.resource_type_id)
-        _cat = await _catalog_pick(db, tenant_id, eop.name, _cat_cache,
-                                   create_missing=True, norm=eop.duration_base)
-        op = Operation(
-            id=uuid4(),
-            tenant_id=tenant_id,
-            project_id=order.project_id,
-            order_id=owner,
-            source_node_id=_src_node,
-            source_routing_id=_src_route,
-            source_step_seq=getattr(eop, "source_step_seq", None),
-            catalog_operation_id=(_cat.id if _cat is not None else None),
-            name=eop.name,
-            duration_base=eop.duration_base,
-            duration_unit=eop.duration_unit,
-            setup_time=eop.setup_time,
-            teardown_time=eop.teardown_time,
-            operation_type=eop.operation_type,
-            output_product=eop.output_product,
-            output_quantity=eop.output_quantity,
-            yield_rate=eop.yield_rate,
-            input_materials=eop.input_materials,
-            supplier_id=eop.supplier_id,
-            is_milestone=eop.is_milestone,
-        )
-        db.add(op)
-        await db.flush()
-        op_map[eop.temp_id] = op.id
-        ops_per_order[owner] = ops_per_order.get(owner, 0) + 1
+            _src_node = None
+            _src_route = None
+            if getattr(eop, "source_node_id", None):
+                try:
+                    _src_node = UUID(str(eop.source_node_id))
+                except Exception:
+                    _src_node = None
+            if getattr(eop, "source_routing_id", None):
+                try:
+                    _src_route = UUID(str(eop.source_routing_id))
+                except Exception:
+                    _src_route = None
 
-        if _rid:
-            db.add(OperationResource(
+            _rid = await _resolve_resource(eop.resource_type_id)
+            _cat = await _catalog_pick(db, tenant_id, eop.name, _cat_cache,
+                                       create_missing=True, norm=eop.duration_base)
+            op = Operation(
                 id=uuid4(),
-                operation_id=op.id,
-                resource_id=_rid,
-                role="primary",
-                efficiency_factor=Decimal("1"),
-                capacity_demand=Decimal("1"),
-            ))
+                tenant_id=tenant_id,
+                project_id=order.project_id,
+                order_id=owner,
+                source_node_id=_src_node,
+                source_routing_id=_src_route,
+                source_step_seq=getattr(eop, "source_step_seq", None),
+                catalog_operation_id=(_cat.id if _cat is not None else None),
+                name=eop.name,
+                duration_base=eop.duration_base,
+                duration_unit=eop.duration_unit,
+                setup_time=eop.setup_time,
+                teardown_time=eop.teardown_time,
+                operation_type=eop.operation_type,
+                output_product=eop.output_product,
+                output_quantity=eop.output_quantity,
+                yield_rate=eop.yield_rate,
+                input_materials=eop.input_materials,
+                supplier_id=eop.supplier_id,
+                is_milestone=eop.is_milestone,
+            )
+            db.add(op)
+            await db.flush()
+            saved_temp_map[eop.temp_id] = op.id
+            saved += 1
+            if _rid:
+                db.add(OperationResource(
+                    id=uuid4(),
+                    operation_id=op.id,
+                    resource_id=_rid,
+                    role="primary",
+                    efficiency_factor=Decimal("1"),
+                    capacity_demand=Decimal("1"),
+                ))
+        saved_ids_by_order[str(t.id)] = saved
 
-    # Сохраняем зависимости внутри сохранённых операций
+    # 3) Связи: между сохранёнными новыми и оставшимися существующими (без дублей)
+    existing_pairs: set = set()
+    _cur_ids = {op_id for op_id in after_delete_existing.values()} | {op_id for op_id in legacy_by_name.values()} | set(saved_temp_map.values())
+    if _cur_ids:
+        dep_rows = (await db.execute(
+            select(OperationDependency.predecessor_id, OperationDependency.successor_id).where(
+                OperationDependency.predecessor_id.in_(_cur_ids)
+            )
+        )).all()
+        for pr, su in dep_rows:
+            existing_pairs.add((pr, su))
+        dep_rows2 = (await db.execute(
+            select(OperationDependency.predecessor_id, OperationDependency.successor_id).where(
+                OperationDependency.successor_id.in_(_cur_ids)
+            )
+        )).all()
+        for pr, su in dep_rows2:
+            existing_pairs.add((pr, su))
+
+    def _resolve_temp(tid) -> Optional[UUID]:
+        if tid in saved_temp_map:
+            return saved_temp_map[tid]
+        eop = ctx["by_temp"].get(tid)
+        if eop is None:
+            return None
+        owner = str(getattr(eop, "owner_order_id", None) or "")
+        node_id = getattr(eop, "source_node_id", None)
+        seq = getattr(eop, "source_step_seq", None)
+        if node_id and seq is not None:
+            got = after_delete_existing.get((owner, str(node_id), int(seq)))
+            if got:
+                return got
+        got = legacy_by_name.get((owner, eop.name))
+        return got
+
     deps_created = 0
     for dep in result.dependencies:
-        if dep.predecessor_temp_id in op_map and dep.successor_temp_id in op_map:
-            d = OperationDependency(
+        id1 = _resolve_temp(dep.predecessor_temp_id)
+        id2 = _resolve_temp(dep.successor_temp_id)
+        if id1 and id2 and (id1, id2) not in existing_pairs:
+            db.add(OperationDependency(
                 id=uuid4(),
-                predecessor_id=op_map[dep.predecessor_temp_id],
-                successor_id=op_map[dep.successor_temp_id],
+                predecessor_id=id1,
+                successor_id=id2,
                 dependency_type=dep.dependency_type,
                 lag_time=dep.lag_hours,
                 lag_unit="hour",
-            )
-            db.add(d)
+            ))
+            existing_pairs.add((id1, id2))
             deps_created += 1
 
-    # 5) Обновляем статусы заказов, у которых появились операции
+    # 4) Статусы заказов
     from datetime import datetime, timezone
     _now = datetime.now(timezone.utc)
     expanded_orders = []
-    for t in to_expand:
-        cnt = ops_per_order.get(t.id, 0)
-        if cnt:
+    skipped = []
+    for co in ctx["orders"]:
+        t = co["order"]
+        saved = saved_ids_by_order.get(str(t.id), 0)
+        kept = len([op for op in co["ex"] if op.id not in delete_ids]) if co["ex"] else 0
+        if saved:
             t.status = "planned"
             t.exploded_at = _now
-            t.operations_created = cnt
-            expanded_orders.append({"id": str(t.id), "ext_id": t.ext_id, "operations": cnt})
+            t.operations_created = kept + saved
+            expanded_orders.append({"id": str(t.id), "ext_id": t.ext_id, "operations": saved, "kept": kept})
         else:
-            skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": 0,
-                            "reason": "нечего разворачивать (в составе нет узлов с маршрутами)"})
+            reason = "уже развёрнут, изменений нет" if co["ex"] else "нечего разворачивать (в составе нет узлов с маршрутами)"
+            skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": kept, "reason": reason})
 
     await db.commit()
 
@@ -1625,11 +1829,14 @@ async def expand_order(
     return {
         "order_id": str(order.id),
         "status": order.status,
-        "operations_created": len(op_map),
+        "mode": "full" if replace else ("smart+update" if update_changed else "smart"),
+        "operations_created": len(saved_temp_map),
+        "operations_deleted": len(delete_ids),
         "dependencies_created": deps_created,
         "materials_required": len(result.materials),
         "expanded_orders": expanded_orders,
         "skipped_orders": skipped,
+        "plan": plan,
         "warnings": warnings,
     }
 

@@ -2742,7 +2742,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     | { kind: 'op-add'; routingId: string }
     | { kind: 'op-del'; opId: string; opName: string }
     | { kind: 'node-nom'; nodeId: string; nodeType: string; nomId: string | null }
-    | { kind: 'expand-confirm'; orderId: string; label: string; kids: number }
+    | { kind: 'expand-confirm'; orderId: string; label: string; kids: number; plan?: any; full?: boolean }
   >(null);
   const [modalName, setModalName] = useState('');
   const [modalResId, setModalResId] = useState<string | null>(null); // Ресурс * для op-add (обязательный)
@@ -3235,34 +3235,44 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     setNetLoading(false);
   };
 
-  // Создать операции по составу и маршрутам заказа и подчинённых — диалог + запуск.
-  const expandOrderClick = (o: any) => {
+  // Пересобрать развёртку: сверка «маршрут ↔ план» (GET expand-inspect) → окно сверки → пересборка.
+  const expandOrderClick = async (o: any) => {
     const kids = (projectOrders[selectedProject?.id || ''] || []).filter((x: any) => String(x.parent_order_id) === String(o.id));
-    setAppModal({ kind: 'expand-confirm', orderId: o.id, label: (o.ext_id || o.specification_name || 'заказ'), kids: kids.length });
+    setExpandingId(o.id);
+    let plan: any = null;
+    try {
+      plan = await apiF('/production-orders/' + o.id + '/expand-inspect');
+    } catch (e0: any) {
+      setMsg('Сверка недоступна: ' + detailOf(e0));
+    }
+    setAppModal({ kind: 'expand-confirm', orderId: o.id, label: (o.ext_id || o.specification_name || 'заказ'), kids: kids.length, plan: plan, full: false });
+    setExpandingId(null);
   };
-  const expandOrderRun = async () => {
+  const expandOrderRun = async (full?: boolean) => {
     if (!appModal || appModal.kind !== 'expand-confirm') return;
     const { orderId } = appModal;
     setAppModal(null);
     setExpandingId(orderId);
     try {
-      const r: any = await apiF('/production-orders/' + orderId + '/expand', { method: 'POST' });
+      const q = full ? '?replace=true' : '?update_changed=true';
+      const r: any = await apiF('/production-orders/' + orderId + '/expand' + q, { method: 'POST' });
       const parts: string[] = [];
-      if (r.expanded_orders && r.expanded_orders.length) {
-        parts.push('развёрнуто заказов: ' + r.expanded_orders.length + ', операций: ' + (r.operations_created || 0) + ', связей: ' + (r.dependencies_created || 0));
-      } else {
-        parts.push('новых операций не создано');
-      }
+      if (r.operations_created) parts.push('создано операций: ' + r.operations_created);
+      if (r.operations_deleted) parts.push('заменено операций: ' + r.operations_deleted);
+      if (r.dependencies_created) parts.push('связей: ' + r.dependencies_created);
+      if (r.expanded_orders && r.expanded_orders.length) parts.push('заказов: ' + r.expanded_orders.length);
+      if (!parts.length) parts.push('новых операций не создано');
       if (r.skipped_orders && r.skipped_orders.length) parts.push('пропущено заказов: ' + r.skipped_orders.length);
       if (r.warnings && r.warnings.length) parts.push('⚠ ' + r.warnings[0]);
-      setMsg('Развёртка: ' + parts.join(' · '));
+      setMsg((full ? 'Полная пересборка: ' : 'Пересборка: ') + parts.join(' · '));
       const pid = selectedProject?.id;
       if (pid) { reloadBomTree(pid); reloadRoutings(pid); loadProjectOrders(pid); }
     } catch (e2: any) {
-      setMsg('Развёртка: ' + detailOf(e2));
+      setMsg('Пересборка: ' + detailOf(e2));
     }
     setExpandingId(null);
   };
+
   // Кластер и критическая цепь (блок 6.20, срез 1): цепь по связям операций кластера.
   const loadClusterChain = async (v: string, label?: string) => {
     setNetChainScope(v);
@@ -3701,7 +3711,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                       {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>{treeMode === 'bom' ? 'структура изделия' : treeMode === 'routes' ? 'технологические маршруты' : 'структура + маршруты'}</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
-                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Превратить состав и маршрут заказа в операции плана; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Сделать развёртку'}</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Сверить маршрут и план и пересобрать: покажет, что добавится и что изменится. У заказа-родителя — и у всех подчинённых заказов." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Собираю…' : '⚙️ Пересобрать развёртку'}</button>
                                     </div>
                                     <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} orders={orders} currentOrderId={o.id} routings={routings} showOps={treeMode !== 'bom'} showMaterials={treeMode !== 'routes'} resName={resName} layerMode onOrderFocus={focusOrderByBom} timeline={bomTimeline?.length ? bomTimeline : buildDraftTimeline(orderBomNodes(o))} timelineDraft={!bomTimeline?.length} timelineLoading={bomTimelineLoading} onLoadTimeline={loadBomTimeline} />
                                   </div>
@@ -6147,7 +6157,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                   {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                   <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                   <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
-                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Превратить состав и маршрут заказа в операции плана; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Сделать развёртку'}</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Сверить маршрут и план и пересобрать: покажет, что добавится и что изменится. У заказа-родителя — и у всех подчинённых заказов." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Собираю…' : '⚙️ Пересобрать развёртку'}</button>
                                 </div>
                                 <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                               </div>
@@ -6264,7 +6274,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                           {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                           <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                           <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
-                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Превратить состав и маршрут заказа в операции плана; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Сделать развёртку'}</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Сверить маршрут и план и пересобрать: покажет, что добавится и что изменится. У заказа-родителя — и у всех подчинённых заказов." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Собираю…' : '⚙️ Пересобрать развёртку'}</button>
                                         </div>
                                         <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                                       </div>
@@ -6305,7 +6315,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                                       {bomLoading[selectedProject?.id || ''] && <span style={{ fontSize: 11, color: '#F59E0B' }}>загрузка…</span>}
                                       <span style={{ fontSize: 11, color: '#5A7090' }}>структура изделия</span>
                                       <button onClick={() => openBomModal(o)} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>Развернуть полностью ↗</button>
-                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Превратить состав и маршрут заказа в операции плана; у заказа-родителя — и у всех подчинённых заказов. Уже развёрнутые заказы пропускаются." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Разворачиваю…' : '⚙️ Сделать развёртку'}</button>
+                                      <button onClick={() => expandOrderClick(o)} disabled={expandingId === o.id} title="Сверить маршрут и план и пересобрать: покажет, что добавится и что изменится. У заказа-родителя — и у всех подчинённых заказов." style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: expandingId === o.id ? .55 : 1 }}>{expandingId === o.id ? '⚙️ Собираю…' : '⚙️ Пересобрать развёртку'}</button>
                                     </div>
                                     <BomTree nodes={orderBomNodes(o)} compact orderName={o.specification_name} onOrderFocus={focusOrderByBom} />
                                   </div>
@@ -7695,17 +7705,39 @@ const changeOrderStatus = async (o: any, status: string) => {
         );
       }
       if (appModal.kind === 'expand-confirm') {
+        const pl: any = appModal.plan;
+        const tt: any = (pl && pl.totals) || {};
+        const addsS: any[] = pl ? (pl.orders || []).flatMap((x: any) => (x.adds || []).map((a: any) => ({ name: a.name, ext: x.ext_id }))) : [];
+        const updS: any[] = pl ? (pl.orders || []).flatMap((x: any) => (x.updates || []).map((u: any) => ({ name: u.name, ext: x.ext_id, from_h: u.from_h, to_h: u.to_h }))) : [];
         return (
-          <AppModal title="Сделать развёртку" code="expand-confirm" debug={debugMode} onClose={() => setAppModal(null)} accent="#22D3EE" width={500}>
-            <div style={{ fontSize: 12.5, color: '#B0C4DE', lineHeight: 1.6 }}>
-              Развернуть в операции: <b style={{ color: '#E8EEF5' }}>«{appModal.label}»</b>{appModal.kids ? ' и подчинённые заказы (' + appModal.kids + ')' : ''}?
+          <AppModal title={appModal.full ? 'Полная пересборка' : 'Пересобрать развёртку'} code="expand-confirm" debug={debugMode} onClose={() => setAppModal(null)} accent={appModal.full ? '#F87171' : '#22D3EE'} width={560}>
+            <div style={{ fontSize: 12.5, color: '#B0C4DE', lineHeight: 1.55 }}>
+              Заказ <b style={{ color: '#E8EEF5' }}>«{appModal.label}»</b>{appModal.kids ? ' и подчинённые заказы (' + appModal.kids + ')' : ''}
             </div>
-            <div style={{ marginTop: 8, fontSize: 11.5, color: '#8FA3BD' }}>
-              Из состава и маршрутов будут созданы операции плана и связи. Результат сразу увидят Гант, сетевой график и расчёты. Заказы, у которых операции уже есть, будут пропущены.
+            {pl ? (
+              <div style={{ marginTop: 10, fontSize: 12, color: '#B0C4DE', lineHeight: 1.75 }}>
+                {tt.create ? <div>• Ещё не развёрнуто — будет создано операций: <b>{tt.create}</b></div> : null}
+                {tt.add ? <div>• Новые шаги маршрута — будет добавлено: <b>{tt.add}</b></div> : null}
+                {tt.update ? <div>• Изменённые шаги — будет обновлено: <b>{tt.update}</b></div> : null}
+                {tt.remove ? <div style={{ color: '#FBBF24' }}>• Шагов нет в маршруте: {tt.remove} {(tt.remove === 1 ? 'операция останется' : 'операции останутся')} в плане</div> : null}
+                <div style={{ color: '#8FA3BD' }}>• Без изменений: {tt.keep || 0}</div>
+                {addsS.length ? <div style={{ marginTop: 6, color: '#8FA3BD', fontSize: 11.5 }}>Добавится: {addsS.slice(0, 5).map((a: any) => (a.ext || '') + ' · ' + a.name).join('; ')}{addsS.length > 5 ? ' …' : ''}</div> : null}
+                {updS.length ? <div style={{ marginTop: 4, color: '#8FA3BD', fontSize: 11.5 }}>Обновится: {updS.slice(0, 5).map((u: any) => (u.ext || '') + ' · ' + u.name + ' (' + u.from_h + ' → ' + u.to_h + ' ч)').join('; ')}{updS.length > 5 ? ' …' : ''}</div> : null}
+              </div>
+            ) : (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: '#8FA3BD' }}>Сверка недоступна — операции будут созданы/дополнены по текущему маршруту.</div>
+            )}
+            <div style={{ marginTop: 10, fontSize: 11.5, color: appModal.full ? '#FCA5A5' : '#8FA3BD' }}>
+              {appModal.full
+                ? 'ВНИМАНИЕ: полная пересборка удалит операции плана заказа и создаст их заново по маршруту. Ручные правки (оценки, ресурсы, связи, факт) будут потеряны. Рекомендуем сначала сохранить версию плана.'
+                : 'Новые шаги добавляются; изменившиеся обновляются только этим действием. Существующие операции с ручными правками не трогаются.'}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252' }}>
-              <button onClick={() => setAppModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-              <button onClick={() => expandOrderRun()} style={{ background: '#22D3EE', border: 'none', color: '#06283A', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Сделать развёртку</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252', flexWrap: 'wrap' }}>
+              <button onClick={() => setAppModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              {!appModal.full && (
+                <button onClick={() => setAppModal({ ...(appModal as any), full: true })} style={{ marginRight: 'auto', background: 'transparent', border: 'none', color: '#8FA3BD', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>Полная пересборка…</button>
+              )}
+              <button onClick={() => expandOrderRun(appModal.full)} style={{ background: appModal.full ? '#F87171' : '#22D3EE', border: 'none', color: appModal.full ? '#fff' : '#06283A', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{appModal.full ? 'Пересобрать полностью' : 'Пересобрать'}</button>
             </div>
           </AppModal>
         );
