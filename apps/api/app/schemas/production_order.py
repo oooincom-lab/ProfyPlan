@@ -43,6 +43,8 @@ class ProductionOrderCreate(BaseModel):
     # Реквизит «Приоритетный заказ»: неприкосновенность заказа.
     # У подчинённого заказа, чей родитель приоритетен, поле заблокировано.
     is_priority: Optional[bool] = None
+    # «Ведём руками»: не применять авто-пересборку развёртки (только предлагать).
+    plan_manual: Optional[bool] = None
 
 
 class ProductionOrderOut(BaseModel):
@@ -81,6 +83,7 @@ class ProductionOrderOut(BaseModel):
     priority_anchor_source_ext_id: Optional[str] = None
     exploded_at: Optional[datetime] = None
     operations_created: Optional[int] = None
+    plan_manual: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

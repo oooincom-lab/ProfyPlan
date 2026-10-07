@@ -108,3 +108,9 @@ class ProductionOrder(BaseModel):
         nullable=True,
         index=True,
     )
+
+    # «Ведём руками»: автоматическая пересборка развёртки для заказа отключена —
+    # сверка при сохранении только предлагает, ничего не применяет (07.10.2026).
+    plan_manual: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )

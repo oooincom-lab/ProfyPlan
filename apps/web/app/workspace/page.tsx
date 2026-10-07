@@ -1820,7 +1820,9 @@ const [chainDialog, setChainDialog] = useState<null | {
     try {
       const plan: any = await apiF('/production-orders/' + orderId + '/expand-inspect');
       const t = (plan && plan.totals) || {};
-      const autoSafe = ((t.create || 0) + (t.add || 0) > 0) && !t.update && !t.remove;
+      const oo = (orders || []).find((x: any) => x.id === orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === orderId);
+      const manual = !!(oo && (oo as any).plan_manual);
+      const autoSafe = !manual && ((t.create || 0) + (t.add || 0) > 0) && !t.update && !t.remove;
       if (autoSafe) {
         const r: any = await apiF('/production-orders/' + orderId + '/expand?update_changed=true', { method: 'POST' });
         if (r && r.operations_created) {
@@ -1828,7 +1830,7 @@ const [chainDialog, setChainDialog] = useState<null | {
           const pid = selectedProject?.id;
           if (pid) { reloadBomTree(pid); reloadRoutings(pid); loadProjectOrders(pid); }
         }
-      } else if (t.update || t.remove) {
+      } else if (t.update || t.remove || (manual && ((t.create || 0) + (t.add || 0) > 0))) {
         const oe = (plan.orders || []).find((x: any) => x.id === orderId) || {};
         setAppModal({ kind: 'expand-confirm', orderId: orderId, label: oe.ext_id || 'заказ', kids: Math.max((plan.orders || []).length - 1, 0), plan: plan, full: false });
       }
@@ -7754,6 +7756,9 @@ const changeOrderStatus = async (o: any, status: string) => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252', flexWrap: 'wrap' }}>
               <button onClick={() => setAppModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              {!appModal.full && (
+                <button onClick={async () => { try { await apiF('/production-orders/' + appModal.orderId, { method: 'PUT', body: JSON.stringify({ plan_manual: true }) }); setMsg('Авто-пересборка для заказа отключена — теперь только вручную'); } catch (e3: any) { setMsg('Не удалось: ' + detailOf(e3)); } setAppModal(null); }} title="Заказ переходит в режим «ведём руками»: автоматика не применяет изменения, только предлагает" style={{ background: 'transparent', border: 'none', color: '#FBBF24', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>🚫 Не пересобирать автоматически впредь</button>
+              )}
               {!appModal.full && (
                 <button onClick={() => setAppModal({ ...(appModal as any), full: true })} style={{ marginRight: 'auto', background: 'transparent', border: 'none', color: '#8FA3BD', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>Полная пересборка…</button>
               )}

@@ -1876,6 +1876,8 @@ async def update_order(
                 order.client = c.name
         else:
             order.client_id = None
+    if body_fields.get("plan_manual") is not None:
+        order.plan_manual = bool(body.plan_manual)
     if body_fields.get("quantity") is not None:
         order.quantity = body.quantity
     if body_fields.get("start_date") is not None:
