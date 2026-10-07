@@ -1345,6 +1345,7 @@ def _order_to_out(o: ProductionOrder, by_id: Optional[dict] = None, children: Op
         priority_anchor_source_ext_id=(anchor_st["source"].ext_id if anchor_st["source"] is not None else None),
         exploded_at=o.exploded_at,
         operations_created=o.operations_created,
+        plan_manual=bool(getattr(o, "plan_manual", False)),
         created_at=o.created_at,
     )
 
