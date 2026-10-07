@@ -1815,6 +1815,25 @@ const [chainDialog, setChainDialog] = useState<null | {
     setAnchorBusy(false);
   };
 
+  // Авто-развёртка после сохранения изменений заказа (этап 3): сверка «маршрут/состав ↔ план».
+  const maybeAutoExpand = async (orderId: string) => {
+    try {
+      const plan: any = await apiF('/production-orders/' + orderId + '/expand-inspect');
+      const t = (plan && plan.totals) || {};
+      const autoSafe = ((t.create || 0) + (t.add || 0) > 0) && !t.update && !t.remove;
+      if (autoSafe) {
+        const r: any = await apiF('/production-orders/' + orderId + '/expand?update_changed=true', { method: 'POST' });
+        if (r && r.operations_created) {
+          setMsg('Развёртка обновлена автоматически: создано операций — ' + r.operations_created + '. Пересчитайте план.');
+          const pid = selectedProject?.id;
+          if (pid) { reloadBomTree(pid); reloadRoutings(pid); loadProjectOrders(pid); }
+        }
+      } else if (t.update || t.remove) {
+        const oe = (plan.orders || []).find((x: any) => x.id === orderId) || {};
+        setAppModal({ kind: 'expand-confirm', orderId: orderId, label: oe.ext_id || 'заказ', kids: Math.max((plan.orders || []).length - 1, 0), plan: plan, full: false });
+      }
+    } catch (e) { /* авто-проверка — молча */ }
+  };
   const saveWinEdit = async (w: WinRec) => {
     const o = orders.find((x: any) => x.id === w.orderId);
     if (!o) return;
@@ -1828,6 +1847,7 @@ const [chainDialog, setChainDialog] = useState<null | {
       setMsg('Заказ обновлён');
       win.setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: false } : x));
       if (selectedProject) await loadProjectOrdersView(selectedProject);
+      void maybeAutoExpand(o.id);
     } catch (e: any) { setMsg('Ошибка сохранения: ' + (e.message || String(e))); }
   };
   useEffect(() => {
