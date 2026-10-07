@@ -23,7 +23,8 @@ from app.models.project import Project
 from app.routers.production_orders import _build_bom_link_graph, _order_to_out
 from app.schemas.production_order import ProductionOrderOut
 from app.models.routing import Routing, RoutingOperation
-from app.models.operation import Operation, OperationDependency
+from app.models.operation import Operation, OperationDependency, OperationResource
+from app.models.resource import Resource
 from app.schemas.bom import (
     BOMNodeCreate, BOMNodeUpdate, BOMNodeOut, BOMTreeOut, BOMUploadResult,
     RoutingCreate, RoutingOut, RoutingOpOut, RoutingOpUpdate, RoutingOpAdd, RoutingList,
@@ -685,15 +686,87 @@ async def explode_and_save_bom(
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     """
-    Развернуть BOM проекта в CPM-операции и сохранить в БД.
+    Безопасная развёртка проекта после импорта (обновление 07.10.2026).
 
-    Создаёт операции и зависимости для CPM-расчёта.
+    Создаёт операции только для заказов, у которых их ещё нет; владелец операции —
+    заказ узла BOM. Повторный импорт не плодит дубли и не трогает существующий план:
+    обновление изменённых маршрутов выполняется осознанно («Пересобрать развёртку»).
     """
     result = await run_explosion(db, tenant_id, project_id, body)
 
-    # Сохраняем операции (explode endpoint)
-    temp_to_real: dict[str, str] = {}
+    _auto_types = ("production", "procurement")
+    orders = (await db.execute(select(ProductionOrder).where(
+        ProductionOrder.tenant_id == tenant_id,
+        ProductionOrder.project_id == project_id,
+    ))).scalars().all()
+    empty_orders = []
+    if orders:
+        order_ids = [o.id for o in orders]
+        with_ops_rows = (await db.execute(
+            select(Operation.order_id).where(
+                Operation.tenant_id == tenant_id,
+                Operation.project_id == project_id,
+                Operation.order_id.in_(order_ids),
+                Operation.operation_type.in_(_auto_types),
+            ).group_by(Operation.order_id)
+        )).all()
+        has_ops = {r[0] for r in with_ops_rows}
+        empty_orders = [o for o in orders if o.id not in has_ops]
+    empty_ids = {o.id for o in empty_orders}
+
+    if not empty_ids:
+        warnings = list(result.warnings or [])
+        warnings.append("Все заказы проекта уже развёрнуты — повторно операции не создавались.")
+        return BOMExplodeAndSaveOut(
+            created_operations=0,
+            created_dependencies=0,
+            materials_count=len(result.materials),
+            warnings=warnings,
+        )
+
+    from app.routers.production_orders import _catalog_pick
+
+    _cat_cache: dict = {}
+    _res_cache: dict = {}
+
+    async def _resolve_resource(tag: Optional[str]):
+        if not tag:
+            return None
+        key = str(tag).strip()
+        if not key:
+            return None
+        if key in _res_cache:
+            return _res_cache[key]
+        rid = None
+        try:
+            rid = UUID(key)
+        except Exception:
+            rid = None
+        if rid is not None:
+            r = await db.get(Resource, rid)
+            if r:
+                _res_cache[key] = r.id
+                return r.id
+        r = (await db.execute(select(Resource).where(
+            Resource.tenant_id == tenant_id,
+            func.lower(Resource.name) == key.lower(),
+        ).order_by(Resource.created_at.asc().nullslast()))).scalars().first()
+        _res_cache[key] = r.id if r else None
+        return _res_cache[key]
+
+    from datetime import datetime, timezone
+    _now = datetime.now(timezone.utc)
+
+    temp_to_real: dict[str, UUID] = {}
+    ops_per_order: dict = {}
     for op in result.operations:
+        owner = None
+        try:
+            owner = UUID(str(op.owner_order_id)) if getattr(op, "owner_order_id", None) else None
+        except Exception:
+            owner = None
+        if owner is None or owner not in empty_ids:
+            continue
         _sn = None
         _sr = None
         if getattr(op, "source_node_id", None):
@@ -706,45 +779,77 @@ async def explode_and_save_bom(
                 _sr = UUID(str(op.source_routing_id))
             except Exception:
                 _sr = None
+        _rid = await _resolve_resource(getattr(op, "resource_type_id", None))
+        _cat = await _catalog_pick(db, tenant_id, op.name, _cat_cache,
+                                   create_missing=True, norm=op.duration_base)
         real_op = Operation(
+            id=uuid4(),
             tenant_id=tenant_id,
             project_id=project_id,
+            order_id=owner,
+            catalog_operation_id=(_cat.id if _cat is not None else None),
             name=op.name,
             duration_base=op.duration_base,
             duration_unit=op.duration_unit,
             setup_time=op.setup_time,
             teardown_time=op.teardown_time,
+            operation_type=op.operation_type,
+            output_product=op.output_product,
+            output_quantity=op.output_quantity,
+            yield_rate=op.yield_rate,
+            input_materials=op.input_materials,
+            supplier_id=op.supplier_id,
+            is_milestone=op.is_milestone,
             source_node_id=_sn,
             source_routing_id=_sr,
             source_step_seq=getattr(op, "source_step_seq", None),
         )
         db.add(real_op)
         await db.flush()
-        temp_to_real[op.temp_id] = str(real_op.id)
+        temp_to_real[op.temp_id] = real_op.id
+        ops_per_order[owner] = ops_per_order.get(owner, 0) + 1
+        if _rid:
+            db.add(OperationResource(
+                id=uuid4(),
+                operation_id=real_op.id,
+                resource_id=_rid,
+                role="primary",
+                efficiency_factor=Decimal("1"),
+                capacity_demand=Decimal("1"),
+            ))
 
-    # Сохраняем зависимости
     dep_count = 0
     for dep in result.dependencies:
         pred_id = temp_to_real.get(dep.predecessor_temp_id)
         succ_id = temp_to_real.get(dep.successor_temp_id)
         if pred_id and succ_id:
-            real_dep = OperationDependency(
-                predecessor_id=UUID(pred_id),
-                successor_id=UUID(succ_id),
+            db.add(OperationDependency(
+                id=uuid4(),
+                predecessor_id=pred_id,
+                successor_id=succ_id,
                 dependency_type=dep.dependency_type,
                 lag_time=dep.lag_hours,
                 lag_unit="hour",
-            )
-            db.add(real_dep)
+            ))
             dep_count += 1
+
+    for o in empty_orders:
+        cnt = ops_per_order.get(o.id, 0)
+        if cnt:
+            o.status = "planned"
+            o.exploded_at = _now
+            o.operations_created = cnt
 
     await db.commit()
 
+    warnings = list(result.warnings or [])
+    if ops_per_order:
+        warnings.append("Развёрнуто заказов: %s (существующие заказы не тронуты)." % len(ops_per_order))
     return BOMExplodeAndSaveOut(
-        created_operations=len(result.operations),
+        created_operations=len(temp_to_real),
         created_dependencies=dep_count,
         materials_count=len(result.materials),
-        warnings=result.warnings,
+        warnings=warnings,
     )
 
 
@@ -898,7 +1003,7 @@ async def run_explosion(
 
             prod_ops, internal_deps = expand_routing_to_ops(
                 routing_ops,
-                node.quantity_per_parent * body.project_quantity,
+                Decimal(str(node.quantity_per_parent)) * Decimal(str(body.project_quantity)),
                 node_path,
             )
 

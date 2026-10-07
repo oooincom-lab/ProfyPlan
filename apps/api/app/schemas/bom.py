@@ -196,7 +196,7 @@ class RoutingList(BaseModel):
 
 class BOMExplodeRequest(BaseModel):
     """Запрос на развёртку BOM в операции."""
-    project_quantity: Decimal = Field(default=1.0, ge=0)
+    project_quantity: Decimal = Field(default=Decimal("1"), ge=0)
     spec_id: Optional[str] = None  # nomenclature_id корневого узла
 
 
@@ -233,7 +233,7 @@ class BOMExplosionOut(BaseModel):
 
 class BOMExplodeAndSaveRequest(BaseModel):
     """Развернуть BOM и сохранить как операции проекта."""
-    project_quantity: Decimal = Field(default=1.0, ge=0)
+    project_quantity: Decimal = Field(default=Decimal("1"), ge=0)
     spec_id: Optional[str] = None
 
 
