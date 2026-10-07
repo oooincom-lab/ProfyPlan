@@ -3270,6 +3270,12 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     setAppModal({ kind: 'expand-confirm', orderId: o.id, label: (o.ext_id || o.specification_name || 'заказ'), kids: kids.length, plan: plan, full: false });
     setExpandingId(null);
   };
+  // Пересборка из окна заказа: найти заказ по id и открыть окно сверки.
+  const expandOrderById = (orderId: string) => {
+    const oo = (orders || []).find((x: any) => x.id === orderId) || (projectOrders[selectedProject?.id || ''] || []).find((x: any) => x.id === orderId);
+    void expandOrderClick(oo || ({ id: orderId, ext_id: 'заказ' } as any));
+  };
+
   const expandOrderRun = async (full?: boolean) => {
     if (!appModal || appModal.kind !== 'expand-confirm') return;
     const { orderId } = appModal;
@@ -7425,7 +7431,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         onResize={win.startResize}
         onResizeBy={win.resizeWinBy}
         onApplyCell={win.applySnapCell}
-        onSaveEdit={saveWinEdit}
+        onSaveEdit={saveWinEdit} onExpandOrder={expandOrderById}
         onAnchorChange={changeOrderAnchor}
         onAnchorRollback={rollbackOrderAnchor}
         anchorGhost={anchorGhost}

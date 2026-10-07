@@ -180,6 +180,8 @@ type WindowsLayerProps = {
   onCalDelException?: (exceptionId: string) => void;
   schedules?: any[];
   onSaveResourceEdit?: (w: WinRec) => void;
+  /** Пересобрать развёртку заказа (и подчинённых) из окна заказа */
+  onExpandOrder?: (orderId: string) => void;
   debug?: boolean;
 };
 
@@ -211,7 +213,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     onDirManageEdit, onDirManageDelete, dirRefreshKey = 0, onOrderFocus,
     onRoutingOpAdd, onRoutingOpRemove, onNodeUnlink, openOrderWinById, onNodeNomenclatureChange,
     anomalies, anomaliesLoading = false, onCreateMissingOrders, onCreateOrderFromNode, onAttachOrder,
-    onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onResizeBy, onApplyCell, onSaveEdit,
+    onClose, onFocus, onToggleMin, onMinimizeAll, onReset, onToggleMax, onDrag, onResize, onResizeBy, onApplyCell, onSaveEdit, onExpandOrder,
   onAnchorChange, onAnchorRollback, anchorGhost,
   onConflictsLoad, onConflictResolve, conflictsData, interleavePlan, conflictGhost,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
@@ -808,6 +810,9 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                         style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⛓ Привязать свободный заказ</button>
                     )}
                   </>
+                )}
+                {onExpandOrder && o && (
+                  <button onClick={() => onExpandOrder(o.id)} title="Сверить маршрут и план и пересобрать операции этого заказа (и подчинённых)" style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⚙️ Пересобрать развёртку</button>
                 )}
                 {!w.editing ? (
                   <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', is_priority: (o!.priority_locked ? !!o!.priority_effective : !!o!.is_priority) ? '1' : '0', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
