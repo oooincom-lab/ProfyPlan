@@ -1832,7 +1832,7 @@ const [chainDialog, setChainDialog] = useState<null | {
         }
       } else if (t.update || t.remove || (manual && ((t.create || 0) + (t.add || 0) > 0))) {
         const oe = (plan.orders || []).find((x: any) => x.id === orderId) || {};
-        setAppModal({ kind: 'expand-confirm', orderId: orderId, label: oe.ext_id || 'заказ', kids: Math.max((plan.orders || []).length - 1, 0), plan: plan, full: false });
+        setAppModal({ kind: 'expand-confirm', orderId: orderId, label: oe.ext_id || 'заказ', kids: Math.max((plan.orders || []).length - 1, 0), plan: plan, manual: manual, full: false });
       }
     } catch (e) { /* авто-проверка — молча */ }
   };
@@ -2764,7 +2764,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     | { kind: 'op-add'; routingId: string }
     | { kind: 'op-del'; opId: string; opName: string }
     | { kind: 'node-nom'; nodeId: string; nodeType: string; nomId: string | null }
-    | { kind: 'expand-confirm'; orderId: string; label: string; kids: number; plan?: any; full?: boolean }
+    | { kind: 'expand-confirm'; orderId: string; label: string; kids: number; plan?: any; manual?: boolean; full?: boolean }
   >(null);
   const [modalName, setModalName] = useState('');
   const [modalResId, setModalResId] = useState<string | null>(null); // Ресурс * для op-add (обязательный)
@@ -3267,7 +3267,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     } catch (e0: any) {
       setMsg('Сверка недоступна: ' + detailOf(e0));
     }
-    setAppModal({ kind: 'expand-confirm', orderId: o.id, label: (o.ext_id || o.specification_name || 'заказ'), kids: kids.length, plan: plan, full: false });
+    setAppModal({ kind: 'expand-confirm', orderId: o.id, label: (o.ext_id || o.specification_name || 'заказ'), kids: kids.length, plan: plan, manual: !!(o && (o as any).plan_manual), full: false });
     setExpandingId(null);
   };
   // Пересборка из окна заказа: найти заказ по id и открыть окно сверки.
@@ -3276,7 +3276,15 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     void expandOrderClick(oo || ({ id: orderId, ext_id: 'заказ' } as any));
   };
 
-  const expandOrderRun = async (full?: boolean) => {
+  // Обновить флаг «ведём руками» в локальных списках (после PUT plan_manual).
+  const patchOrderFlag = (oid: string, val: boolean) => {
+    setOrders((prev: any) => (prev || []).map((x: any) => x.id === oid ? { ...x, plan_manual: val } : x));
+    setProjectOrders((prev: any) => {
+      const pid = selectedProject?.id;
+      if (!pid || !prev || !prev[pid]) return prev;
+      return { ...prev, [pid]: prev[pid].map((x: any) => x.id === oid ? { ...x, plan_manual: val } : x) };
+    });
+  };  const expandOrderRun = async (full?: boolean) => {
     if (!appModal || appModal.kind !== 'expand-confirm') return;
     const { orderId } = appModal;
     setAppModal(null);
@@ -7762,8 +7770,11 @@ const changeOrderStatus = async (o: any, status: string) => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #1E3252', flexWrap: 'wrap' }}>
               <button onClick={() => setAppModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-              {!appModal.full && (
-                <button onClick={async () => { try { await apiF('/production-orders/' + appModal.orderId, { method: 'PUT', body: JSON.stringify({ plan_manual: true }) }); setMsg('Авто-пересборка для заказа отключена — теперь только вручную'); } catch (e3: any) { setMsg('Не удалось: ' + detailOf(e3)); } setAppModal(null); }} title="Заказ переходит в режим «ведём руками»: автоматика не применяет изменения, только предлагает" style={{ background: 'transparent', border: 'none', color: '#FBBF24', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>🚫 Не пересобирать автоматически впредь</button>
+              {!appModal.full && !(appModal as any).manual && (
+                <button onClick={async () => { try { await apiF('/production-orders/' + appModal.orderId, { method: 'PUT', body: JSON.stringify({ plan_manual: true }) }); patchOrderFlag(appModal.orderId, true); setMsg('Авто-пересборка для заказа отключена — теперь только вручную. Вернуть можно в этом же окне'); } catch (e3: any) { setMsg('Не удалось: ' + detailOf(e3)); } setAppModal(null); }} title="Заказ переходит в режим «ведём руками»: автоматика не применяет изменения, только предлагает" style={{ background: 'transparent', border: 'none', color: '#FBBF24', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>🚫 Не пересобирать автоматически впредь</button>
+              )}
+              {!appModal.full && (appModal as any).manual && (
+                <button onClick={async () => { try { await apiF('/production-orders/' + appModal.orderId, { method: 'PUT', body: JSON.stringify({ plan_manual: false }) }); patchOrderFlag(appModal.orderId, false); setMsg('Режим по умолчанию возвращён: заказ снова обновляется автоматически (новые шаги — тихо, изменения — через сверку)'); } catch (e3: any) { setMsg('Не удалось: ' + detailOf(e3)); } setAppModal(null); }} title="Вернуть авто-пересборку: заказ снова будет обновляться автоматически после сохранения" style={{ background: 'transparent', border: 'none', color: '#4ADE80', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>↩️ Вернуть авто-пересборку (в режим по умолчанию)</button>
               )}
               {!appModal.full && (
                 <button onClick={() => setAppModal({ ...(appModal as any), full: true })} style={{ marginRight: 'auto', background: 'transparent', border: 'none', color: '#8FA3BD', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>Полная пересборка…</button>
