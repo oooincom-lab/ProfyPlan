@@ -804,11 +804,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                       <input type="checkbox" checked={showBomOps} onChange={e => setShowBomOps(e.target.checked)} style={{ accentColor: '#3B82F6' }} />
                       показывать операции
                     </label>
-                    {onAttachOrder && (
-                      <button onClick={() => setAttachOpen({ orderId: o!.id })}
-                        title="Привязать свободный заказ как производителя полуфабриката"
-                        style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⛓ Привязать свободный заказ</button>
-                    )}
+
                   </>
                 )}
                 {onExpandOrder && o && (
@@ -837,6 +833,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
             <div style={{ padding: '12px 14px', overflow: 'auto', flex: 1, fontSize: 12.5, color: '#E2E8F0', minHeight: 0 }}>
               {isBom && (renderBomWindow ? renderBomWindow(w) : null)}
+              {isBom && onAttachOrder && o && (
+                <div style={{ marginTop: 10 }}>
+                  <button onClick={() => setAttachOpen({ orderId: o.id })} title="Привязать свободный заказ как производителя полуфабриката" style={{ background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.4)', color: '#C4B5FD', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⛓ Привязать свободный заказ</button>
+                </div>
+              )}
               {isDir && (
                 <DirectoryTable
                   entity={w.data?.entity || ''}
