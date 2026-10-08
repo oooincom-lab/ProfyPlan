@@ -807,9 +807,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
 
                   </>
                 )}
-                {onExpandOrder && o && (
-                  <button onClick={() => onExpandOrder(o.id)} title="Сверить маршрут и план и пересобрать операции этого заказа (и подчинённых)" style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⚙️ Пересобрать развёртку</button>
-                )}
+
                 {!w.editing ? (
                   <button onClick={() => setWins(prev => prev.map(x => x.id === w.id ? { ...x, editing: true, form: { client_id: o!.client_id || '', quantity: String(o!.quantity ?? ''), unit: o!.unit || '', priority: o!.priority || 'normal', is_priority: (o!.priority_locked ? !!o!.priority_effective : !!o!.is_priority) ? '1' : '0', start_date: o!.start_date || '', due_date: o!.due_date || '', status: o!.status || 'draft' } } : x))}
                     style={{ background: 'transparent', border: '1px solid rgba(245,158,11,.4)', color: '#FCD34D', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>✏️ Редактировать</button>
@@ -1407,6 +1405,11 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 );
               })()}
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'route' && o && onExpandOrder && (
+                <div style={{ marginTop: 10 }}>
+                  <button onClick={() => onExpandOrder(o.id)} title="Сверить маршрут и план и пересобрать операции этого заказа (и подчинённых)" style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>⚙️ Пересобрать развёртку</button>
+                </div>
+              )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'res' && o && (() => {
                 const saved = (orderRes || {})[o.id] || [];
                 // §15.19: ресурсы заказа производны от операций слоя — показываем их
