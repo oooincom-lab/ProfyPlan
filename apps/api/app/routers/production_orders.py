@@ -580,6 +580,15 @@ async def _import_bom(
                         ProductStructure.path == node_path,
                     ).order_by(ProductStructure.created_at.asc().nullslast())
                 )).scalars().first()
+            if node is None and project_id and node_ext_id:
+                # Резервное сопоставление по коду узла — устойчиво к смене имени спецификации
+                node = (await db.execute(
+                    select(ProductStructure).where(
+                        ProductStructure.tenant_id == tenant_id,
+                        ProductStructure.project_id == UUID(project_id),
+                        ProductStructure.nomenclature_id == node_ext_id,
+                    ).order_by(ProductStructure.created_at.asc().nullslast())
+                )).scalars().first()
             if node:
                 node.nomenclature_ref_id = nref_id
                 node.nomenclature_name = nomenclature_name
@@ -916,7 +925,8 @@ async def _import_routes(
                 ProductStructure.project_id == (UUID(project_id) if project_id else None),
             )
             res = await db.execute(stmt)
-            bom_node = res.scalar_one_or_none()
+            # .first(): устойчиво к историческим дублям узлов с одинаковым кодом
+            bom_node = res.scalars().first()
             if not bom_node:
                 # Авто-создание BOM-узла (при подтверждении пользователя)
                 if create_missing_bom and node_ext_id:
@@ -971,6 +981,7 @@ async def _import_routes(
 
             # Идемпотентность: при повторном импорте заменяем маршрут узла
             # (импорт — источник истины для импортированных маршрутов)
+            replaced = False
             if bom_node.routing_id:
                 old_rt = await db.get(Routing, bom_node.routing_id)
                 if old_rt:
@@ -979,6 +990,7 @@ async def _import_routes(
                     )
                     await db.delete(old_rt)
                     await db.flush()
+                    replaced = True
                 bom_node.routing_id = None
             routing = Routing(
                 id=uuid4(),
@@ -990,7 +1002,10 @@ async def _import_routes(
             )
             db.add(routing)
             await db.flush()
-            result.routings_created += 1
+            if replaced:
+                result.routings_updated += 1
+            else:
+                result.routings_created += 1
 
             # Создаём RoutingOperation для каждой строки
             for row_idx, row in node_rows:
