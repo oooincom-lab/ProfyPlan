@@ -485,6 +485,48 @@ export default function AppShell() {
     inp.click();
   };
 
+  // Зафиксация плана: снимок расчёта для передачи во внешние системы (1С и др.)
+  const [planSnaps, setPlanSnaps] = useState<any[]>([]);
+  const loadPlanSnaps = async () => {
+    if (!selectedProject) return;
+    try {
+      const r = await apiF<any>('/projects/' + selectedProject.id + '/plan-snapshots');
+      setPlanSnaps((r && r.items) || []);
+    } catch { /* тихо */ }
+  };
+  useEffect(() => {
+    if (view === 'calculations' && calcTab === 'overview' && selectedProject?.id) { void loadPlanSnaps(); }
+  }, [view, calcTab, selectedProject?.id]);
+  const snapshotPlan = async () => {
+    if (!selectedProject) return;
+    try {
+      const nm = 'Фиксация ' + new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const r = await apiF<any>('/projects/' + selectedProject.id + '/plan-snapshots', { method: 'POST', body: JSON.stringify({ name: nm }) });
+      setMsg('План зафиксирован: ' + (r.rows_count ?? 0) + ' операций. Выгрузка — в списке ниже.');
+      void loadPlanSnaps();
+    } catch (e: any) { setMsg('Не удалось зафиксировать план: ' + detailOf(e)); }
+  };
+  const downloadPlanSnap = async (s: any, fmt: 'csv' | 'json') => {
+    try {
+      const det: any = await apiF<any>('/plan-snapshots/' + s.id);
+      const rows = (det && det.rows) || [];
+      if (fmt === 'json') {
+        downloadBlob('plan-snapshot-' + String(s.id).slice(0, 8) + '.json', JSON.stringify(det, null, 2), 'application/json');
+        return;
+      }
+      const head = ['Код заказа', 'Заказ', 'Операция', 'Подразделение', 'Ресурс', 'Начало', 'Окончание', 'Длительность, ч', 'Количество', 'Ед', 'Критическая'];
+      const fmtDT = (v: any) => v ? String(v).replace('T', ' ').slice(0, 16) : '';
+      const csvRows: any[][] = [head].concat(rows.map((r: any) => [r.order_ext_id || '', r.order_name || '', r.operation_name || '', r.department_name || '', r.resource_name || '', fmtDT(r.start_datetime), fmtDT(r.finish_datetime), r.duration_hours ?? '', r.quantity ?? '', r.unit || '', r.is_critical ? 'да' : '']));
+      downloadCsv('plan-snapshot-' + String(s.id).slice(0, 8) + '.csv', csvRows);
+    } catch (e: any) { setMsg('Не удалось выгрузить: ' + detailOf(e)); }
+  };
+  const deletePlanSnap = async (s: any) => {
+    try {
+      await apiF('/plan-snapshots/' + s.id, { method: 'DELETE' });
+      setMsg('Фиксация удалена');
+      void loadPlanSnaps();
+    } catch (e: any) { setMsg('Не удалось удалить: ' + detailOf(e)); }
+  };
   // Итоговый отчёт проекта — самодостаточный HTML-файл (остаток 6.22.6): KPI, шаги расчёта, цели, запуски.
   const exportFinalReport = () => {
     if (!selectedProject) return;
@@ -5014,8 +5056,29 @@ const changeOrderStatus = async (o: any, status: string) => {
                   <span className="panel-sub">{selectedProject?.name || 'проект не выбран'}</span>
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={exportFinalReport} title="Итоговый отчёт по проекту в файл (HTML): показатели, шаги расчёта, цели, последние запуски">Выгрузить отчёт</button>
+                <button className="btn btn-secondary btn-sm" onClick={snapshotPlan} title="Сохранить снимок текущего плана: пооперационные даты и длительности — для передачи во внешние системы (1С)">📌 Зафиксировать план</button>
               </div>
               <div style={{ padding: '12px 16px', display: 'grid', gap: 12 }}>
+                {planSnaps.length > 0 && (
+                  <div data-help-id="calc.plan-snapshots" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#B0C4DE' }}>📌 Зафиксированные планы</span>
+                      <span style={{ fontSize: 11, color: '#5A7090' }}>снимки для передачи во внешние системы (выгрузка CSV / JSON)</span>
+                      <button onClick={() => void loadPlanSnaps()} title="Обновить список" style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #2A4060', borderRadius: 6, color: '#8FA3BD', padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>🔄</button>
+                    </div>
+                    {planSnaps.map((s: any) => (
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '1px dashed rgba(30,58,95,.4)', fontSize: 12 }}>
+                        <span style={{ color: '#E8EEF5' }}>{s.name || 'Фиксация'}</span>
+                        <span style={{ color: '#5A7090' }}>{s.rows_count} оп. · {String(s.planning_logic || '').toUpperCase()} · {String(s.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                          <button onClick={() => void downloadPlanSnap(s, 'csv')} title="Выгрузить CSV — для Excel/1С (разделитель «;»)" style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.45)', color: '#22D3EE', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>CSV</button>
+                          <button onClick={() => void downloadPlanSnap(s, 'json')} title="Выгрузить JSON (полный снимок с шапкой)" style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>JSON</button>
+                          <button onClick={() => void deletePlanSnap(s)} title="Удалить фиксацию" style={{ background: 'transparent', border: '1px solid rgba(248,113,113,.35)', color: '#F87171', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* Путь расчёта (блок 6.31): цепочка шагов — ведёт, подсказывает, переходит по клику */}
                 <div data-help-id="calc.path" style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', padding: '10px 12px', display: 'grid', gap: 8 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

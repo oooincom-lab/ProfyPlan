@@ -39,3 +39,4 @@ from app.models.calculation_run import CalculationRun  # noqa: F401
 from app.models.goal import Goal  # noqa: F401
 from app.models.early_access import EarlyAccessRequest  # noqa: F401
 from app.models.invitation import Invitation  # noqa: F401
+from app.models.plan_snapshot import PlanSnapshot, PlanSnapshotRow  # noqa: F401
