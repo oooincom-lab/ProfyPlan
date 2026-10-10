@@ -9,8 +9,9 @@
 from __future__ import annotations
 
 import math
+import json
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -246,10 +247,79 @@ async def build_snapshot(
         )
         orders_by_id = {o.id: o for o in o_rows.scalars().all()}
 
+    # ── Подразделение операции: ведущий ресурс → любой ресурс → шаг маршрута-источника ──
+    ro_dept_cache: dict = {}
+    dept_cache: dict = {}
+
+    async def resolve_dept(op: Operation):
+        key = str(op.id)
+        if key in dept_cache:
+            return dept_cache[key]
+        ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
+        lead = resources.get(ors[0].resource_id) if ors else None
+        nm = dept_names.get(getattr(lead, "department_id", None)) if lead else None
+        if not nm:
+            for opres in ors:
+                r = resources.get(opres.resource_id)
+                cand = dept_names.get(getattr(r, "department_id", None)) if r else None
+                if cand:
+                    nm = cand
+                    break
+        if not nm and getattr(op, "source_routing_id", None) and getattr(op, "source_step_seq", None):
+            key2 = (str(op.source_routing_id), op.source_step_seq)
+            if key2 not in ro_dept_cache:
+                ro = (await db.execute(
+                    select(RoutingOperation).where(
+                        RoutingOperation.routing_id == op.source_routing_id,
+                        RoutingOperation.sequence_number == op.source_step_seq,
+                    ).limit(1)
+                )).scalars().first()
+                nm2 = None
+                if ro is not None:
+                    if getattr(ro, "department_id", None):
+                        drow = await db.get(Department, ro.department_id)
+                        nm2 = drow.name if drow else None
+                    if not nm2 and getattr(ro, "department", None):
+                        nm2 = (ro.department or "").strip() or None
+                ro_dept_cache[key2] = nm2
+            nm = ro_dept_cache.get(key2)
+        dept_cache[key] = nm
+        return nm
+
+    # ── «Куда закупается»: материал → подразделения операций-потребителей ──
+    mat_consumers: dict = {}
+    order_dept: dict = {}
+    for op in operations:
+        if getattr(op, "order_id", None):
+            nm0 = await resolve_dept(op)
+            if nm0:
+                od = order_dept.setdefault(str(op.order_id), Counter())
+                od[nm0] += 1
+        if (getattr(op, "operation_type", None) or "") == "procurement":
+            continue
+        raw = getattr(op, "input_materials", None)
+        nm = await resolve_dept(op)
+        if not raw or not nm:
+            continue
+        try:
+            mats = json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            continue
+        if not isinstance(mats, list):
+            continue
+        oid = str(getattr(op, "order_id", "") or "")
+        for m in mats:
+            name = ""
+            if isinstance(m, dict):
+                name = str(m.get("name") or "").strip().lower()
+            elif isinstance(m, str):
+                name = m.strip().lower()
+            if name:
+                mat_consumers.setdefault(name, []).append((oid, nm))
+
     # ── Данные строк снимка ──
     row_data: list[dict] = []
     missing_departments: list[str] = []
-    ro_dept_cache: dict = {}
     for op in operations:
         nid = str(op.id)
         node = result.nodes.get(nid)
@@ -275,33 +345,20 @@ async def build_snapshot(
         lead_res = resources.get(ors[0].resource_id) if ors else None
 
         # Подразделение обязательно для передачи во внешние системы (1С).
-        # Цепочка: ведущий ресурс → любой ресурс операции → шаг маршрута-источника.
-        dept_name = dept_names.get(getattr(lead_res, "department_id", None)) if lead_res else None
-        if not dept_name:
-            for opres in ors:
-                r = resources.get(opres.resource_id)
-                cand = dept_names.get(getattr(r, "department_id", None)) if r else None
-                if cand:
-                    dept_name = cand
-                    break
-        if not dept_name and getattr(op, "source_routing_id", None) and getattr(op, "source_step_seq", None):
-            key = (str(op.source_routing_id), op.source_step_seq)
-            if key not in ro_dept_cache:
-                ro = (await db.execute(
-                    select(RoutingOperation).where(
-                        RoutingOperation.routing_id == op.source_routing_id,
-                        RoutingOperation.sequence_number == op.source_step_seq,
-                    ).limit(1)
-                )).scalars().first()
-                nm = None
-                if ro is not None:
-                    if getattr(ro, "department_id", None):
-                        drow = await db.get(Department, ro.department_id)
-                        nm = drow.name if drow else None
-                    if not nm and getattr(ro, "department", None):
-                        nm = (ro.department or "").strip() or None
-                ro_dept_cache[key] = nm
-            dept_name = ro_dept_cache.get(key)
+        # Основа — resolve_dept; для закупок — «куда закупается» (потребитель материала).
+        dept_name = await resolve_dept(op)
+        if not dept_name and (getattr(op, "operation_type", None) or "") == "procurement":
+            mat = (op.name.split(":", 1)[1] if ":" in (op.name or "") else (op.name or "")).strip().lower()
+            pool = mat_consumers.get(mat) or []
+            same = [d for oid, d in pool if oid == str(getattr(op, "order_id", "") or "")]
+            use = same or [d for _, d in pool]
+            if use:
+                dept_name = Counter(use).most_common(1)[0][0]
+        if not dept_name and getattr(op, "order_id", None):
+            # Запасное правило: «куда закупается» ≈ подразделение заказа (самое частое среди его операций)
+            od = order_dept.get(str(op.order_id))
+            if od:
+                dept_name = od.most_common(1)[0][0]
         if not dept_name:
             missing_departments.append(op.name)
 
