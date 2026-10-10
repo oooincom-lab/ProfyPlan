@@ -33,6 +33,7 @@ class OperationUpdate(BaseModel):
     fact_hours: Optional[Decimal] = Field(default=None, ge=0)
     fact_finished_on: Optional[date] = None
     position: Optional[int] = None
+    department_id: Optional[str] = None
 
 
 class OperationOut(BaseModel):
@@ -52,6 +53,7 @@ class OperationOut(BaseModel):
     operation_type: Optional[str] = None
     order_id: Optional[str] = None
     position: Optional[int] = None
+    department_id: Optional[str] = None
     is_critical: bool = False
 
     class Config:

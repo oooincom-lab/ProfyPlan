@@ -146,6 +146,10 @@ type WindowsLayerProps = {
   onOrderResAdd?: (orderId: string, resourceId: string) => void;
   /** Загрузить ресурсы заказа (lazy при открытой вкладке «Ресурсы») */
   onOrderResLoad?: (orderId: string) => void;
+  /** Операции плана по заказам (для вкладки «План») и ленивая загрузка/правка */
+  orderOps?: Record<string, any[]>;
+  onOrderOpsLoad?: (orderId: string) => void;
+  onOpDepartment?: (opId: string, deptId: string | null) => void | Promise<void>;
   /** Изменить переопределение/связь ресурса заказа (upsert) */
   onOrderResChange?: (orderId: string, item: any, patch: Record<string, any>) => void;
   /** Убрать переопределение/связь */
@@ -218,7 +222,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   onConflictsLoad, onConflictResolve, conflictsData, interleavePlan, conflictGhost,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
+    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, orderOps, onOrderOpsLoad, onOpDepartment, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -260,6 +264,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   useEffect(() => {
     for (const w of wins) {
       if (!w.min && w.tab === 'res' && w.orderId && onOrderResLoad) onOrderResLoad(w.orderId);
+      if (!w.min && w.tab === 'plan' && w.orderId && onOrderOpsLoad) onOrderOpsLoad(w.orderId);
       if (!w.min && w.kind === 'resedit' && w.data?.id && onResAssignLoad) onResAssignLoad(String(w.data.id));
       if (!w.min && w.kind === 'order' && w.data && (w.data as any).project_id && onEnsureOrderProject) onEnsureOrderProject(String((w.data as any).project_id));
     }
@@ -1583,11 +1588,44 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                   </div>
                 );
               })()}
-              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'plan' && (
-                <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
-                  План по заказу формируется при расчёте CPM / Ганта (Фаза 2): операции маршрута будут разворачиваться в план с привязкой к ресурсам и датам.
-                </div>
-              )}
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'plan' && (() => {
+                const ops = (orderOps && w.orderId && orderOps[w.orderId]) || null;
+                if (!ops) return <div style={{ color: '#5A7090' }}>Загрузка операций…</div>;
+                if (!ops.length) return (
+                  <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
+                    У заказа пока нет операций плана. Нажмите «⚙️ Пересобрать развёртку» на вкладке «Маршрут» или в списке заказов — операции создадутся из маршрута и состава.
+                  </div>
+                );
+                const sorted = [...ops].sort((a: any, b: any) => (a.position ?? 99999) - (b.position ?? 99999));
+                return (
+                  <div>
+                    <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 }}>
+                      Операции плана заказа · {sorted.length} шт. Подразделение заполняется автоматически (маршрут → ресурс → потребитель → заказ); ручной выбор приоритетнее.
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {sorted.map((op: any) => (
+                        <div key={op.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 7, fontSize: 12 }}>
+                          <span style={{ flex: '0 0 auto', color: '#5A7090', minWidth: 26 }}>{op.position ?? '—'}</span>
+                          <span style={{ flex: 1, minWidth: 0, color: '#E8EEF5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={op.name}>{op.name}</span>
+                          <span style={{ flex: '0 0 auto', color: '#8FA3BD' }}>{Number(op.duration_base) || 0} {op.duration_unit === 'hour' ? 'ч' : (op.duration_unit || '')}</span>
+                          {op.is_critical ? <span title="Критическая операция" style={{ color: '#F87171' }}>●</span> : null}
+                          <select
+                            value={op.department_id || ''}
+                            onChange={(e) => onOpDepartment && void onOpDepartment(op.id, e.target.value || null)}
+                            title="Подразделение операции (ручной выбор приоритетнее авто)"
+                            style={{ flex: '0 0 210px', background: '#0D1F3A', border: '1px solid #1E3252', borderRadius: 6, color: op.department_id ? '#93C5FD' : '#8FA3BD', padding: '4px 6px', fontSize: 11.5, fontFamily: 'inherit' }}
+                          >
+                            <option value="">— авто —</option>
+                            {(departments || []).map((d: any) => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="pp-resize" onPointerDown={(e) => onResize(e, w)} />
           </div>

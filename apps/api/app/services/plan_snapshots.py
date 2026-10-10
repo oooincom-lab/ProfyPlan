@@ -251,10 +251,21 @@ async def build_snapshot(
     ro_dept_cache: dict = {}
     dept_cache: dict = {}
 
+    manual_dept_cache: dict = {}
+
     async def resolve_dept(op: Operation):
         key = str(op.id)
         if key in dept_cache:
             return dept_cache[key]
+        # Ручное значение (правка в окне заказа) — приоритетнее авто-правил
+        if getattr(op, "department_id", None):
+            did = str(op.department_id)
+            if did not in manual_dept_cache:
+                drow = await db.get(Department, op.department_id)
+                manual_dept_cache[did] = drow.name if drow else None
+            if manual_dept_cache.get(did):
+                dept_cache[key] = manual_dept_cache[did]
+                return dept_cache[key]
         ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
         lead = resources.get(ors[0].resource_id) if ors else None
         nm = dept_names.get(getattr(lead, "department_id", None)) if lead else None

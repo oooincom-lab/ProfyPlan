@@ -27,6 +27,9 @@ class Operation(BaseModel):
         index=True,
     )
     order_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("production_orders.id", ondelete="CASCADE"), nullable=True, index=True)
+    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     duration_base: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=1.0

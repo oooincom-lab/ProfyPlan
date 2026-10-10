@@ -61,7 +61,7 @@ async def list_operations(
         )
         .order_by(Operation.position)
     )
-    items = []; [items.append(OperationOut(id=str(o.id), project_id=str(o.project_id), name=o.name, duration_base=o.duration_base, duration_unit=o.duration_unit, setup_time=o.setup_time, teardown_time=o.teardown_time, to_optimistic=o.to_optimistic, tm_likely=o.tm_likely, tp_pessimistic=o.tp_pessimistic, fact_hours=o.fact_hours, fact_finished_on=o.fact_finished_on, operation_type=o.operation_type, estimate_source=getattr(o, 'estimate_source', 'expert'), order_id=str(o.order_id) if o.order_id else None, position=o.position, is_critical=o.is_critical)) for o in result.scalars().all()]; return items
+    items = []; [items.append(OperationOut(id=str(o.id), project_id=str(o.project_id), name=o.name, duration_base=o.duration_base, duration_unit=o.duration_unit, setup_time=o.setup_time, teardown_time=o.teardown_time, to_optimistic=o.to_optimistic, tm_likely=o.tm_likely, tp_pessimistic=o.tp_pessimistic, fact_hours=o.fact_hours, fact_finished_on=o.fact_finished_on, operation_type=o.operation_type, estimate_source=getattr(o, 'estimate_source', 'expert'), order_id=str(o.order_id) if o.order_id else None, position=o.position, is_critical=o.is_critical, department_id=str(o.department_id) if o.department_id else None)) for o in result.scalars().all()]; return items
 
 
 @router.get("/resources-map")
@@ -113,7 +113,7 @@ async def create_operation(
     db.add(operation)
     await db.commit()
     await db.refresh(operation)
-    return OperationOut(id=str(operation.id), project_id=str(operation.project_id), name=operation.name, duration_base=operation.duration_base, duration_unit=operation.duration_unit, setup_time=operation.setup_time, teardown_time=operation.teardown_time, to_optimistic=operation.to_optimistic, tm_likely=operation.tm_likely, tp_pessimistic=operation.tp_pessimistic, fact_hours=operation.fact_hours, fact_finished_on=operation.fact_finished_on, operation_type=operation.operation_type, estimate_source=getattr(operation, 'estimate_source', None), position=operation.position, is_critical=operation.is_critical)
+    return OperationOut(id=str(operation.id), project_id=str(operation.project_id), name=operation.name, duration_base=operation.duration_base, duration_unit=operation.duration_unit, setup_time=operation.setup_time, teardown_time=operation.teardown_time, to_optimistic=operation.to_optimistic, tm_likely=operation.tm_likely, tp_pessimistic=operation.tp_pessimistic, fact_hours=operation.fact_hours, fact_finished_on=operation.fact_finished_on, operation_type=operation.operation_type, estimate_source=getattr(operation, 'estimate_source', None), position=operation.position, is_critical=operation.is_critical, department_id=str(operation.department_id) if operation.department_id else None)
 
 
 @router.get("/{operation_id}", response_model=OperationOut)
@@ -133,7 +133,7 @@ async def get_operation(
     op = result.scalar_one_or_none()
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
-    return OperationOut(id=str(op.id), project_id=str(op.project_id), name=op.name, duration_base=op.duration_base, duration_unit=op.duration_unit, setup_time=op.setup_time, teardown_time=op.teardown_time, to_optimistic=op.to_optimistic, tm_likely=op.tm_likely, tp_pessimistic=op.tp_pessimistic, fact_hours=op.fact_hours, fact_finished_on=op.fact_finished_on, operation_type=op.operation_type, estimate_source=getattr(op, 'estimate_source', None), position=op.position, is_critical=op.is_critical)
+    return OperationOut(id=str(op.id), project_id=str(op.project_id), name=op.name, duration_base=op.duration_base, duration_unit=op.duration_unit, setup_time=op.setup_time, teardown_time=op.teardown_time, to_optimistic=op.to_optimistic, tm_likely=op.tm_likely, tp_pessimistic=op.tp_pessimistic, fact_hours=op.fact_hours, fact_finished_on=op.fact_finished_on, operation_type=op.operation_type, estimate_source=getattr(op, 'estimate_source', None), position=op.position, is_critical=op.is_critical, department_id=str(op.department_id) if op.department_id else None)
 
 
 @router.put("/{operation_id}", response_model=OperationOut)
@@ -155,12 +155,16 @@ async def update_operation(
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
 
-    for key, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if 'department_id' in data:
+        v = data.pop('department_id')
+        op.department_id = UUID(str(v)) if v else None
+    for key, value in data.items():
         setattr(op, key, value)
 
     await db.commit()
     await db.refresh(op)
-    return OperationOut(id=str(op.id), project_id=str(op.project_id), name=op.name, duration_base=op.duration_base, duration_unit=op.duration_unit, setup_time=op.setup_time, teardown_time=op.teardown_time, to_optimistic=op.to_optimistic, tm_likely=op.tm_likely, tp_pessimistic=op.tp_pessimistic, fact_hours=op.fact_hours, fact_finished_on=op.fact_finished_on, operation_type=op.operation_type, estimate_source=getattr(op, 'estimate_source', None), position=op.position, is_critical=op.is_critical)
+    return OperationOut(id=str(op.id), project_id=str(op.project_id), name=op.name, duration_base=op.duration_base, duration_unit=op.duration_unit, setup_time=op.setup_time, teardown_time=op.teardown_time, to_optimistic=op.to_optimistic, tm_likely=op.tm_likely, tp_pessimistic=op.tp_pessimistic, fact_hours=op.fact_hours, fact_finished_on=op.fact_finished_on, operation_type=op.operation_type, estimate_source=getattr(op, 'estimate_source', None), position=op.position, is_critical=op.is_critical, department_id=str(op.department_id) if op.department_id else None)
 
 
 @router.delete("/{operation_id}", status_code=status.HTTP_204_NO_CONTENT)
