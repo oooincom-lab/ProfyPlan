@@ -500,17 +500,24 @@ export default function AppShell() {
   // Операции плана для вкладки «План» окна заказа (ленивая загрузка + правка подразделения)
   const [orderOps, setOrderOps] = useState<Record<string, any[]>>({});
   const orderOpsLoadedRef = useRef<Record<string, boolean>>({});
-  const loadOrderOps = async (orderId: string) => {
+  const loadOrderOps = async (orderId: string, projectHint?: string) => {
     if (!orderId || orderOpsLoadedRef.current[orderId]) return;
     orderOpsLoadedRef.current[orderId] = true;
     try {
-      const pid = selectedProject?.id;
-      if (!pid) return;
+      const pid = projectHint || selectedProject?.id;
+      if (!pid) {
+        orderOpsLoadedRef.current[orderId] = false;
+        setMsg('Не удалось определить проект заказа — переоткройте окно заказа');
+        return;
+      }
       const r: any = await apiF<any>('/projects/' + pid + '/operations');
       const items = Array.isArray(r) ? r : ((r && r.items) || []);
       const filtered = items.filter((x: any) => String(x.order_id) === String(orderId));
       setOrderOps(prev => ({ ...prev, [orderId]: filtered }));
-    } catch { orderOpsLoadedRef.current[orderId] = false; }
+    } catch (e: any) {
+      orderOpsLoadedRef.current[orderId] = false;
+      setMsg('Не удалось загрузить операции заказа: ' + detailOf(e));
+    }
   };
   const saveOpDepartment = async (opId: string, deptId: string | null) => {
     const pid = selectedProject?.id;
@@ -7516,7 +7523,7 @@ const changeOrderStatus = async (o: any, status: string) => {
         setLay={win.setLay}
         orders={orders}
         orderOps={orderOps}
-        onOrderOpsLoad={(oid: string) => void loadOrderOps(oid)}
+        onOrderOpsLoad={(oid: string, hint?: string) => void loadOrderOps(oid, hint)}
         onOpDepartment={(oid: string, d: string | null) => void saveOpDepartment(oid, d)}
         resourcesList={resourcesList}
         orderBomNodes={orderBomNodes}

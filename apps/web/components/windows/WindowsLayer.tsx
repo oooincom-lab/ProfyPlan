@@ -148,7 +148,7 @@ type WindowsLayerProps = {
   onOrderResLoad?: (orderId: string) => void;
   /** Операции плана по заказам (для вкладки «План») и ленивая загрузка/правка */
   orderOps?: Record<string, any[]>;
-  onOrderOpsLoad?: (orderId: string) => void;
+  onOrderOpsLoad?: (orderId: string, projectHint?: string) => void;
   onOpDepartment?: (opId: string, deptId: string | null) => void | Promise<void>;
   /** Изменить переопределение/связь ресурса заказа (upsert) */
   onOrderResChange?: (orderId: string, item: any, patch: Record<string, any>) => void;
@@ -264,7 +264,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   useEffect(() => {
     for (const w of wins) {
       if (!w.min && w.tab === 'res' && w.orderId && onOrderResLoad) onOrderResLoad(w.orderId);
-      if (!w.min && w.tab === 'plan' && w.orderId && onOrderOpsLoad) onOrderOpsLoad(w.orderId);
+      if (!w.min && w.tab === 'plan' && w.orderId && onOrderOpsLoad) onOrderOpsLoad(w.orderId, (w.data as any)?.project_id);
       if (!w.min && w.kind === 'resedit' && w.data?.id && onResAssignLoad) onResAssignLoad(String(w.data.id));
       if (!w.min && w.kind === 'order' && w.data && (w.data as any).project_id && onEnsureOrderProject) onEnsureOrderProject(String((w.data as any).project_id));
     }
@@ -1590,7 +1590,12 @@ export default function WindowsLayer(props: WindowsLayerProps) {
               })()}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'plan' && (() => {
                 const ops = (orderOps && w.orderId && orderOps[w.orderId]) || null;
-                if (!ops) return <div style={{ color: '#5A7090' }}>Загрузка операций…</div>;
+                if (!ops) return (
+                  <div style={{ color: '#5A7090', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    Загрузка операций…
+                    <button onClick={() => onOrderOpsLoad && w.orderId && onOrderOpsLoad(w.orderId, (w.data as any)?.project_id)} style={{ background: 'transparent', border: '1px solid #2A4060', borderRadius: 6, color: '#8FA3BD', padding: '2px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Обновить</button>
+                  </div>
+                );
                 if (!ops.length) return (
                   <div style={{ color: '#8FA3BD', lineHeight: 1.6 }}>
                     У заказа пока нет операций плана. Нажмите «⚙️ Пересобрать развёртку» на вкладке «Маршрут» или в списке заказов — операции создадутся из маршрута и состава.
