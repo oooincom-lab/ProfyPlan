@@ -549,9 +549,9 @@ export default function AppShell() {
         downloadBlob('plan-snapshot-' + String(s.id).slice(0, 8) + '.json', JSON.stringify(det, null, 2), 'application/json');
         return;
       }
-      const head = ['Код заказа', 'Заказ', 'Операция', 'Подразделение', 'Ресурс', 'Начало', 'Окончание', 'Длительность, ч', 'Количество', 'Ед', 'Критическая'];
+      const head = ['Код заказа', 'Заказ', 'UUID заказа', 'Операция', 'Код операции', 'UUID операции', 'Подразделение', 'Код подразделения', 'UUID подразделения', 'Ресурс', 'Внешний код ресурса', 'UUID ресурса', 'Начало', 'Окончание', 'Длительность, ч', 'Количество', 'Ед', 'Критическая'];
       const fmtDT = (v: any) => v ? String(v).replace('T', ' ').slice(0, 16) : '';
-      const csvRows: any[][] = [head].concat(rows.map((r: any) => [r.order_ext_id || '', r.order_name || '', r.operation_name || '', r.department_name || '', r.resource_name || '', fmtDT(r.start_datetime), fmtDT(r.finish_datetime), r.duration_hours ?? '', r.quantity ?? '', r.unit || '', r.is_critical ? 'да' : '']));
+      const csvRows: any[][] = [head].concat(rows.map((r: any) => [r.order_ext_id || '', r.order_name || '', r.order_id || '', r.operation_name || '', r.operation_ext_id || '', r.operation_id || '', r.department_name || '', r.department_code || '', r.department_id || '', r.resource_name || '', r.resource_ext_id || '', r.resource_id || '', fmtDT(r.start_datetime), fmtDT(r.finish_datetime), r.duration_hours ?? '', r.quantity ?? '', r.unit || '', r.is_critical ? 'да' : '']));
       downloadCsv('plan-snapshot-' + String(s.id).slice(0, 8) + '.csv', csvRows);
     } catch (e: any) { setMsg('Не удалось выгрузить: ' + detailOf(e)); }
   };

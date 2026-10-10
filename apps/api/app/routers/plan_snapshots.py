@@ -58,8 +58,13 @@ class SnapshotRowOut(BaseModel):
     order_name: Optional[str] = None
     operation_id: Optional[uuid.UUID] = None
     operation_name: str
+    operation_ext_id: Optional[str] = None
     department_name: Optional[str] = None
+    department_id: Optional[str] = None
+    department_code: Optional[str] = None
     resource_name: Optional[str] = None
+    resource_id: Optional[str] = None
+    resource_ext_id: Optional[str] = None
     start_date: Optional[datetime] = None
     finish_date: Optional[datetime] = None
     start_datetime: Optional[datetime] = None
@@ -228,10 +233,17 @@ async def export_snapshot(
             "rows": [
                 {
                     "order_ext_id": r.order_ext_id,
+                    "order_id": str(r.order_id) if r.order_id else None,
                     "order_name": r.order_name,
                     "operation_name": r.operation_name,
+                    "operation_ext_id": r.operation_ext_id,
+                    "operation_id": str(r.operation_id) if r.operation_id else None,
                     "department_name": r.department_name,
+                    "department_code": r.department_code,
+                    "department_id": str(r.department_id) if r.department_id else None,
                     "resource_name": r.resource_name,
+                    "resource_ext_id": r.resource_ext_id,
+                    "resource_id": str(r.resource_id) if r.resource_id else None,
                     "start": r.start_datetime.isoformat() if r.start_datetime else None,
                     "finish": r.finish_datetime.isoformat() if r.finish_datetime else None,
                     "duration_hours": float(r.duration_hours) if r.duration_hours is not None else None,
@@ -255,9 +267,16 @@ async def export_snapshot(
         [
             "Код заказа",
             "Заказ",
+            "UUID заказа",
             "Операция",
+            "Код операции",
+            "UUID операции",
             "Подразделение",
+            "Код подразделения",
+            "UUID подразделения",
             "Ресурс",
+            "Внешний код ресурса",
+            "UUID ресурса",
             "Начало",
             "Окончание",
             "Длительность, ч",
@@ -271,9 +290,16 @@ async def export_snapshot(
             [
                 r.order_ext_id or "",
                 r.order_name or "",
+                (str(r.order_id) if r.order_id else ""),
                 r.operation_name or "",
+                r.operation_ext_id or "",
+                (str(r.operation_id) if r.operation_id else ""),
                 r.department_name or "",
+                r.department_code or "",
+                (str(r.department_id) if r.department_id else ""),
                 r.resource_name or "",
+                r.resource_ext_id or "",
+                (str(r.resource_id) if r.resource_id else ""),
                 _fmt_dt(r.start_datetime),
                 _fmt_dt(r.finish_datetime),
                 _fmt_num(r.duration_hours),

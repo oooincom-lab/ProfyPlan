@@ -61,8 +61,13 @@ class PlanSnapshotRow(BaseModel):
         ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
     )
     operation_name: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    operation_ext_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     department_name: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    department_code: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     resource_name: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    resource_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    resource_ext_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
 
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     finish_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

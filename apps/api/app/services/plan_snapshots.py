@@ -101,6 +101,13 @@ async def build_snapshot(
         dept_rows = await db.execute(select(Department).where(Department.id.in_(dept_ids)))
         dept_names = {d.id: d.name for d in dept_rows.scalars().all()}
 
+    # Полный справочник подразделений (tenant): имя → (UUID, код) — для UID в снимке
+    dept_full = await db.execute(select(Department).where(Department.tenant_id == tenant_id))
+    dept_by_name: dict = {}
+    for d in dept_full.scalars().all():
+        if d.name and d.name not in dept_by_name:
+            dept_by_name[d.name] = (d.id, getattr(d, "code", None))
+
     # ── Каскад графиков работы: ресурс → подразделение → проект ──
     override_sched: dict = {}
     if res_ids:
@@ -373,6 +380,12 @@ async def build_snapshot(
         if not dept_name:
             missing_departments.append(op.name)
 
+        _dinfo = dept_by_name.get(dept_name) if dept_name else None
+        dept_id_out = _dinfo[0] if _dinfo else None
+        dept_code_out = _dinfo[1] if _dinfo else None
+        res_id_out = ors[0].resource_id if ors else None
+        res_ext_out = (getattr(lead_res, "ext_id", None) if lead_res else None)
+
         o = orders_by_id.get(getattr(op, "order_id", None))
 
         row_data.append(
@@ -382,8 +395,13 @@ async def build_snapshot(
                 "order_name": (o.specification_name if o else None),
                 "operation_id": op.id,
                 "operation_name": op.name,
+                "operation_ext_id": getattr(op, "ext_id", None),
                 "department_name": dept_name,
+                "department_id": dept_id_out,
+                "department_code": dept_code_out,
                 "resource_name": (lead_res.name if lead_res else None),
+                "resource_id": res_id_out,
+                "resource_ext_id": res_ext_out,
                 "start_date": sd_dt,
                 "finish_date": ed_dt,
                 "start_datetime": start_dt,
