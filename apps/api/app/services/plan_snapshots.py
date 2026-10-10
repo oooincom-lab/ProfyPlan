@@ -27,6 +27,7 @@ from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.project_resource import ProjectResource
 from app.models.resource import Resource
+from app.models.routing import RoutingOperation
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot
 from app.services.cpm import calculate_cpm
 from app.services.capacity import (
@@ -247,6 +248,8 @@ async def build_snapshot(
 
     # ── Данные строк снимка ──
     row_data: list[dict] = []
+    missing_departments: list[str] = []
+    ro_dept_cache: dict = {}
     for op in operations:
         nid = str(op.id)
         node = result.nodes.get(nid)
@@ -270,7 +273,38 @@ async def build_snapshot(
 
         ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
         lead_res = resources.get(ors[0].resource_id) if ors else None
-        dept_id = getattr(lead_res, "department_id", None) if lead_res else None
+
+        # Подразделение обязательно для передачи во внешние системы (1С).
+        # Цепочка: ведущий ресурс → любой ресурс операции → шаг маршрута-источника.
+        dept_name = dept_names.get(getattr(lead_res, "department_id", None)) if lead_res else None
+        if not dept_name:
+            for opres in ors:
+                r = resources.get(opres.resource_id)
+                cand = dept_names.get(getattr(r, "department_id", None)) if r else None
+                if cand:
+                    dept_name = cand
+                    break
+        if not dept_name and getattr(op, "source_routing_id", None) and getattr(op, "source_step_seq", None):
+            key = (str(op.source_routing_id), op.source_step_seq)
+            if key not in ro_dept_cache:
+                ro = (await db.execute(
+                    select(RoutingOperation).where(
+                        RoutingOperation.routing_id == op.source_routing_id,
+                        RoutingOperation.sequence_number == op.source_step_seq,
+                    ).limit(1)
+                )).scalars().first()
+                nm = None
+                if ro is not None:
+                    if getattr(ro, "department_id", None):
+                        drow = await db.get(Department, ro.department_id)
+                        nm = drow.name if drow else None
+                    if not nm and getattr(ro, "department", None):
+                        nm = (ro.department or "").strip() or None
+                ro_dept_cache[key] = nm
+            dept_name = ro_dept_cache.get(key)
+        if not dept_name:
+            missing_departments.append(op.name)
+
         o = orders_by_id.get(getattr(op, "order_id", None))
 
         row_data.append(
@@ -280,7 +314,7 @@ async def build_snapshot(
                 "order_name": (o.specification_name if o else None),
                 "operation_id": op.id,
                 "operation_name": op.name,
-                "department_name": dept_names.get(dept_id),
+                "department_name": dept_name,
                 "resource_name": (lead_res.name if lead_res else None),
                 "start_date": sd_dt,
                 "finish_date": ed_dt,
@@ -322,4 +356,4 @@ async def build_snapshot(
         db.add(PlanSnapshotRow(id=uuid.uuid4(), snapshot_id=snap.id, **rd))
 
     await db.commit()
-    return snap
+    return snap, missing_departments

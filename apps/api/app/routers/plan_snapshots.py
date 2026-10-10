@@ -43,6 +43,7 @@ class SnapshotOut(BaseModel):
     data_fingerprint: Optional[str] = None
     start_anchor: Optional[datetime] = None
     rows_count: int
+    missing_departments: list[str] = []
     created_at: Optional[datetime] = None
     created_by: Optional[uuid.UUID] = None
 
@@ -117,7 +118,7 @@ async def create_snapshot(
     """Зафиксировать план проекта: снимок операций с датами и длительностями."""
     project = await _get_project(db, project_id, tenant_id)
     try:
-        snap = await build_snapshot(
+        snap, missing = await build_snapshot(
             db,
             project,
             tenant_id,
@@ -127,7 +128,9 @@ async def create_snapshot(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return snap
+    out = SnapshotOut.model_validate(snap)
+    out.missing_departments = missing
+    return out
 
 
 @router.get("/projects/{project_id}/plan-snapshots", response_model=SnapshotListOut)

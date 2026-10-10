@@ -502,7 +502,13 @@ export default function AppShell() {
     try {
       const nm = 'Фиксация ' + new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const r = await apiF<any>('/projects/' + selectedProject.id + '/plan-snapshots', { method: 'POST', body: JSON.stringify({ name: nm }) });
-      setMsg('План зафиксирован: ' + (r.rows_count ?? 0) + ' операций. Выгрузка — в списке ниже.');
+      const miss = (r.missing_departments || []) as string[];
+      setMsg(
+        'План зафиксирован: ' + (r.rows_count ?? 0) + ' операций.' +
+        (miss.length
+          ? ' ⚠️ Без подразделения: ' + miss.length + ' (' + miss.slice(0, 3).join(', ') + (miss.length > 3 ? '…' : '') + ').'
+          : ' Выгрузка — в списке ниже.')
+      );
       void loadPlanSnaps();
     } catch (e: any) { setMsg('Не удалось зафиксировать план: ' + detailOf(e)); }
   };
