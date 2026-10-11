@@ -497,42 +497,6 @@ export default function AppShell() {
   useEffect(() => {
     if (view === 'calculations' && calcTab === 'overview' && selectedProject?.id) { void loadPlanSnaps(); }
   }, [view, calcTab, selectedProject?.id]);
-  // Операции плана для вкладки «План» окна заказа (ленивая загрузка + правка подразделения)
-  const [orderOps, setOrderOps] = useState<Record<string, any[]>>({});
-  const orderOpsLoadedRef = useRef<Record<string, boolean>>({});
-  const loadOrderOps = async (orderId: string, projectHint?: string) => {
-    if (!orderId || orderOpsLoadedRef.current[orderId]) return;
-    orderOpsLoadedRef.current[orderId] = true;
-    try {
-      const pid = projectHint || selectedProject?.id;
-      if (!pid) {
-        orderOpsLoadedRef.current[orderId] = false;
-        setMsg('Не удалось определить проект заказа — переоткройте окно заказа');
-        return;
-      }
-      const r: any = await apiF<any>('/projects/' + pid + '/operations');
-      const items = Array.isArray(r) ? r : ((r && r.items) || []);
-      const filtered = items.filter((x: any) => String(x.order_id) === String(orderId));
-      setOrderOps(prev => ({ ...prev, [orderId]: filtered }));
-    } catch (e: any) {
-      orderOpsLoadedRef.current[orderId] = false;
-      setMsg('Не удалось загрузить операции заказа: ' + detailOf(e));
-    }
-  };
-  const saveOpDepartment = async (opId: string, deptId: string | null) => {
-    const pid = selectedProject?.id;
-    if (!pid) return;
-    try {
-      await apiF('/projects/' + pid + '/operations/' + opId, { method: 'PUT', body: JSON.stringify({ department_id: deptId }) });
-      const dname = deptId ? (((departmentsAll || []).find((d: any) => d.id === deptId) || {}).name || '') : null;
-      setOrderOps(prev => {
-        const next: Record<string, any[]> = {};
-        for (const k of Object.keys(prev)) next[k] = (prev[k] || []).map((x: any) => x.id === opId ? { ...x, department_id: deptId, department: dname } : x);
-        return next;
-      });
-      setMsg(deptId ? ('Подразделение операции: ' + (dname || 'выбрано')) : 'Подразделение вернётся к авто-значению');
-    } catch (e: any) { setMsg('Не удалось сохранить подразделение: ' + detailOf(e)); }
-  };
   const snapshotPlan = async () => {
     if (!selectedProject) return;
     try {
@@ -7522,9 +7486,6 @@ const changeOrderStatus = async (o: any, status: string) => {
         setWins={win.setWins}
         setLay={win.setLay}
         orders={orders}
-        orderOps={orderOps}
-        onOrderOpsLoad={(oid: string, hint?: string) => void loadOrderOps(oid, hint)}
-        onOpDepartment={(oid: string, d: string | null) => void saveOpDepartment(oid, d)}
         resourcesList={resourcesList}
         orderBomNodes={orderBomNodes}
         routings={routings}

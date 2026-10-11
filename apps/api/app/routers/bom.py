@@ -779,6 +779,31 @@ async def explode_and_save_bom(
                 _sr = UUID(str(op.source_routing_id))
             except Exception:
                 _sr = None
+        _step_seq = getattr(op, "source_step_seq", None)
+        _dept_step = None
+        if _sr and _step_seq is not None:
+            _ro = (await db.execute(
+                select(RoutingOperation).where(
+                    RoutingOperation.routing_id == _sr,
+                    RoutingOperation.sequence_number == _step_seq,
+                ).limit(1)
+            )).scalars().first()
+            if _ro is not None:
+                _dept_step = getattr(_ro, "department_id", None)
+                if not _dept_step and getattr(_ro, "department", None):
+                    _dn = (_ro.department or "").strip()
+                    if _dn:
+                        _dp = (await db.execute(
+                            select(Department).where(
+                                Department.tenant_id == tenant_id,
+                                Department.name == _dn,
+                            ).order_by(Department.created_at.asc().nullslast())
+                        )).scalars().first()
+                        if not _dp:
+                            _dp = Department(id=uuid4(), tenant_id=tenant_id, name=_dn)
+                            db.add(_dp)
+                            await db.flush()
+                        _dept_step = _dp.id
         _rid = await _resolve_resource(getattr(op, "resource_type_id", None))
         _cat = await _catalog_pick(db, tenant_id, op.name, _cat_cache,
                                    create_missing=True, norm=op.duration_base)
@@ -803,6 +828,7 @@ async def explode_and_save_bom(
             source_node_id=_sn,
             source_routing_id=_sr,
             source_step_seq=getattr(op, "source_step_seq", None),
+            department_id=_dept_step,
         )
         db.add(real_op)
         await db.flush()
