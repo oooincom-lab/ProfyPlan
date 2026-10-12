@@ -866,6 +866,7 @@ async def _import_routes(
     rows = list(ws.iter_rows(min_row=2, values_only=True))
     routings_by_node = {}  # node_ext_id → [(row_idx, row_data)]
     ops_without_resource = 0
+    steps_without_dept = 0
 
     for i, row in enumerate(rows):
         if not row or not any(c for c in row):
@@ -1045,6 +1046,8 @@ async def _import_routes(
                             if r_d:
                                 dept_val = r_d.name
                     dept_id2 = await _get_or_create_department(dept_val)
+                    if not dept_id2:
+                        steps_without_dept += 1
                     stage_id2 = await _get_or_create_stage(stage_name_val or stage_val)
                     # Каталог операций: найти по имени, создать при отсутствии (v2.17)
                     cat_id = None
@@ -1116,6 +1119,10 @@ async def _import_routes(
     if ops_without_resource > 0:
         result.warnings.append(
             f"В {ops_without_resource} операциях не указан ресурс — загрузка выполнена, но расчёт ресурсов будет неполным. Ресурсы можно добавить вручную в справочнике."
+        )
+    if steps_without_dept > 0:
+        result.warnings.append(
+            f"В {steps_without_dept} шагах маршрута не заполнено подразделение — развёртка заказов будет заблокирована до заполнения (вкладка «Маршрут»)."
         )
 
     await db.flush()
@@ -1647,6 +1654,7 @@ async def expand_order(
     # 2) Что сохраняем: новая операция = у заказа не было операций; добавить; обновить (после удаления)
     expand_ids = {t.id for t in targets}
     saved_ids_by_order: dict = {}
+    _dept_violations: list = []
     saved_temp_map: dict = {}
 
     _res_cache: dict[str, Optional[UUID]] = {}
@@ -1753,6 +1761,8 @@ async def expand_order(
                                 db.add(_dp)
                                 await db.flush()
                             _dept_step = _dp.id
+                    if not _dept_step:
+                        _dept_violations.append(eop.name)
             _rid = await _resolve_resource(eop.resource_type_id)
             _cat = await _catalog_pick(db, tenant_id, eop.name, _cat_cache,
                                        create_missing=True, norm=eop.duration_base)
@@ -1862,6 +1872,12 @@ async def expand_order(
         else:
             reason = "уже развёрнут, изменений нет" if co["ex"] else "нечего разворачивать (в составе нет узлов с маршрутами)"
             skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": kept, "reason": reason})
+
+    if _dept_violations:
+        await db.rollback()
+        _s = "; ".join(_dept_violations[:6])
+        _m = len(_dept_violations) - 6 if len(_dept_violations) > 6 else 0
+        raise HTTPException(400, f"Развёртка остановлена: у {len(_dept_violations)} операций шаги маршрута без подразделения. Заполните подразделение у шагов маршрута (вкладка «Маршрут») и повторите. Например: {_s}" + (f" и ещё {_m}." if _m else ""))
 
     await db.commit()
 

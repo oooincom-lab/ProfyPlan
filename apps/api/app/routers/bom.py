@@ -757,6 +757,8 @@ async def explode_and_save_bom(
     from datetime import datetime, timezone
     _now = datetime.now(timezone.utc)
 
+    _dept_violations: list = []
+
     temp_to_real: dict[str, UUID] = {}
     ops_per_order: dict = {}
     for op in result.operations:
@@ -804,6 +806,8 @@ async def explode_and_save_bom(
                             db.add(_dp)
                             await db.flush()
                         _dept_step = _dp.id
+                if not _dept_step:
+                    _dept_violations.append(op.name)
         _rid = await _resolve_resource(getattr(op, "resource_type_id", None))
         _cat = await _catalog_pick(db, tenant_id, op.name, _cat_cache,
                                    create_missing=True, norm=op.duration_base)
@@ -865,6 +869,12 @@ async def explode_and_save_bom(
             o.status = "planned"
             o.exploded_at = _now
             o.operations_created = cnt
+
+    if _dept_violations:
+        await db.rollback()
+        _s = "; ".join(_dept_violations[:6])
+        _m = len(_dept_violations) - 6 if len(_dept_violations) > 6 else 0
+        raise HTTPException(400, f"Развёртка остановлена: {len(_dept_violations)} операций — у их шагов маршрута не заполнено подразделение. Заполните подразделение у шагов (вкладка «Маршрут») и повторите. Например: {_s}" + (f" и ещё {_m}." if _m else ""))
 
     await db.commit()
 
