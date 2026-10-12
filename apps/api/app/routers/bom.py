@@ -1532,12 +1532,21 @@ class StructureIssue(BaseModel):
     reason: str
 
 
+class OrderNoDeptIssue(BaseModel):
+    """Заказ, у операций которого не заполнено подразделение."""
+    order_id: str
+    ext_id: Optional[str] = None
+    name: str = ""
+    operations_without_department: int = 0
+
+
 class StructureValidationOut(BaseModel):
     checked_nodes: int
     issues: list[StructureIssue]
     no_routing: list[StructureIssue]
     no_order: list[StructureIssue]
     self_order: list[StructureIssue]
+    orders_no_department: list[OrderNoDeptIssue] = []
     total_issues: int
 
 
@@ -1645,12 +1654,38 @@ async def validate_structure(
     no_routing = [i for i in issues if i.category == "no_routing"]
     no_order = [i for i in issues if i.category == "no_order"]
     self_order = [i for i in issues if i.category == "self_order"]
+
+    # Заказы с операциями без подразделения (обязательный атрибут для передачи вовне и развёртки)
+    _orders_by_id = {o.id: o for o in orders}
+    _no_dept_rows = (await db.execute(
+        select(Operation.order_id).where(
+            Operation.tenant_id == tenant_id,
+            Operation.project_id == pid,
+            Operation.order_id.isnot(None),
+            Operation.department_id.is_(None),
+        )
+    )).scalars().all()
+    _cnt: dict = {}
+    for _oid in _no_dept_rows:
+        _cnt[_oid] = _cnt.get(_oid, 0) + 1
+    orders_no_department = []
+    for _oid, _c in _cnt.items():
+        _o = _orders_by_id.get(_oid)
+        orders_no_department.append(OrderNoDeptIssue(
+            order_id=str(_oid),
+            ext_id=(_o.ext_id if _o else None),
+            name=((_o.specification_name if _o else "") or ""),
+            operations_without_department=_c,
+        ))
+    orders_no_department.sort(key=lambda x: -x.operations_without_department)
+
     return StructureValidationOut(
         checked_nodes=len(nodes),
         issues=issues,
         no_routing=no_routing,
         no_order=no_order,
         self_order=self_order,
+        orders_no_department=orders_no_department,
         total_issues=len(issues),
     )
 

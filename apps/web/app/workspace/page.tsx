@@ -1514,6 +1514,7 @@ const [chainDialog, setChainDialog] = useState<null | {
     no_routing: any[];
     no_order: any[];
     self_order: any[];
+    orders_no_department: any[];
     total_issues: number;
   }>(null);
   const [bomAnomaliesLoading, setBomAnomaliesLoading] = useState(false);
@@ -3739,6 +3740,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             if (freeIdx > 0) { const [f] = sections.splice(freeIdx, 1); sections.push(f); }
             const allSections = [...sections, { key: 'orphan', icon: '❓', title: 'Без группы (потерянные)', orders: orphanRows }];
             const visibleSections = allSections.filter(sec => sec.orders.length > 0 || sec.key === 'free');
+                        const noDeptOrderIds = new Set(((bomAnomalies && bomAnomalies.orders_no_department) || []).map((x: any) => x.order_id));
                         const renderTreeRow = (r: any) => {
                           const { o, depth, hasChildren, collapsed } = r;
                           const ti = getTypeInfo(o);
@@ -3769,7 +3771,7 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                                   ? <span title={o.priority_lock_reason || 'Приоритетный заказ (признак унаследован)'} style={{ display: 'inline-block', background: 'rgba(239,68,68,.14)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⚑⛓</span>
                                   : o.is_priority
                                     ? <span title={'Приоритетный заказ' + (o.priority_descendants ? ` — признак унаследуют подчинённые: ${o.priority_descendants}` : '')} style={{ display: 'inline-block', background: 'rgba(245,158,11,.16)', color: '#FBBF24', border: '1px solid rgba(245,158,11,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⚑</span>
-                                    : null}{o.specification_name || o.ext_id || '—'}</td>
+                                    : null}{noDeptOrderIds.has(o.id) ? <span title="Есть операции без подразделения — заказ остаётся черновиком" style={{ display: 'inline-block', background: 'rgba(239,68,68,.14)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,.45)', borderRadius: 5, fontSize: 10.5, padding: '0 5px', marginRight: 6, fontWeight: 600, lineHeight: '14px' }}>⚠</span> : null}{o.specification_name || o.ext_id || '—'}</td>
                               <td style={o.pool_id ? { color: '#A78BFA' } : undefined}>{o.client || '—'}</td>
                               <td className="t-mono">{o.quantity} {o.unit}</td>
                               <td><span className={`badge ${priorityBadgeClass(o.priority)}`}>{priorityLabel(o.priority)}</span></td>
@@ -3861,23 +3863,23 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
 
                   {/* Аномалии структуры BOM (список заказов) */}
                   {(() => {
-                    const all: any[] = bomAnomalies ? [...(bomAnomalies.no_routing || []), ...(bomAnomalies.no_order || []), ...(bomAnomalies.self_order || [])] : [];
+                    const all: any[] = bomAnomalies ? [...(bomAnomalies.no_routing || []), ...(bomAnomalies.no_order || []), ...(bomAnomalies.self_order || []), ...((bomAnomalies.orders_no_department || []).map((x: any) => ({ node_id: '', ext_id: x.ext_id, name: x.name, category: 'no_department', reason: 'операции без подразделения: ' + x.operations_without_department })))] : [];
                     if (bomAnomaliesLoading) return <div style={{ fontSize: 11.5, color: '#F59E0B', padding: '6px 2px' }}>Проверка структуры BOM…</div>;
                     if (!all.length) return null;
                     return (
                       <div style={{ marginBottom: 10, padding: '8px 12px', background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: '#FCA5A5' }}>⚠ Аномалии структуры: {all.length}</span>
-                          <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>полуфабрикаты без маршрута или без подчинённого заказа</span>
+                          <span style={{ fontSize: 10.5, color: '#8FA3BD' }}>полуфабрикаты без маршрута/заказа; заказы с операциями без подразделения</span>
                           <div style={{ flex: 1 }} />
-                          {createMissingOrders && all.filter((a: any) => a.category !== 'no_routing').length > 0 && (
-                            <button onClick={createMissingOrders} style={{ background: '#3B82F6', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Создать заказы ({all.filter((a: any) => a.category !== 'no_routing').length})</button>
+                          {createMissingOrders && all.filter((a: any) => a.category === 'no_order' || a.category === 'self_order').length > 0 && (
+                            <button onClick={createMissingOrders} style={{ background: '#3B82F6', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Создать заказы ({all.filter((a: any) => a.category === 'no_order' || a.category === 'self_order').length})</button>
                           )}
                         </div>
                         <div style={{ display: 'grid', gap: 3, maxHeight: 130, overflow: 'auto', marginTop: 5 }}>
                           {all.slice(0, 15).map((a: any, i: number) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, padding: '3px 8px', background: 'rgba(4,10,20,.4)', borderRadius: 5 }}>
-                              <span style={{ color: '#FCA5A5', fontWeight: 600, flex: '0 0 84px' }}>{a.category === 'no_routing' ? 'нет маршрута' : a.category === 'no_order' ? 'нет заказа' : 'свой заказ'}</span>
+                              <span style={{ color: '#FCA5A5', fontWeight: 600, flex: '0 0 84px' }}>{a.category === 'no_routing' ? 'нет маршрута' : a.category === 'no_order' ? 'нет заказа' : a.category === 'self_order' ? 'свой заказ' : 'без подразд.'}</span>
                               <span style={{ color: '#E8EEF5', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.path || a.name}>{a.name}</span>
                               {a.category !== 'no_routing' && createOrderFromNode && (
                                 <button onClick={() => createOrderFromNode(a.node_id)} style={{ background: 'transparent', border: '1px solid rgba(59,130,246,.4)', color: '#60A5FA', borderRadius: 5, padding: '1px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Создать заказ</button>
@@ -4710,9 +4712,12 @@ const changeOrderStatus = async (o: any, status: string) => {
     if (!ok) return;
     targets = targets.concat(kids.map((k) => k.id));
   }
+  let updErr: any = null;
   for (const id of targets) {
-    try { await apiF('/production-orders/' + id, { method: 'PUT', body: JSON.stringify({ status }) }); } catch {}
+    try { await apiF('/production-orders/' + id, { method: 'PUT', body: JSON.stringify({ status }) }); }
+    catch (e: any) { updErr = e; break; }
   }
+  if (updErr) { setMsg('⛔ ' + detailOf(updErr)); return; }
   setOrders((prev: any[]) => (prev || []).map((x: any) => (targets.includes(x.id) ? { ...x, status } : x)));
 };
 

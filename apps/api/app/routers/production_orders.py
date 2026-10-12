@@ -1864,11 +1864,22 @@ async def expand_order(
         t = co["order"]
         saved = saved_ids_by_order.get(str(t.id), 0)
         kept = len([op for op in co["ex"] if op.id not in delete_ids]) if co["ex"] else 0
+        _no_dept_left = False
         if saved:
+            _no_dept_left = bool((await db.execute(
+                select(Operation.id).where(
+                    Operation.order_id == t.id,
+                    Operation.department_id.is_(None),
+                ).limit(1)
+            )).scalars().first())
+        if saved and not _no_dept_left:
             t.status = "planned"
             t.exploded_at = _now
             t.operations_created = kept + saved
             expanded_orders.append({"id": str(t.id), "ext_id": t.ext_id, "operations": saved, "kept": kept})
+        elif saved:
+            result.warnings.append(f"Заказ {t.ext_id or str(t.id)[:8]}: есть операции без подразделения — заказ остаётся черновиком до заполнения (маршрут → «Пересобрать развёртку»).")
+            skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": saved, "reason": "операции без подразделения — остаётся черновиком"})
         else:
             reason = "уже развёрнут, изменений нет" if co["ex"] else "нечего разворачивать (в составе нет узлов с маршрутами)"
             skipped.append({"id": str(t.id), "ext_id": t.ext_id, "operations": kept, "reason": reason})
@@ -1919,6 +1930,17 @@ async def update_order(
     if not order:
         raise HTTPException(404, "Заказ не найден")
     body_fields = body.model_dump(exclude_unset=True)
+    # Вывод заказа из черновика: у всех операций должно быть подразделение
+    if order.status == "draft" and body_fields.get("status") and body_fields.get("status") != "draft":
+        _no_dept_ops = (await db.execute(
+            select(Operation).where(
+                Operation.order_id == order.id,
+                Operation.department_id.is_(None),
+            )
+        )).scalars().all()
+        if _no_dept_ops:
+            _sample = "; ".join([op.name for op in _no_dept_ops[:6]])
+            raise HTTPException(400, f"Заказ нельзя вывести из черновика: у {len(_no_dept_ops)} операций не заполнено подразделение. Заполните (маршрут → «Пересобрать развёртку») и повторите. Например: {_sample}")
     for field in ("specification_name", "ext_id", "unit", "priority", "client", "notes", "status"):
         # Только явно присланные поля: иначе PUT с одним реквизитом затирал остальные
         # значениями по умолчанию схемы (priority -> normal, unit -> pcs).
