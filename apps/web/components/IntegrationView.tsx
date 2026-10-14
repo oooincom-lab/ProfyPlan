@@ -21,7 +21,7 @@ const TRANSPORT_LABEL: any = { file: 'файловый', http: 'прямое', o
 const DIR_ICON: any = { out: '📤', 'in': '📥' };
 const STATUS_COLOR: any = { ok: '#4ADE80', partial: '#FBBF24', error: '#F87171', applied: '#4ADE80', skipped: '#8FA3BD', pending: '#93C5FD' };
 
-export default function IntegrationView({ api, notify, openXlog, openXconn }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void; openXconn?: (c: any) => void }) {
+export default function IntegrationView({ api, notify, openXlog, openXconn }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void; openXconn?: (c: any, save?: (id: string | null, body: any) => Promise<any>) => void }) {
   const [conns, setConns] = useState<any[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
   const [log, setLog] = useState<any[]>([]);
@@ -31,7 +31,6 @@ export default function IntegrationView({ api, notify, openXlog, openXconn }: { 
   const [snaps, setSnaps] = useState<any[]>([]);
   const [sid, setSid] = useState<string>('');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<any>({ name: '', profile: '1c_unf', transport: 'file', comment: '' });
   const [resp, setResp] = useState<string>('');
   const [selLogId, setSelLogId] = useState<string | null>(null);
   const [connClicked, setConnClicked] = useState<string | null>(null);
@@ -73,14 +72,22 @@ export default function IntegrationView({ api, notify, openXlog, openXconn }: { 
     try { const r = await api('/projects/' + projectId + '/plan-snapshots'); setSnaps(r.items || []); } catch { /* тихо */ }
   };
 
-  const createConn = async () => {
-    if (!form.name.trim()) { say('Укажите имя подключения'); return; }
-    try {
-      await api('/integration/connections', { method: 'POST', body: JSON.stringify({ ...form }) });
-      say('Подключение создано');
-      setForm({ name: '', profile: '1c_unf', transport: 'file', comment: '' });
+  const saveConn = (id: string | null, body: any) =>
+    api('/integration/connections' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  const openConn = (c: any) => { if (openXconn) openXconn(c, saveConn); };
+  const openNewConn = () => {
+    if (!openXconn) return;
+    openXconn(null, async (id: string | null, body: any) => {
+      const r = await saveConn(id, body);
+      if (!id) {
+        say('Подключение создано: ' + ((r && r.name) || body.name || ''));
+        if (r && r.id) setSelId(r.id);
+      } else {
+        say('Подключение сохранено: ' + ((r && r.name) || body.name || ''));
+      }
       void loadConns();
-    } catch (e: any) { say('Ошибка: ' + (e?.message || e)); }
+      return r;
+    });
   };
   const deleteConn = async (c: any) => {
     try {
@@ -168,7 +175,7 @@ export default function IntegrationView({ api, notify, openXlog, openXconn }: { 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}><span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>Подключения</span><span style={{ fontSize: 11, color: '#5A7090' }}>двойной клик по подключению — настройки</span></div>
             {conns.length === 0 && <div style={{ fontSize: 12, color: '#5A7090' }}>Пока нет подключений — создайте первое ниже.</div>}
             {conns.map((c) => (
-              <div key={c.id} onClick={() => { if (connClicked === c.id) { if (openXconn) openXconn(c); } else { setSelId(c.id); setConnClicked(c.id); } }} onDoubleClick={() => { if (openXconn) openXconn(c); }}
+              <div key={c.id} onClick={() => { if (connClicked === c.id) { openConn(c); } else { setSelId(c.id); setConnClicked(c.id); } }} onDoubleClick={() => openConn(c)}
                 title="Двойной клик — настройки подключения"
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px', borderRadius: 8, cursor: 'pointer', border: selId === c.id ? '1px solid rgba(34,211,238,.5)' : '1px solid #1E3252', background: selId === c.id ? 'rgba(34,211,238,.06)' : '#0A1628', marginBottom: 6 }}>
                 <span style={{ color: '#E8EEF5', fontSize: 12.5 }}>{c.name}</span>
@@ -179,23 +186,9 @@ export default function IntegrationView({ api, notify, openXlog, openXconn }: { 
                 </span>
               </div>
             ))}
-            <div style={{ borderTop: '1px dashed #1E3252', marginTop: 8, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 12, color: '#8FA3BD' }}>Новое подключение:</div>
-              <input style={inp} placeholder="Название (например: УНФ ТОПЕКС)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <select style={{ ...inp, flex: 1 }} value={form.profile} onChange={(e) => setForm({ ...form, profile: e.target.value })}>
-                  <option value="1c_unf">1С:УНФ</option>
-                  <option value="1c_ka">1С:КА</option>
-                  <option value="1c_erp">1С:ERP</option>
-                  <option value="custom">Другая система</option>
-                </select>
-                <select style={{ ...inp, flex: 1 }} value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value })}>
-                  <option value="file">Файловый обмен</option>
-                  <option value="http">Прямое подключение</option>
-                  <option value="odata">OData</option>
-                </select>
-              </div>
-              <button style={btn('primary')} onClick={() => void createConn()}>➕ Создать подключение</button>
+            <div style={{ borderTop: '1px dashed #1E3252', marginTop: 8, paddingTop: 8 }}>
+              <button style={{ ...btn('primary'), width: '100%' }} onClick={() => openNewConn()}>➕ Создать подключение</button>
+              <div style={{ fontSize: 11, color: '#5A7090', marginTop: 6 }}>Откроется окно: название, система, транспорт и параметры обмена — сохранение создаёт подключение.</div>
             </div>
           </div>
 

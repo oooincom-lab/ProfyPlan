@@ -688,10 +688,13 @@ export function useWindows(sidebarWidth: number = 260) {
   };
 
   const openXconnWin = (conn: any, save?: any) => {
-    const ex = wins.find((w: WinRec) => w.kind === 'xconn' && w.data && w.data.conn && conn && w.data.conn.id === conn.id);
+    const ex = wins.find((w: WinRec) => w.kind === 'xconn' && w.data && (
+      (conn && conn.id && w.data.conn && w.data.conn.id === conn.id) ||
+      (!(conn && conn.id) && !(w.data.conn && w.data.conn.id))
+    ));
     if (ex) {
       winZ.current += 1;
-      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, data: { ...(w.data || {}), conn: conn || {}, save: save || (w.data && w.data.save) }, z: winZ.current } : w));
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, data: { ...(w.data || {}), conn: (conn && conn.id) ? conn : ((w.data && w.data.conn) || {}), save: save || (w.data && w.data.save) }, z: winZ.current } : w));
       return;
     }
     winZ.current += 1;
@@ -704,7 +707,7 @@ export function useWindows(sidebarWidth: number = 260) {
       kind: 'xconn' as const,
       orderId: '',
       data: { conn: conn || {}, save },
-      title: 'Интеграция · ' + ((conn && conn.name) || ''),
+      title: (conn && conn.id) ? 'Интеграция · ' + (conn.name || '') : 'Новое подключение',
       x: d.x + Math.max(30, Math.round((d.w - w) / 2)),
       y: d.y + Math.max(20, Math.round((d.h - h) / 2)),
       w, h,

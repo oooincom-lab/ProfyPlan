@@ -7326,7 +7326,7 @@ const changeOrderStatus = async (o: any, status: string) => {
           {/* ═══ TEAM (блок 6.34.2) ═══ */}
           {/* РАЗДЕЛ ИНТЕГРАЦИЯ (каркас 1С, срезы 1–2) */}
           {view === 'integration' && (
-            <IntegrationView api={apiF} notify={(m: string) => setMsg(m)} openXlog={(e: any, items?: any[]) => (win as any).openXlogWin(e, items)} openXconn={(c: any) => (win as any).openXconnWin(c, async (id: string, body: any) => apiF('/integration/connections/' + id, { method: 'PUT', body: JSON.stringify(body) }))} />
+            <IntegrationView api={apiF} notify={(m: string) => setMsg(m)} openXlog={(e: any, items?: any[]) => (win as any).openXlogWin(e, items)} openXconn={(c: any, save?: any) => (win as any).openXconnWin(c, save)} />
           )}
 
           {view === 'team' && (() => {
