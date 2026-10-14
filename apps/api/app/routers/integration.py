@@ -31,6 +31,7 @@ from app.services.integration_exchange import (
     process_incoming,
     scan_inbox_dir,
 )
+from app.services.integration_apply import apply_pending
 
 router = APIRouter(prefix="/v1/integration", tags=["integration"])
 
@@ -88,6 +89,11 @@ class InboxOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ApplyIn(BaseModel):
+    connection_id: Optional[UUID] = None
+    limit: int = 500
 
 
 async def _get_conn(db: AsyncSession, conn_id: UUID, tenant_id: UUID) -> IntegrationConnection:
@@ -236,6 +242,16 @@ async def scan_dir(
     """Обработать все входящие пакеты из каталога in подключения."""
     conn = await _get_conn(db, conn_id, tenant_id)
     return await scan_inbox_dir(db, conn, tenant_id)
+
+
+@router.post("/inbox/apply")
+async def apply_inbox(
+    body: ApplyIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Применить ожидающие элементы очереди к справочникам (конвейер профиля УНФ)."""
+    return await apply_pending(db, tenant_id, body.connection_id, body.limit)
 
 
 @router.get("/log")
