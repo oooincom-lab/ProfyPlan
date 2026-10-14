@@ -57,6 +57,7 @@ import ToolsPanel from '@/components/ToolsPanel';
 import CpmGraph from '@/components/CpmGraph';
 import CalcLayersStrip from '@/components/CalcLayersStrip';
 import SavedViewsPanel from '@/components/SavedViewsPanel';
+import IntegrationView from '@/components/IntegrationView';
 import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
@@ -180,7 +181,7 @@ function detailOf(e: any): string {
   return m ? m[1] : s;
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -4751,6 +4752,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'reports': 'Отчёты',
     'settings': 'Настройки',
     'team': 'Команда',
+    'integration': 'Интеграция',
     'new-project': 'Новый проект',
   };
 
@@ -7322,6 +7324,11 @@ const changeOrderStatus = async (o: any, status: string) => {
           )}
 
           {/* ═══ TEAM (блок 6.34.2) ═══ */}
+          {/* РАЗДЕЛ ИНТЕГРАЦИЯ (каркас 1С, срезы 1–2) */}
+          {view === 'integration' && (
+            <IntegrationView api={apiF} notify={(m: string) => setMsg(m)} />
+          )}
+
           {view === 'team' && (() => {
             const canManage = team?.my_role === 'owner' || team?.my_role === 'admin';
             const inputStyle: any = { background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', padding: '8px 12px', fontSize: 13, fontFamily: 'inherit' };
