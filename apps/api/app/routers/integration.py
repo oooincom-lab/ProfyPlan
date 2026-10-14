@@ -31,6 +31,7 @@ from app.services.integration_exchange import (
     export_plan_snapshot,
     process_incoming,
     scan_inbox_dir,
+    cleanup_exchange_log,
 )
 from app.services.integration_apply import apply_pending
 from app.services.odata_client import CATALOG_MAP, ODataClient, ODataError, map_catalog_row
@@ -196,6 +197,7 @@ async def export_plan(
 ):
     """Сформировать исходящий пакет плана из фиксации (файл в каталоге out)."""
     conn = await _get_conn(db, conn_id, tenant_id)
+    await cleanup_exchange_log(db, tenant_id)
     try:
         return await export_plan_snapshot(db, conn, body.snapshot_id, tenant_id)
     except ValueError as e:
@@ -255,6 +257,7 @@ async def scan_dir(
 ):
     """Обработать все входящие пакеты из каталога in подключения."""
     conn = await _get_conn(db, conn_id, tenant_id)
+    await cleanup_exchange_log(db, tenant_id)
     return await scan_inbox_dir(db, conn, tenant_id)
 
 
@@ -339,6 +342,7 @@ async def get_log(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await cleanup_exchange_log(db, tenant_id)
     q = select(ExchangeLogEntry).where(ExchangeLogEntry.tenant_id == tenant_id)
     if connection_id:
         q = q.where(ExchangeLogEntry.connection_id == connection_id)

@@ -11,11 +11,11 @@ import io
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import ExchangeInboxItem, ExchangeLogEntry, IntegrationConnection
@@ -24,6 +24,32 @@ from app.models.plan_snapshot import PlanSnapshot, PlanSnapshotRow
 SCHEMA = "profyplan.exchange.v1"
 BASE_DIR = os.environ.get("EXCHANGE_DIR", "/app/exchange")
 
+
+# ── Хранение истории обмена — константа: 30 дней (решение владельца, 15.10.2026) ──
+# Журнал обмена и обработанные элементы очереди хранятся 30 дней; всё старше
+# удаляется автоматически при работе с разделом. Ожидающие обработки не удаляются.
+EXCHANGE_LOG_RETENTION_DAYS = 30
+
+
+async def cleanup_exchange_log(db: AsyncSession, tenant_id: UUID) -> int:
+    """Удалить записи журнала и обработанные элементы очереди старше срока хранения."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=EXCHANGE_LOG_RETENTION_DAYS)
+    res = await db.execute(
+        delete(ExchangeLogEntry).where(
+            ExchangeLogEntry.tenant_id == tenant_id,
+            ExchangeLogEntry.created_at < cutoff,
+        )
+    )
+    deleted = res.rowcount or 0
+    await db.execute(
+        delete(ExchangeInboxItem).where(
+            ExchangeInboxItem.tenant_id == tenant_id,
+            ExchangeInboxItem.created_at < cutoff,
+            ExchangeInboxItem.status != "pending",
+        )
+    )
+    await db.commit()
+    return deleted
 
 def _dirs(conn: IntegrationConnection) -> tuple:
     st = conn.settings or {}
