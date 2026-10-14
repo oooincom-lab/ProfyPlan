@@ -36,7 +36,12 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
   const sel = conns.find((x) => x.id === selId) || null;
 
   const loadConns = async () => {
-    try { const r = await api('/integration/connections'); setConns(r.items || []); }
+    try {
+      const r = await api('/integration/connections');
+      const items = r.items || [];
+      setConns(items);
+      setSelId((cur: string | null) => cur || (items[0]?.id ?? null));
+    }
     catch (e: any) { notify('Не удалось загрузить подключения: ' + (e?.message || e)); }
   };
   const loadLog = async (cid?: string | null) => {
