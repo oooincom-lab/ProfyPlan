@@ -114,6 +114,27 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
 
   const cnt = (s: string) => inbox.filter((x) => x.status === s).length;
 
+  const doOdataTest = async () => {
+    if (!sel) { notify('Выберите подключение'); return; }
+    setBusy(true);
+    try {
+      const r = await api('/integration/connections/' + sel.id + '/odata/test', { method: 'POST', body: JSON.stringify({}) });
+      notify('OData: соединение в порядке' + (r.probe ? ' (' + r.probe.entity + ': ' + r.probe.rows + ')' : ''));
+      void loadLog(selId);
+    } catch (e: any) { notify('OData: ' + (e?.message || e)); void loadLog(selId); }
+    setBusy(false);
+  };
+  const doOdataPull = async () => {
+    if (!sel) { notify('Выберите подключение'); return; }
+    setBusy(true);
+    try {
+      const r = await api('/integration/connections/' + sel.id + '/odata/pull', { method: 'POST', body: JSON.stringify({}) });
+      notify('OData: притянуто элементов — ' + (r.pulled ?? 0) + (r.skipped && r.skipped.length ? ' (сущностей пропущено: ' + r.skipped.length + ')' : '') + '. Нажмите «Применить очередь».');
+      void loadInbox(selId); void loadLog(selId);
+    } catch (e: any) { notify('OData: ' + (e?.message || e)); void loadLog(selId); }
+    setBusy(false);
+  };
+
   return (
     <div style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -183,9 +204,12 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
               <button style={btn('primary')} disabled={busy || !sel || !sid} onClick={() => void doExport()}>📤 Экспорт фиксации</button>
               <button style={btn()} disabled={busy || !sel} onClick={() => void doScan()}>🔄 Скан каталога</button>
               <button style={btn()} disabled={busy || !sel} onClick={() => void doApply()}>✅ Применить очередь</button>
+              <button style={btn()} disabled={busy || !sel} onClick={() => void doOdataTest()}>🔌 OData: тест соединения</button>
+              <button style={btn()} disabled={busy || !sel} onClick={() => void doOdataPull()}>📥 Тянуть справочники (OData)</button>
             </div>
             <div style={{ fontSize: 11, color: '#5A7090', marginTop: 8 }}>
               Экспорт формирует пакет плана в исходящий каталог подключения; скан обрабатывает входящие пакеты из каталога; «Применить очередь» переносит принятые данные в справочники.
+              OData-кнопки работают для подключений с адресом 1С (нужна публикация OData на стороне 1С): тест проверяет соединение, загрузка тянет справочники напрямую.
             </div>
           </div>
 

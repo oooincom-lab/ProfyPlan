@@ -27,11 +27,13 @@ from app.core.deps import get_current_tenant_id, get_current_user
 from app.models.integration import ExchangeInboxItem, ExchangeLogEntry, IntegrationConnection
 from app.models.tenant import User
 from app.services.integration_exchange import (
+    make_envelope,
     export_plan_snapshot,
     process_incoming,
     scan_inbox_dir,
 )
 from app.services.integration_apply import apply_pending
+from app.services.odata_client import CATALOG_MAP, ODataClient, ODataError, map_catalog_row
 
 router = APIRouter(prefix="/v1/integration", tags=["integration"])
 
@@ -94,6 +96,15 @@ class InboxOut(BaseModel):
 class ApplyIn(BaseModel):
     connection_id: Optional[UUID] = None
     limit: int = 500
+
+
+class ODataTestIn(BaseModel):
+    probe_entity: Optional[str] = None
+
+
+class ODataPullIn(BaseModel):
+    entities: Optional[list] = None
+    top: int = 200
 
 
 async def _get_conn(db: AsyncSession, conn_id: UUID, tenant_id: UUID) -> IntegrationConnection:
@@ -252,6 +263,70 @@ async def apply_inbox(
 ):
     """Применить ожидающие элементы очереди к справочникам (конвейер профиля УНФ)."""
     return await apply_pending(db, tenant_id, body.connection_id, body.limit)
+
+
+@router.post("/connections/{conn_id}/odata/test")
+async def odata_test(
+    conn_id: UUID,
+    body: ODataTestIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Проверка соединения OData: $metadata + (опционально) чтение строки сущности."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    st = conn.settings or {}
+    base = st.get("base_url")
+    if not base:
+        raise HTTPException(400, "Укажите base_url в настройках подключения (settings.base_url)")
+    client = ODataClient(base, st.get("username"), st.get("password"))
+    try:
+        info = await client.ping(body.probe_entity or st.get("probe_entity"))
+    except ODataError as e:
+        db.add(ExchangeLogEntry(tenant_id=tenant_id, connection_id=conn.id, direction="in", kind="odata_test", status="error", entities_count=0, message=str(e)[:500]))
+        await db.commit()
+        raise HTTPException(400, str(e))
+    db.add(ExchangeLogEntry(tenant_id=tenant_id, connection_id=conn.id, direction="in", kind="odata_test", status="ok", entities_count=0, message="OData: соединение в порядке %s" % (info.get("probe") or "")))
+    await db.commit()
+    return {"ok": True, **info}
+
+
+@router.post("/connections/{conn_id}/odata/pull")
+async def odata_pull(
+    conn_id: UUID,
+    body: ODataPullIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Притянуть справочники из 1С по OData и положить в очередь (пакет refs)."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    st = conn.settings or {}
+    base = st.get("base_url")
+    if not base:
+        raise HTTPException(400, "Укажите base_url в настройках подключения")
+    entities = body.entities or ["Catalog_Номенклатура", "Catalog_Контрагенты", "Catalog_СтруктурныеЕдиницы", "Catalog_КлючевыеРесурсы"]
+    client = ODataClient(base, st.get("username"), st.get("password"))
+    packet_entities = []
+    skipped = []
+    for ent in entities:
+        suffix = str(ent).split("_", 1)[-1]
+        mapped = CATALOG_MAP.get(suffix)
+        if not mapped:
+            skipped.append(ent)
+            continue
+        try:
+            rows = await client.get_entities(ent, top=body.top)
+        except ODataError as e:
+            db.add(ExchangeLogEntry(tenant_id=tenant_id, connection_id=conn.id, direction="in", kind="odata_pull", status="error", entities_count=0, message=str(e)[:500]))
+            await db.commit()
+            raise HTTPException(400, str(e))
+        for row in rows:
+            uid = row.get("Ссылка") or row.get("Ref_Key") or row.get("Код")
+            packet_entities.append({"type": mapped, "uid": str(uid) if uid else None, "op": "upsert", "fields": map_catalog_row(suffix, row)})
+    if not packet_entities:
+        return {"pulled": 0, "skipped": skipped, "result": None}
+    env = make_envelope("in", "refs", packet_entities, meta={"source": "odata", "entities": [str(e) for e in entities]})
+    res = await process_incoming(db, conn, json.dumps(env, ensure_ascii=False), "odata_pull.json", tenant_id)
+    return {"pulled": len(packet_entities), "skipped": skipped, "result": res}
 
 
 @router.get("/log")
