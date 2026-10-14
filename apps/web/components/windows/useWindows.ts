@@ -7,7 +7,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 export type WinRec = {
   id: string;
   kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'wsched-edit' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd'
-  | 'catoped' | 'help';
+  | 'catoped' | 'help' | 'xlog';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -658,10 +658,39 @@ export function useWindows(sidebarWidth: number = 260) {
 
   const openHelpWin = (articleId: string) => setHelpArticle(articleId);
 
+  const openXlogWin = (entry: any, items?: any[]) => {
+    const ex = wins.find((w: WinRec) => w.kind === 'xlog' && w.data && w.data.entry && entry && w.data.entry.id === entry.id);
+    if (ex) {
+      winZ.current += 1;
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, data: { entry: entry || {}, items: items || [] }, z: winZ.current } : w));
+      return;
+    }
+    winZ.current += 1;
+    const d = deskRect();
+    const w = Math.min(600, d.w - 60);
+    const h = Math.min(560, d.h - 60);
+    const id = 'x' + Date.now().toString(36);
+    setWins(prev => [...prev, {
+      id,
+      kind: 'xlog' as const,
+      orderId: '',
+      data: { entry: entry || {}, items: items || [] },
+      title: '\u0416\u0443\u0440\u043d\u0430\u043b \u043e\u0431\u043c\u0435\u043d\u0430 \u00b7 ' + ((entry && entry.kind) || ''),
+      x: d.x + Math.max(30, Math.round((d.w - w) / 2)),
+      y: d.y + Math.max(20, Math.round((d.h - h) / 2)),
+      w, h,
+      min: false,
+      z: winZ.current,
+      tab: 'order' as const,
+      editing: false,
+      form: {},
+    }]);
+  };
+
   return {
     wins, setWins, lay, setLay, snapZone,
     openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
-    openWschedEdit, openHelpWin, setHelpArticle,
+    openWschedEdit, openHelpWin, openXlogWin, setHelpArticle,
     startDrag, startResize, resizeWinBy, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

@@ -298,6 +298,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
   if (w.kind === 'catoped') return w.title || 'Операция справочника';
+  if (w.kind === 'xlog') return w.title || 'Журнал обмена';
     const o = w.data || orderById(w.orderId);
     const base = o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + base : base;
@@ -309,6 +310,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'dir') return w.title || 'Справочник';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
   if (w.kind === 'catoped') return w.title || 'Операция справочника';
+  if (w.kind === 'xlog') return w.title || 'Журнал обмена';
     if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
     if (w.kind === 'cal') return w.title || 'Календарь ресурса';
     if (w.kind === 'wsched') return w.title || 'Графики работы';
@@ -337,6 +339,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'wsched') return { badge: `[wsched:openWin #${n}]`, copy: `[wsched:openWin #${n}] «${title}»` };
     if (w.kind === 'wsched-edit') return { badge: `[wsched-edit:openWin #${n}]`, copy: `[wsched-edit:openWin #${n}] «${title}»` };
   if (w.kind === 'catoped') return { badge: `[catoped:openWin #${n}]`, copy: `[catoped:openWin #${n}] «${title}»` };
+if (w.kind === 'xlog') return { badge: `[xlog:openWin #${n}]`, copy: `[xlog:openWin #${n}] <${title}>` };
     if (w.kind === 'pcal') return { badge: `[pcal:openWin #${n}]`, copy: `[pcal:openWin #${n}] «${title}»` };
     if (w.kind === 'neworder') return { badge: `[neworder:openWin #${n}]`, copy: `[neworder:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
@@ -621,6 +624,47 @@ export default function WindowsLayer(props: WindowsLayerProps) {
                     onSaved={() => { try { window.dispatchEvent(new Event('profyplan:catalog-ops-changed')); } catch {} }}
                     onClose={() => onClose(w.id)}
                   />
+                </div>
+              </div>
+            );
+          }
+          if (w.kind === 'xlog') {
+            const e = (w.data && w.data.entry) || {};
+            const items = (w.data && w.data.items) || [];
+            const fld = (k: string, v: any) => (
+              <div style={{ display: 'flex', gap: 8, padding: '4px 0', borderBottom: '1px solid #16294A', fontSize: 12.5 }}>
+                <span style={{ flex: '0 0 160px', color: '#5A7090' }}>{k}</span>
+                <span style={{ flex: 1, color: '#E8EEF5', wordBreak: 'break-word' }}>{v === null || v === undefined || v === '' ? '—' : String(v)}</span>
+              </div>
+            );
+            return (
+              <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+                style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+                onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+                <WinTitleBar w={w} dot="#93C5FD" title={w.title || 'Журнал обмена'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
+                <div style={{ padding: '12px 14px', overflow: 'auto' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#B0C4DE', marginBottom: 8 }}>
+                    {e.direction === 'out' ? '📤 Отправка' : '📥 Приём'} · {e.kind || ''}
+                  </div>
+                  {fld('Статус', e.status)}
+                  {fld('Элементов', e.entities_count)}
+                  {fld('Файл', e.file_name)}
+                  {fld('Пакет (packet_id)', e.packet_id)}
+                  {fld('Сообщение', e.message)}
+                  {fld('Когда', String(e.created_at || '').replace('T', ' ').slice(0, 19))}
+                  {e.details ? fld('Детали', JSON.stringify(e.details)) : null}
+                  {items.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#B0C4DE', marginBottom: 6 }}>Элементы пакета ({items.length})</div>
+                      {items.slice(0, 60).map((it: any) => (
+                        <div key={it.id} style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 12, borderBottom: '1px solid #16294A' }}>
+                          <span style={{ color: '#93C5FD', flex: '0 0 150px' }}>{it.entity_type}</span>
+                          <span style={{ color: '#8FA3BD', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.entity_uid || ''}</span>
+                          <span style={{ color: it.status === 'applied' ? '#4ADE80' : it.status === 'error' ? '#F87171' : it.status === 'skipped' ? '#8FA3BD' : '#93C5FD' }}>{it.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );

@@ -21,7 +21,7 @@ const TRANSPORT_LABEL: any = { file: 'файловый', http: 'прямое', o
 const DIR_ICON: any = { out: '📤', 'in': '📥' };
 const STATUS_COLOR: any = { ok: '#4ADE80', partial: '#FBBF24', error: '#F87171', applied: '#4ADE80', skipped: '#8FA3BD', pending: '#93C5FD' };
 
-export default function IntegrationView({ api, notify }: { api: Api; notify: (m: string) => void }) {
+export default function IntegrationView({ api, notify, openXlog }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void }) {
   const [conns, setConns] = useState<any[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
   const [log, setLog] = useState<any[]>([]);
@@ -32,6 +32,9 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
   const [sid, setSid] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<any>({ name: '', profile: '1c_unf', transport: 'file', comment: '' });
+  const [resp, setResp] = useState<string>('');
+  const [selLogId, setSelLogId] = useState<string | null>(null);
+  const say = (m: string) => { setResp(m); notify(m); };
 
   const sel = conns.find((x) => x.id === selId) || null;
 
@@ -42,7 +45,7 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
       setConns(items);
       setSelId((cur: string | null) => cur || (items[0]?.id ?? null));
     }
-    catch (e: any) { notify('Не удалось загрузить подключения: ' + (e?.message || e)); }
+    catch (e: any) { say('Не удалось загрузить подключения: ' + (e?.message || e)); }
   };
   const loadLog = async (cid?: string | null) => {
     try { const r = await api('/integration/log?limit=40' + (cid ? '&connection_id=' + cid : '')); setLog(r.items || []); } catch { /* тихо */ }
@@ -64,74 +67,84 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
   };
 
   const createConn = async () => {
-    if (!form.name.trim()) { notify('Укажите имя подключения'); return; }
+    if (!form.name.trim()) { say('Укажите имя подключения'); return; }
     try {
       await api('/integration/connections', { method: 'POST', body: JSON.stringify({ ...form }) });
-      notify('Подключение создано');
+      say('Подключение создано');
       setForm({ name: '', profile: '1c_unf', transport: 'file', comment: '' });
       void loadConns();
-    } catch (e: any) { notify('Ошибка: ' + (e?.message || e)); }
+    } catch (e: any) { say('Ошибка: ' + (e?.message || e)); }
   };
   const deleteConn = async (c: any) => {
     try {
       await api('/integration/connections/' + c.id, { method: 'DELETE' });
-      notify('Подключение удалено');
+      say('Подключение удалено');
       if (selId === c.id) setSelId(null);
       void loadConns();
-    } catch (e: any) { notify('Ошибка: ' + (e?.message || e)); }
+    } catch (e: any) { say('Ошибка: ' + (e?.message || e)); }
   };
 
   const doExport = async () => {
-    if (!sel || !sid) { notify('Выберите подключение и фиксацию плана'); return; }
+    if (!sel || !sid) { say('Выберите подключение и фиксацию плана'); return; }
     setBusy(true);
     try {
       const r = await api('/integration/connections/' + sel.id + '/export/plan-snapshot', { method: 'POST', body: JSON.stringify({ snapshot_id: sid }) });
-      notify('Пакет сформирован: ' + r.file + ' (строк: ' + r.entities + ')');
+      say('Пакет сформирован: ' + r.file + ' (строк: ' + r.entities + ')');
       void loadLog(selId); void loadInbox(selId);
-    } catch (e: any) { notify('Ошибка экспорта: ' + (e?.message || e)); }
+    } catch (e: any) { say('Ошибка экспорта: ' + (e?.message || e)); }
     setBusy(false);
   };
   const doScan = async () => {
-    if (!sel) { notify('Выберите подключение'); return; }
+    if (!sel) { say('Выберите подключение'); return; }
     setBusy(true);
     try {
       const r = await api('/integration/connections/' + sel.id + '/scan', { method: 'POST' });
-      notify('Каталог обработан: файлов — ' + (r.processed ?? 0));
+      say('Каталог обработан: файлов — ' + (r.processed ?? 0));
       void loadLog(selId); void loadInbox(selId);
-    } catch (e: any) { notify('Ошибка скана: ' + (e?.message || e)); }
+    } catch (e: any) { say('Ошибка скана: ' + (e?.message || e)); }
     setBusy(false);
   };
   const doApply = async () => {
-    if (!sel) { notify('Выберите подключение'); return; }
+    if (!sel) { say('Выберите подключение'); return; }
     setBusy(true);
     try {
       const r = await api('/integration/inbox/apply', { method: 'POST', body: JSON.stringify({ connection_id: sel.id }) });
-      notify('Очередь обработана: применено ' + r.applied + ', пропущено ' + r.skipped + ', ошибок ' + r.errors);
+      say('Очередь обработана: применено ' + r.applied + ', пропущено ' + r.skipped + ', ошибок ' + r.errors);
       void loadInbox(selId); void loadLog(selId);
-    } catch (e: any) { notify('Ошибка: ' + (e?.message || e)); }
+    } catch (e: any) { say('Ошибка: ' + (e?.message || e)); }
     setBusy(false);
+  };
+
+  const openLogDetails = async (x: any) => {
+    try {
+      const r = await api('/integration/inbox?limit=500');
+      const items = ((r && r.items) || []).filter((it: any) => it.log_id === x.id);
+      if (openXlog) openXlog(x, items);
+    } catch {
+      if (openXlog) openXlog(x, []);
+    }
   };
 
   const cnt = (s: string) => inbox.filter((x) => x.status === s).length;
 
   const doOdataTest = async () => {
-    if (!sel) { notify('Выберите подключение'); return; }
+    if (!sel) { say('Выберите подключение'); return; }
     setBusy(true);
     try {
       const r = await api('/integration/connections/' + sel.id + '/odata/test', { method: 'POST', body: JSON.stringify({}) });
-      notify('OData: соединение в порядке' + (r.probe ? ' (' + r.probe.entity + ': ' + r.probe.rows + ')' : ''));
+      say('OData: соединение в порядке' + (r.probe ? ' (' + r.probe.entity + ': ' + r.probe.rows + ')' : ''));
       void loadLog(selId);
-    } catch (e: any) { notify('OData: ' + (e?.message || e)); void loadLog(selId); }
+    } catch (e: any) { say('OData: ' + (e?.message || e)); void loadLog(selId); }
     setBusy(false);
   };
   const doOdataPull = async () => {
-    if (!sel) { notify('Выберите подключение'); return; }
+    if (!sel) { say('Выберите подключение'); return; }
     setBusy(true);
     try {
       const r = await api('/integration/connections/' + sel.id + '/odata/pull', { method: 'POST', body: JSON.stringify({}) });
-      notify('OData: притянуто элементов — ' + (r.pulled ?? 0) + (r.skipped && r.skipped.length ? ' (сущностей пропущено: ' + r.skipped.length + ')' : '') + '. Нажмите «Применить очередь».');
+      say('OData: притянуто элементов — ' + (r.pulled ?? 0) + (r.skipped && r.skipped.length ? ' (сущностей пропущено: ' + r.skipped.length + ')' : '') + '. Нажмите «Применить очередь».');
       void loadInbox(selId); void loadLog(selId);
-    } catch (e: any) { notify('OData: ' + (e?.message || e)); void loadLog(selId); }
+    } catch (e: any) { say('OData: ' + (e?.message || e)); void loadLog(selId); }
     setBusy(false);
   };
 
@@ -210,12 +223,14 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
             <div style={{ fontSize: 11, color: '#5A7090', marginTop: 8 }}>
               Экспорт формирует пакет плана в исходящий каталог подключения; скан обрабатывает входящие пакеты из каталога; «Применить очередь» переносит принятые данные в справочники.
               OData-кнопки работают для подключений с адресом 1С (нужна публикация OData на стороне 1С): тест проверяет соединение, загрузка тянет справочники напрямую.
+              {resp && (<div style={{ marginTop: 8, padding: '7px 10px', border: '1px dashed rgba(34,211,238,.4)', borderRadius: 8, color: '#93C5FD', fontSize: 12 }}>Ответ: {resp}</div>)}
             </div>
           </div>
 
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>Журнал обмена</span>
+              <span style={{ fontSize: 11, color: '#5A7090' }}>двойной клик по записи — подробнее</span>
               <button style={{ ...btn(), marginLeft: 'auto' }} onClick={() => { void loadLog(selId); void loadInbox(selId); }}>🔄 Обновить</button>
             </div>
             <div style={{ maxHeight: 340, overflow: 'auto' }}>
@@ -223,7 +238,9 @@ export default function IntegrationView({ api, notify }: { api: Api; notify: (m:
                 <thead><tr><th style={th}></th><th style={th}>Вид</th><th style={th}>Статус</th><th style={th}>Элементов</th><th style={th}>Файл</th><th style={th}>Сообщение</th><th style={th}>Когда</th></tr></thead>
                 <tbody>
                   {log.map((x) => (
-                    <tr key={x.id}>
+                    <tr key={x.id} onClick={() => { if (selLogId === x.id) { void openLogDetails(x); } else { setSelLogId(x.id); } }} onDoubleClick={() => void openLogDetails(x)}
+                      title="Двойной клик — подробнее"
+                      style={{ cursor: 'pointer', background: selLogId === x.id ? 'rgba(34,211,238,.06)' : 'transparent' }}>
                       <td style={td}>{DIR_ICON[x.direction] || '•'}</td>
                       <td style={td}>{x.kind}</td>
                       <td style={{ ...td, color: STATUS_COLOR[x.status] || '#E8EEF5', fontWeight: 600 }}>{x.status}</td>

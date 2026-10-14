@@ -74,6 +74,8 @@ class LogOut(BaseModel):
     entities_count: int
     file_name: Optional[str] = None
     message: Optional[str] = None
+    packet_id: Optional[str] = None
+    details: Optional[dict] = None
     created_at: Optional[datetime] = None
 
     class Config:
@@ -83,6 +85,7 @@ class LogOut(BaseModel):
 class InboxOut(BaseModel):
     id: uuid.UUID
     connection_id: Optional[uuid.UUID] = None
+    log_id: Optional[uuid.UUID] = None
     entity_type: str
     entity_uid: Optional[str] = None
     op: str
