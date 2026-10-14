@@ -258,7 +258,7 @@ async def scan_inbox_dir(db: AsyncSession, conn: IntegrationConnection, tenant_i
     for fname in names:
         fp = os.path.join(in_dir, fname)
         try:
-            content = io.open(fp, encoding="utf-8").read()
+            content = io.open(fp, encoding="utf-8-sig").read()
             res = await process_incoming(db, conn, content, fname, tenant_id)
             results.append({"file": fname, "result": res})
             os.replace(fp, os.path.join(done_dir, "%s_%s" % (datetime.now().strftime("%H%M%S"), fname)))
