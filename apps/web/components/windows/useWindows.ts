@@ -7,7 +7,7 @@ export type OrderTab = 'order' | 'bom' | 'route' | 'res' | 'plan';
 export type WinRec = {
   id: string;
   kind: 'order' | 'list' | 'bom' | 'dir' | 'resedit' | 'opadd' | 'cal' | 'wsched' | 'wsched-edit' | 'pcal' | 'neworder' | 'deptedit' | 'diredit' | 'diradd'
-  | 'catoped' | 'help' | 'xlog';
+  | 'catoped' | 'help' | 'xlog' | 'xconn';
   orderId: string;
   data?: any;
   listKind?: 'orders' | 'groups' | 'pools';
@@ -687,10 +687,39 @@ export function useWindows(sidebarWidth: number = 260) {
     }]);
   };
 
+  const openXconnWin = (conn: any, save?: any) => {
+    const ex = wins.find((w: WinRec) => w.kind === 'xconn' && w.data && w.data.conn && conn && w.data.conn.id === conn.id);
+    if (ex) {
+      winZ.current += 1;
+      setWins(prev => prev.map(w => w.id === ex.id ? { ...w, min: false, data: { ...(w.data || {}), conn: conn || {}, save: save || (w.data && w.data.save) }, z: winZ.current } : w));
+      return;
+    }
+    winZ.current += 1;
+    const d = deskRect();
+    const w = Math.min(620, d.w - 60);
+    const h = Math.min(600, d.h - 60);
+    const id = 'c' + Date.now().toString(36);
+    setWins(prev => [...prev, {
+      id,
+      kind: 'xconn' as const,
+      orderId: '',
+      data: { conn: conn || {}, save },
+      title: 'Интеграция · ' + ((conn && conn.name) || ''),
+      x: d.x + Math.max(30, Math.round((d.w - w) / 2)),
+      y: d.y + Math.max(20, Math.round((d.h - h) / 2)),
+      w, h,
+      min: false,
+      z: winZ.current,
+      tab: 'order' as const,
+      editing: false,
+      form: {},
+    }]);
+  };
+
   return {
     wins, setWins, lay, setLay, snapZone,
     openWin, openBomWin, openListWin, openDirWin, openOpAddWin, openDirAddWin, openDirEditWin, openCalWin, openManagerWin, openOrderDraftWin, openResEdit, closeWin, focusWin, toggleMinWin, minimizeAll, toggleMinimizeAll, toggleMaxWin, resetWin, snapEnabled, toggleSnap,
-    openWschedEdit, openHelpWin, openXlogWin, setHelpArticle,
+    openWschedEdit, openHelpWin, openXlogWin, openXconnWin, setHelpArticle,
     startDrag, startResize, resizeWinBy, pickLay, placeNext, applySnap, applySnapGrid, applySnapCell,
   };
 }

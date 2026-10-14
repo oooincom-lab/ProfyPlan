@@ -21,7 +21,7 @@ const TRANSPORT_LABEL: any = { file: 'файловый', http: 'прямое', o
 const DIR_ICON: any = { out: '📤', 'in': '📥' };
 const STATUS_COLOR: any = { ok: '#4ADE80', partial: '#FBBF24', error: '#F87171', applied: '#4ADE80', skipped: '#8FA3BD', pending: '#93C5FD' };
 
-export default function IntegrationView({ api, notify, openXlog }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void }) {
+export default function IntegrationView({ api, notify, openXlog, openXconn }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void; openXconn?: (c: any) => void }) {
   const [conns, setConns] = useState<any[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
   const [log, setLog] = useState<any[]>([]);
@@ -34,6 +34,7 @@ export default function IntegrationView({ api, notify, openXlog }: { api: Api; n
   const [form, setForm] = useState<any>({ name: '', profile: '1c_unf', transport: 'file', comment: '' });
   const [resp, setResp] = useState<string>('');
   const [selLogId, setSelLogId] = useState<string | null>(null);
+  const [connClicked, setConnClicked] = useState<string | null>(null);
   const say = (m: string) => { setResp(m); notify(m); };
 
   const sel = conns.find((x) => x.id === selId) || null;
@@ -59,6 +60,12 @@ export default function IntegrationView({ api, notify, openXlog }: { api: Api; n
 
   useEffect(() => { void loadConns(); void loadProjects(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { void loadLog(selId); void loadInbox(selId); /* eslint-disable-next-line */ }, [selId]);
+  /* eslint-disable-next-line */
+  useEffect(() => {
+    const h = () => { void loadConns(); };
+    window.addEventListener('profyplan:integration-changed', h);
+    return () => window.removeEventListener('profyplan:integration-changed', h);
+  }, []);
 
   const loadSnaps = async (projectId: string) => {
     setPid(projectId); setSnaps([]); setSid('');
@@ -158,10 +165,11 @@ export default function IntegrationView({ api, notify, openXlog }: { api: Api; n
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 12 }}>
         <div>
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE', marginBottom: 8 }}>Подключения</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}><span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>Подключения</span><span style={{ fontSize: 11, color: '#5A7090' }}>двойной клик по подключению — настройки</span></div>
             {conns.length === 0 && <div style={{ fontSize: 12, color: '#5A7090' }}>Пока нет подключений — создайте первое ниже.</div>}
             {conns.map((c) => (
-              <div key={c.id} onClick={() => setSelId(c.id)}
+              <div key={c.id} onClick={() => { if (connClicked === c.id) { if (openXconn) openXconn(c); } else { setSelId(c.id); setConnClicked(c.id); } }} onDoubleClick={() => { if (openXconn) openXconn(c); }}
+                title="Двойной клик — настройки подключения"
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px', borderRadius: 8, cursor: 'pointer', border: selId === c.id ? '1px solid rgba(34,211,238,.5)' : '1px solid #1E3252', background: selId === c.id ? 'rgba(34,211,238,.06)' : '#0A1628', marginBottom: 6 }}>
                 <span style={{ color: '#E8EEF5', fontSize: 12.5 }}>{c.name}</span>
                 <span style={{ fontSize: 11, color: '#5A7090' }}>{PROFILE_LABEL[c.profile] || c.profile} · {TRANSPORT_LABEL[c.transport] || c.transport}</span>

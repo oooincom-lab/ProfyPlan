@@ -20,6 +20,7 @@ import HelpContent, { HelpButton } from '@/components/HelpWindow';
 import { articleIdForWindow } from '@/lib/help';
 import { API_ORIGIN, API_V1 } from '@/lib/api';
 import { CatalogOpEditForm } from '@/components/CatalogOps';
+import ConnectionForm from '@/components/ConnectionForm';
 
 // ── Единая шапка MDI-окна: свернуть, развернуть, раскладка окон (Snap), закрыть ──
 // Все типы окон обязаны использовать эту шапку — иначе набор кнопок расходится
@@ -299,6 +300,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'resedit') return w.title || 'Ресурс';
   if (w.kind === 'catoped') return w.title || 'Операция справочника';
   if (w.kind === 'xlog') return w.title || 'Журнал обмена';
+  if (w.kind === 'xconn') return w.title || 'Подключение интеграции';
     const o = w.data || orderById(w.orderId);
     const base = o ? (o.ext_id || o.id) : (w.orderId.slice(0, 8));
     return w.kind === 'bom' ? 'BOM · ' + base : base;
@@ -311,6 +313,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'resedit') return w.title || 'Ресурс';
   if (w.kind === 'catoped') return w.title || 'Операция справочника';
   if (w.kind === 'xlog') return w.title || 'Журнал обмена';
+  if (w.kind === 'xconn') return w.title || 'Подключение интеграции';
     if (w.kind === 'opadd') return w.title || 'Добавить операцию в маршрут';
     if (w.kind === 'cal') return w.title || 'Календарь ресурса';
     if (w.kind === 'wsched') return w.title || 'Графики работы';
@@ -340,6 +343,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'wsched-edit') return { badge: `[wsched-edit:openWin #${n}]`, copy: `[wsched-edit:openWin #${n}] «${title}»` };
   if (w.kind === 'catoped') return { badge: `[catoped:openWin #${n}]`, copy: `[catoped:openWin #${n}] «${title}»` };
 if (w.kind === 'xlog') return { badge: `[xlog:openWin #${n}]`, copy: `[xlog:openWin #${n}] <${title}>` };
+    if (w.kind === 'xconn') return { badge: `[xconn:openXconnWin #${n}]`, copy: `[xconn:openXconnWin #${n}] «${title}»` };
     if (w.kind === 'pcal') return { badge: `[pcal:openWin #${n}]`, copy: `[pcal:openWin #${n}] «${title}»` };
     if (w.kind === 'neworder') return { badge: `[neworder:openWin #${n}]`, copy: `[neworder:openWin #${n}] «${title}»` };
     return { badge: `[resedit:openResEdit #${n}]`, copy: `[resedit:openResEdit #${n}] «${title}»` };
@@ -669,6 +673,24 @@ if (w.kind === 'xlog') return { badge: `[xlog:openWin #${n}]`, copy: `[xlog:open
               </div>
             );
           }
+          if (w.kind === 'xconn') {
+            const c = (w.data && w.data.conn) || {};
+            return (
+              <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+                style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+                onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+                <WinTitleBar w={w} dot="#22D3EE" title={w.title || 'Подключение интеграции'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
+                <div style={{ padding: '12px 14px', overflow: 'auto' }}>
+                  <ConnectionForm conn={c} save={w.data && w.data.save} onClose={() => onClose(w.id)}
+                    onSaved={(u: any) => {
+                      setWins(prev => prev.map((x: any) => x.id === w.id ? { ...x, title: 'Интеграция · ' + ((u && u.name) || ''), data: { ...(x.data || {}), conn: u } } : x));
+                      try { window.dispatchEvent(new Event('profyplan:integration-changed')); } catch {}
+                    }} />
+                </div>
+              </div>
+            );
+          }
+
   if (w.kind === 'diredit') {
             const cols = (w.data?.columns || []).filter((c: any) => c.editable !== false && !['id', '_depth', '_parent_name', 'position'].includes(c.key));
             const rowsForm = (w.form || {}) as Record<string, string>;
