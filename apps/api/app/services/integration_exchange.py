@@ -26,13 +26,13 @@ BASE_DIR = os.environ.get("EXCHANGE_DIR", "/app/exchange")
 
 
 # ── Хранение истории обмена — константа: 30 дней (решение владельца, 15.10.2026) ──
-# Журнал обмена и обработанные элементы очереди хранятся 30 дней; всё старше
-# удаляется автоматически при работе с разделом. Ожидающие обработки не удаляются.
+# Журнал обмена и очередь принятого хранятся 30 дней; всё старше удаляется
+# автоматически при работе с разделом (включая неприменённые элементы очереди).
 EXCHANGE_LOG_RETENTION_DAYS = 30
 
 
 async def cleanup_exchange_log(db: AsyncSession, tenant_id: UUID) -> int:
-    """Удалить записи журнала и обработанные элементы очереди старше срока хранения."""
+    """Удалить записи журнала и элементы очереди старше срока хранения (константа)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=EXCHANGE_LOG_RETENTION_DAYS)
     res = await db.execute(
         delete(ExchangeLogEntry).where(
@@ -45,7 +45,6 @@ async def cleanup_exchange_log(db: AsyncSession, tenant_id: UUID) -> int:
         delete(ExchangeInboxItem).where(
             ExchangeInboxItem.tenant_id == tenant_id,
             ExchangeInboxItem.created_at < cutoff,
-            ExchangeInboxItem.status != "pending",
         )
     )
     await db.commit()
