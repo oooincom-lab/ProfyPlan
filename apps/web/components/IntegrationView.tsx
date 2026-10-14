@@ -21,7 +21,7 @@ const TRANSPORT_LABEL: any = { file: 'файловый', http: 'прямое', o
 const DIR_ICON: any = { out: '📤', 'in': '📥' };
 const STATUS_COLOR: any = { ok: '#4ADE80', partial: '#FBBF24', error: '#F87171', applied: '#4ADE80', skipped: '#8FA3BD', pending: '#93C5FD' };
 
-export default function IntegrationView({ api, notify, openXlog, openXconn }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void; openXconn?: (c: any, save?: (id: string | null, body: any) => Promise<any>) => void }) {
+export default function IntegrationView({ api, notify, openXlog, openXconn, openXjournal }: { api: Api; notify: (m: string) => void; openXlog?: (e: any, items?: any[]) => void; openXconn?: (c: any, save?: (id: string | null, body: any) => Promise<any>) => void; openXjournal?: () => void }) {
   const [conns, setConns] = useState<any[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
   const [log, setLog] = useState<any[]>([]);
@@ -232,7 +232,8 @@ export default function IntegrationView({ api, notify, openXlog, openXconn }: { 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE' }}>Журнал обмена</span>
               <span style={{ fontSize: 11, color: '#5A7090' }}>двойной клик по записи — подробнее</span>
-              <button style={{ ...btn(), marginLeft: 'auto' }} onClick={() => { void loadLog(selId); void loadInbox(selId); }}>🔄 Обновить</button>
+              <button style={{ ...btn(), marginLeft: 'auto' }} onClick={() => { if (openXjournal) openXjournal(); }}>🔎 Показать подробнее</button>
+              <button style={{ ...btn() }} onClick={() => { void loadLog(selId); void loadInbox(selId); }}>🔄 Обновить</button>
             </div>
             <div style={{ maxHeight: 340, overflow: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>

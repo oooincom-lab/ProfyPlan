@@ -12,14 +12,14 @@ import io
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -338,17 +338,42 @@ async def odata_pull(
 @router.get("/log")
 async def get_log(
     connection_id: Optional[UUID] = None,
+    kind: Optional[str] = None,
+    status: Optional[str] = None,
+    direction: Optional[str] = None,
+    days: Optional[int] = None,
     limit: int = 50,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     await cleanup_exchange_log(db, tenant_id)
-    q = select(ExchangeLogEntry).where(ExchangeLogEntry.tenant_id == tenant_id)
+    base = [ExchangeLogEntry.tenant_id == tenant_id]
     if connection_id:
-        q = q.where(ExchangeLogEntry.connection_id == connection_id)
-    q = q.order_by(ExchangeLogEntry.created_at.desc().nullslast()).limit(min(max(limit, 1), 200))
+        base.append(ExchangeLogEntry.connection_id == connection_id)
+    if status:
+        base.append(ExchangeLogEntry.status == status)
+    if direction:
+        base.append(ExchangeLogEntry.direction == direction)
+    if days and days > 0:
+        base.append(ExchangeLogEntry.created_at >= datetime.now(timezone.utc) - timedelta(days=min(int(days), 365)))
+    conds = list(base)
+    if kind:
+        conds.append(ExchangeLogEntry.kind == kind)
+    limit = min(max(limit, 1), 200)
+    offset = max(offset, 0)
+    q = (
+        select(ExchangeLogEntry)
+        .where(*conds)
+        .order_by(ExchangeLogEntry.created_at.desc().nullslast())
+        .limit(limit)
+        .offset(offset)
+    )
     res = await db.execute(q)
-    return {"items": [LogOut.model_validate(x) for x in res.scalars().all()]}
+    total = (await db.execute(select(func.count()).select_from(ExchangeLogEntry).where(*conds))).scalar() or 0
+    kinds_res = await db.execute(select(ExchangeLogEntry.kind).where(*base).distinct())
+    kinds = sorted({k for (k,) in kinds_res.all() if k})
+    return {"items": [LogOut.model_validate(x) for x in res.scalars().all()], "total": int(total), "kinds": kinds}
 
 
 @router.get("/inbox")
