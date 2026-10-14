@@ -5,6 +5,7 @@
 - counterparty  → Контрагенты (upsert по external_code → ИНН → имя);
 - department    → Подразделения (upsert по коду → имени);
 - resource      → Ресурсы (upsert по ext_id → имени);
+- order         → Заказы на производство (upsert по номеру/ext_id; новые — черновиками; не-черновики не трогаем).
 - project       → Проекты (только сопоставление; отсутствующие — в «пропущено» с пояснением).
 
 Сопоставление — по внешним идентификаторам (ext_id/код), никогда по порядку; каждое
@@ -13,6 +14,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -24,6 +26,7 @@ from app.models.counterparty import Counterparty
 from app.models.department import Department
 from app.models.integration import ExchangeInboxItem
 from app.models.nomenclature import Nomenclature
+from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.resource import Resource
 
@@ -39,6 +42,13 @@ NTYPE_MAP = {
     "продукция": "product",
     "product": "product",
     "операция": "service",
+}
+
+PRIORITY_MAP = {
+    "низкий": "low", "low": "low",
+    "обычный": "normal", "средний": "normal", "normal": "normal",
+    "высокий": "high", "high": "high",
+    "критический": "critical", "critical": "critical",
 }
 
 
@@ -187,6 +197,105 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
     return "applied: создано"
 
 
+def _parse_date(v) -> Optional[date]:
+    s = _s(v)
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s[:10])
+    except Exception:
+        return None
+
+
+async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
+    """Приём заказа на производство из 1С: новые — черновиками; черновики обновляются; не-черновики не трогаем."""
+    number = _s(f.get("number")) or _s(f.get("name"))
+    ext = number or _s(uid)
+    if not ext:
+        return "skipped: нет номера заказа"
+    qty_raw = f.get("quantity")
+    try:
+        qty = Decimal(str(qty_raw).replace(",", ".")) if qty_raw not in (None, "") else Decimal("1")
+    except Exception:
+        qty = Decimal("1")
+    if qty <= 0:
+        return "skipped: количество <= 0"
+    unit = _s(f.get("unit")) or "pcs"
+    start_date = _parse_date(f.get("start_date"))
+    due_date = _parse_date(f.get("due_date") or f.get("date"))
+    priority = PRIORITY_MAP.get(_s(f.get("priority")).lower()) or "normal"
+    spec = (
+        _s(f.get("specification_name"))
+        or _s(f.get("specification"))
+        or _s(f.get("product_name"))
+        or _s(f.get("product"))
+        or None
+    )
+    client = _s(f.get("client")) or None
+
+    # Проект — только сопоставление (по коду/ext_id, затем по имени)
+    project_id = None
+    pcode = _s(f.get("project_code")) or _s(f.get("project_ext_id"))
+    pname = _s(f.get("project_name")) or _s(f.get("project"))
+    proj = None
+    if pcode:
+        proj = (
+            await db.execute(select(Project).where(Project.tenant_id == tenant_id, Project.ext_id == pcode))
+        ).scalars().first()
+    if proj is None and pname:
+        proj = (
+            await db.execute(select(Project).where(Project.tenant_id == tenant_id, Project.name == pname))
+        ).scalars().first()
+    if proj is not None:
+        project_id = proj.id
+
+    obj = (
+        await db.execute(
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_id == ext
+            )
+        )
+    ).scalars().first()
+
+    if obj is None:
+        db.add(
+            ProductionOrder(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                project_id=project_id,
+                ext_id=ext,
+                specification_name=spec,
+                quantity=qty,
+                unit=unit,
+                start_date=start_date,
+                due_date=due_date,
+                priority=priority,
+                client=client,
+                status="draft",
+                notes="Импорт из 1С (интеграция)",
+            )
+        )
+        return "applied: создан черновик" + ("" if project_id else " (без проекта — сопоставьте в системе)")
+
+    if obj.status == "draft" and obj.exploded_at is None:
+        obj.quantity = qty
+        obj.unit = unit
+        if start_date:
+            obj.start_date = start_date
+        if due_date:
+            obj.due_date = due_date
+        obj.priority = priority
+        if spec:
+            obj.specification_name = spec
+        if client:
+            obj.client = client
+        if project_id and obj.project_id is None:
+            obj.project_id = project_id
+        return "applied: обновлён черновик"
+
+    return "skipped: заказ уже есть (не черновик) — оставлен без изменений"
+
+
 async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     name = _s(f.get("name"))
     ext = _s(f.get("ext_id")) or _s(uid)
@@ -240,6 +349,8 @@ async def apply_pending(
                     msg = await _apply_resource(db, tenant_id, item.entity_uid, f)
                 elif et in ("project", "проект", "проекты"):
                     msg = await _apply_project(db, tenant_id, item.entity_uid, f)
+                elif et in ("order", "заказ", "заказы", "orders", "производственный_заказ"):
+                    msg = await _apply_order(db, tenant_id, item.entity_uid, f)
                 else:
                     msg = "skipped: тип не поддержан каркасом (%s)" % (item.entity_type or "?")
         except Exception as e:
