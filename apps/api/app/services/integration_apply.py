@@ -264,6 +264,7 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
                 tenant_id=tenant_id,
                 project_id=project_id,
                 ext_id=ext,
+                ext_uid=(_s(uid) or None),
                 specification_name=spec,
                 quantity=qty,
                 unit=unit,
@@ -280,6 +281,8 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
     if obj.status == "draft" and obj.exploded_at is None:
         obj.quantity = qty
         obj.unit = unit
+        if _s(uid) and not obj.ext_uid:
+            obj.ext_uid = _s(uid)
         if start_date:
             obj.start_date = start_date
         if due_date:

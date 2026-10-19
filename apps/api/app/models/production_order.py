@@ -32,6 +32,10 @@ class ProductionOrder(BaseModel):
         String(100), nullable=True, index=True
     )  # внешний ID из ERP (напр. "ЗНП-001")
 
+    # UID объекта в источнике (GUID ссылки 1С). Надёжнее номера: номер меняется при
+    # перенумерации/смене префикса, GUID — нет. Заполняется при приёме заказов из 1С.
+    ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+
     # Привязка к спецификации (ID из product_structures, либо строка-имя)
     specification_id: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True

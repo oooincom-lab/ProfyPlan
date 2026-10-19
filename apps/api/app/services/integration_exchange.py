@@ -109,6 +109,7 @@ async def export_plan_snapshot(
                 "op": "upsert",
                 "fields": {
                     "order_ext_id": r.order_ext_id,
+                    "order_ext_uid": r.order_ext_uid,
                     "order_uuid": str(r.order_id) if r.order_id else None,
                     "order_name": r.order_name,
                     "operation_uuid": str(r.operation_id) if r.operation_id else None,

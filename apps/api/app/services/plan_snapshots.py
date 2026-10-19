@@ -392,6 +392,7 @@ async def build_snapshot(
             {
                 "order_id": getattr(op, "order_id", None),
                 "order_ext_id": (o.ext_id if o else None),
+                "order_ext_uid": (getattr(o, "ext_uid", None) if o else None),
                 "order_name": (o.specification_name if o else None),
                 "operation_id": op.id,
                 "operation_name": op.name,
