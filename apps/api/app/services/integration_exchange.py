@@ -125,6 +125,8 @@ async def export_plan_snapshot(
                     "duration_hours": float(r.duration_hours) if r.duration_hours is not None else None,
                     "quantity": float(r.quantity) if r.quantity is not None else None,
                     "unit": r.unit,
+                    # Загрузка ресурса на интервале start–finish (единиц ресурса); в v1 операция занимает 1 единицу.
+                    "resource_load": 1,
                     "is_critical": bool(r.is_critical),
                 },
             }
