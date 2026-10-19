@@ -56,6 +56,8 @@ class PlanSnapshotRow(BaseModel):
     )
     order_ext_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     order_ext_uid: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    resource_ext_uid: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    department_ext_uid: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     order_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(

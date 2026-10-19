@@ -106,7 +106,7 @@ async def build_snapshot(
     dept_by_name: dict = {}
     for d in dept_full.scalars().all():
         if d.name and d.name not in dept_by_name:
-            dept_by_name[d.name] = (d.id, getattr(d, "code", None))
+            dept_by_name[d.name] = (d.id, getattr(d, "code", None), getattr(d, "ext_uid", None))
 
     # ── Каскад графиков работы: ресурс → подразделение → проект ──
     override_sched: dict = {}
@@ -383,8 +383,10 @@ async def build_snapshot(
         _dinfo = dept_by_name.get(dept_name) if dept_name else None
         dept_id_out = _dinfo[0] if _dinfo else None
         dept_code_out = _dinfo[1] if _dinfo else None
+        dept_ext_uid_out = _dinfo[2] if _dinfo else None
         res_id_out = ors[0].resource_id if ors else None
         res_ext_out = (getattr(lead_res, "ext_id", None) if lead_res else None)
+        res_ext_uid_out = (getattr(lead_res, "ext_uid", None) if lead_res else None)
 
         o = orders_by_id.get(getattr(op, "order_id", None))
 
@@ -400,9 +402,11 @@ async def build_snapshot(
                 "department_name": dept_name,
                 "department_id": dept_id_out,
                 "department_code": dept_code_out,
+                "department_ext_uid": dept_ext_uid_out,
                 "resource_name": (lead_res.name if lead_res else None),
                 "resource_id": res_id_out,
                 "resource_ext_id": res_ext_out,
+                "resource_ext_uid": res_ext_uid_out,
                 "start_date": sd_dt,
                 "finish_date": ed_dt,
                 "start_datetime": start_dt,

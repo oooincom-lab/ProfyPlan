@@ -26,4 +26,5 @@ class Counterparty(BaseModel):
     external_code: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, index=True
     )  # внешний код для сопоставления с внешними системами (ERP)
+    ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # UID источника (GUID 1С)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

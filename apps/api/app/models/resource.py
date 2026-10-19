@@ -50,6 +50,7 @@ class Resource(BaseModel):
     )  # график работы по умолчанию
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # UID источника (GUID 1С)
     scope: Mapped[str] = mapped_column(
         String(20), nullable=False, default="shared", server_default="shared"
     )  # 'project' (эксклюзивно под проект) | 'shared' (межпроектный пул)

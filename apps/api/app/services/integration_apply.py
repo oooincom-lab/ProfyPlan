@@ -60,10 +60,16 @@ async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[s
     name = _s(f.get("name"))
     if not name:
         return "skipped: пустое наименование"
-    ext = _s(f.get("ext_id")) or _s(uid)
+    uid_s = _s(uid) or None
+    ext = _s(f.get("ext_id")) or None
     code = _s(f.get("code")) or None
     obj = None
-    if ext:
+    if uid_s:
+        res = await db.execute(
+            select(Nomenclature).where(Nomenclature.tenant_id == tenant_id, Nomenclature.ext_uid == uid_s)
+        )
+        obj = res.scalars().first()
+    if obj is None and ext:
         res = await db.execute(
             select(Nomenclature).where(Nomenclature.tenant_id == tenant_id, Nomenclature.ext_id == ext)
         )
@@ -87,6 +93,8 @@ async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[s
             obj.unit = unit
         if ext and not obj.ext_id:
             obj.ext_id = ext
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
         return "applied: обновлено"
     db.add(
         Nomenclature(
@@ -98,6 +106,7 @@ async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[s
             ntype=ntype,
             unit=unit,
             ext_id=ext or None,
+            ext_uid=uid_s,
         )
     )
     return "applied: создано"
@@ -107,10 +116,16 @@ async def _apply_counterparty(db: AsyncSession, tenant_id: UUID, uid: Optional[s
     name = _s(f.get("name"))
     if not name:
         return "skipped: пустое наименование"
-    ext = _s(f.get("external_code")) or _s(f.get("ext_id")) or _s(uid)
+    uid_s = _s(uid) or None
+    ext = _s(f.get("external_code")) or _s(f.get("ext_id")) or None
     inn = _s(f.get("inn")) or None
     obj = None
-    if ext:
+    if uid_s:
+        res = await db.execute(
+            select(Counterparty).where(Counterparty.tenant_id == tenant_id, Counterparty.ext_uid == uid_s)
+        )
+        obj = res.scalars().first()
+    if obj is None and ext:
         res = await db.execute(
             select(Counterparty).where(Counterparty.tenant_id == tenant_id, Counterparty.external_code == ext)
         )
@@ -131,8 +146,10 @@ async def _apply_counterparty(db: AsyncSession, tenant_id: UUID, uid: Optional[s
             obj.inn = inn
         if ext and not getattr(obj, "external_code", None):
             obj.external_code = ext
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
         return "applied: обновлено"
-    db.add(Counterparty(id=uuid.uuid4(), tenant_id=tenant_id, name=name, inn=inn, external_code=ext or None))
+    db.add(Counterparty(id=uuid.uuid4(), tenant_id=tenant_id, name=name, inn=inn, external_code=ext or None, ext_uid=uid_s))
     return "applied: создано"
 
 
@@ -140,9 +157,15 @@ async def _apply_department(db: AsyncSession, tenant_id: UUID, uid: Optional[str
     name = _s(f.get("name"))
     if not name:
         return "skipped: пустое наименование"
+    uid_s = _s(uid) or None
     code = _s(f.get("code")) or None
     obj = None
-    if code:
+    if uid_s:
+        res = await db.execute(
+            select(Department).where(Department.tenant_id == tenant_id, Department.ext_uid == uid_s)
+        )
+        obj = res.scalars().first()
+    if obj is None and code:
         res = await db.execute(
             select(Department).where(Department.tenant_id == tenant_id, Department.code == code)
         )
@@ -156,8 +179,10 @@ async def _apply_department(db: AsyncSession, tenant_id: UUID, uid: Optional[str
         obj.name = name
         if code:
             obj.code = code
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
         return "applied: обновлено"
-    db.add(Department(id=uuid.uuid4(), tenant_id=tenant_id, name=name, code=code))
+    db.add(Department(id=uuid.uuid4(), tenant_id=tenant_id, name=name, code=code, ext_uid=uid_s))
     return "applied: создано"
 
 
@@ -165,9 +190,15 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
     name = _s(f.get("name"))
     if not name:
         return "skipped: пустое наименование"
-    ext = _s(f.get("ext_id")) or _s(uid)
+    uid_s = _s(uid) or None
+    ext = _s(f.get("ext_id")) or None
     obj = None
-    if ext:
+    if uid_s:
+        res = await db.execute(
+            select(Resource).where(Resource.tenant_id == tenant_id, Resource.ext_uid == uid_s)
+        )
+        obj = res.scalars().first()
+    if obj is None and ext:
         res = await db.execute(
             select(Resource).where(Resource.tenant_id == tenant_id, Resource.ext_id == ext)
         )
@@ -181,6 +212,8 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
         obj.name = name
         if ext and not obj.ext_id:
             obj.ext_id = ext
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
         return "applied: обновлено"
     db.add(
         Resource(
@@ -188,6 +221,7 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
             tenant_id=tenant_id,
             name=name,
             ext_id=ext or None,
+            ext_uid=uid_s,
             scope=f.get("scope") or "global",
             resource_type=(_s(f.get("resource_type")) or "equipment")[:20],
             capacity_per_unit=Decimal("1"),
@@ -195,16 +229,6 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
         )
     )
     return "applied: создано"
-
-
-def _parse_date(v) -> Optional[date]:
-    s = _s(v)
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(s[:10])
-    except Exception:
-        return None
 
 
 async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
@@ -301,9 +325,15 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
 
 async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     name = _s(f.get("name"))
-    ext = _s(f.get("ext_id")) or _s(uid)
+    uid_s = _s(uid) or None
+    ext = _s(f.get("ext_id")) or None
     obj = None
-    if ext:
+    if uid_s:
+        res = await db.execute(
+            select(Project).where(Project.tenant_id == tenant_id, Project.ext_uid == uid_s)
+        )
+        obj = res.scalars().first()
+    if obj is None and ext:
         res = await db.execute(
             select(Project).where(Project.tenant_id == tenant_id, Project.ext_id == ext)
         )
@@ -315,8 +345,8 @@ async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], 
         obj = res.scalars().first()
     if obj is None:
         return "skipped: проект не найден — создайте его в интерфейсе или проверьте код"
-    if name and obj.name != name:
-        pass  # наименование проекта не перетираем автоматически
+    if uid_s and not obj.ext_uid:
+        obj.ext_uid = uid_s
     return "applied: проект сопоставлен"
 
 

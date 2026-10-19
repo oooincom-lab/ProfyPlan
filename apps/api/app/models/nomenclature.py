@@ -33,3 +33,4 @@ class Nomenclature(BaseModel):
     description: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # UID источника (GUID 1С)
