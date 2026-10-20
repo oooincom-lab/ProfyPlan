@@ -84,6 +84,11 @@ class ProjectOut(BaseModel):
     start_date: Optional[datetime] = None
     priority: Optional[str] = None
     due_date: Optional[datetime] = None
+    # Проверка даты старта: сравнение с первым заказом/операцией
+    earliest_start: Optional[date] = None
+    earliest_start_source: Optional[str] = None
+    start_issue: Optional[str] = None
+    start_issue_days: Optional[int] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

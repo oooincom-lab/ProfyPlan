@@ -13,7 +13,7 @@ from app.models.project import Project
 from app.models.production_order import ProductionOrder
 from app.models.operation import Operation, OperationResource
 from app.models.calculation_run import CalculationRun
-from app.models.plan_snapshot import PlanSnapshot
+from app.models.plan_snapshot import PlanSnapshot, PlanSnapshotRow
 from app.models.plan_version import InterProjectDependency
 from app.models.tenant import User
 from app.schemas.project import ProjectCreate, ProjectList, ProjectMove, ProjectOut, ProjectUpdate
@@ -73,6 +73,59 @@ async def _is_descendant(db: AsyncSession, tenant_id: UUID, maybe_child: UUID, a
     return False
 
 
+
+
+async def _attach_start_checks(db: AsyncSession, tenant_id: UUID, projects: list) -> None:
+    """Проставляет проектам проверку даты старта (без N+1 по одному).
+
+    start_issue:
+      missing — дата старта не задана;
+      late    — дата старта позже первого заказа/операции на start_issue_days дней.
+    """
+    if not projects:
+        return
+    ids = [p.id for p in projects]
+    order_min = {
+        pid: d0
+        for pid, d0 in (await db.execute(
+            select(ProductionOrder.project_id, func.min(ProductionOrder.start_date))
+            .where(
+                ProductionOrder.tenant_id == tenant_id,
+                ProductionOrder.project_id.in_(ids),
+                ProductionOrder.start_date.isnot(None),
+            )
+            .group_by(ProductionOrder.project_id)
+        )).all()
+    }
+    # операции из снимков плана — резервный источник, если заказов нет
+    snap_min = {
+        pid: d0
+        for pid, d0 in (await db.execute(
+            select(PlanSnapshot.project_id, func.min(PlanSnapshotRow.start_datetime))
+            .join(PlanSnapshotRow, PlanSnapshotRow.snapshot_id == PlanSnapshot.id)
+            .where(PlanSnapshot.tenant_id == tenant_id, PlanSnapshot.project_id.in_(ids))
+            .group_by(PlanSnapshot.project_id)
+        )).all()
+    }
+    for p in projects:
+        o = order_min.get(p.id)
+        s0 = snap_min.get(p.id)
+        cand = o or (s0.date() if s0 else None)
+        src = "orders" if o else ("plan" if s0 else None)
+        issue = None
+        days = None
+        if getattr(p, "start_date", None) is None:
+            issue = "missing"
+        elif cand is not None:
+            ps = p.start_date.date() if hasattr(p.start_date, "date") else p.start_date
+            if ps > cand:
+                issue = "late"
+                days = (ps - cand).days
+        p.earliest_start = cand
+        p.earliest_start_source = src
+        p.start_issue = issue
+        p.start_issue_days = days
+
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
 
@@ -99,6 +152,7 @@ async def list_projects(
         .limit(page_size)
     )
     projects = result.scalars().all()
+    await _attach_start_checks(db, tenant_id, list(projects))
 
     return ProjectList(
         items=[ProjectOut.model_validate(p) for p in projects],
@@ -193,6 +247,7 @@ async def get_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    await _attach_start_checks(db, tenant_id, [project])
     return ProjectOut.model_validate(project)
 
 

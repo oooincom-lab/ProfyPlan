@@ -4965,7 +4965,7 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                   {projects.slice(0, 4).map((p: any, pi: number) => (
                     <div key={p.id} className="proj-card" data-module="dash:card:project" onClick={() => loadProjectDashboard(p)}>{debugMode && <DebugBadge debug={debugMode} corner text={`[dash:card:project #${pi + 1}]`} />}
-                      <div className="pc-name">{p.name}</div>
+                      <div className="pc-name">{p.name}{p.start_issue ? <span title={p.start_issue === 'missing' ? 'Дата старта не задана' : `Старт позже первого заказа на ${p.start_issue_days} дн`} style={{ color: p.start_issue === 'missing' ? '#F87171' : '#FCD34D', marginLeft: 5 }}>⚠</span> : null}</div>
                       <div className="pc-meta">{p.status} · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
                       <div className="pc-actions">
                         <span className="badge">{p.status === 'draft' ? 'Черновик' : p.status === 'active' ? 'Активный' : p.status}</span>
@@ -4987,6 +4987,24 @@ const changeOrderStatus = async (o: any, status: string) => {
               {projects.filter((p: any) => p.status !== 'archived').map((p: any, pi: number) => (
                 <div key={p.id} className="proj-card" data-module="dash:card:project">{debugMode && <DebugBadge debug={debugMode} corner text={`[dash:card:project #${pi + 1}]`} />}
                   <div className="pc-name">📁 {p.name}</div>
+                  {p.start_issue === 'missing' && (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); setSelectedProject(p); setSettingsCalc(false); setView('settings'); }}
+                      title="Дата старта не задана: расчёт идёт от сегодняшнего дня. Нажмите, чтобы указать дату."
+                      style={{ marginTop: 4, fontSize: 11.5, color: '#F87171', cursor: 'pointer' }}
+                    >
+                      ⚠ дата старта не задана
+                    </div>
+                  )}
+                  {p.start_issue === 'late' && (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); setSelectedProject(p); setSettingsCalc(false); setView('settings'); }}
+                      title={`Старт проекта позже первого заказа (${p.earliest_start}) на ${p.start_issue_days} дн. Нажмите, чтобы проверить дату.`}
+                      style={{ marginTop: 4, fontSize: 11.5, color: '#FCD34D', cursor: 'pointer' }}
+                    >
+                      ⚠ старт позже первого заказа на {p.start_issue_days} дн
+                    </div>
+                  )}
                   <div className="pc-meta">{p.status} · {p.mode || 'cpm'} · {new Date(p.created_at).toLocaleDateString('ru')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     <button className="btn btn-primary btn-sm" onClick={() => loadProjectDashboard(p)}>Открыть</button>
@@ -6940,6 +6958,16 @@ const changeOrderStatus = async (o: any, status: string) => {
                         style={{ background: '#0B1B33', color: '#E8EEF5', border: '1px solid #2A4060', borderRadius: 6, padding: '5px 8px', fontSize: 12.5 }}
                       />
                     </label>
+                    {selectedProject.start_issue === 'missing' && (
+                      <div style={{ fontSize: 11.5, color: '#F87171' }}>
+                        ⚠ Дата старта не задана — расчёт идёт от сегодняшнего дня. Укажите дату, чтобы вероятности и план считались от реального старта.
+                      </div>
+                    )}
+                    {selectedProject.start_issue === 'late' && (
+                      <div style={{ fontSize: 11.5, color: '#FCD34D' }}>
+                        ⚠ Дата старта позже первого заказа ({String(selectedProject.earliest_start).slice(0, 10)}) на {selectedProject.start_issue_days} дн. Проверьте: возможно, заказы начинаются раньше проекта.
+                      </div>
+                    )}
                     <label style={{ fontSize: 11.5, color: '#8FA3BD', display: 'grid', gap: 4, maxWidth: 320 }}>
                       режим фиксации дат
                       <select
