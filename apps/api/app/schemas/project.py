@@ -29,6 +29,8 @@ class ProjectCreate(BaseModel):
     country_code: str = Field(default="RU", min_length=2, max_length=2)
     start_date: Optional[datetime] = None
     priority: str = Field(default="normal", pattern="^(low|normal|high)$")
+    parent_id: Optional[UUID] = None
+    sort_order: int = Field(default=0, ge=0)
 
 
 class ProjectUpdate(BaseModel):
@@ -59,6 +61,8 @@ class ProjectOut(BaseModel):
 
     id: UUID
     tenant_id: UUID
+    parent_id: Optional[UUID] = None
+    sort_order: int = 0
     name: str
     description: Optional[str] = None
     status: str
@@ -83,6 +87,11 @@ class ProjectOut(BaseModel):
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class ProjectMove(BaseModel):
+    parent_id: Optional[UUID] = None
+    sort_order: Optional[int] = Field(default=None, ge=0)
 
 
 class ProjectList(BaseModel):

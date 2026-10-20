@@ -11,7 +11,62 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user
 from app.models.project import Project
 from app.models.tenant import User
-from app.schemas.project import ProjectCreate, ProjectList, ProjectOut, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectList, ProjectMove, ProjectOut, ProjectUpdate
+
+MAX_PROJECT_DEPTH = 6
+
+
+async def _project_depth(db: AsyncSession, tenant_id: UUID, project_id: UUID) -> int:
+    """Глубина проекта от корня (корень = 1)."""
+    depth = 1
+    cur = project_id
+    seen = set()
+    while True:
+        if cur in seen or depth > 50:
+            break
+        seen.add(cur)
+        res = await db.execute(select(Project).where(Project.id == cur, Project.tenant_id == tenant_id))
+        pr = res.scalar_one_or_none()
+        if not pr or not pr.parent_id:
+            break
+        cur = pr.parent_id
+        depth += 1
+    return depth
+
+
+async def _subtree_height(db: AsyncSession, tenant_id: UUID, root_id: UUID) -> int:
+    """Высота поддерева (только вершина = 1)."""
+    res = await db.execute(select(Project.id, Project.parent_id).where(Project.tenant_id == tenant_id))
+    rows = res.all()
+    children: dict = {}
+    for cid, pid in rows:
+        if pid:
+            children.setdefault(pid, []).append(cid)
+    best = 0
+    stack = [(root_id, 1)]
+    seen = set()
+    while stack:
+        pid, d = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        best = max(best, d)
+        for ch in children.get(pid, []):
+            stack.append((ch, d + 1))
+    return best or 1
+
+
+async def _is_descendant(db: AsyncSession, tenant_id: UUID, maybe_child: UUID, ancestor: UUID) -> bool:
+    cur = maybe_child
+    seen = set()
+    while cur and cur not in seen:
+        seen.add(cur)
+        if cur == ancestor:
+            return True
+        res = await db.execute(select(Project.parent_id).where(Project.id == cur, Project.tenant_id == tenant_id))
+        cur = res.scalar_one_or_none()
+    return False
+
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
@@ -76,6 +131,17 @@ async def create_project(
     """Создать новый проект."""
     # Оси расчёта (блок 6.16.7): если заданы явно — они источник истины,
     # иначе выводим их из default_method; совместимая строка всегда согласована с осями.
+    # Иерархия (A): валидация родителя и глубины
+    if body.parent_id:
+        pres = await db.execute(
+            select(Project).where(Project.id == body.parent_id, Project.tenant_id == tenant_id)
+        )
+        parent = pres.scalar_one_or_none()
+        if not parent:
+            raise HTTPException(status_code=400, detail="Родительский проект не найден")
+        if await _project_depth(db, tenant_id, parent.id) + 1 > MAX_PROJECT_DEPTH:
+            raise HTTPException(status_code=400, detail=f"Максимальная глубина иерархии — {MAX_PROJECT_DEPTH}")
+
     logic, analysis = _axes_from_method(body.default_method)
     if body.planning_logic:
         logic = body.planning_logic
@@ -84,6 +150,8 @@ async def create_project(
 
     project = Project(
         tenant_id=tenant_id,
+        parent_id=body.parent_id,
+        sort_order=body.sort_order or 0,
         name=body.name,
         description=body.description,
         mode=body.mode,
@@ -157,6 +225,41 @@ async def update_project(
     return ProjectOut.model_validate(project)
 
 
+@router.patch("/{project_id}/move", response_model=ProjectOut)
+async def move_project(
+    project_id: UUID,
+    body: ProjectMove,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Перемещение проекта в другую ветку (или в корень)."""
+    res = await db.execute(select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id))
+    project = res.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if body.parent_id is not None:
+        if body.parent_id == project_id:
+            raise HTTPException(status_code=400, detail="Проект не может быть родителем самому себе")
+        pres = await db.execute(select(Project).where(Project.id == body.parent_id, Project.tenant_id == tenant_id))
+        parent = pres.scalar_one_or_none()
+        if not parent:
+            raise HTTPException(status_code=400, detail="Родительский проект не найден")
+        if await _is_descendant(db, tenant_id, body.parent_id, project_id):
+            raise HTTPException(status_code=400, detail="Нельзя переместить проект внутрь собственного подпроекта")
+        depth = await _project_depth(db, tenant_id, body.parent_id) + 1
+        height = await _subtree_height(db, tenant_id, project_id)
+        if depth + height - 1 > MAX_PROJECT_DEPTH:
+            raise HTTPException(status_code=400, detail=f"Максимальная глубина иерархии — {MAX_PROJECT_DEPTH}")
+
+    project.parent_id = body.parent_id
+    if body.sort_order is not None:
+        project.sort_order = body.sort_order
+    await db.commit()
+    await db.refresh(project)
+    return ProjectOut.model_validate(project)
+
+
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: UUID,
@@ -173,6 +276,16 @@ async def delete_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Иерархия (A): проект с подпроектами удалять нельзя
+    ch = await db.execute(
+        select(func.count(Project.id)).where(Project.tenant_id == tenant_id, Project.parent_id == project_id)
+    )
+    if (ch.scalar() or 0) > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя удалить проект с подпроектами: перенесите их или архивируйте ветку",
+        )
 
     # События мощности проекта удаляются вместе с ним: иначе внешний ключ обнуляет
     # привязку и событие становится общим для всех проектов (12.09.2026)

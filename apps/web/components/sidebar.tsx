@@ -116,6 +116,49 @@ export default function Sidebar(props: SidebarProps) {
     });
   };
 
+  // Иерархия проектов (A): дерево, раскрытие веток, хлебный след
+  const [collapsedProjTree, setCollapsedProjTree] = useState<Set<string>>(new Set());
+  const toggleProjTree = (pid: string) => {
+    setCollapsedProjTree(prev => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
+  };
+  const projectTrail = (p: any) => {
+    const byId = new Map((projects as any[]).map((x: any) => [x.id, x]));
+    const names: string[] = [];
+    let cur: any = p;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      names.unshift(cur.name);
+      cur = cur.parent_id ? (byId as any).get(cur.parent_id) : null;
+    }
+    return names.join(' / ');
+  };
+  const treeRows = (() => {
+    const active = (projects as any[]).filter((p: any) => p.status !== 'archived');
+    const ids = new Set(active.map((p: any) => p.id));
+    const children: Record<string, any[]> = {};
+    const roots: any[] = [];
+    for (const p of active) {
+      const pid = p.parent_id;
+      if (pid && ids.has(pid)) (children[pid] || (children[pid] = [])).push(p);
+      else roots.push(p);
+    }
+    const sortFn = (a: any, b: any) => ((a.sort_order || 0) - (b.sort_order || 0)) || String(a.name).localeCompare(String(b.name), 'ru');
+    const out: { p: any; depth: number; hasKids: boolean }[] = [];
+    const walk = (p: any, d: number) => {
+      const kids = (children[p.id] || []).slice().sort(sortFn);
+      out.push({ p, depth: d, hasKids: kids.length > 0 });
+      if (!collapsedProjTree.has(p.id)) kids.forEach((k: any) => walk(k, d + 1));
+    };
+    roots.slice().sort(sortFn).forEach((r) => walk(r, 0));
+    return out;
+  })();
+
   const collapseAllProjects = () => {
     setExpandedProj(new Set());
     setExpandedProjGroups(new Set());
@@ -337,7 +380,7 @@ export default function Sidebar(props: SidebarProps) {
         <>{debug && <DebugBadge debug={debug} text="[nav:projects]" />}</>
       </div>
 
-      {expandedProjects && projects.filter((p: any) => p.status !== 'archived').map((p: any) => {
+      {expandedProjects && treeRows.map(({ p, depth, hasKids }: any) => {
         const isExp = expandedProj.has(p.id);
         return (
           <div key={p.id}>
@@ -345,10 +388,15 @@ export default function Sidebar(props: SidebarProps) {
               className={`s-item ${view === 'project-dashboard' && selectedProject?.id === p.id ? 'active' : ''}`}
               onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, project: p }); }}
               style={view === 'project-dashboard' && selectedProject?.id === p.id
-                ? { paddingLeft: 32, display: 'flex', alignItems: 'center', gap: 10 }
-                : { paddingLeft: 32, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--s-fg-proj)' }}
+                ? { paddingLeft: 32 + depth * 14, display: 'flex', alignItems: 'center', gap: 10 }
+                : { paddingLeft: 32 + depth * 14, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--s-fg-proj)' }}
             >
-              {/* Arrow — toggles expand only */}
+                            {hasKids && (
+                <span className="s-arrow" title="Подпроекты" onClick={(e) => { e.stopPropagation(); toggleProjTree(p.id); }}>
+                  {collapsedProjTree.has(p.id) ? '▸' : '▾'}
+                </span>
+              )}
+{/* Arrow — toggles expand only */}
               <span
                 className="s-arrow"
                 onClick={(e) => { e.stopPropagation(); toggleProj(p.id); }}
@@ -358,6 +406,7 @@ export default function Sidebar(props: SidebarProps) {
               {/* Name — navigates only */}
               <span
                 className="s-proj-name"
+                title={projectTrail(p)}
                 onClick={() => loadProjectDashboard(p)}
                 style={{ cursor: 'pointer' }}
               >

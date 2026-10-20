@@ -21,6 +21,11 @@ class Project(BaseModel):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Иерархия проектов (A, 20.10.2026): организационный слой; расчёт остаётся по проекту.
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     description: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         String(20), default="draft"

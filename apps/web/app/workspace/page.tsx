@@ -1461,6 +1461,10 @@ export default function AppShell() {
 
   // ── Context menu ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; project?: any; pool?: any; group?: any } | null>(null);
+  const [subProjModal, setSubProjModal] = useState<{ parent: any } | null>(null);
+  const [subProjName, setSubProjName] = useState('');
+  const [moveModal, setMoveModal] = useState<{ project: any } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<string>('');
   const [sidebarCtx, setSidebarCtx] = useState<{ x: number; y: number; view: string } | null>(null);
   const [directoryModal, setDirectoryModal] = useState<string | null>(null);
   const [wschedEditModal, setWschedEditModal] = useState<any>(null); // 'new' | Schedule | null // e.g. 'nomenclature'
@@ -2965,6 +2969,46 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
     deleteProject(p);
   };
 
+  const reloadProjects = async () => {
+    try {
+      const proj = await apiF<{ items: any[] }>('/projects?page_size=200');
+      setProjects(proj.items);
+    } catch (e: any) {
+      setMsg('Не удалось обновить список проектов: ' + (e?.message || e));
+    }
+  };
+  const createSubproject = async (parent: any, name: string) => {
+    const nm = name.trim();
+    if (!nm) return;
+    try {
+      await apiF('/projects', { method: 'POST', body: JSON.stringify({ name: nm, parent_id: parent.id }) });
+      await reloadProjects();
+      setMsg('Создан подпроект: ' + nm);
+    } catch (e: any) {
+      setMsg('Ошибка создания подпроекта: ' + (e?.message || e));
+    }
+  };
+  const moveProject = async (p: any, parentId: string | null) => {
+    try {
+      await apiF(`/projects/${p.id}/move`, { method: 'PATCH', body: JSON.stringify({ parent_id: parentId }) });
+      await reloadProjects();
+      setMsg('Проект перемещён');
+    } catch (e: any) {
+      setMsg('Ошибка перемещения: ' + (e?.message || e));
+    }
+  };
+  const descendantsOf = (pid: string): Set<string> => {
+    const s = new Set<string>();
+    const stack = [pid];
+    while (stack.length) {
+      const cur = stack.pop() as string;
+      for (const p of (projects as any[])) {
+        if (p.parent_id === cur && !s.has(p.id)) { s.add(p.id); stack.push(p.id); }
+      }
+    }
+    return s;
+  };
+
   const renameProject = async (p: any, newName: string) => {
     if (!newName.trim()) return;
     try {
@@ -2982,7 +3026,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
   }, []);
 
   const enterWorkspace = useCallback(async () => {
-    const proj = await apiF<{ items: any[] }>('/projects');
+    const proj = await apiF<{ items: any[] }>('/projects?page_size=200');
     setProjects(proj.items);
     setLoaded(true);
     await fetchMe();
@@ -6756,6 +6800,16 @@ const changeOrderStatus = async (o: any, status: string) => {
                 <div style={{ display: 'grid', gap: 16, maxWidth: 500 }}>
                   <div style={{ display: settingsCalc ? 'none' : undefined }}>
                     <label style={{ display: 'block', fontSize: 12, color: '#5A7090', marginBottom: 6 }}>Название</label>
+                    {(() => {
+                      const byId = new Map((projects as any[]).map((x: any) => [x.id, x]));
+                      const names: string[] = [];
+                      let cur: any = selectedProject;
+                      const seen = new Set<string>();
+                      while (cur && !seen.has(cur.id)) { seen.add(cur.id); names.unshift(cur.name); cur = cur.parent_id ? (byId as any).get(cur.parent_id) : null; }
+                      return names.length > 1 ? (
+                        <div style={{ fontSize: 11, color: '#5A7090', marginBottom: 4 }}>{names.join(' / ')}</div>
+                      ) : null;
+                    })()}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input id="proj-name-input" defaultValue={selectedProject.name} style={{ flex: 1, background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '8px 12px', fontSize: 14 }} onKeyDown={e => { if (e.key === 'Enter') renameProject(selectedProject, (e.target as HTMLInputElement).value); }} />
                       <button className="btn btn-primary btn-sm" onClick={() => renameProject(selectedProject, (document.getElementById('proj-name-input') as HTMLInputElement)?.value || '')}>Сохранить</button>
@@ -7624,6 +7678,50 @@ const changeOrderStatus = async (o: any, status: string) => {
       </>
     )}
 
+    {/* Создание подпроекта */}
+    {subProjModal && (
+      <>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.45)', zIndex: 10000 }} onClick={() => setSubProjModal(null)} />
+        <div style={{ position: 'fixed', left: '50%', top: '30%', transform: 'translateX(-50%)', width: 380, background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252', borderRadius: 12, padding: 18, zIndex: 10001, boxShadow: '0 20px 60px rgba(0,0,0,0.55)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#E8EEF5', marginBottom: 4 }}>Новый подпроект</div>
+          <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 10 }}>в проекте «{subProjModal.parent.name}»</div>
+          <input autoFocus value={subProjName} onChange={(e) => setSubProjName(e.target.value)} placeholder="Название подпроекта"
+            onKeyDown={(e) => { if (e.key === 'Enter') { createSubproject(subProjModal.parent, subProjName); setSubProjModal(null); } if (e.key === 'Escape') setSubProjModal(null); }}
+            style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '8px 12px', fontSize: 14, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+            <button onClick={() => setSubProjModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Отмена</button>
+            <button onClick={() => { createSubproject(subProjModal.parent, subProjName); setSubProjModal(null); }} style={{ background: '#2563EB', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Создать</button>
+          </div>
+        </div>
+      </>
+    )}
+
+    {/* Перемещение проекта */}
+    {moveModal && (
+      <>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.45)', zIndex: 10000 }} onClick={() => setMoveModal(null)} />
+        <div style={{ position: 'fixed', left: '50%', top: '30%', transform: 'translateX(-50%)', width: 420, background: 'linear-gradient(135deg, #0F1E36, #162844)', border: '1px solid #1E3252', borderRadius: 12, padding: 18, zIndex: 10001, boxShadow: '0 20px 60px rgba(0,0,0,0.55)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#E8EEF5', marginBottom: 4 }}>Переместить проект</div>
+          <div style={{ fontSize: 12, color: '#5A7090', marginBottom: 10 }}>«{moveModal.project.name}» → выберите родителя</div>
+          {(() => {
+            const excl = new Set<string>([moveModal.project.id, ...Array.from(descendantsOf(moveModal.project.id))]);
+            const opts = (projects as any[]).filter((p: any) => !excl.has(p.id) && p.status !== 'archived');
+            return (
+              <select value={moveTarget} onChange={(e) => setMoveTarget(e.target.value)}
+                style={{ width: '100%', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '8px 12px', fontSize: 14, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
+                <option value="">— Корень (без родителя) —</option>
+                {opts.map((p: any) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+              </select>
+            );
+          })()}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+            <button onClick={() => setMoveModal(null)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Отмена</button>
+            <button onClick={() => { moveProject(moveModal.project, moveTarget || null); setMoveModal(null); }} style={{ background: '#2563EB', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Переместить</button>
+          </div>
+        </div>
+      </>
+    )}
+
     {/* Context menu */}
     {ctxMenu && (
       <>
@@ -7645,6 +7743,12 @@ const changeOrderStatus = async (o: any, status: string) => {
               onKeyDown={(e) => { if (e.key === 'Escape') { setCtxMenu(null); } if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v && v !== ctxMenu.project.name) { renameProject(ctxMenu.project, v); } setCtxMenu(null); } }}
               onBlur={() => setCtxMenu(null)}
             />
+            <button onClick={() => { setSubProjModal({ parent: ctxMenu.project }); setSubProjName(''); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              ＋ Подпроект
+            </button>
+            <button onClick={() => { setMoveModal({ project: ctxMenu.project }); setMoveTarget(ctxMenu.project.parent_id || ''); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+              Переместить…
+            </button>
             <button onClick={() => { archiveProject(ctxMenu.project); setCtxMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#B0C4DE', padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
               {ctxMenu.project.status === 'archived' ? '📂 Восстановить' : '📦 В архив'}
             </button>
