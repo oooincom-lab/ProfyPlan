@@ -46,10 +46,11 @@ class InterDepIn(BaseModel):
 @ccm_router.get("/inter-deps")
 async def list_inter_deps(
     project_id: Optional[UUID] = None,
+    root_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
-    """Межпроектные связи (все или по проекту)."""
+    """Межпроектные связи (все, по проекту или по ветке root_id)."""
     q = select(InterProjectDependency).where(
         InterProjectDependency.source_project_id.in_(
             select(Project.id).where(Project.tenant_id == tenant_id)
@@ -60,6 +61,27 @@ async def list_inter_deps(
             (InterProjectDependency.source_project_id == project_id)
             | (InterProjectDependency.target_project_id == project_id)
         )
+    if root_id:
+        res_p = await db.execute(select(Project.id, Project.parent_id).where(Project.tenant_id == tenant_id))
+        rows = res_p.all()
+        children = {}
+        for cid, pid in rows:
+            if pid:
+                children.setdefault(pid, []).append(cid)
+        scope = set()
+        stack = [root_id]
+        while stack:
+            cur = stack.pop()
+            if cur in scope:
+                continue
+            scope.add(cur)
+            for ch in children.get(cur, []):
+                stack.append(ch)
+        if scope:
+            q = q.where(
+                InterProjectDependency.source_project_id.in_(scope)
+                & InterProjectDependency.target_project_id.in_(scope)
+            )
     res = await db.execute(q.order_by(InterProjectDependency.created_at.desc()).limit(500))
     deps = res.scalars().all()
     items = []
