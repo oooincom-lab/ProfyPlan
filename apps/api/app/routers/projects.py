@@ -333,6 +333,24 @@ async def project_readiness(
     else:
         add("fixation", "Фиксация плана", "ok", f"Фиксаций: {snaps}", "project")
 
+    # Межпроектное выравнивание: конфликты по общим ресурсам с другими проектами
+    conflicts = 0
+    try:
+        from app.routers.ccm import _overload_rows
+        rows = await _overload_rows(db, tenant_id)
+        pid_s = str(project_id)
+        for r in rows:
+            for c in (r.get("conflicts") or []):
+                if pid_s in (str(c.get("a_id")), str(c.get("b_id"))):
+                    conflicts += 1
+    except Exception:
+        conflicts = 0
+    if conflicts > 0:
+        add("leveling", "Межпроектное выравнивание", "warn",
+            f"Пересечений по общим ресурсам с другими проектами: {conflicts} — проверьте CCM → Выравнивание", "ccm")
+    else:
+        add("leveling", "Межпроектное выравнивание", "ok", "Межпроектных пересечений по ресурсам нет", "ccm")
+
     ok = len([i for i in items if i["status"] == "ok"])
     nxt = next((i["id"] for i in items if i["status"] == "block"), None) or next((i["id"] for i in items if i["status"] == "warn"), None)
     return {"project_id": str(project_id), "project_name": project.name, "score": {"ok": ok, "total": len(items)}, "next": nxt, "items": items}

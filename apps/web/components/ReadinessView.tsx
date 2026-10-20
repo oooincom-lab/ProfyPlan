@@ -18,6 +18,7 @@ const HINTS: any = {
   calculation: 'Локальный расчёт проекта (CPM/каскад).',
   complex: 'Межпроектные связи — если проект в ветке с другими.',
   fixation: 'Фиксация плана — то, что уходит в 1С.',
+  leveling: 'Если проекты делят ресурсы — проверьте CCM → «Выравнивание».',
 };
 
 export default function ReadinessView({ api, projects, notify, onOpenProject, onOpenCcm, onOpenComplex }: {
@@ -96,7 +97,7 @@ export default function ReadinessView({ api, projects, notify, onOpenProject, on
             {HINTS[item.id] && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 2 }}>{HINTS[item.id]}</div>}
           </div>
           <button style={btn} onClick={() => open(item)}>
-            {item.action === 'complex' ? 'Комплекс' : item.id === 'fixation' ? 'К фиксации' : 'Перейти'}
+            {item.action === 'complex' ? 'Комплекс' : item.action === 'ccm' ? 'К выравниванию' : item.id === 'fixation' ? 'К фиксации' : 'Перейти'}
           </button>
         </div>
       ))}
