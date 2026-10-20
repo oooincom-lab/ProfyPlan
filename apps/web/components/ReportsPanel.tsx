@@ -63,6 +63,8 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
   };
 
   const depts: any[] = deptLoad?.departments || [];
+  const pickedIds = Object.keys(picked).filter((k) => picked[k]);
+  const pickedCount = pickedIds.length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -135,10 +137,13 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
         <div className="panel-hdr">
           <span className="panel-title">⚖ Межпроектное выравнивание</span>
           <span style={{ marginLeft: 'auto' }}>
-            <button type="button" onClick={runLeveling} disabled={busy}
+            <button type="button" onClick={runLeveling} disabled={busy || pickedCount < 2}
               style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               {busy ? '…' : '▶ Предложить сдвиги'}
             </button>
+            <span style={{ marginLeft: 8, fontSize: 11.5, color: pickedCount < 2 ? '#FCD34D' : '#8FA3BD' }}>
+              выбрано: {pickedCount} (минимум 2)
+            </span>
             <button type="button" onClick={() => openCcmWith(Object.keys(picked).filter(k => picked[k]))} disabled={busy}
               style={{ marginLeft: 8, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>
               Открыть в CCM
@@ -148,6 +153,8 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
         <div style={{ fontSize: 12.5, color: '#8FA3BD', marginBottom: 8 }}>
           Отметьте проекты — система упорядочит их по приоритету и предложит сдвиги так, чтобы общие ресурсы не использовались одновременно. Применение сдвигов — отдельным шагом (фаза 3).
         </div>
+        {msg && <div style={{ fontSize: 12, color: '#FCD34D', marginBottom: 6 }}>{msg}</div>}
+        {plan && (plan.conflicts || []).length === 0 && <div style={{ fontSize: 12, color: '#86EFAC', marginBottom: 6 }}>Конфликтов по выбранным проектам не найдено — сдвиги не требуются.</div>}
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
           {(projects || []).map(p => (
             <label key={p.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12.5, color: '#CBD5E1' }}>
