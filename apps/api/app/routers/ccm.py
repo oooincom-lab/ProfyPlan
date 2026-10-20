@@ -120,6 +120,17 @@ async def create_inter_dep(
     if not src.scalar_one_or_none() or not tgt.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Операции не найдены в указанных проектах")
 
+    dup = await db.execute(
+        select(InterProjectDependency).where(
+            InterProjectDependency.source_project_id == body.source_project_id,
+            InterProjectDependency.source_operation_id == body.source_operation_id,
+            InterProjectDependency.target_project_id == body.target_project_id,
+            InterProjectDependency.target_operation_id == body.target_operation_id,
+        )
+    )
+    if dup.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Такая связь уже существует")
+
     dep = InterProjectDependency(
         source_project_id=body.source_project_id,
         source_operation_id=body.source_operation_id,

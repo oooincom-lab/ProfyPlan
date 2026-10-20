@@ -24,6 +24,7 @@ export default function ComplexView({ api, projects, notify }: { api: Api; proje
   const [lag, setLag] = useState('0');
   const [res, setRes] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [sugg, setSugg] = useState<any[] | null>(null);
 
   const byId = useMemo(() => new Map((projects || []).map((p: any) => [p.id, p])), [projects]);
   const opsName = useMemo(() => {
@@ -93,6 +94,104 @@ export default function ComplexView({ api, projects, notify }: { api: Api; proje
     setBusy(false);
   };
 
+  const suggest = async () => {
+    if (!aId || !bId) { notify('Выберите два проекта'); return; }
+    setBusy(true); setSugg(null);
+    try {
+      const [sa, sb, ra, rb] = await Promise.all([
+        api(`/projects/${aId}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }),
+        api(`/projects/${bId}/calculate/schedule`, { method: 'POST', body: JSON.stringify({}) }),
+        api(`/projects/${aId}/operations/resources-map`),
+        api(`/projects/${bId}/operations/resources-map`),
+      ]);
+      const mapRes = (rows: any[]) => {
+        const m = new Map<string, any[]>();
+        for (const r of rows || []) {
+          if (!r.resource_id) continue;
+          const arr = m.get(r.operation_id) || [];
+          if (!arr.some((x: any) => x.id === r.resource_id)) arr.push({ id: r.resource_id, name: r.resource_name || 'ресурс' });
+          m.set(r.operation_id, arr);
+        }
+        return m;
+      };
+      const resA = mapRes(Array.isArray(ra) ? ra : (ra?.items || []));
+      const resB = mapRes(Array.isArray(rb) ? rb : (rb?.items || []));
+      const nodesA = (sa?.nodes || []).filter((n: any) => n.start_datetime && n.finish_datetime);
+      const nodesB = (sb?.nodes || []).filter((n: any) => n.start_datetime && n.finish_datetime);
+      const H = 3600000;
+      const out: any[] = [];
+      for (const na of nodesA) {
+        for (const nb of nodesB) {
+          const ra_ = resA.get(na.id) || [];
+          const rb_ = resB.get(nb.id) || [];
+          const common = ra_.filter((x: any) => rb_.some((y: any) => y.id === x.id));
+          if (!common.length) continue;
+          const A0 = Date.parse(na.start_datetime), A1 = Date.parse(na.finish_datetime);
+          const B0 = Date.parse(nb.start_datetime), B1 = Date.parse(nb.finish_datetime);
+          if ([A0, A1, B0, B1].some((x) => isNaN(x))) continue;
+          const overlap = Math.min(A1, B1) - Math.max(A0, B0);
+          let reason = '', lag = 0, prio = 9;
+          if (overlap > 0) {
+            reason = `пересечение по ресурсу «${common[0].name}» — ${(overlap / H).toFixed(1)} ч`;
+            prio = 1;
+          } else {
+            const gap = A1 <= B0 ? B0 - A1 : A0 - B1;
+            if (gap <= 24 * H) {
+              lag = +(gap / H).toFixed(1);
+              reason = `стык по ресурсу «${common[0].name}» — ${lag} ч`;
+              prio = 2;
+            } else continue;
+          }
+          const aFirst = A0 <= B0;
+          out.push({
+            srcProject: aFirst ? aId : bId,
+            srcOp: aFirst ? na.id : nb.id,
+            srcName: aFirst ? na.name : nb.name,
+            tgtProject: aFirst ? bId : aId,
+            tgtOp: aFirst ? nb.id : na.id,
+            tgtName: aFirst ? nb.name : na.name,
+            reason, lag, prio,
+          });
+          if (out.length >= 20) break;
+        }
+        if (out.length >= 20) break;
+      }
+      const seen = new Set<string>();
+      const uniq = out.filter((x) => {
+        const k = x.srcOp + '>' + x.tgtOp;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }).sort((x, y) => x.prio - y.prio);
+      setSugg(uniq);
+      if (!uniq.length) notify('Совпадений по общим ресурсам не найдено');
+      else notify(`Найдено предложений: ${uniq.length}`);
+    } catch (e: any) {
+      notify('Не удалось подобрать связи: ' + (e?.message || e));
+    }
+    setBusy(false);
+  };
+
+  const flipSugg = (i: number) => {
+    setSugg((prev) => (prev || []).map((s, k) => k === i ? {
+      ...s,
+      srcProject: s.tgtProject, srcOp: s.tgtOp, srcName: s.tgtName,
+      tgtProject: s.srcProject, tgtOp: s.srcOp, tgtName: s.srcName,
+    } : s));
+  };
+
+  const applySugg = async (s: any) => {
+    try {
+      await api('/ccm/inter-deps', {
+        method: 'POST',
+        body: JSON.stringify({ source_project_id: s.srcProject, source_operation_id: s.srcOp, target_project_id: s.tgtProject, target_operation_id: s.tgtOp, dependency_type: 'FS', lag_hours: s.lag || 0 }),
+      });
+      notify('Связь создана: ' + s.srcName + ' → ' + s.tgtName);
+      setSugg((prev) => (prev || []).filter((x) => x !== s));
+      await loadLinks();
+    } catch (e: any) { notify('Ошибка: ' + (e?.message || e)); }
+  };
+
   const pname = (id: string) => (byId.get(id)?.name || '—');
 
   return (
@@ -111,8 +210,35 @@ export default function ComplexView({ api, projects, notify }: { api: Api; proje
         <select style={inp} value={bId} onChange={(e) => setBId(e.target.value)}>
           {active.map((p: any) => (<option key={p.id} value={p.id}>{p.name}</option>))}
         </select>
+        <button style={btn} disabled={busy} onClick={() => void suggest()}>🔎 Подобрать связи</button>
         <button style={btnP} disabled={busy} onClick={() => void calc()}>Рассчитать комплекс</button>
       </div>
+
+      {sugg && (
+        <div style={card}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE', marginBottom: 6 }}>Предложения по связям (по общим ресурсам)</div>
+          <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 8 }}>Анализ пересечений в текущих планах проектов; направление можно поменять, лаг — из разрыва.</div>
+          {sugg.length === 0 && <div style={{ fontSize: 12, color: '#5A7090' }}>Ничего не найдено.</div>}
+          {sugg.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr><th style={th}>Источник</th><th style={th}>Приёмник</th><th style={th}>Причина</th><th style={th}></th></tr></thead>
+              <tbody>
+                {sugg.map((s: any, i: number) => (
+                  <tr key={s.srcOp + '>' + s.tgtOp}>
+                    <td style={td}>{pname(s.srcProject)} · {s.srcName}</td>
+                    <td style={td}>{pname(s.tgtProject)} · {s.tgtName}</td>
+                    <td style={{ ...td, color: '#8FA3BD' }}>{s.reason}{s.lag ? ` (лаг ${s.lag} ч)` : ''}</td>
+                    <td style={td}>
+                      <button style={btn} onClick={() => flipSugg(i)} title="Поменять направление">⇄</button>{' '}
+                      <button style={btnP} onClick={() => void applySugg(s)}>Связать</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       <div style={card}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#B0C4DE', marginBottom: 8 }}>Связи между A и B</div>
