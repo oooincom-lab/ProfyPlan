@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user
 from app.models.project import Project
+from app.models.production_order import ProductionOrder
+from app.models.operation import Operation, OperationResource
+from app.models.calculation_run import CalculationRun
+from app.models.plan_snapshot import PlanSnapshot
+from app.models.plan_version import InterProjectDependency
 from app.models.tenant import User
 from app.schemas.project import ProjectCreate, ProjectList, ProjectMove, ProjectOut, ProjectUpdate
 
@@ -223,6 +228,114 @@ async def update_project(
     await db.commit()
     await db.refresh(project)
     return ProjectOut.model_validate(project)
+
+
+@router.get("/{project_id}/readiness")
+async def project_readiness(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Готовность проекта к расчёту: шаги подготовки данных (чек-лист)."""
+    pres = await db.execute(select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id))
+    project = pres.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    orders = (await db.execute(
+        select(ProductionOrder).where(ProductionOrder.tenant_id == tenant_id, ProductionOrder.project_id == project_id)
+    )).scalars().all()
+    total_orders = len(orders)
+    drafts = len([o for o in orders if (o.status or "draft") == "draft"])
+
+    ops = (await db.execute(
+        select(Operation).where(Operation.tenant_id == tenant_id, Operation.project_id == project_id)
+    )).scalars().all()
+    op_ids = [o.id for o in ops]
+    nondraft = {o.id for o in orders if (o.status or "draft") != "draft"}
+    ops_without_dept = len([
+        o for o in ops
+        if o.department_id is None and (o.order_id is None or o.order_id in nondraft)
+    ])
+    with_res = 0
+    if op_ids:
+        with_res = (await db.execute(
+            select(func.count(func.distinct(OperationResource.operation_id))).where(
+                OperationResource.operation_id.in_(op_ids)
+            )
+        )).scalar() or 0
+    ops_without_res = max(0, len(ops) - with_res)
+
+    last_run = (await db.execute(
+        select(CalculationRun).where(CalculationRun.tenant_id == tenant_id, CalculationRun.project_id == project_id)
+        .order_by(CalculationRun.created_at.desc()).limit(1)
+    )).scalars().first()
+    snaps = (await db.execute(
+        select(func.count(PlanSnapshot.id)).where(PlanSnapshot.tenant_id == tenant_id, PlanSnapshot.project_id == project_id)
+    )).scalar() or 0
+    deps = (await db.execute(
+        select(func.count(InterProjectDependency.id)).where(
+            (InterProjectDependency.source_project_id == project_id)
+            | (InterProjectDependency.target_project_id == project_id)
+        )
+    )).scalar() or 0
+    kids = (await db.execute(
+        select(func.count(Project.id)).where(Project.tenant_id == tenant_id, Project.parent_id == project_id)
+    )).scalar() or 0
+    multi = bool(project.parent_id) or kids > 0
+
+    items = []
+    def add(iid, title, status, detail, action):
+        items.append({"id": iid, "title": title, "status": status, "detail": detail, "action": action})
+
+    if total_orders == 0:
+        add("orders", "Заказы", "block", "В проекте нет заказов — расчёт невозможен", "project")
+    elif drafts == total_orders:
+        add("orders", "Заказы", "warn", f"Заказов: {total_orders}, все черновики — в расчёт не попадут", "project")
+    elif drafts > 0:
+        add("orders", "Заказы", "warn", f"Заказов: {total_orders}, черновиков: {drafts}", "project")
+    else:
+        add("orders", "Заказы", "ok", f"Заказов: {total_orders}", "project")
+
+    if len(ops) == 0:
+        add("structure", "Структура", "block", "Операций нет — разверните заказы по маршрутам" if total_orders else "Нет заказов и операций", "project")
+    elif ops_without_dept > 0:
+        add("structure", "Структура", "block", f"Операций без подразделения: {ops_without_dept} — развёртка блокируется/карантин", "project")
+    else:
+        add("structure", "Структура", "ok", f"Операций: {len(ops)}", "project")
+
+    if project.schedule_id:
+        add("calendar", "Календарь и графики", "ok", "График проекта задан", "project")
+    else:
+        add("calendar", "Календарь и графики", "warn", "График проекта не задан — даты будут условными", "project")
+
+    if len(ops) == 0:
+        add("resources", "Ресурсы", "warn", "Нет операций — назначить ресурсы некому", "project")
+    elif ops_without_res > 0:
+        add("resources", "Ресурсы", "warn", f"Операций без ресурсов: {ops_without_res}", "project")
+    else:
+        add("resources", "Ресурсы", "ok", "Все операции с ресурсами", "project")
+
+    if last_run is None:
+        add("calculation", "Локальный расчёт", "warn", "Расчёт ещё не запускался", "project")
+    else:
+        add("calculation", "Локальный расчёт", "ok", "Последний расчёт: " + last_run.created_at.strftime("%d.%m.%Y %H:%M"), "project")
+
+    if not multi:
+        add("complex", "Комплекс (C)", "ok", "Один проект — связи с другими не требуются", "complex")
+    elif deps == 0:
+        add("complex", "Комплекс (C)", "warn", "Проект в ветке, но межпроектных связей нет", "complex")
+    else:
+        add("complex", "Комплекс (C)", "ok", f"Межпроектных связей: {deps}", "complex")
+
+    if snaps == 0:
+        add("fixation", "Фиксация плана", "warn", "Фиксаций плана нет — в 1С передавать нечего", "project")
+    else:
+        add("fixation", "Фиксация плана", "ok", f"Фиксаций: {snaps}", "project")
+
+    ok = len([i for i in items if i["status"] == "ok"])
+    nxt = next((i["id"] for i in items if i["status"] == "block"), None) or next((i["id"] for i in items if i["status"] == "warn"), None)
+    return {"project_id": str(project_id), "project_name": project.name, "score": {"ok": ok, "total": len(items)}, "next": nxt, "items": items}
 
 
 @router.patch("/{project_id}/move", response_model=ProjectOut)
