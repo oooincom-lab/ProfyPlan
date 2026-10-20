@@ -10,7 +10,7 @@ type View =
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
-  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration';
+  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex';
 
 interface SidebarProps {
   view: View;
@@ -711,6 +711,7 @@ export default function Sidebar(props: SidebarProps) {
       {/* Аналитика */}
       <div className="s-sec" style={{ justifyContent: 'flex-start' }}>Аналитика</div>
       <button className={`s-item ${view === 'ccm' ? 'active' : ''}`} onClick={() => navTo('ccm')}>📈 CCM · Портфель{debug && <DebugBadge debug={debug} text="[nav:ccm]" />}</button>
+      <button className={`s-item ${view === 'complex' ? 'active' : ''}`} onClick={() => navTo('complex')}>🧩 Комплекс (C){debug && <DebugBadge debug={debug} text="[nav:complex]" />}</button>
       <button className={`s-item ${view === 'reports' ? 'active' : ''}`} onClick={() => navTo('reports')}>
         📋 Отчёты{debug && <DebugBadge debug={debug} text="[nav:reports]" />}
       </button>

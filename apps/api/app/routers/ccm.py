@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from pydantic import BaseModel
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -18,7 +20,7 @@ from app.core.deps import get_current_tenant_id
 from app.models.operation import Operation, OperationDependency, OperationResource
 from app.models.project import Project
 from app.models.resource import Resource
-from app.models.plan_version import PlanBaseline, ActualExecution
+from app.models.plan_version import ActualExecution, InterProjectDependency, PlanBaseline
 from app.models.production_order import ProductionOrder
 from app.services.cpm import calculate_cpm
 from app.services.multi_project import merge_projects, format_merged_result
@@ -29,6 +31,135 @@ from app.services.bottleneck import analyze_bottlenecks, BottleneckResult
 from app.services.bush_shift_warnings import tree_move_warnings as _tree_move_warnings
 
 ccm_router = APIRouter(prefix="/v1/ccm", tags=["CCM"])
+
+
+class InterDepIn(BaseModel):
+    source_project_id: UUID
+    source_operation_id: UUID
+    target_project_id: UUID
+    target_operation_id: UUID
+    dependency_type: str = "FS"
+    lag_hours: float = 0
+    notes: Optional[str] = None
+
+
+@ccm_router.get("/inter-deps")
+async def list_inter_deps(
+    project_id: Optional[UUID] = None,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Межпроектные связи (все или по проекту)."""
+    q = select(InterProjectDependency).where(
+        InterProjectDependency.source_project_id.in_(
+            select(Project.id).where(Project.tenant_id == tenant_id)
+        )
+    )
+    if project_id:
+        q = q.where(
+            (InterProjectDependency.source_project_id == project_id)
+            | (InterProjectDependency.target_project_id == project_id)
+        )
+    res = await db.execute(q.order_by(InterProjectDependency.created_at.desc()).limit(500))
+    deps = res.scalars().all()
+    items = []
+    for d in deps:
+        items.append({
+            "id": str(d.id),
+            "source_project_id": str(d.source_project_id),
+            "source_operation_id": str(d.source_operation_id) if d.source_operation_id else None,
+            "target_project_id": str(d.target_project_id),
+            "target_operation_id": str(d.target_operation_id) if d.target_operation_id else None,
+            "dependency_type": d.dependency_type,
+            "lag_hours": float(d.lag_hours or 0),
+            "notes": d.notes,
+        })
+    return {"items": items, "total": len(items)}
+
+
+async def _same_branch(db: AsyncSession, tenant_id: UUID, a: UUID, b: UUID) -> bool:
+    """Оба проекта в одной ветке (общий корень)."""
+    async def root_of(pid: UUID) -> Optional[UUID]:
+        cur = pid
+        seen = set()
+        while cur and cur not in seen:
+            seen.add(cur)
+            res = await db.execute(select(Project.parent_id).where(Project.id == cur, Project.tenant_id == tenant_id))
+            parent = res.scalar_one_or_none()
+            if not parent:
+                return cur
+            cur = parent
+        return cur
+    return (await root_of(a)) == (await root_of(b))
+
+
+@ccm_router.post("/inter-deps")
+async def create_inter_dep(
+    body: InterDepIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Создать межпроектную связь (операция → операция, FS/SS/FF)."""
+    if body.dependency_type not in ("FS", "SS", "FF"):
+        raise HTTPException(status_code=400, detail="Допустимые типы связей: FS, SS, FF")
+    if body.lag_hours < 0:
+        raise HTTPException(status_code=400, detail="Лаг не может быть отрицательным")
+    if body.source_operation_id == body.target_operation_id:
+        raise HTTPException(status_code=400, detail="Нельзя связать операцию саму с собой")
+
+    for pid in (body.source_project_id, body.target_project_id):
+        pres = await db.execute(select(Project).where(Project.id == pid, Project.tenant_id == tenant_id))
+        if not pres.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Проект не найден")
+
+    if body.source_project_id != body.target_project_id and not await _same_branch(db, tenant_id, body.source_project_id, body.target_project_id):
+        raise HTTPException(status_code=400, detail="Проекты должны быть в одной ветке (общий корень)")
+
+    src = await db.execute(select(Operation).where(Operation.id == body.source_operation_id, Operation.project_id == body.source_project_id, Operation.tenant_id == tenant_id))
+    tgt = await db.execute(select(Operation).where(Operation.id == body.target_operation_id, Operation.project_id == body.target_project_id, Operation.tenant_id == tenant_id))
+    if not src.scalar_one_or_none() or not tgt.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Операции не найдены в указанных проектах")
+
+    dep = InterProjectDependency(
+        source_project_id=body.source_project_id,
+        source_operation_id=body.source_operation_id,
+        target_project_id=body.target_project_id,
+        target_operation_id=body.target_operation_id,
+        dependency_type=body.dependency_type,
+        lag_hours=Decimal(str(body.lag_hours or 0)),
+        notes=body.notes,
+    )
+    db.add(dep)
+    try:
+        await db.flush()
+        # проверка цикла на объединённом графе двух проектов
+        await merge_projects(db, [body.source_project_id, body.target_project_id], tenant_id)
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    await db.commit()
+    await db.refresh(dep)
+    return {"id": str(dep.id), "created": True}
+
+
+@ccm_router.delete("/inter-deps/{dep_id}", status_code=204)
+async def delete_inter_dep(
+    dep_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Удалить межпроектную связь."""
+    res = await db.execute(
+        select(InterProjectDependency).where(
+            InterProjectDependency.id == dep_id,
+            InterProjectDependency.source_project_id.in_(select(Project.id).where(Project.tenant_id == tenant_id)),
+        )
+    )
+    dep = res.scalar_one_or_none()
+    if not dep:
+        raise HTTPException(status_code=404, detail="Связь не найдена")
+    await db.delete(dep)
+    await db.commit()
 
 
 @ccm_router.post("/merge")

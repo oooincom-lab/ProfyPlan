@@ -58,6 +58,7 @@ import CpmGraph from '@/components/CpmGraph';
 import CalcLayersStrip from '@/components/CalcLayersStrip';
 import SavedViewsPanel from '@/components/SavedViewsPanel';
 import IntegrationView from '@/components/IntegrationView';
+import ComplexView from '@/components/ComplexView';
 import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
@@ -181,7 +182,7 @@ function detailOf(e: any): string {
   return m ? m[1] : s;
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -4797,6 +4798,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'settings': 'Настройки',
     'team': 'Команда',
     'integration': 'Интеграция',
+    'complex': 'Комплекс (C)',
     'new-project': 'Новый проект',
   };
 
@@ -7381,6 +7383,10 @@ const changeOrderStatus = async (o: any, status: string) => {
           {/* РАЗДЕЛ ИНТЕГРАЦИЯ (каркас 1С, срезы 1–2) */}
           {view === 'integration' && (
             <IntegrationView api={apiF} notify={(m: string) => setMsg(m)} openXlog={(e: any, items?: any[]) => (win as any).openXlogWin(e, items)} openXconn={(c: any, save?: any) => (win as any).openXconnWin(c, save)} openXjournal={() => (win as any).openXjournalWin(apiF, (e: any, items?: any[]) => (win as any).openXlogWin(e, items))} />
+          )}
+
+          {view === 'complex' && (
+            <ComplexView api={apiF} projects={projects} notify={(m: string) => setMsg(m)} />
           )}
 
           {view === 'team' && (() => {
