@@ -411,12 +411,6 @@ export default function Sidebar(props: SidebarProps) {
                 style={{ cursor: 'pointer' }}
               >
                 <span className="s-folder" style={{ color: 'var(--s-folder-proj)' }} /> {p.name}
-                {p.start_issue === 'late' && (
-                  <span title={`Старт проекта позже первого заказа на ${p.start_issue_days} дн`} style={{ color: '#FCD34D', marginLeft: 4 }}>⚠</span>
-                )}
-                {p.start_issue === 'missing' && (
-                  <span title="Дата старта проекта не задана" style={{ color: '#F87171', marginLeft: 4 }}>⚠</span>
-                )}
               </span>
             </div>
 
