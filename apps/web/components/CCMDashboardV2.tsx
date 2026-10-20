@@ -71,7 +71,19 @@ type Tab = 'network-graph';
 
 export default function CCMV2Dashboard({ onOpenResourceEdit, onOpenOrder }: { onOpenResourceEdit?: (id: string) => void; onOpenOrder?: (order: any) => void } = {}) {
   const [projects, setProjects] = useState<any[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('ccm_prefill_projects');
+        if (raw) {
+          localStorage.removeItem('ccm_prefill_projects');
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) return arr.map(String);
+        }
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
   const [activeTab, setActiveTab] = useState<Tab>('network-graph');
   const [ccmResult, setCcmResult] = useState<any>(null);
   const [levelResult, setLevelResult] = useState<any>(null);

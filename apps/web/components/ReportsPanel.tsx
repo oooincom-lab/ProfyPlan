@@ -12,7 +12,7 @@ const fmt = (s?: string | null) => {
 };
 
 /** Отчёты: загрузка подразделений и предложение межпроектного выравнивания. */
-export default function ReportsPanel({ projects }: { projects: any[] }) {
+export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpenComplex }: { projects: any[]; onOpenProject?: (id: string) => void; onOpenCcm?: () => void; onOpenComplex?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -32,6 +32,11 @@ export default function ReportsPanel({ projects }: { projects: any[] }) {
     if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
     if (r.status === 204) return undefined as any;
     return r.json();
+  };
+
+  const openCcmWith = (ids: string[]) => {
+    try { localStorage.setItem('ccm_prefill_projects', JSON.stringify(ids)); } catch { /* ignore */ }
+    if (onOpenCcm) onOpenCcm();
   };
 
   useEffect(() => {
@@ -84,6 +89,19 @@ export default function ReportsPanel({ projects }: { projects: any[] }) {
         </div>}
         {deptLoad && (
           <>
+            {((deptLoad.totals?.peak_percent || 0) > 100) && (
+              <div style={{ margin: '2px 0 10px', padding: '8px 10px', border: '1px dashed rgba(248,113,113,.5)', borderRadius: 8, background: 'rgba(248,113,113,.06)', fontSize: 12, color: '#CBD5E1' }}>
+                <b style={{ color: '#F87171' }}>Превышение загрузки.</b> Что делать: скорректировать ресурсы/график в проекте, посмотреть конфликты в CCM или открыть комплекс.
+                <span style={{ display: 'inline-flex', gap: 6, marginLeft: 8, flexWrap: 'wrap' }}>
+                  <button type="button" onClick={() => onOpenProject && onOpenProject(projId)}
+                    style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Открыть проект</button>
+                  <button type="button" onClick={() => openCcmWith([projId])}
+                    style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>CCM: конфликты</button>
+                  <button type="button" onClick={() => onOpenComplex && onOpenComplex()}
+                    style={{ background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Комплекс (C)</button>
+                </span>
+              </div>
+            )}
             <div style={{ fontSize: 12, color: '#8FA3BD', marginBottom: 8 }}>
               Проект: <b>{deptLoad.project_name}</b> · итого спрос <b>{deptLoad.totals?.demand_text}</b> · пик нагрузки <b style={{ color: (deptLoad.totals?.peak_percent || 0) > 100 ? '#F87171' : '#FCD34D' }}>{deptLoad.totals?.peak_percent}%</b>
             </div>
@@ -120,6 +138,10 @@ export default function ReportsPanel({ projects }: { projects: any[] }) {
             <button type="button" onClick={runLeveling} disabled={busy}
               style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               {busy ? '…' : '▶ Предложить сдвиги'}
+            </button>
+            <button type="button" onClick={() => openCcmWith(Object.keys(picked).filter(k => picked[k]))} disabled={busy}
+              style={{ marginLeft: 8, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Открыть в CCM
             </button>
           </span>
         </div>

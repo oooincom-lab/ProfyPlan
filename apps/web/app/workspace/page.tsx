@@ -7514,7 +7514,10 @@ const changeOrderStatus = async (o: any, status: string) => {
 
           {/* ═══ REPORTS ═══ */}
           {view === 'reports' && (
-            <ReportsPanel projects={projects} />
+            <ReportsPanel projects={projects}
+              onOpenProject={(id: string) => { const p = (projects as any[]).find((x: any) => x.id === id); if (p) loadProjectDashboard(p); }}
+              onOpenCcm={() => navTo('ccm' as any)}
+              onOpenComplex={() => navTo('complex' as any)} />
           )}
         </div>
       </div>
