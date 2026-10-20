@@ -40,8 +40,9 @@ export default function ComplexView({ api, projects, notify }: { api: Api; proje
   const [scopeId, setScopeId] = useState('');
   useEffect(() => {
     if (!scopeId && active.length) {
-      const withKids = active.find((p: any) => (children[p.id] || []).length > 0);
-      setScopeId((withKids || active[0]).id);
+      const rootsWithKids = active.filter((p: any) => !p.parent_id && ((children[p.id] || []).length > 0));
+      const anyWithKids = active.find((p: any) => (children[p.id] || []).length > 0);
+      setScopeId((rootsWithKids[0] || anyWithKids || active[0]).id);
     }
     /* eslint-disable-next-line */
   }, [projects]);
