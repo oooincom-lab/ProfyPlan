@@ -328,11 +328,6 @@ async def project_readiness(
     else:
         add("complex", "Комплекс (C)", "ok", f"Межпроектных связей: {deps}", "complex")
 
-    if snaps == 0:
-        add("fixation", "Фиксация плана", "warn", "Фиксаций плана нет — в 1С передавать нечего", "project")
-    else:
-        add("fixation", "Фиксация плана", "ok", f"Фиксаций: {snaps}", "project")
-
     # Межпроектное выравнивание: конфликты по общим ресурсам с другими проектами
     conflicts = 0
     try:
@@ -350,6 +345,11 @@ async def project_readiness(
             f"Пересечений по общим ресурсам с другими проектами: {conflicts} — проверьте CCM → Выравнивание", "ccm")
     else:
         add("leveling", "Межпроектное выравнивание", "ok", "Межпроектных пересечений по ресурсам нет", "ccm")
+
+    if snaps == 0:
+        add("fixation", "Фиксация плана", "warn", "Фиксаций плана нет — в 1С передавать нечего", "project")
+    else:
+        add("fixation", "Фиксация плана", "ok", f"Фиксаций: {snaps}", "project")
 
     ok = len([i for i in items if i["status"] == "ok"])
     nxt = next((i["id"] for i in items if i["status"] == "block"), None) or next((i["id"] for i in items if i["status"] == "warn"), None)
