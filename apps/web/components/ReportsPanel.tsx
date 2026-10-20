@@ -191,11 +191,18 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
                       {fmt(x.current_start)}{x.start_source === 'orders' ? <span style={{ color: '#5A7090' }}> · из заказов</span> : null}
                     </td>
                     <td className="t-mono" style={{ color: x.moved ? '#FCD34D' : '#86EFAC' }}>{fmt(x.suggested_start)}</td>
-                    <td className="t-mono">{x.shift_days ? '+' + x.shift_days + ' дн' : '—'}</td>
+                    <td className="t-mono" title={x.warning || undefined} style={{ color: x.warning ? '#F87171' : undefined }}>
+                      {x.shift_days ? '+' + x.shift_days + ' дн' : '—'}{x.warning ? ' ⚠' : ''}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {(plan.plan || []).filter((x: any) => x.warning).length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: '#F87171' }}>
+                ⚠ У {(plan.plan || []).filter((x: any) => x.warning).length} проектов сдвиг больше полугода — последовательное размещение требует дополнительных ресурсов или пересмотра приоритетов.
+              </div>
+            )}
             {(plan.plan || []).filter((x: any) => !x.current_start).length > 0 && (
               <div style={{ marginTop: 8, fontSize: 11.5, color: '#8FA3BD' }}>
                 Без даты старта: {(plan.plan || []).filter((x: any) => !x.current_start).length} — нет ни в карточке проекта, ни в заказах; по ним сдвиг не рассчитывается.

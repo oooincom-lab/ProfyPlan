@@ -1909,6 +1909,7 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
     from app.models.product_structure import ProductStructure
     from app.models.project import Project
     from app.models.project_resource import ProjectResource
+    from app.models.production_order import ProductionOrder
     from app.models.resource_department_quota import ResourceDepartmentQuota
     from app.services.capacity import format_duration
 
@@ -1926,6 +1927,20 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
         str(x.id): x
         for x in (await db.execute(select(Project).where(Project.tenant_id == tenant_id))).scalars().all()
     }
+
+    # Периоды заказов по проектам: если в карточке проекта даты не заданы,
+    # CCM берёт самый ранний старт и самый поздний срок заказов.
+    order_span: dict = {}
+    for _pid, _s0, _d0 in (await db.execute(
+        select(
+            ProductionOrder.project_id,
+            func.min(ProductionOrder.start_date),
+            func.max(ProductionOrder.due_date),
+        )
+        .where(ProductionOrder.tenant_id == tenant_id, ProductionOrder.project_id.isnot(None))
+        .group_by(ProductionOrder.project_id)
+    )).all():
+        order_span[str(_pid)] = (_s0, _d0)
 
     share_map: dict = {}
     excl_map: dict = {}
@@ -2037,6 +2052,14 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
             eff_days = (hours / (8.0 * m_cap)) if m_cap > 0 else 0.0
             start = getattr(proj, "start_date", None) if proj else None
             finish = getattr(proj, "due_date", None) if proj else None
+            source = "project" if start else None
+            if start is None:
+                _span = order_span.get(pid)
+                if _span and _span[0]:
+                    start = datetime.combine(_span[0], datetime.min.time())
+                    source = "orders"
+                    # срок заказа — дедлайн, а не окно занятия ресурса:
+                    # окно считаем от старта по трудозатратам (как для проектов с датой).
             if start and not finish:
                 finish = start + timedelta(days=max(eff_days, 0.0) * 1.4)
             assignments.append({
@@ -2050,6 +2073,7 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
                 "effective_days": round(eff_days, 2),
                 "start": start.isoformat() if start else None,
                 "finish": finish.isoformat() if finish else None,
+                "start_source": source,
             })
         assignments.sort(key=lambda x: x["start"] or "")
 
@@ -2063,6 +2087,10 @@ async def _overload_rows(db: AsyncSession, tenant_id) -> list:
                 a1 = datetime.fromisoformat(a["finish"]) if "T" in a["finish"] else datetime.fromisoformat(a["finish"] + "T00:00")
                 b0 = datetime.fromisoformat(b["start"]) if "T" in b["start"] else datetime.fromisoformat(b["start"] + "T00:00")
                 b1 = datetime.fromisoformat(b["finish"]) if "T" in b["finish"] else datetime.fromisoformat(b["finish"] + "T00:00")
+                if a0.tzinfo is not None: a0 = a0.replace(tzinfo=None)
+                if a1.tzinfo is not None: a1 = a1.replace(tzinfo=None)
+                if b0.tzinfo is not None: b0 = b0.replace(tzinfo=None)
+                if b1.tzinfo is not None: b1 = b1.replace(tzinfo=None)
                 o0 = max(a0, b0)
                 o1 = min(a1, b1)
                 days = (o1 - o0).days
@@ -2561,9 +2589,13 @@ async def multi_leveling(
                         finish = start + duration
                         moved = True
         placed[pid] = {"start": start, "finish": finish, "rank": rank.get((getattr(p, "priority", None) or "normal"), 1)}
+        _warn = None
+        if shift_days and shift_days > 180:
+            _warn = "сдвиг %s дн — больше полугода: последовательное размещение требует дополнительных ресурсов" % shift_days
         plan.append({
             "project_id": pid,
             "project_name": p.name,
+            "warning": _warn,
             "priority": (getattr(p, "priority", None) or "normal"),
             "current_start": _si.get("start").isoformat() if _si.get("start") else None,
             "project_start": (_si.get("project_start").isoformat() if _si.get("project_start") else None),
@@ -2583,6 +2615,7 @@ async def multi_leveling(
             "projects": len(plan),
             "moved": sum(1 for x in plan if x["moved"]),
             "conflicts": len(conflicts),
+            "warnings": sum(1 for x in plan if x.get("warning")),
         },
     }
 
