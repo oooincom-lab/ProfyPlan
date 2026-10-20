@@ -176,6 +176,9 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
           <>
             <div style={{ fontSize: 12, color: '#8FA3BD', marginBottom: 8 }}>
               перемещено проектов: <b>{plan.summary?.moved ?? 0}</b> из {plan.summary?.projects ?? 0} · конфликтов: <b>{plan.summary?.conflicts ?? 0}</b>
+              <span style={{ color: '#5A7090' }}>
+                {' '}· даты: проект {(plan.plan || []).filter((x: any) => x.start_source === 'project').length}, заказы {(plan.plan || []).filter((x: any) => x.start_source === 'orders').length}
+              </span>
             </div>
             <table className="tbl" style={{ fontSize: 12 }}>
               <thead><tr><th>Проект</th><th>Приоритет</th><th>Текущий старт</th><th>Предлагаемый старт</th><th>Сдвиг</th></tr></thead>
@@ -184,7 +187,9 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
                   <tr key={x.project_id}>
                     <td>{x.project_name}{x.moved ? <span style={{ color: '#FCD34D' }}> · сдвигается</span> : null}</td>
                     <td style={{ color: x.priority === 'high' ? '#86EFAC' : '#8FA3BD' }}>{x.priority}</td>
-                    <td className="t-mono">{fmt(x.current_start)}</td>
+                    <td className="t-mono" title={x.start_source === 'orders' ? 'Дата старта проекта не задана — взята самая ранняя дата старта заказов' : undefined}>
+                      {fmt(x.current_start)}{x.start_source === 'orders' ? <span style={{ color: '#5A7090' }}> · из заказов</span> : null}
+                    </td>
                     <td className="t-mono" style={{ color: x.moved ? '#FCD34D' : '#86EFAC' }}>{fmt(x.suggested_start)}</td>
                     <td className="t-mono">{x.shift_days ? '+' + x.shift_days + ' дн' : '—'}</td>
                   </tr>
@@ -193,7 +198,7 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
             </table>
             {(plan.plan || []).filter((x: any) => !x.current_start).length > 0 && (
               <div style={{ marginTop: 8, fontSize: 11.5, color: '#8FA3BD' }}>
-                Без даты старта: {(plan.plan || []).filter((x: any) => !x.current_start).length} — по ним сдвиг не рассчитывается, задайте старт в проекте.
+                Без даты старта: {(plan.plan || []).filter((x: any) => !x.current_start).length} — нет ни в карточке проекта, ни в заказах; по ним сдвиг не рассчитывается.
               </div>
             )}
             {(plan.conflicts || []).length > 0 && (

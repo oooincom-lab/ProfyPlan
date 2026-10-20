@@ -3,7 +3,7 @@ CCM-роутер: multi-project merge, BOM-развёртка, resource leveling
 """
 import io
 import math
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -2445,15 +2445,19 @@ async def multi_leveling(
     (применение отдельным вызовом PUT /v1/projects/{id}).
     """
     def _naive(dt):
-        """Приводит дату к naive-виду: сравнение aware/naive ломает сортировку."""
+        """Приводит дату/строку к naive datetime: сравнение aware/naive ломает сортировку."""
         if dt is None:
             return None
+        if isinstance(dt, datetime):
+            return dt.replace(tzinfo=None) if dt.tzinfo else dt
+        if isinstance(dt, date):
+            return datetime(dt.year, dt.month, dt.day, 8, 0)
         if isinstance(dt, str):
             try:
-                dt = datetime.fromisoformat(dt)
+                return _naive(datetime.fromisoformat(dt))
             except Exception:
                 return None
-        return dt.replace(tzinfo=None) if getattr(dt, "tzinfo", None) else dt
+        return None
 
     if not project_ids:
         raise HTTPException(400, "Укажите хотя бы один проект")
@@ -2466,6 +2470,30 @@ async def multi_leveling(
     }
     if not projs:
         raise HTTPException(404, "Проекты не найдены")
+
+    # если дата старта проекта не задана — берём самый ранний старт его заказов
+    order_start_by: dict = {}
+    os_rows = await db.execute(
+        select(ProductionOrder.project_id, func.min(ProductionOrder.start_date))
+        .where(
+            ProductionOrder.project_id.in_([p.id for p in projs.values()]),
+            ProductionOrder.tenant_id == tenant_id,
+            ProductionOrder.start_date.isnot(None),
+        )
+        .group_by(ProductionOrder.project_id)
+    )
+    for pid, d0 in os_rows.all():
+        order_start_by[str(pid)] = _naive(d0)
+
+    start_info: dict = {}
+    for pid, p in projs.items():
+        raw = _naive(getattr(p, "start_date", None))
+        from_orders = order_start_by.get(pid)
+        start_info[pid] = {
+            "start": raw or from_orders,
+            "project_start": raw,
+            "source": "project" if raw else ("orders" if from_orders else None),
+        }
 
     rows = await _overload_rows(db, tenant_id)
 
@@ -2497,15 +2525,18 @@ async def multi_leveling(
     order = sorted(
         projs.values(),
         key=lambda x: (-rank.get((getattr(x, "priority", None) or "normal"), 1),
-                       _naive(getattr(x, "start_date", None)) or datetime.min),
+                       (start_info.get(str(x.id)) or {}).get("start") or datetime.min),
     )
 
     placed: dict = {}
     plan = []
     for i, p in enumerate(order):
         pid = str(p.id)
-        start = _naive(getattr(p, "start_date", None))
+        _si = start_info.get(pid) or {}
+        start = _si.get("start")
         finish = finish_by_proj.get(pid)
+        if finish is None:
+            finish = None
         shift_days = 0
         moved = False
         if start:
@@ -2534,7 +2565,9 @@ async def multi_leveling(
             "project_id": pid,
             "project_name": p.name,
             "priority": (getattr(p, "priority", None) or "normal"),
-            "current_start": getattr(p, "start_date", None).isoformat() if getattr(p, "start_date", None) else None,
+            "current_start": _si.get("start").isoformat() if _si.get("start") else None,
+            "project_start": (_si.get("project_start").isoformat() if _si.get("project_start") else None),
+            "start_source": _si.get("source"),
             "suggested_start": start.isoformat() if start else None,
             "suggested_finish": finish.isoformat() if finish else None,
             "shift_days": shift_days,
