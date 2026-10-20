@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 43. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 45. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1272,6 +1272,84 @@
   <div class="task">
     <div class="task-title">6.38.7 Документы для пилота.</div>
     <div class="task-detail">ТЗ файлового обмена для 1С-специалиста (формат пакетов, маппинг, примеры на встроенном языке 1С, чек-лист приёмки; HTML + MD) и инструкция «Как подключить 1С:УНФ к ProfyPlan» (файловый обмен / OData). Устойчивость приёма: UTF-8 с BOM принимается. - готово 15.10</div>
+    
+  </div>
+</div>
+</div>
+<div class="phase"><div class="phase-head"><span class="tag">Блок 6</span> 39. Иерархия проектов (A) — решение 20.10.2026</div>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">6.39.1 Решение.</div>
+    <div class="task-detail">Проект — расчётная единица; иерархия — организационный слой: <code>projects.parent_id</code> (nullable, self-FK, ON DELETE RESTRICT, индекс), <code>sort_order</code>, глубина ≤ 6, несколько корневых деревьев. Родитель может иметь свои заказы; сводка по ветке — read-only без двойного счёта; удаление с детьми запрещено (архив ветки/перенос детей); снимки и 1С — без изменений.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.39.2 Календарь.</div>
+    <div class="task-detail">Наследование: собственный → ближайший родитель → общий производственный; собственный календарь ребёнка отменяет родительский; создание «на основе» общего или родительского. Для C v1 — единый эффективный календарь комплекса с пометкой; настройки проектов при расчёте не меняются.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.39.3 Тарифы.</div>
+    <div class="task-detail">Старт — 1 контур; Бизнес — дерево + портфель + интеграция 1С; Холдинг — CCM/PERT/МК, аудит, SSO. Глубина — техническая (≤ 6), не тарифная.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.39.4 Срез 1.</div>
+    <div class="task-detail">Миграция 0029 (parent_id/sort_order/индексы), API дерева и перемещения, защита циклов/глубины, UI (дерево, «＋ Подпроект», «Переместить», хлебные крошки), портфель по ветке, правила архива/удаления, справка, тесты.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.39.5 Справка (обязательно после реализации).</div>
+    <div class="task-detail">«Проекты» (подпроекты/дерево), «Настройки» (календарь и наследование), «Портфель» (фильтр по ветке).</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.39.6 Документы.</div>
+    <div class="task-detail">ADR <code>ProfyPlan-ADR-проекты-и-иерархия-20.10.2026.html</code>; записка <code>ProfyPlan-режимы-планирования-стратегия-20.10.2026.html</code>.</div>
+    
+  </div>
+</div>
+</div>
+<div class="phase"><div class="phase-head"><span class="tag">Блок 6</span> 40. Межпроектный CPM (C) — решение 20.10.2026</div>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">6.40.1 Что уже есть.</div>
+    <div class="task-detail"><code>operation_dependencies</code> (FS/FF/SS/SF + lag), <code>inter_project_dependencies</code> (проект + операция, FS/SS/FF, lag), <code>services/multi_project.py</code> (<code>merge_projects</code>), <code>POST /v1/ccm/merge</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.2 Семантика.</div>
+    <div class="task-detail">Эффективные настройки каждого проекта (наследование календаря); пользовательских схем расчёта нет. Связи v1 — операция→операция (FS/SS/FF), оба проекта в одной ветке, запрет циклов. T0 комплекса — настройка ветки (по умолчанию <code>min(start_anchor)</code>); якоря проектов в merged v1 не применяются.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.3 C v1 (просмотр).</div>
+    <div class="task-detail">CRUD связей (API), календарь/T0 комплекса, merged CPM + сквозной КП, экран «Комплекс» (связи + объединённый Гант), read-only отчёт. Без ресурсов и без write-back. Даты — в календаре комплекса с пометкой. Лимиты: 20 проектов / 5000 операций / 2000 связей.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.4 C v1.1.</div>
+    <div class="task-detail">Write-back «Применить расчёт комплекса к проектам» (с аудитом), мультикалендарный CPM (трансляция связей через календарь получателя), project-level связи, кэш, снимок комплекса.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.5 C v2 (по гейтам).</div>
+    <div class="task-detail">Единый ресурсный пул, приоритеты, leveling по ветке, экспорт комплекса в 1С — только при ≥ 2–3 клиентах/пилотах с реальной потребностью.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.6 Права.</div>
+    <div class="task-detail">Менеджер+ (операторы — только просмотр); проверка в API включается вместе с ролями.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.7 Справка (обязательно после реализации).</div>
+    <div class="task-detail">«Комплекс: связи и объединённый Гант», «Портфель по ветке», «Календарь и наследование»; обновить «Интеграцию» (write-back и экспорт дат).</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.40.8 Документы.</div>
+    <div class="task-detail"><code>ProfyPlan-C-вопросы-и-ответы-20.10.2026.html</code>, ADR.</div>
     
   </div>
 </div>
