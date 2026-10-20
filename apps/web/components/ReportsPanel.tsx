@@ -65,6 +65,7 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
   const depts: any[] = deptLoad?.departments || [];
   const pickedIds = Object.keys(picked).filter((k) => picked[k]);
   const pickedCount = pickedIds.length;
+  const allPicked = (projects || []).length > 0 && (projects || []).every((p) => picked[p.id]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -144,6 +145,14 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
             <span style={{ marginLeft: 8, fontSize: 11.5, color: pickedCount < 2 ? '#FCD34D' : '#8FA3BD' }}>
               выбрано: {pickedCount} (минимум 2)
             </span>
+            <button type="button" onClick={() => {
+              const next: Record<string, boolean> = {};
+              (projects || []).forEach((p) => { next[p.id] = !allPicked; });
+              setPicked(next);
+            }} disabled={busy}
+              style={{ marginLeft: 6, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '4px 9px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {allPicked ? 'Снять все' : 'Все'}
+            </button>
             <button type="button" onClick={() => openCcmWith(Object.keys(picked).filter(k => picked[k]))} disabled={busy}
               style={{ marginLeft: 8, background: 'transparent', border: '1px solid #2A4060', color: '#8FA3BD', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>
               Открыть в CCM
@@ -182,6 +191,11 @@ export default function ReportsPanel({ projects, onOpenProject, onOpenCcm, onOpe
                 ))}
               </tbody>
             </table>
+            {(plan.plan || []).filter((x: any) => !x.current_start).length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: '#8FA3BD' }}>
+                Без даты старта: {(plan.plan || []).filter((x: any) => !x.current_start).length} — по ним сдвиг не рассчитывается, задайте старт в проекте.
+              </div>
+            )}
             {(plan.conflicts || []).length > 0 && (
               <div style={{ marginTop: 8, fontSize: 11.5, color: '#FCD34D' }}>
                 Конфликты: {(plan.conflicts || []).map((c: any) => `${c.a} × ${c.b} (${c.days} дн, ${c.resource})`).join('; ')}

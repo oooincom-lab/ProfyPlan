@@ -2444,6 +2444,17 @@ async def multi_leveling(
     ресурсы не использовались одновременно. Результат — предложение
     (применение отдельным вызовом PUT /v1/projects/{id}).
     """
+    def _naive(dt):
+        """Приводит дату к naive-виду: сравнение aware/naive ломает сортировку."""
+        if dt is None:
+            return None
+        if isinstance(dt, str):
+            try:
+                dt = datetime.fromisoformat(dt)
+            except Exception:
+                return None
+        return dt.replace(tzinfo=None) if getattr(dt, "tzinfo", None) else dt
+
     if not project_ids:
         raise HTTPException(400, "Укажите хотя бы один проект")
 
@@ -2465,8 +2476,10 @@ async def multi_leveling(
             pid = a.get("project_id")
             if pid in projs and a.get("finish"):
                 try:
-                    f = datetime.fromisoformat(a["finish"])
+                    f = _naive(a["finish"])
                 except Exception:
+                    continue
+                if f is None:
                     continue
                 if pid not in finish_by_proj or f > finish_by_proj[pid]:
                     finish_by_proj[pid] = f
@@ -2484,14 +2497,14 @@ async def multi_leveling(
     order = sorted(
         projs.values(),
         key=lambda x: (-rank.get((getattr(x, "priority", None) or "normal"), 1),
-                       getattr(x, "start_date", None) or datetime.min),
+                       _naive(getattr(x, "start_date", None)) or datetime.min),
     )
 
     placed: dict = {}
     plan = []
     for i, p in enumerate(order):
         pid = str(p.id)
-        start = getattr(p, "start_date", None)
+        start = _naive(getattr(p, "start_date", None))
         finish = finish_by_proj.get(pid)
         shift_days = 0
         moved = False
