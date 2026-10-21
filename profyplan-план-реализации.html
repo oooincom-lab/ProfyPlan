@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 46. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 47. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1388,6 +1388,44 @@
   </div>
 </div>
 <p><b>Статус:</b> серверный lease и Chromium MVP собраны локально 22.10; API и статические страницы проверены, прогон расширения в браузере — следующий шаг.</p>
+<h2>6.42. Облачный обмен 1С: Яндекс Диск и Google Drive (22.10.2026)</h2>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">6.42.1 Контракт.</div>
+    <div class="task-detail">Дополнение №2 к ТЗ, версия 1.1: канонические папки <code>1c_to_plan</code> / <code>plan_to_1c</code>, <code>processed</code>, <code>archive</code>, <code>_state</code>; формат <code>profyplan.exchange.v1</code> без изменений.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.2 Яндекс Диск.</div>
+    <div class="task-detail">OAuth <code>OAuth</code>, <code>cloud-api.yandex.net/v1/disk</code>, загрузка через <code>resources/upload</code> → <code>PUT href</code>, <code>md5</code>, список с пагинацией.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.3 Google Drive.</div>
+    <div class="task-detail">OAuth 2.0 refresh token (In production / Internal; Testing 7 дней недопустим), Drive v3, ID папок, resumable upload, <code>md5Checksum</code>, <code>supportsAllDrives</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.4 Настройки.</div>
+    <div class="task-detail">Владелец папки — клиент, доступ Editor для 1С и ProfyPlan; интервал опроса задаётся с обеих сторон (5 минут по умолчанию, 1–60); один активный провайдер; один активный обмен на базу.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.5 Платформа и TLS.</div>
+    <div class="task-detail">1С 8.3.24+ и 8.5.x; <code>ЗащищенноеСоединениеOpenSSL</code>, TLS 1.2+, проверка сертификата; 8.3.20–8.3.23 — после отдельного теста.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.6 Этапы.</div>
+    <div class="task-detail">Сначала приём/регистрация плана; запись дат в документы 1С — этап 2. Далее — FTP/FTPS и почта на том же конверте.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.7 Статус.</div>
+    <div class="task-detail">ТЗ 1.1 готово; реализация на стороне 1С — по заданию; адаптер ProfyPlan — следующий срез.</div>
+    
+  </div>
+</div>
 <h2>Правила качества сетевого графика (блок 6.11, 26.09.2026)</h2>
 <p>Спецификация — в техническом промте, «Дополнение 12. Сетевой график: правила качества» (26.09.2026). Отдельных работ по этому пункту нет: правила входят в состав блока 6.11 и применяются при его доработке. <b>Статус — «спецификация зафиксирована, работ нет»</b> (сам блок 6.11 остаётся «готово локально, проверено»).</p>
 <div class="tasks">
