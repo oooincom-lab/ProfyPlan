@@ -8,9 +8,11 @@
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -19,12 +21,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user
-from app.models.integration import ExchangeInboxItem, ExchangeLogEntry, IntegrationConnection
+from app.models.integration import ExchangeInboxItem, ExchangeLease, ExchangeLogEntry, IntegrationConnection
 from app.models.tenant import User
 from app.services.integration_exchange import (
     make_envelope,
@@ -109,6 +111,25 @@ class ODataTestIn(BaseModel):
 class ODataPullIn(BaseModel):
     entities: Optional[list] = None
     top: int = 200
+
+
+class LeaseIn(BaseModel):
+    agent_id: str
+    instance_id: str
+    session_id: Optional[str] = None
+    ttl_seconds: int = 90
+
+
+class LeaseHeartbeatIn(BaseModel):
+    lease_token: str
+
+
+class LeaseTokenIn(BaseModel):
+    lease_token: str
+
+
+class AckOutboxIn(BaseModel):
+    pass
 
 
 async def _get_conn(db: AsyncSession, conn_id: UUID, tenant_id: UUID) -> IntegrationConnection:
@@ -392,3 +413,208 @@ async def get_inbox(
     q = q.order_by(ExchangeInboxItem.created_at.desc().nullslast()).limit(min(max(limit, 1), 500))
     res = await db.execute(q)
     return {"items": [InboxOut.model_validate(x) for x in res.scalars().all()]}
+
+# ─── Lease активного обмена: одна машина/сессия на подключение ───
+
+LEASE_TTL_DEFAULT = 90
+LEASE_TTL_MIN = 30
+LEASE_TTL_MAX = 300
+
+
+def _lease_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _lease_holder(row: Optional[ExchangeLease]) -> Optional[dict]:
+    if row is None:
+        return None
+    return {
+        "agent_id": row.agent_id,
+        "instance_id": row.instance_id,
+        "session_id": row.session_id,
+        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+    }
+
+
+async def _cleanup_lease(db: AsyncSession, conn_id: UUID) -> None:
+    await db.execute(
+        delete(ExchangeLease).where(
+            ExchangeLease.connection_id == conn_id,
+            ExchangeLease.expires_at < datetime.now(timezone.utc),
+        )
+    )
+    await db.flush()
+
+
+async def _get_lease(db: AsyncSession, conn_id: UUID) -> Optional[ExchangeLease]:
+    now = datetime.now(timezone.utc)
+    return (
+        await db.execute(
+            select(ExchangeLease).where(
+                ExchangeLease.connection_id == conn_id,
+                ExchangeLease.expires_at > now,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+@router.get("/connections/{conn_id}/agent-config")
+async def agent_config(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Метаданные подключения для браузерного помощника (без секретов)."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    return {
+        "connection_id": str(conn.id),
+        "name": conn.name,
+        "profile": conn.profile,
+        "transport": conn.transport,
+        "is_active": conn.is_active,
+        "has_settings": bool(conn.settings),
+    }
+
+
+@router.get("/connections/{conn_id}/lease")
+async def get_lease(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Кто сейчас держит обмен на подключении."""
+    await _get_conn(db, conn_id, tenant_id)
+    await _cleanup_lease(db, conn_id)
+    row = await _get_lease(db, conn_id)
+    return {"connection_id": str(conn_id), "holder": _lease_holder(row)}
+
+
+@router.post("/connections/{conn_id}/lease")
+async def acquire_lease(
+    conn_id: UUID,
+    body: LeaseIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Взять lease обмена. Второй экземпляр получает 409 с данными держателя."""
+    await _get_conn(db, conn_id, tenant_id)
+    if not body.agent_id.strip() or not body.instance_id.strip():
+        raise HTTPException(400, "agent_id и instance_id обязательны")
+    ttl = max(LEASE_TTL_MIN, min(int(body.ttl_seconds or LEASE_TTL_DEFAULT), LEASE_TTL_MAX))
+    await _cleanup_lease(db, conn_id)
+    row = await _get_lease(db, conn_id)
+    now = datetime.now(timezone.utc)
+    if row is not None and row.instance_id != body.instance_id:
+        raise HTTPException(409, detail={
+            "code": "lease_busy",
+            "message": "Обмен уже идёт на другом компьютере или в другой сессии",
+            "holder": _lease_holder(row),
+        })
+    token = secrets.token_urlsafe(32)
+    expires = now + timedelta(seconds=ttl)
+    if row is None:
+        row = ExchangeLease(
+            tenant_id=tenant_id,
+            connection_id=conn_id,
+            agent_id=body.agent_id.strip()[:120],
+            instance_id=body.instance_id.strip()[:120],
+            session_id=(body.session_id or "")[:120] or None,
+            token_hash=_lease_hash(token),
+            expires_at=expires,
+        )
+        db.add(row)
+    else:
+        row.agent_id = body.agent_id.strip()[:120]
+        row.session_id = (body.session_id or "")[:120] or None
+        row.token_hash = _lease_hash(token)
+        row.expires_at = expires
+    await db.commit()
+    return {
+        "connection_id": str(conn_id),
+        "lease_token": token,
+        "expires_at": expires.isoformat(),
+        "ttl_seconds": ttl,
+        "holder": _lease_holder(row),
+    }
+
+
+@router.post("/connections/{conn_id}/lease/heartbeat")
+async def heartbeat_lease(
+    conn_id: UUID,
+    body: LeaseHeartbeatIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Продлить lease; без heartbeat он истекает и обмен останавливается."""
+    await _get_conn(db, conn_id, tenant_id)
+    row = await _get_lease(db, conn_id)
+    if row is None or row.token_hash != _lease_hash(body.lease_token):
+        raise HTTPException(409, "Lease не найден или уже перехвачен")
+    if row.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(409, "Lease истёк — возьмите заново")
+    row.expires_at = datetime.now(timezone.utc) + timedelta(seconds=LEASE_TTL_DEFAULT)
+    await db.commit()
+    return {"ok": True, "expires_at": row.expires_at.isoformat()}
+
+
+@router.delete("/connections/{conn_id}/lease")
+async def release_lease(
+    conn_id: UUID,
+    body: LeaseTokenIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Освободить lease (закрытие сессии, остановка обмена)."""
+    await _get_conn(db, conn_id, tenant_id)
+    row = await _get_lease(db, conn_id)
+    if row is not None and row.token_hash == _lease_hash(body.lease_token):
+        await db.delete(row)
+        await db.commit()
+    return {"ok": True}
+
+
+@router.get("/connections/{conn_id}/outbox")
+async def list_outbox(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Список исходящих пакетов, ожидающих доставки на машину пользователя."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    from app.services.integration_exchange import _dirs, _ensure
+
+    out_dir = _ensure(_dirs(conn)[1])
+    items = []
+    for name in sorted(os.listdir(out_dir)):
+        path = os.path.join(out_dir, name)
+        if not os.path.isfile(path) or not name.lower().endswith(".json"):
+            continue
+        st = os.stat(path)
+        items.append({"name": name, "size": st.st_size, "mtime": st.st_mtime})
+    return {"dir": out_dir, "items": items}
+
+
+@router.post("/connections/{conn_id}/outbox/{file_name}/ack")
+async def ack_outbox(
+    conn_id: UUID,
+    file_name: str,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Подтвердить доставку: перенести файл в out/archive."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    if "/" in file_name or "\\" in file_name or ".." in file_name:
+        raise HTTPException(400, "Некорректное имя файла")
+    from app.services.integration_exchange import _dirs, _ensure
+
+    out_dir = _ensure(_dirs(conn)[1])
+    archive = _ensure(os.path.join(out_dir, "archive"))
+    src = os.path.join(out_dir, file_name)
+    if not os.path.isfile(src):
+        raise HTTPException(404, "Файл не найден")
+    dst = os.path.join(archive, file_name)
+    if os.path.exists(dst):
+        dst = os.path.join(archive, "%s-%s" % (datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S"), file_name))
+    os.replace(src, dst)
+    return {"ok": True, "archived": os.path.basename(dst)}
+

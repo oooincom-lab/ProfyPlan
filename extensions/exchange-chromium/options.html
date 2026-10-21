@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>ProfyPlan — обмен файлами</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">ProfyPlan <span>· обмен</span></div>
+    <h1>Обмен на этом компьютере</h1>
+    <p class="muted">Расширение читает пакеты из выбранной папки и передаёт их в портал. Обмен идёт, пока открыт браузер и включён этот помощник.</p>
+  </header>
+
+  <section class="card">
+    <div class="row">
+      <div>
+        <div class="label">Портал</div>
+        <div class="hint">Войдите в ProfyPlan — токен подхватится автоматически.</div>
+      </div>
+      <button id="openPortal" class="btn secondary" type="button">Открыть портал</button>
+    </div>
+    <div class="row">
+      <div>
+        <div class="label">Подключение</div>
+        <div class="hint">Настройка из раздела «Интеграция».</div>
+      </div>
+      <div class="controls">
+        <select id="connection"></select>
+        <button id="refresh" class="btn secondary" type="button">Обновить</button>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <div class="label">Папка обмена</div>
+        <div class="hint">Внутри будут <code>in</code>, <code>out</code> и <code>processed</code>.</div>
+      </div>
+      <div class="controls">
+        <input id="folder" readonly placeholder="Папка не выбрана">
+        <button id="pickFolder" class="btn secondary" type="button">Выбрать папку</button>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <div class="label">Включить обмен</div>
+        <div class="hint">Пока включено, расширение держит сессию обмена и проверяет папку раз в минуту.</div>
+      </div>
+      <label class="switch"><input id="enabled" type="checkbox"><span></span></label>
+    </div>
+  </section>
+
+  <section class="card status-card">
+    <div class="status-line"><span id="statusState" class="pill">idle</span><span id="statusText">—</span></div>
+    <div class="status-line"><span class="muted">Последняя синхронизация:</span> <span id="lastSync">—</span></div>
+    <div class="status-line"><span id="holder" class="muted"></span></div>
+    <div class="actions">
+      <button id="save" class="btn primary" type="button">Сохранить</button>
+      <button id="syncNow" class="btn secondary" type="button">Синхронизировать сейчас</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </section>
+
+  <footer class="muted">Chrome, Edge, Opera, Яндекс Браузер. Для Firefox и Safari нужен companion-агент.</footer>
+</div>
+<script src="options.js"></script>
+</body>
+</html>

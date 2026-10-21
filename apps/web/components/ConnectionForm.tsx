@@ -97,6 +97,18 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
           </div>
         </div>
       )}
+      {f.transport === 'file' && (
+        <div style={{ border: '1px solid rgba(59,130,246,.35)', background: 'rgba(59,130,246,.06)', borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#B0C4DE', marginBottom: 3 }}>Обмен на этом компьютере</div>
+          <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 7 }}>
+            Chrome, Edge, Opera, Яндекс Браузер: установите помощник — он увидит папку на этой машине. Для Firefox и Safari нужен companion-агент.
+          </div>
+          <a href="/extension/index.html" target="_blank" rel="noreferrer"
+            style={{ display: 'inline-block', background: 'rgba(59,130,246,.18)', border: '1px solid rgba(59,130,246,.5)', color: '#93C5FD', borderRadius: 6, padding: '5px 10px', fontSize: 12, textDecoration: 'none' }}>
+            Установить расширение
+          </a>
+        </div>
+      )}
       {row('Комментарий', <input style={inp} value={f.comment} onChange={(e) => upd({ comment: e.target.value })} />)}
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#8FA3BD', marginBottom: 10 }}>
         <input type="checkbox" checked={!!f.is_active} onChange={(e) => upd({ is_active: e.target.checked })} />

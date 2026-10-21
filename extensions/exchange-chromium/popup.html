@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>ProfyPlan — обмен</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="popup">
+<div class="wrap">
+  <div class="logo">ProfyPlan <span>· обмен</span></div>
+  <h1>Файловый обмен</h1>
+  <div class="card status-card">
+    <div class="status-line"><span id="state" class="pill">idle</span></div>
+    <div class="status-line" id="message">Загрузка…</div>
+    <div class="status-line muted" id="meta"></div>
+    <div class="actions">
+      <button id="sync" class="btn primary" type="button">Синхронизировать</button>
+      <button id="options" class="btn secondary" type="button">Настройки</button>
+    </div>
+  </div>
+  <footer>Работает, пока открыт браузер. Chrome, Edge, Opera, Яндекс.</footer>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -8,9 +8,10 @@
 Пакеты — единый конверт profyplan.exchange.v1 (см. services/integration_exchange.py).
 """
 import uuid
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,3 +76,24 @@ class ExchangeInboxItem(BaseModel):
     op: Mapped[str] = mapped_column(String(20), nullable=False, default="upsert")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending / applied / skipped / error
     payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
+class ExchangeLease(BaseModel):
+    """Активный обмен на подключении: одна машина/сессия держит lease.
+
+    Защищает от одновременного обмена из двух вкладок или с двух машин.
+    """
+
+    __tablename__ = "exchange_leases"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    connection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    agent_id: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    instance_id: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    session_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
