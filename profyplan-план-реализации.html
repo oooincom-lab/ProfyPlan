@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 45. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 46. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1359,6 +1359,35 @@
   </div>
 </div>
 </div>
+<h2>6.41. Помощник обмена на компьютере пользователя (22.10.2026)</h2>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">6.41.1 Серверный lease.</div>
+    <div class="task-detail">Один активный обмен на подключение: <code>exchange_leases</code> (миграция 0030), захват/продление/освобождение, конфликт 409 с держателем, истечение по TTL. Защита от двух вкладок и двух машин.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.41.2 Outbox.</div>
+    <div class="task-detail"><code>GET /connections/{id}/outbox</code> и <code>POST /outbox/{name}/ack</code>: список исходящих пакетов и перенос доставленного в <code>out/archive</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.41.3 Chromium-расширение.</div>
+    <div class="task-detail">Chrome, Edge, Opera, Яндекс Браузер: выбор папки (File System Access API), обмен <code>in</code>/<code>out</code>, <code>processed</code>, heartbeat, статус и последняя синхронизация. Исходники — <code>extensions/exchange-chromium</code>, установочный zip — <code>/extension/profyplan-exchange-chromium.zip</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.41.4 Установка из настроек.</div>
+    <div class="task-detail">В окне подключения (файловый транспорт) — блок «Обмен на этом компьютере» и ссылка на страницу установки; для Firefox и Safari указывается необходимость companion-агента.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.41.5 Дальше.</div>
+    <div class="task-detail">Firefox: WebExtension + native messaging host; Safari/macOS: приложение-контейнер, Safari Web Extension, notarization; затем публикация в магазинах или enterprise-развёртывание. Обмен по облаку/FTP/почте — отдельные транспорты на том же конверте.</div>
+    
+  </div>
+</div>
+<p><b>Статус:</b> серверный lease и Chromium MVP собраны локально 22.10; API и статические страницы проверены, прогон расширения в браузере — следующий шаг.</p>
 <h2>Правила качества сетевого графика (блок 6.11, 26.09.2026)</h2>
 <p>Спецификация — в техническом промте, «Дополнение 12. Сетевой график: правила качества» (26.09.2026). Отдельных работ по этому пункту нет: правила входят в состав блока 6.11 и применяются при его доработке. <b>Статус — «спецификация зафиксирована, работ нет»</b> (сам блок 6.11 остаётся «готово локально, проверено»).</p>
 <div class="tasks">
