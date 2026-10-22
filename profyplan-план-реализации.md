@@ -589,6 +589,7 @@
 - **Pairing 0.3.0:** серверные `agent-code`/`agent/pair`, агентский токен с scope и jti; companion `pair` + DPAPI; кнопка в окне подключения. Проверено: код одноразовый, токен ограничен интеграцией, `/projects` → 403.
 - **Installer 0.4.0:** `installer.py`, `ProfyPlanCompanionSetup.exe`, ярлык, Uninstall-запись, Run-автозапуск, tray, `--uninstall`; защита от второго tray. Проверено на локальной машине; осталось подписать EXE и поправить очистку каталога при uninstall.
 - **MSI 0.7.1:** `msi/Product.wxs`, `build-msi.ps1` (WiX 3) — per-user MSI собран; `sign.ps1` и `SIGNING.md` добавлены. Authenticode: NotSigned; установка на чистую машину не завершена, нужен код-сертификат.
+- **0.8.2:** Setup содержит основной EXE в payload; установка больше не копирует Setup как приложение.
 - **0.8.1:** исправлено наложение кнопок в окне проверки обновления (вторая кнопка привязана к первой).
 - **Service 0.8.0:** `service.py` + WinSW — служба `ProfyPlanCompanion` (`Automatic`, `LocalSystem`), конфиг в `C:\ProgramData\ProfyPlanCompanion`, машинный DPAPI; команды `install-service|uninstall-service|service-status`; `install --service`, `Setup --service`; обновление останавливает и перезапускает службу. Локально проверено; clean-machine и админ-сценарий — в очереди.
 - **Settings 0.5.0:** `settings.ps1` — окно настроек (папка/интервал), tray «Настройки» без JSON; конфиг перечитывается после сохранения. Проверено: окно открывается, сборка 0.5.0.
