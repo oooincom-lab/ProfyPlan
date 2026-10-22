@@ -25,8 +25,14 @@ from pathlib import Path
 from urllib import error, request
 from urllib.parse import quote
 
+# PyInstaller --windowed оставляет stdout/stderr как None; print не должен падать.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 APP = "ProfyPlan Companion"
-VERSION = "0.8.2"
+VERSION = "0.8.3"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"

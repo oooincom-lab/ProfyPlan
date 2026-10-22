@@ -1,6 +1,6 @@
 # ProfyPlan Companion — описание модуля
 
-**Версия:** 0.8.2 · **Статус:** Windows MVP · **Дата:** 22.10.2026
+**Версия:** 0.8.3 · **Статус:** Windows MVP · **Дата:** 23.10.2026
 **Папка исходников:** `profyplan/companion-windows`
 **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила разработки:** [DEVELOPMENT.md](DEVELOPMENT.md)
 

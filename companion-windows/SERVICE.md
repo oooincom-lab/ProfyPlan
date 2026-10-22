@@ -1,6 +1,6 @@
 # Windows-служба ProfyPlan Companion
 
-**Версия:** 0.8.0 · **Статус:** реализовано локально, требуется проверка на чистой машине
+**Версия:** 0.8.3 · **Статус:** реализовано локально, требуется проверка на чистой машине
 
 ## 1. Зачем WinSW
 
@@ -13,7 +13,7 @@ Python-приложение нельзя напрямую зарегистрир
 Требуются права администратора.
 
 ```powershell
-ProfyPlanCompanion.exe install-service --config "C:\ProgramData\ProfyPlanCompanion\companion.json"
+ProfyPlanCompanionCli.exe install-service --config "C:\ProgramData\ProfyPlanCompanion\companion.json"
 ```
 
 Или установщик:
@@ -46,9 +46,9 @@ ProfyPlanCompanion.exe install --config "%LOCALAPPDATA%\ProfyPlan\companion.json
 ## 4. Управление
 
 ```powershell
-ProfyPlanCompanion.exe service-status
-ProfyPlanCompanion.exe uninstall-service
-ProfyPlanCompanion.exe uninstall-service --purge
+ProfyPlanCompanionCli.exe service-status
+ProfyPlanCompanionCli.exe uninstall-service
+ProfyPlanCompanionCli.exe uninstall-service --purge
 ```
 
 `uninstall-service` без `--purge` оставляет конфиг и логи; `--purge` удаляет файлы службы.

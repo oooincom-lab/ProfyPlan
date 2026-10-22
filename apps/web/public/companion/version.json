@@ -1,9 +1,9 @@
 {
-  "version": "0.8.2",
+  "version": "0.8.3",
   "download_url": "/companion/ProfyPlanCompanionSetup.exe",
-  "sha256": "915fc5a548855f8948282d52fdbc43ae1ff85fd981575ef54f600131a71e65c1",
-  "published_at": "2026-10-22T23:40:00+03:00",
-  "notes": "Установщик ставит основной EXE из payload; кнопки проверки обновления не пересекаются.",
-  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.2.msi",
-  "msi_sha256": "ed34bb09cde8edd339dfa974e29b0c2d33a713152a3e46980f56f0d7de254de7"
+  "sha256": "e504a813a5255b6a3a0231c221ba7b1e5b9f4ea43b32ae94cabcd8b283c3ce40",
+  "published_at": "2026-10-23T00:08:00+03:00",
+  "notes": "Основной EXE без консольного окна; отдельный CLI для команд службы; установщик ставит основной EXE из payload.",
+  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.3.msi",
+  "msi_sha256": "337bdce3c5b64141f38dd858d4e73b0a5ab5061c451d40a51c4132c26abb4b93"
 }

@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.8.2 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.8.3 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Универсальный файловый обмен ProfyPlan с учётными системами без браузера и без расширения. 1С:УНФ — первый коннектор. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -64,10 +64,12 @@ Tray проверяет `/companion/version.json` при запуске и ра�
 
 ## Windows-служба
 
+Основной `ProfyPlanCompanion.exe` теперь оконный: при запуске не открывается чёрная консоль. Для команд управления службой используйте консольный `ProfyPlanCompanionCli.exe` из каталога установки.
+
 ```powershell
 # из установленного приложения, от администратора
-ProfyPlanCompanion.exe install-service --config "%LOCALAPPDATA%\ProfyPlan\companion.json"
-ProfyPlanCompanion.exe service-status
+ProfyPlanCompanionCli.exe install-service --config "%LOCALAPPDATA%\ProfyPlan\companion.json"
+ProfyPlanCompanionCli.exe service-status
 ```
 
 Служба `ProfyPlanCompanion` запускается автоматически до входа пользователя, конфиг лежит в `C:\ProgramData\ProfyPlanCompanion`, токен перешифрован машинным DPAPI. Подробности — [SERVICE.md](SERVICE.md).
@@ -77,10 +79,10 @@ ProfyPlanCompanion.exe service-status
 ```powershell
 winget install WiXToolset.WiXToolset
 .\build.ps1
-.\build-msi.ps1 -Version 0.7.1
+.\build-msi.ps1 -Version 0.8.3
 ```
 
-`dist\ProfyPlanCompanion-0.7.1.msi` ставит приложение per-user и создаёт ярлык в меню «Пуск». MSI пока **не подписан**: нужен код-сертификат; после его получения — `.\sign.ps1 -Thumbprint <thumbprint>`.
+`dist\ProfyPlanCompanion-0.8.3.msi` ставит приложение per-user и создаёт ярлык в меню «Пуск». MSI пока **не подписан**: нужен код-сертификат; после его получения — `.\sign.ps1 -Thumbprint <thumbprint>`.
 
 ## О программе
 
