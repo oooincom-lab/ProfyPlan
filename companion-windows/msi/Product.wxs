@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="ProfyPlan Companion"
+           Language="1049"
+           Codepage="1251"
+           Version="$(var.Version)"
+           Manufacturer="ProfyPlan"
+           UpgradeCode="22C243A8-29D3-49CB-970E-AB39A9602513">
+
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perUser"
+             Platform="x64"
+             Description="Модуль обмена данными ProfyPlan"
+             Comments="ProfyPlan Companion" />
+
+    <MajorUpgrade DowngradeErrorMessage="Установлена более новая версия ProfyPlan Companion." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="ProfyPlanCompanion" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="ProfyPlan" />
+      </Directory>
+    </Directory>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="C9D4EE63-0673-43B2-96C9-29EB2FBAD2C6">
+        <File Id="AppExe"
+              Source="$(var.SourceDir)\ProfyPlanCompanion.exe"
+              KeyPath="no" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\ProfyPlan\Companion"
+                       Name="InstallDir"
+                       Type="string"
+                       Value="[INSTALLFOLDER]"
+                       KeyPath="yes" />
+        <RemoveFolder Id="RemoveINSTALLFOLDER" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcut" Guid="DEEBCE30-A01A-4A5F-BEAA-5A08360F6473">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="ProfyPlan Companion"
+                  Description="Модуль обмена данными ProfyPlan"
+                  Target="[#AppExe]"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\ProfyPlan\Companion"
+                       Name="StartMenu"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="Complete"
+             Title="ProfyPlan Companion"
+             Level="1"
+             Display="expand"
+             ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+  </Product>
+</Wix>

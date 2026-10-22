@@ -56,3 +56,6 @@ apps/api/.openclaw_*
 
 # Сертификаты — никогда в репозиторий (на сервере свои)
 nginx/ssl/
+
+# MSI build work
+companion-windows/build-msi/

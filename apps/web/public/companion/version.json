@@ -3,5 +3,7 @@
   "download_url": "/companion/ProfyPlanCompanionSetup.exe",
   "sha256": "9c780e6a42b405f9ee62b98bd90fa1d6147d6e0c199367778a417479b11682f9",
   "published_at": "2026-10-22T21:25:00+03:00",
-  "notes": "Модуль обмена данными с любыми учётными системами; 1С:УНФ — один из коннекторов."
+  "notes": "MSI 0.7.1 собран; подпись ожидает код-сертификат.",
+  "msi_download_url": "/companion/ProfyPlanCompanion-0.7.1.msi",
+  "msi_sha256": "865fda8801984132ce8a183a8450b164502e4f70719b547876ef4cf8295d0fd2"
 }

@@ -32,6 +32,8 @@ Companion — универсальный программный модуль ф�
 | `update.py` | Проверка `version.json`, уведомление и скачивание Setup для обновления |
 | `install.ps1` | Установка в `%LOCALAPPDATA%`, первичная настройка, задача Windows |
 | `build.ps1` | Сборка standalone EXE через PyInstaller |
+| `build-msi.ps1`, `msi/Product.wxs` | Сборка per-user MSI через WiX 3 |
+| `sign.ps1` | Подпись EXE/Setup/MSI код-сертификатом и проверка |
 | `config.example.json` | Пример конфигурации |
 | `README.md` | Быстрый старт |
 | `ABOUT.md` | Это описание модуля |
