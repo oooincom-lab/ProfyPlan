@@ -59,7 +59,7 @@ $header.Controls.Add($logo)
 $logoText = Add-Text $logo "P" 0 4 52 44 24 "#FFFFFF" "Bold"
 $logoText.TextAlign = "MiddleCenter"
 Add-Text $header "ProfyPlan Companion" 92 18 420 30 16 "#FFFFFF" "Bold" | Out-Null
-Add-Text $header "Настройки обмена с 1С · УНФ" 94 48 420 22 9 "#93C5FD" | Out-Null
+Add-Text $header "Настройки модуля обмена" 94 48 420 22 9 "#93C5FD" | Out-Null
 if ($Version) {
     $ver = Add-Text $header ("v" + $Version) 500 24 116 24 10 "#93C5FD" "Bold"
     $ver.TextAlign = "MiddleRight"

@@ -57,7 +57,7 @@ $logoText = Add-Text $logo "P" 0 4 52 44 24 "#FFFFFF" "Bold"
 $logoText.TextAlign = "MiddleCenter"
 
 Add-Text $header "ProfyPlan Companion" 92 18 420 30 16 "#FFFFFF" "Bold" | Out-Null
-Add-Text $header "Обмен с 1С · УНФ" 94 48 420 22 9 "#93C5FD" | Out-Null
+Add-Text $header "Модуль обмена данными" 94 48 420 22 9 "#93C5FD" | Out-Null
 $brand = Add-Text $header "ProfyPlan" 500 24 116 24 10 "#93C5FD" "Bold"
 $brand.TextAlign = "MiddleRight"
 
@@ -96,7 +96,7 @@ if ($isUpdate) {
     Add-Text $card ("Проверка обновлений: " + $status) 18 178 556 22 9 "#64748B" | Out-Null
     $card2 = New-Card $content 246 112
     Add-Text $card2 "О ПРОГРАММЕ" 18 14 200 18 8 "#64748B" "Bold" | Out-Null
-    Add-Text $card2 "Служба обмена файлами между 1С:УНФ и ProfyPlan. Работает в системном трее, сохраняет настройки и обновляется автоматически." 18 36 556 58 9 "#334155" | Out-Null
+    Add-Text $card2 "Универсальный модуль обмена файлами ProfyPlan с учётными системами. 1С:УНФ — один из коннекторов. Работает в трее, сохраняет настройки и обновляется автоматически." 18 36 556 64 9 "#334155" | Out-Null
     $top = 382
 }
 
