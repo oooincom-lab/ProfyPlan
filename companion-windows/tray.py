@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -78,19 +79,35 @@ class TrayApp:
         except Exception as exc:
             self.logger.error("не удалось открыть папку: %s", exc)
 
+    def _settings_script(self) -> Path:
+        if getattr(sys, "frozen", False):
+            return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "settings.ps1"
+        return Path(__file__).with_name("settings.ps1")
+
     def on_open_config(self, icon=None, item=None):
-        try:
-            subprocess.Popen(["notepad.exe", str(self.config_path)])
-        except Exception as exc:
-            self.logger.error("не удалось открыть конфиг: %s", exc)
+        def worker():
+            try:
+                script = self._settings_script()
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                     "-WindowStyle", "Hidden", "-File", str(script),
+                     "-ConfigPath", str(self.config_path)],
+                    creationflags=0x08000000,
+                )
+                self.cfg = agent.load_config(self.config_path)
+                self._set_status("настройки сохранены")
+            except Exception as exc:
+                self.logger.error("не удалось открыть настройки: %s", exc)
+                self._set_status("ошибка настроек")
+        threading.Thread(target=worker, daemon=True).start()
 
     def on_exit(self, icon=None, item=None):
         self.stop_event.set()
         self.icon.stop()
 
     def _loop(self):
-        interval = int(self.cfg.get("interval_seconds") or 300)
         while not self.stop_event.is_set():
+            interval = int(self.cfg.get("interval_seconds") or 300)
             self._set_status("обмен…")
             try:
                 rc = agent.sync_once(self.cfg, self.logger)

@@ -7,7 +7,7 @@ $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host "Сборка $Name..." -ForegroundColor Cyan
 python -m pip install --upgrade pyinstaller | Out-Host
-$common = @("--noconfirm","--clean","--onefile","--hidden-import","tray","--hidden-import","pystray._win32","--collect-submodules","pystray")
+$common = @("--noconfirm","--clean","--onefile","--hidden-import","tray","--hidden-import","pystray._win32","--collect-submodules","pystray","--add-data","$source\settings.ps1;.")
 python -m PyInstaller @common --console --name $Name --distpath (Join-Path $source "dist") --workpath (Join-Path $source "build") (Join-Path $source "agent.py")
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller CLI failed" }
 python -m PyInstaller @common --windowed --name "ProfyPlanCompanionSetup" --distpath (Join-Path $source "dist") --workpath (Join-Path $source "build-setup") (Join-Path $source "agent.py")
