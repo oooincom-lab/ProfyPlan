@@ -46,14 +46,28 @@ def _shortcut_path() -> Path:
     return base / "ProfyPlan Companion.lnk"
 
 
-def _write_registry(install_dir: Path, exe: Path) -> None:
+def _tray_autostart(config_path: Path) -> bool:
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        return bool(data.get("tray_autostart", True))
+    except Exception:
+        return True
+
+
+def _write_registry(install_dir: Path, exe: Path, tray_autostart: bool = True) -> None:
     if os.name != "nt":
         return
     import winreg
 
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
-        winreg.SetValueEx(key, "ProfyPlanCompanion", 0, winreg.REG_SZ,
-                          '"%s" tray --config "%s"' % (exe, install_dir / "companion.json"))
+        if tray_autostart:
+            winreg.SetValueEx(key, "ProfyPlanCompanion", 0, winreg.REG_SZ,
+                              '"%s" tray --config "%s"' % (exe, install_dir / "companion.json"))
+        else:
+            try:
+                winreg.DeleteValue(key, "ProfyPlanCompanion")
+            except FileNotFoundError:
+                pass
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as key:
         winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, APP_NAME)
         winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, agent.VERSION)
@@ -135,7 +149,7 @@ def install(config_path: Path, install_dir: Path = DEFAULT_DIR, start: bool = Tr
         shutil.copy2(cli, install_dir / "ProfyPlanCompanionCli.exe")
     shutil.copy2(config_path, install_dir / "companion.json")
     _create_shortcut(target, install_dir / "companion.json")
-    _write_registry(install_dir, target)
+    _write_registry(install_dir, target, _tray_autostart(config_path))
     if start:
         subprocess.Popen([str(target), "tray", "--config", str(install_dir / "companion.json")],
                          cwd=str(install_dir), creationflags=0x08000000)

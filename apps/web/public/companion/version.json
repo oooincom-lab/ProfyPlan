@@ -1,9 +1,9 @@
 {
-  "version": "0.8.4",
+  "version": "0.8.6",
   "download_url": "/companion/ProfyPlanCompanionSetup.exe",
-  "sha256": "3cacc7d1aa2f1eff89243f8e761df99540fbdd711037c0671d82a44d5aa4e959",
-  "published_at": "2026-10-23T00:26:00+03:00",
-  "notes": "В настройках: запуск/остановка службы и галочка «Запускать в виде службы»; основной EXE без консоли.",
-  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.4.msi",
-  "msi_sha256": "50b43aafce3d58409b708958d754da603cd86ebbb2124af6a2fcc5ddc3d00182"
+  "sha256": "e3c654e84c17b4d0696d73b08ff08893477a55d0c83d9c516e1a0cd6faaf30fd",
+  "published_at": "2026-10-23T01:07:00+03:00",
+  "notes": "Автозагрузка tray сохраняется в конфиге и не сбрасывается обновлением; tray остаётся после включения службы.",
+  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.6.msi",
+  "msi_sha256": "76b4ab7dab10253f5624a6fcbd9dd3730a4604382ce600e5499865e3900125f6"
 }

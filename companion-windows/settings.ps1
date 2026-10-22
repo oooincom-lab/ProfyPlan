@@ -51,6 +51,44 @@ function Get-CliPath {
     throw "Не найден ProfyPlanCompanionCli.exe. Переустановите companion."
 }
 
+function Start-Tray {
+    try {
+        $cli = Get-CliPath
+        $exe = Join-Path (Split-Path -Parent $cli) "ProfyPlanCompanion.exe"
+        if (-not (Test-Path -LiteralPath $exe)) { return }
+        $running = Get-CimInstance Win32_Process -Filter "Name='ProfyPlanCompanion.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -match "tray" }
+        if (-not $running) {
+            Start-Process -FilePath $exe -ArgumentList @("tray", "--config", $ConfigPath) -WindowStyle Hidden | Out-Null
+        }
+    } catch {
+        # tray не должен мешать сохранению настроек
+    }
+}
+
+function Get-TrayAutostart {
+    try {
+        $value = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "ProfyPlanCompanion" -ErrorAction SilentlyContinue).ProfyPlanCompanion
+        return [bool]$value
+    } catch {
+        return $false
+    }
+}
+
+function Set-TrayAutostart([bool]$Enabled) {
+    $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    if ($Enabled) {
+        $cli = Get-CliPath
+        $exe = Join-Path (Split-Path -Parent $cli) "ProfyPlanCompanion.exe"
+        if (-not (Test-Path -LiteralPath $exe)) { throw "Не найден ProfyPlanCompanion.exe." }
+        New-Item -Path $key -Force | Out-Null
+        $value = '"' + $exe + '" tray --config "' + $ConfigPath + '"'
+        Set-ItemProperty -Path $key -Name "ProfyPlanCompanion" -Value $value
+    } else {
+        Remove-ItemProperty -Path $key -Name "ProfyPlanCompanion" -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-ServiceCli {
     param([string[]]$Arguments)
     $cli = Get-CliPath
@@ -67,6 +105,8 @@ function Update-ServiceUi {
         $serviceState.ForeColor = C "#B45309"
         $serviceMode.Checked = $false
         $startService.Enabled = $true
+        $startService.BackColor = C "#2563EB"
+        $startService.ForeColor = [System.Drawing.Color]::White
         $stopService.Enabled = $false
         return
     }
@@ -75,6 +115,8 @@ function Update-ServiceUi {
         $serviceState.Text = "Служба работает · автозапуск при загрузке"
         $serviceState.ForeColor = C "#15803D"
         $startService.Enabled = $false
+        $startService.BackColor = C "#93C5FD"
+        $startService.ForeColor = C "#EFF6FF"
         $stopService.Enabled = $true
     } else {
         $stateText = switch ([string]$svc.Status) {
@@ -87,6 +129,8 @@ function Update-ServiceUi {
         $serviceState.Text = ("Служба установлена · " + $stateText)
         $serviceState.ForeColor = C "#B45309"
         $startService.Enabled = $true
+        $startService.BackColor = C "#2563EB"
+        $startService.ForeColor = [System.Drawing.Color]::White
         $stopService.Enabled = $false
     }
 }
@@ -94,7 +138,7 @@ function Update-ServiceUi {
 $cfg = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "ProfyPlan Companion — Настройки"
-$form.ClientSize = New-Object System.Drawing.Size(640, 720)
+$form.ClientSize = New-Object System.Drawing.Size(640, 748)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedSingle"
 $form.MaximizeBox = $false
@@ -120,7 +164,7 @@ if ($Version) {
 }
 
 $content = New-Object System.Windows.Forms.Panel
-$content.Left = 0; $content.Top = 92; $content.Width = 640; $content.Height = 628
+$content.Left = 0; $content.Top = 92; $content.Width = 640; $content.Height = 656
 $content.AutoScroll = $true; $content.BackColor = C "#F8FAFC"
 $form.Controls.Add($content)
 
@@ -158,19 +202,19 @@ $card2.Controls.Add($interval)
 Add-Text $card2 "мин" 104 136 40 20 9 "#64748B" | Out-Null
 Add-Text $card2 "Проверка входящих файлов и отправка исходящих." 150 136 420 20 8 "#94A3B8" | Out-Null
 
-$card3 = New-Card $content 402 150
+$card3 = New-Card $content 402 166
 Add-Text $card3 "СЛУЖБА WINDOWS" 18 12 300 18 8 "#64748B" "Bold" | Out-Null
 $serviceState = Add-Text $card3 "Проверка состояния..." 18 34 556 20 9 "#64748B"
 $startService = New-Object System.Windows.Forms.Button
 $startService.Text = "Запустить службу"
-$startService.Left = 18; $startService.Top = 62; $startService.Width = 170; $startService.Height = 32
+$startService.Left = 18; $startService.Top = 56; $startService.Width = 170; $startService.Height = 30
 $startService.FlatStyle = "Flat"; $startService.FlatAppearance.BorderSize = 0
 $startService.BackColor = C "#2563EB"; $startService.ForeColor = [System.Drawing.Color]::White
 $startService.Font = F 9 "Bold"; $startService.Cursor = "Hand"
 $card3.Controls.Add($startService)
 $stopService = New-Object System.Windows.Forms.Button
 $stopService.Text = "Остановить службу"
-$stopService.Left = 198; $stopService.Top = 62; $stopService.Width = 180; $stopService.Height = 32
+$stopService.Left = 198; $stopService.Top = 56; $stopService.Width = 180; $stopService.Height = 30
 $stopService.FlatStyle = "Flat"; $stopService.FlatAppearance.BorderSize = 1
 $stopService.FlatAppearance.BorderColor = C "#CBD5E1"
 $stopService.BackColor = [System.Drawing.Color]::White; $stopService.ForeColor = C "#334155"
@@ -178,24 +222,29 @@ $stopService.Font = F 9; $stopService.Cursor = "Hand"
 $card3.Controls.Add($stopService)
 $serviceMode = New-Object System.Windows.Forms.CheckBox
 $serviceMode.Text = "Запускать в виде службы"
-$serviceMode.Left = 18; $serviceMode.Top = 104; $serviceMode.Width = 320; $serviceMode.Height = 24
+$serviceMode.Left = 18; $serviceMode.Top = 94; $serviceMode.Width = 320; $serviceMode.Height = 24
 $serviceMode.Font = F 9; $serviceMode.ForeColor = C "#0F172A"
 $card3.Controls.Add($serviceMode)
-Add-Text $card3 "Снять галочку — остановить и удалить службу. Нужны права администратора." 18 128 556 18 8 "#94A3B8" | Out-Null
+$trayAutostart = New-Object System.Windows.Forms.CheckBox
+$trayAutostart.Text = "Запускать в трее при запуске Windows"
+$trayAutostart.Left = 18; $trayAutostart.Top = 118; $trayAutostart.Width = 400; $trayAutostart.Height = 22
+$trayAutostart.Font = F 9; $trayAutostart.ForeColor = C "#0F172A"
+$card3.Controls.Add($trayAutostart)
+Add-Text $card3 "Снять галочку службы — остановить и удалить её. Нужны права администратора." 18 142 556 18 8 "#94A3B8" | Out-Null
 
-$status = Add-Text $content "" 24 560 592 28 9 "#B91C1C"
+$status = Add-Text $content "" 24 576 592 26 9 "#B91C1C"
 $status.Visible = $false
 
 $save = New-Object System.Windows.Forms.Button
 $save.Text = "Сохранить"
-$save.Left = 378; $save.Top = 590; $save.Width = 120; $save.Height = 38
+$save.Left = 378; $save.Top = 610; $save.Width = 120; $save.Height = 38
 $save.FlatStyle = "Flat"; $save.FlatAppearance.BorderSize = 0
 $save.BackColor = C "#2563EB"; $save.ForeColor = [System.Drawing.Color]::White
 $save.Font = F 10 "Bold"; $save.Cursor = "Hand"
 $content.Controls.Add($save)
 $cancel = New-Object System.Windows.Forms.Button
 $cancel.Text = "Отмена"
-$cancel.Left = 506; $cancel.Top = 590; $cancel.Width = 110; $cancel.Height = 38
+$cancel.Left = 506; $cancel.Top = 610; $cancel.Width = 110; $cancel.Height = 38
 $cancel.FlatStyle = "Flat"; $cancel.FlatAppearance.BorderSize = 1
 $cancel.FlatAppearance.BorderColor = C "#CBD5E1"
 $cancel.BackColor = [System.Drawing.Color]::White; $cancel.ForeColor = C "#334155"
@@ -218,6 +267,7 @@ $startService.Add_Click({
             Invoke-ServiceCli @("start-service")
         }
         Update-ServiceUi
+        Start-Tray
         $script:initialServiceMode = $true
         $status.ForeColor = C "#15803D"
         $status.Text = "Служба запущена. Она будет работать без входа пользователя."
@@ -232,6 +282,7 @@ $stopService.Add_Click({
     try {
         Invoke-ServiceCli @("stop-service")
         Update-ServiceUi
+        Start-Tray
         $script:initialServiceMode = $true
         $status.ForeColor = C "#B45309"
         $status.Text = "Служба остановлена. Конфигурация сохранена."
@@ -257,6 +308,7 @@ $save.Add_Click({
         $cfg.out_dir = Join-Path $rootPath "out"
         $cfg.processed_dir = Join-Path $rootPath "processed"
         $cfg.interval_seconds = [int]$interval.Value * 60
+        $cfg | Add-Member -NotePropertyName tray_autostart -NotePropertyValue ([bool]$trayAutostart.Checked) -Force
         $json = $cfg | ConvertTo-Json -Depth 8
         [System.IO.File]::WriteAllText($ConfigPath, $json, (New-Object System.Text.UTF8Encoding($false)))
         if ($serviceMode.Checked -ne $script:initialServiceMode) {
@@ -273,6 +325,8 @@ $save.Add_Click({
             $script:initialServiceMode = $serviceMode.Checked
             Update-ServiceUi
         }
+        Set-TrayAutostart ([bool]$trayAutostart.Checked)
+        Start-Tray
         $status.ForeColor = C "#15803D"
         $status.Text = "Сохранено. Новые параметры применятся в следующем цикле."
         $status.Visible = $true
@@ -286,7 +340,9 @@ $save.Add_Click({
 })
 
 Update-ServiceUi
+$trayAutostart.Checked = Get-TrayAutostart
 $script:initialServiceMode = $serviceMode.Checked
+$script:initialTrayAutostart = $trayAutostart.Checked
 $form.AcceptButton = $save
 $form.CancelButton = $cancel
 [void]$form.ShowDialog()

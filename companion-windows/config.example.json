@@ -10,6 +10,7 @@
   "out_dir": "C:\\ProfyPlanExchange\\out",
   "processed_dir": "C:\\ProfyPlanExchange\\processed",
   "interval_seconds": 300,
+  "tray_autostart": true,
   "agent_id": "windows-companion",
   "instance_id": "00000000-0000-0000-0000-000000000000"
 }
