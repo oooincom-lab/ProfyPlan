@@ -301,12 +301,23 @@ async def cloud_status(
     conn = await _get_conn(db, conn_id, tenant_id)
     cfg = cloud_settings(conn)
     provider = str(cfg.get("provider") or "yandex").lower()
-    root = str(cfg.get("root") or settings.yandex_disk_root or "/ProfyPlan")
-    token = bool(os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token)
+    if provider == "google":
+        root = str(cfg.get("root_folder_id") or "Google Drive")
+        token = bool(
+            os.environ.get("GOOGLE_DRIVE_ACCESS_TOKEN")
+            or settings.google_drive_access_token
+        )
+        token = token and bool(cfg.get("folder_ids"))
+    elif provider == "yandex":
+        root = str(cfg.get("root") or settings.yandex_disk_root or "/ProfyPlan")
+        token = bool(os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token)
+    else:
+        root = str(cfg.get("root") or "")
+        token = False
     return {
         "provider": provider,
         "root": root,
-        "configured": token if provider == "yandex" else False,
+        "configured": token,
         "folders": list(FOLDERS),
         "transport": "cloud",
     }
@@ -332,13 +343,15 @@ async def cloud_check(
         ))
         await db.commit()
         raise HTTPException(400, str(exc))
+    provider_name = getattr(provider, "name", "cloud")
+    root_label = getattr(provider, "root_label", provider.root)
     db.add(ExchangeLogEntry(
         tenant_id=tenant_id, connection_id=conn.id, direction="in",
         kind="cloud_check", status="ok", entities_count=0,
-        message="Облачные папки доступны: %s" % provider.root,
+        message="Облачные папки доступны: %s" % root_label,
     ))
     await db.commit()
-    return {"ok": True, "provider": "yandex", "root": provider.root}
+    return {"ok": True, "provider": provider_name, "root": root_label}
 
 
 @router.post("/connections/{conn_id}/cloud/poll")

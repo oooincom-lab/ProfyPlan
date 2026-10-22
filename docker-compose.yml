@@ -49,6 +49,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       YANDEX_DISK_TOKEN: ${YANDEX_DISK_TOKEN:-}
       YANDEX_DISK_ROOT: ${YANDEX_DISK_ROOT:-/ProfyPlan}
+      GOOGLE_DRIVE_ACCESS_TOKEN: ${GOOGLE_DRIVE_ACCESS_TOKEN:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-profyplan.ai@gmail.com}
     ports:
       - "127.0.0.1:8000:8000"

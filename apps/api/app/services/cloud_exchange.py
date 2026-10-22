@@ -184,7 +184,18 @@ def provider_for(conn: IntegrationConnection):
             raise CloudError("Не задан YANDEX_DISK_TOKEN на сервере")
         return YandexDiskClient(token, root=root)
     if provider == "google":
-        raise CloudError("Google Drive адаптер ещё не включён; выберите yandex")
+        from app.services.google_drive import GoogleDriveClient
+        token = os.environ.get("GOOGLE_DRIVE_ACCESS_TOKEN") or settings.google_drive_access_token
+        if not token:
+            raise CloudError("Не задан GOOGLE_DRIVE_ACCESS_TOKEN на сервере")
+        folder_ids = data.get("folder_ids") or {}
+        if not isinstance(folder_ids, dict) or not folder_ids:
+            raise CloudError("Для Google Drive нужны folder_ids канонических папок")
+        return GoogleDriveClient(
+            token,
+            folder_ids=folder_ids,
+            root_folder_id=data.get("root_folder_id"),
+        )
     raise CloudError("Неизвестный облачный провайдер: %s" % provider)
 
 
@@ -287,8 +298,8 @@ async def poll_cloud(
         incoming = await process_incoming_cloud(db, conn, provider, tenant_id)
         outgoing = await publish_outbox_cloud(db, conn, provider)
         return {
-            "provider": "yandex",
-            "root": provider.root,
+            "provider": getattr(provider, "name", "cloud"),
+            "root": getattr(provider, "root_label", provider.root),
             "incoming": incoming,
             "outgoing": outgoing,
         }

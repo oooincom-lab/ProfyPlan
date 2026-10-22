@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Облачный обмен (токены не хранятся в БД)
     yandex_disk_token: str = ""
     yandex_disk_root: str = "/ProfyPlan"
+    google_drive_access_token: str = ""
 
     # CORS
     cors_origins: list[str] = [
