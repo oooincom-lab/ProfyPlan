@@ -13,10 +13,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
 import agent
+from update import parse_version
 
 APP_NAME = "ProfyPlan Companion"
 DEFAULT_API = "https://profyplan.ru/api/v1"
@@ -198,6 +200,57 @@ def setup_from_file(setup_file: Path) -> Path:
     return target
 
 
+def installed_version() -> str:
+    if os.name != "nt":
+        return ""
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as key:
+            value, _ = winreg.QueryValueEx(key, "DisplayVersion")
+            return str(value)
+    except Exception:
+        return ""
+
+
+def _stop_running() -> None:
+    if os.name != "nt":
+        return
+    subprocess.run(["taskkill", "/IM", "ProfyPlanCompanion.exe", "/F"],
+                   capture_output=True, creationflags=0x08000000)
+    time.sleep(1.0)
+
+
+def _remove_tree(path: Path) -> None:
+    for _ in range(5):
+        try:
+            if path.exists():
+                shutil.rmtree(path)
+            return
+        except Exception:
+            time.sleep(1.0)
+
+
+def run_upgrade(force: bool = False) -> int:
+    """Обновить установленную версию, сохранив companion.json."""
+    cfg = DEFAULT_DIR / "companion.json"
+    if not cfg.exists():
+        _msg("Установленная версия не найдена — запустите обычную установку.", error=True)
+        return 2
+    old = installed_version()
+    if old and parse_version(old) >= parse_version(agent.VERSION) and not force:
+        _msg("Уже установлена версия %s. Обновление не требуется." % old)
+        return 0
+    temp_cfg = Path(tempfile.gettempdir()) / "profyplan-companion-upgrade.json"
+    shutil.copy2(cfg, temp_cfg)
+    _stop_running()
+    _remove_registry()
+    _remove_shortcut()
+    _remove_tree(DEFAULT_DIR)
+    target = install(temp_cfg, DEFAULT_DIR, start=True)
+    _msg("Обновление установлено: %s" % agent.VERSION)
+    return 0
+
+
 def _clipboard_setup() -> Path | None:
     """Прочитать код установщика из буфера: connection_id|code|api_base."""
     if os.name != "nt":
@@ -226,6 +279,23 @@ def _clipboard_setup() -> Path | None:
 
 
 def run_setup(setup_file: str | None = None) -> int:
+    old = installed_version()
+    upgrade_flag = "--upgrade" in sys.argv
+    if old and (upgrade_flag or (DEFAULT_DIR / "companion.json").exists()):
+        if upgrade_flag:
+            return run_upgrade(force="--force" in sys.argv)
+        if parse_version(old) >= parse_version(agent.VERSION):
+            _msg("Уже установлена версия %s. Переустановка не требуется." % old)
+            return 0
+        answer = ctypes.windll.user32.MessageBoxW(
+            0,
+            "Установлена версия %s.\nУдалить её и установить %s?" % (old, agent.VERSION),
+            "ProfyPlan Companion — обновление",
+            0x04 | 0x40,
+        )
+        if answer != 6:
+            return 0
+        return run_upgrade(force=True)
     path = _find_setup_file(setup_file)
     if path is None:
         path = _clipboard_setup()

@@ -26,7 +26,7 @@ from urllib import error, request
 from urllib.parse import quote
 
 APP = "ProfyPlan Companion"
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"
@@ -560,6 +560,9 @@ def cmd_tray(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    if "--upgrade" in sys.argv:
+        from installer import run_upgrade
+        return run_upgrade(force="--force" in sys.argv)
     if "--uninstall" in sys.argv:
         from installer import uninstall
         uninstall()

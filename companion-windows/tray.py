@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import sys
@@ -12,6 +13,7 @@ import time
 from pathlib import Path
 
 import agent
+import update
 
 try:
     import pystray
@@ -47,13 +49,18 @@ class TrayApp:
         self.stop_event = threading.Event()
         self.sync_event = threading.Event()
         self.status = "ожидание"
+        self.update_info = None
+        self.last_update_check = 0.0
         self.status_item = pystray.MenuItem("Статус: ожидание", None, enabled=False)
+        self.update_item = pystray.MenuItem("Обновить", self.on_update, enabled=False)
         self.icon = pystray.Icon(
             "profyplan-companion",
             _icon_image(),
             "ProfyPlan Companion — ожидание",
             menu=pystray.Menu(
                 pystray.MenuItem("Синхронизировать сейчас", self.on_sync),
+                self.update_item,
+                pystray.MenuItem("Проверить обновление", self.on_check_update),
                 self.status_item,
                 pystray.MenuItem("Открыть папку обмена", self.on_open_folder),
                 pystray.MenuItem("Настройки", self.on_open_config),
@@ -69,6 +76,60 @@ class TrayApp:
             self.icon.update_menu()
         except Exception:
             pass
+
+    def _notify(self, text: str):
+        try:
+            self.icon.notify(text, "ProfyPlan Companion")
+        except Exception:
+            self._set_status(text)
+
+    def check_update(self, notify: bool = False):
+        try:
+            info = update.check(self.cfg.get("api_base", ""))
+        except Exception:
+            info = None
+        self.update_info = info
+        if info:
+            text = "Доступна версия %s" % info.get("version")
+            self.update_item.text = "Обновить до %s" % info.get("version")
+            self.update_item.enabled = True
+            if notify:
+                self._notify(text)
+            self._set_status(text)
+        else:
+            self.update_item.text = "Обновить"
+            self.update_item.enabled = False
+        self.last_update_check = time.time()
+
+    def on_check_update(self, icon=None, item=None):
+        self.check_update(notify=True)
+
+    def on_update(self, icon=None, item=None):
+        info = self.update_info
+        if not info:
+            self.check_update(notify=True)
+            info = self.update_info
+        if not info:
+            self._notify("Обновлений нет")
+            return
+        try:
+            answer = ctypes.windll.user32.MessageBoxW(
+                0,
+                "Скачать и установить версию %s?" % info.get("version"),
+                "ProfyPlan Companion — обновление",
+                0x04 | 0x40,
+            )
+            if answer != 6:  # IDYES
+                return
+            self._set_status("загрузка обновления…")
+            path = update.download_and_run(info)
+            self._notify("Обновление %s загружено, запускаю установку" % info.get("version"))
+            self.logger.info("update downloaded: %s", path)
+            self.stop_event.set()
+            self.icon.stop()
+        except Exception as exc:
+            self.logger.error("update failed: %s", exc)
+            self._notify("Не удалось обновить: %s" % str(exc)[:120])
 
     def on_sync(self, icon=None, item=None):
         self.sync_event.set()
@@ -122,6 +183,8 @@ class TrayApp:
             except Exception as exc:
                 self.logger.exception("tray sync error")
                 self._set_status("ошибка: %s" % str(exc)[:40])
+            if time.time() - self.last_update_check > 6 * 3600:
+                self.check_update(notify=True)
             self.sync_event.clear()
             # ждём интервал или ручную синхронизацию
             end = time.time() + interval
@@ -130,6 +193,7 @@ class TrayApp:
                     break
 
     def run(self):
+        self.check_update(notify=False)
         thread = threading.Thread(target=self._loop, name="companion-sync", daemon=True)
         thread.start()
         self._set_status("запущен")

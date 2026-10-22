@@ -1,6 +1,6 @@
 # ProfyPlan Companion — описание модуля
 
-**Версия:** 0.5.0 · **Статус:** Windows MVP · **Дата:** 22.10.2026
+**Версия:** 0.6.0 · **Статус:** Windows MVP · **Дата:** 22.10.2026
 **Папка исходников:** `profyplan/companion-windows`
 **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила разработки:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
@@ -27,7 +27,8 @@ Companion — отдельный программный модуль для фа
 | `agent.py` | Основной runtime: CLI, API-клиент, DPAPI, lease, обмен, состояние, журнал |
 | `settings.ps1` | Окно настроек (PowerShell/WinForms): папка, интервал, без правки JSON |
 | `tray.py` | Иконка в системном трее: статус, ручная синхронизация, папка, настройки |
-| `installer.py` | Установка, ярлык, запись в «Установленные программы», автозапуск, uninstall |
+| `installer.py` | Установка, ярлык, запись в «Установленные программы», автозапуск, uninstall, upgrade |
+| `update.py` | Проверка `version.json`, уведомление и скачивание Setup для обновления |
 | `install.ps1` | Установка в `%LOCALAPPDATA%`, первичная настройка, задача Windows |
 | `build.ps1` | Сборка standalone EXE через PyInstaller |
 | `config.example.json` | Пример конфигурации |

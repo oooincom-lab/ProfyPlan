@@ -1,0 +1,7 @@
+{
+  "version": "0.6.0",
+  "download_url": "/companion/ProfyPlanCompanionSetup.exe",
+  "sha256": "e3240800386ca2043cd49adb4efe673a5842a75686aa6b94d3efaf369d0e4747",
+  "published_at": "2026-10-22T19:35:00+03:00",
+  "notes": "Окно настроек, проверка версии и автообновление из трея."
+}

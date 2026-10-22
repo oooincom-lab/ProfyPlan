@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.5.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.6.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Файловый обмен с ProfyPlan без браузера и без расширения. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -57,6 +57,10 @@ python agent.py status
 ```powershell
 python agent.py tray
 ```
+
+## Обновление
+
+Tray проверяет `/companion/version.json` при запуске и раз в 6 часов. Если версия новее, появляется уведомление и пункт «Обновить до X»: приложение скачивает Setup, проверяет SHA-256 и запускает `--upgrade`. Настройки и привязка сохраняются.
 
 ## Установка через Setup EXE
 
