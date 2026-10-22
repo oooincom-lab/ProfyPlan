@@ -4,6 +4,16 @@
 import { useState } from 'react';
 import { API_V1 } from '../lib/api';
 
+const CLOUD_FOLDERS = [
+  ['1c_to_plan', '1c_to_plan'],
+  ['plan_to_1c', 'plan_to_1c'],
+  ['processed/1c_to_plan', 'processed/1c_to_plan'],
+  ['processed/plan_to_1c', 'processed/plan_to_1c'],
+  ['processed', 'processed'],
+  ['archive', 'archive'],
+  ['_state', '_state'],
+] as const;
+
 const inp: any = { background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' };
 const lbl: any = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 };
 
@@ -24,6 +34,11 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     base_url: (conn?.settings && conn.settings.base_url) || '',
     username: (conn?.settings && conn.settings.username) || '',
     password: '',
+    cloud_provider: (conn?.settings && conn.settings.cloud && conn.settings.cloud.provider) || 'yandex',
+    cloud_root: (conn?.settings && conn.settings.cloud && conn.settings.cloud.root) || '/ProfyPlan',
+    cloud_root_folder_id: (conn?.settings && conn.settings.cloud && conn.settings.cloud.root_folder_id) || '',
+    cloud_folder_ids: (conn?.settings && conn.settings.cloud && conn.settings.cloud.folder_ids) || {},
+    cloud_poll_minutes: (conn?.settings && conn.settings.cloud && conn.settings.cloud.poll_minutes) || 5,
   }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -78,6 +93,26 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     setOrDel('base_url', f.base_url);
     setOrDel('username', f.username);
     if (String(f.password || '')) settings.password = String(f.password);
+    if (f.transport === 'cloud') {
+      const cloud: any = { ...(conn?.settings?.cloud || {}) };
+      cloud.provider = f.cloud_provider;
+      const minutes = Number(f.cloud_poll_minutes);
+      cloud.poll_minutes = Number.isFinite(minutes) ? Math.max(1, Math.min(60, Math.trunc(minutes))) : 5;
+      if (f.cloud_provider === 'yandex') {
+        cloud.root = String(f.cloud_root || '').trim() || '/ProfyPlan';
+      } else {
+        const folderIds: any = {};
+        for (const [key] of CLOUD_FOLDERS) {
+          const value = String((f.cloud_folder_ids || {})[key] || '').trim();
+          if (value) folderIds[key] = value;
+        }
+        cloud.folder_ids = folderIds;
+        const rootId = String(f.cloud_root_folder_id || '').trim();
+        if (rootId) cloud.root_folder_id = rootId;
+        else delete cloud.root_folder_id;
+      }
+      settings.cloud = cloud;
+    }
     const body = { name: f.name.trim(), profile: f.profile, transport: f.transport, settings, comment: f.comment || null, is_active: !!f.is_active };
     try {
       const u = save ? await save(conn && conn.id ? String(conn.id) : null, body) : null;
@@ -110,6 +145,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
         {row('Транспорт', (
           <select style={inp} value={f.transport} onChange={(e) => upd({ transport: e.target.value })}>
             <option value="file">Файловый обмен</option>
+            <option value="cloud">Облачный обмен</option>
             <option value="http">Прямое подключение</option>
             <option value="odata">OData</option>
           </select>
@@ -120,6 +156,37 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
           <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 6 }}>Файловый обмен — каталоги на сервере (пусто = по умолчанию /app/exchange/in|out):</div>
           {row('Каталог входящих (in_dir)', <input style={inp} value={f.in_dir} placeholder="/app/exchange/in" onChange={(e) => upd({ in_dir: e.target.value })} />)}
           {row('Каталог исходящих (out_dir)', <input style={inp} value={f.out_dir} placeholder="/app/exchange/out" onChange={(e) => upd({ out_dir: e.target.value })} />)}
+        </div>
+      ) : f.transport === 'cloud' ? (
+        <div style={{ border: '1px dashed #1E3252', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+          <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 6 }}>Облачный обмен — папки на Яндекс Диске или Google Drive. Токен задаётся в окружении сервера и в браузере не хранится.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {row('Провайдер', (
+              <select style={inp} value={f.cloud_provider} onChange={(e) => upd({ cloud_provider: e.target.value })}>
+                <option value="yandex">Яндекс Диск</option>
+                <option value="google">Google Drive</option>
+              </select>
+            ))}
+            {row('Интервал опроса, мин', <input style={inp} type="number" min={1} max={60} value={f.cloud_poll_minutes} onChange={(e) => upd({ cloud_poll_minutes: e.target.value })} />)}
+          </div>
+          {f.cloud_provider === 'yandex' ? (
+            row('Корневая папка', <input style={inp} value={f.cloud_root} placeholder="/ProfyPlan" onChange={(e) => upd({ cloud_root: e.target.value })} />)
+          ) : (
+            <>
+              {row('ID корневой папки (необязательно)', <input style={inp} value={f.cloud_root_folder_id} placeholder="folder id" onChange={(e) => upd({ cloud_root_folder_id: e.target.value })} />)}
+              <div style={{ fontSize: 11.5, color: '#5FA8D3', margin: '2px 0 6px' }}>ID канонических папок Google Drive:</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {CLOUD_FOLDERS.map(([key, label]) => (
+                  <label key={key} style={lbl}>
+                    <span>{label}</span>
+                    <input style={inp} value={(f.cloud_folder_ids || {})[key] || ''} placeholder="folder id"
+                      onChange={(e) => upd({ cloud_folder_ids: { ...(f.cloud_folder_ids || {}), [key]: e.target.value } })} />
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+          <div style={{ fontSize: 11, color: '#5A7090', marginTop: 7 }}>Сервер опрашивает папки автоматически с выбранным интервалом; кнопки проверки и ручного опроса — на странице «Интеграция».</div>
         </div>
       ) : (
         <div style={{ border: '1px dashed #1E3252', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>

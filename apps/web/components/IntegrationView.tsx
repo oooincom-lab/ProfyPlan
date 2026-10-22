@@ -17,7 +17,7 @@ const btn = (kind?: string): any => ({
 const inp: any = { background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '6px 10px', fontSize: 12.5, fontFamily: 'inherit' };
 
 const PROFILE_LABEL: any = { '1c_unf': '1С:УНФ', '1c_ka': '1С:КА', '1c_erp': '1С:ERP', 'custom': 'Другая' };
-const TRANSPORT_LABEL: any = { file: 'файловый', http: 'прямое', odata: 'OData' };
+const TRANSPORT_LABEL: any = { file: 'файловый', cloud: 'облако', http: 'прямое', odata: 'OData' };
 const DIR_ICON: any = { out: '📤', 'in': '📥' };
 const STATUS_COLOR: any = { ok: '#4ADE80', partial: '#FBBF24', error: '#F87171', applied: '#4ADE80', skipped: '#8FA3BD', pending: '#93C5FD' };
 
@@ -32,6 +32,7 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
   const [sid, setSid] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [resp, setResp] = useState<string>('');
+  const [cloud, setCloud] = useState<any>(null);
   const [selLogId, setSelLogId] = useState<string | null>(null);
   const [connClicked, setConnClicked] = useState<string | null>(null);
   const say = (m: string) => { setResp(m); notify(m); };
@@ -56,9 +57,16 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
   const loadProjects = async () => {
     try { const r = await api('/projects'); setProjects(r.items || []); } catch { /* тихо */ }
   };
+  const loadCloud = async (cid?: string | null) => {
+    const conn = conns.find((x) => x.id === cid);
+    if (!cid || !conn || conn.transport !== 'cloud') { setCloud(null); return; }
+    try { const r = await api('/integration/connections/' + cid + '/cloud/status'); setCloud(r); }
+    catch { setCloud(null); }
+  };
 
   useEffect(() => { void loadConns(); void loadProjects(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { void loadLog(selId); void loadInbox(selId); /* eslint-disable-next-line */ }, [selId]);
+  useEffect(() => { void loadCloud(selId); /* eslint-disable-next-line */ }, [selId, conns]);
   /* eslint-disable-next-line */
   useEffect(() => {
     const h = () => { void loadConns(); };
@@ -161,6 +169,28 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
     } catch (e: any) { say('OData: ' + (e?.message || e)); void loadLog(selId); }
     setBusy(false);
   };
+  const doCloudCheck = async () => {
+    if (!sel) { say('Выберите подключение'); return; }
+    setBusy(true);
+    try {
+      const r = await api('/integration/connections/' + sel.id + '/cloud/check', { method: 'POST' });
+      say('Облако: доступно — ' + (r.root || r.provider || 'провайдер'));
+      await loadCloud(selId); void loadLog(selId);
+    } catch (e: any) { say('Облако: ' + (e?.message || e)); void loadLog(selId); }
+    setBusy(false);
+  };
+  const doCloudPoll = async () => {
+    if (!sel) { say('Выберите подключение'); return; }
+    setBusy(true);
+    try {
+      const r = await api('/integration/connections/' + sel.id + '/cloud/poll', { method: 'POST' });
+      const incoming = r.incoming?.processed ?? 0;
+      const outgoing = r.outgoing?.uploaded?.length ?? 0;
+      say('Облако: принято ' + incoming + ', отправлено ' + outgoing + '. Проверьте очередь и журнал.');
+      await loadCloud(selId); void loadInbox(selId); void loadLog(selId);
+    } catch (e: any) { say('Облако: ' + (e?.message || e)); void loadLog(selId); }
+    setBusy(false);
+  };
 
   return (
     <div style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
@@ -218,9 +248,32 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
               <button style={btn('primary')} disabled={busy || !sel || !sid} onClick={() => void doExport()}>📤 Экспорт фиксации</button>
               <button style={btn()} disabled={busy || !sel} onClick={() => void doScan()}>🔄 Скан каталога</button>
               <button style={btn()} disabled={busy || !sel} onClick={() => void doApply()}>✅ Применить очередь</button>
-              <button style={btn()} disabled={busy || !sel} onClick={() => void doOdataTest()}>🔌 OData: тест соединения</button>
-              <button style={btn()} disabled={busy || !sel} onClick={() => void doOdataPull()}>📥 Тянуть справочники (OData)</button>
+              {sel?.transport !== 'cloud' && (
+                <>
+                  <button style={btn()} disabled={busy || !sel} onClick={() => void doOdataTest()}>🔌 OData: тест соединения</button>
+                  <button style={btn()} disabled={busy || !sel} onClick={() => void doOdataPull()}>📥 Тянуть справочники (OData)</button>
+                </>
+              )}
             </div>
+            {sel?.transport === 'cloud' && (
+              <div style={{ marginTop: 10, padding: '9px 11px', border: '1px dashed rgba(34,211,238,.35)', borderRadius: 8, background: 'rgba(34,211,238,.035)' }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
+                  <b style={{ color: '#B0C4DE' }}>Облачный обмен</b>
+                  <span style={{ color: '#93C5FD' }}>{cloud?.provider === 'google' ? 'Google Drive' : 'Яндекс Диск'}</span>
+                  <span style={{ color: '#5A7090' }}>{cloud?.root || 'папка не настроена'}</span>
+                  <span style={{ color: cloud?.configured ? '#4ADE80' : '#FBBF24' }}>
+                    {cloud?.configured ? 'доступ настроен' : 'нет токена или папок на сервере'}
+                  </span>
+                  <span style={{ color: '#5A7090' }}>опрос каждые {cloud?.poll_minutes || 5} мин</span>
+                  {cloud?.last_poll_at && <span style={{ color: '#5A7090' }}>последний: {String(cloud.last_poll_at).slice(0, 16).replace('T', ' ')}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 7 }}>
+                  <button style={btn()} disabled={busy} onClick={() => void doCloudCheck()}>🔎 Проверить доступ</button>
+                  <button style={btn('primary')} disabled={busy} onClick={() => void doCloudPoll()}>🔄 Опросить облако сейчас</button>
+                </div>
+                {cloud && cloud.scheduler_enabled === false && <div style={{ fontSize: 11, color: '#FBBF24', marginTop: 5 }}>Автоматический опрос выключен на сервере.</div>}
+              </div>
+            )}
             <div style={{ fontSize: 11, color: '#5A7090', marginTop: 8 }}>
               Экспорт формирует пакет плана в исходящий каталог подключения; скан обрабатывает входящие пакеты из каталога; «Применить очередь» переносит принятые данные в справочники.
               OData-кнопки работают для подключений с адресом 1С (нужна публикация OData на стороне 1С): тест проверяет соединение, загрузка тянет справочники напрямую.

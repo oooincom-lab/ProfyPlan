@@ -314,12 +314,27 @@ async def cloud_status(
     else:
         root = str(cfg.get("root") or "")
         token = False
+    try:
+        raw_poll = cfg.get("poll_minutes")
+        poll_minutes = int(raw_poll) if raw_poll is not None else 5
+    except (TypeError, ValueError):
+        poll_minutes = 5
+    poll_minutes = max(1, min(60, poll_minutes))
+    last_poll = await db.scalar(
+        select(func.max(ExchangeLogEntry.created_at)).where(
+            ExchangeLogEntry.connection_id == conn.id,
+            ExchangeLogEntry.kind == "cloud_poll",
+        )
+    )
     return {
         "provider": provider,
         "root": root,
         "configured": token,
         "folders": list(FOLDERS),
         "transport": "cloud",
+        "poll_minutes": poll_minutes,
+        "scheduler_enabled": bool(settings.cloud_scheduler_enabled),
+        "last_poll_at": last_poll.isoformat() if last_poll else None,
     }
 
 

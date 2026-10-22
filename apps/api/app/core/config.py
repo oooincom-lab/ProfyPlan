@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     yandex_disk_token: str = ""
     yandex_disk_root: str = "/ProfyPlan"
     google_drive_access_token: str = ""
+    # Периодический опрос облачных подключений; блокировка не даёт
+    # нескольким API-воркерам опрашивать одно подключение одновременно.
+    cloud_scheduler_enabled: bool = True
+    cloud_scheduler_interval_seconds: int = 60
 
     # CORS
     cors_origins: list[str] = [

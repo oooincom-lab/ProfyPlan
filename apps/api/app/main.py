@@ -1,5 +1,6 @@
 """ProfyPlan API — главная точка входа."""
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,8 +11,19 @@ from app.core.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await engine.dispose()
+    scheduler_task = None
+    if settings.cloud_scheduler_enabled:
+        from app.services.cloud_scheduler import run_scheduler
+
+        scheduler_task = asyncio.create_task(run_scheduler())
+    try:
+        yield
+    finally:
+        if scheduler_task is not None:
+            scheduler_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler_task
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:
