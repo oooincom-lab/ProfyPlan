@@ -3,6 +3,7 @@ param(
     [string]$ConfigPath = "$env:LOCALAPPDATA\ProfyPlan\companion.json",
     [string]$PythonExe = "",
     [int]$IntervalMinutes = 5,
+    [string]$TaskName = "ProfyPlan Companion",
     [switch]$NoTask
 )
 
@@ -17,6 +18,8 @@ if (-not (Test-Path $InstallDir)) {
 Copy-Item (Join-Path $source "agent.py") (Join-Path $InstallDir "agent.py") -Force
 Copy-Item (Join-Path $source "README.md") (Join-Path $InstallDir "README.md") -Force
 Copy-Item (Join-Path $source "config.example.json") (Join-Path $InstallDir "config.example.json") -Force
+$srcExe = Join-Path $source "ProfyPlanCompanion.exe"
+if (Test-Path $srcExe) { Copy-Item $srcExe (Join-Path $InstallDir "ProfyPlanCompanion.exe") -Force }
 
 $exe = Join-Path $InstallDir "ProfyPlanCompanion.exe"
 if (-not (Test-Path $exe)) { $exe = "" }
@@ -59,13 +62,13 @@ $action = New-ScheduledTaskAction -Execute $program -Argument $arguments
 $logon = New-ScheduledTaskTrigger -AtLogOn
 $repeat = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
-    -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -StartWhenAvailable -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 
-Register-ScheduledTask -TaskName "ProfyPlan Companion" -Action $action -Trigger @($logon, $repeat) -Settings $settings -Principal $principal -Description "ProfyPlan file exchange" -Force | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($logon, $repeat) -Settings $settings -Principal $principal -Description "ProfyPlan file exchange" -Force | Out-Null
 
-Write-Host "Done. Task ProfyPlan Companion created." -ForegroundColor Green
+Write-Host "Done. Task $TaskName created." -ForegroundColor Green
 Write-Host "Check: $program $arguments" -ForegroundColor DarkGray
 Write-Host "Run one cycle: $program $arguments" -ForegroundColor DarkGray
