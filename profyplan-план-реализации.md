@@ -578,9 +578,10 @@
 
 - **Код:** `companion-windows/agent.py` — CLI `init`, `once`, `run`, `status`; `install.ps1`; `build.ps1`.
 - **Состав:** вход в ProfyPlan, DPAPI для пароля, lease, `in/out/processed`, `state.json`, журнал, outbox ack.
-- **Проверено локально:** ping загружен и перенесён; outbox скачан и подтверждён; lease-конфликт → rc=2; `install.ps1 -NoTask` проходит.
-- **Дальше:** EXE-сборка и подпись, tray/мастер, pairing-код вместо email/пароля, режим службы Windows, macOS.
-- **Статус:** MVP собран локально; к клиенту не передавался.
+- **Проверено локально:** ping загружен и перенесён; outbox скачан и подтверждён; lease-конфликт → rc=2; `install.ps1 -NoTask` проходит; EXE и регистрация задачи проверены.
+- **Проверено дополнительно:** EXE собран (`dist\ProfyPlanCompanion.exe`, ~7,8 МБ), `--help`/`status`/`once` работают; `install.ps1` создаёт задачу Windows (проверено на тестовом имени, задача удалена); EXE копируется установщиком.
+- **Дальше:** подпись EXE, tray/мастер, pairing-код вместо email/пароля, режим службы Windows, macOS.
+- **Статус:** MVP и EXE собраны локально; к клиенту не передавались, EXE не подписан.
 
 ## 6.43. Публикация Chromium-расширения — BACKLOG до завершения проекта (22.10.2026)
 
