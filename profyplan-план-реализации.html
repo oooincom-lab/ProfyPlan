@@ -1392,7 +1392,7 @@
 <div class="tasks">
   <div class="task">
     <div class="task-title">6.42.1 Контракт.</div>
-    <div class="task-detail">Дополнение №2 к ТЗ, версия 1.1: канонические папки <code>1c_to_plan</code> / <code>plan_to_1c</code>, <code>processed</code>, <code>archive</code>, <code>_state</code>; формат <code>profyplan.exchange.v1</code> без изменений.</div>
+    <div class="task-detail">Дополнение №2 к ТЗ, версия 1.2: канонические папки <code>1c_to_plan</code> / <code>plan_to_1c</code>, <code>processed</code>, <code>archive</code>, <code>_state</code>; формат <code>profyplan.exchange.v1</code> без изменений.</div>
     
   </div>
   <div class="task">
@@ -1423,6 +1423,11 @@
   <div class="task">
     <div class="task-title">6.42.7 Статус.</div>
     <div class="task-detail">ТЗ 1.1 готово; реализация на стороне 1С — по заданию; адаптер ProfyPlan — следующий срез.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.8 Совместимость и секреты.</div>
+    <div class="task-detail">Имя файла: канонический формат с <code>packet_id</code>, legacy без него принимается; <code>packet_id</code> внутри JSON — ключ. Пилот: константы + <code>РежимПароля</code> (не шифрование) с ограничением прав; production — защищённое хранилище. Access token — один раз на цикл, параметром, без модульного кэша (SU225).</div>
     
   </div>
 </div>
