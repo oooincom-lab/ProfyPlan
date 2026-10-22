@@ -143,7 +143,11 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               {pairBusy ? '…' : 'Создать код привязки'}
             </button>
             {pairCode && <span style={{ fontSize: 13, color: '#86EFAC' }}>Код: <b style={{ letterSpacing: 2 }}>{pairCode.code}</b> · 10 минут</span>}
-            {pairCode && <span style={{ fontSize: 11.5, color: '#5A7090' }}>Введите его в companion: <code>pair --code ...</code></span>}
+            {pairCode && (
+              <span style={{ fontSize: 11.5, color: '#5A7090', width: '100%' }}>
+                ID подключения: <code>{conn.id}</code> · команда: <code>ProfyPlanCompanion.exe pair --api-base &lt;API&gt; --connection-id {conn.id} --code {pairCode.code}</code>
+              </span>
+            )}
           </div>
           {pairErr && <div style={{ fontSize: 11.5, color: '#F87171', marginTop: 6 }}>{pairErr}</div>}
         </div>
