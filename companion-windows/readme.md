@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.1.1 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.2.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Файловый обмен с ProfyPlan без браузера и без расширения. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -15,6 +15,7 @@
 
 - Windows 10/11 или Windows Server.
 - Python 3.11+ для запуска из исходников **или** собранный `ProfyPlanCompanion.exe`.
+- Для tray: `pip install pystray pillow` (входит в EXE).
 - Доступ к API ProfyPlan по HTTPS.
 - Учётная запись ProfyPlan с доступом к подключению 1С.
 
@@ -45,13 +46,19 @@ python agent.py run
 python agent.py status
 ```
 
+С иконкой в трее:
+
+```powershell
+python agent.py tray
+```
+
 ## Установка как задача Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Скрипт копирует агент в `%LOCALAPPDATA%\ProfyPlanCompanion`, запускает `init` (если конфига нет) и создаёт задачу «ProfyPlan Companion» с запуском при входе и повтором каждые 5 минут.
+Скрипт копирует агент в `%LOCALAPPDATA%\ProfyPlanCompanion`, запускает `init` (если конфига нет) и создаёт задачу «ProfyPlan Companion» с запуском при входе и повтором каждые 5 минут. Флаг `-Tray` создаёт задачу только на вход и запускает версию с иконкой в трее.
 
 Для сервера 1С лучше запускать под сервисной учётной записью и с правами на папку обмена; задача должна работать без интерактивного входа. Это отдельная настройка, см. раздел «Ограничения».
 

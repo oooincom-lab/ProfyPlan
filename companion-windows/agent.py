@@ -25,7 +25,7 @@ from urllib import error, request
 from urllib.parse import quote
 
 APP = "ProfyPlan Companion"
-VERSION = "0.1.1"
+VERSION = "0.2.0"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"
@@ -467,6 +467,18 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tray(args: argparse.Namespace) -> int:
+    cfg = load_config(Path(args.config))
+    ensure_dirs(cfg)
+    try:
+        from tray import run_tray
+    except Exception as e:
+        print("Tray недоступен: %s" % e, file=sys.stderr)
+        print("Установите зависимости: python -m pip install pystray pillow", file=sys.stderr)
+        return 2
+    return run_tray(cfg, Path(args.config))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="ProfyPlanCompanion", description="ProfyPlan Companion (Windows MVP)")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -492,6 +504,10 @@ def main() -> int:
     p_status = sub.add_parser("status", help="показать настройки")
     p_status.add_argument("--config", default=str(DEFAULT_CONFIG))
     p_status.set_defaults(func=cmd_status)
+
+    p_tray = sub.add_parser("tray", help="запустить с иконкой в системном трее")
+    p_tray.add_argument("--config", default=str(DEFAULT_CONFIG))
+    p_tray.set_defaults(func=cmd_tray)
 
     args = parser.parse_args()
     return args.func(args)

@@ -4,6 +4,7 @@ param(
     [string]$PythonExe = "",
     [int]$IntervalMinutes = 5,
     [string]$TaskName = "ProfyPlan Companion",
+    [switch]$Tray,
     [switch]$NoTask
 )
 
@@ -52,11 +53,12 @@ Write-Host "Windows task was not created (-NoTask)." -ForegroundColor Yellow
     exit 0
 }
 
+$mode = if ($Tray) { "tray" } else { "run" }
 $program = if ($exe) { $exe } else { $PythonWindow }
 $arguments = if ($exe) {
-    "run --config `"$ConfigPath`""
+    "$mode --config `"$ConfigPath`""
 } else {
-    "`"$InstallDir\agent.py`" run --config `"$ConfigPath`""
+    "`"$InstallDir\agent.py`" $mode --config `"$ConfigPath`""
 }
 
 $action = New-ScheduledTaskAction -Execute $program -Argument $arguments
@@ -68,7 +70,8 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -StartWhenAvailable -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($logon, $repeat) -Settings $settings -Principal $principal -Description "ProfyPlan file exchange" -Force | Out-Null
+$triggers = if ($Tray) { @($logon) } else { @($logon, $repeat) }
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Description "ProfyPlan file exchange" -Force | Out-Null
 
 Write-Host "Done. Task $TaskName created." -ForegroundColor Green
 Write-Host "Check: $program $arguments" -ForegroundColor DarkGray
