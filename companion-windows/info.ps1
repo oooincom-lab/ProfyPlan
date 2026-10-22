@@ -127,7 +127,7 @@ if ($isUpdate -and $update) {
     $secondary.Add_Click({ $script:code = 11; $form.Close() })
 } elseif ($isUpdate) {
     $primary.Text = "Проверить снова"
-    $primary.Left = 340
+    $primary.Left = 240
     $secondary.Text = "Закрыть"
     $primary.Add_Click({ $script:code = 11; $form.Close() })
     $secondary.Add_Click({ $form.Close() })
@@ -138,6 +138,8 @@ if ($isUpdate -and $update) {
     $secondary.Add_Click({ $form.Close() })
 }
 
+# Всегда держим вторую кнопку справа от первой, без наложения.
+$secondary.Left = $primary.Left + $primary.Width + 12
 $form.AcceptButton = $primary
 [void]$form.ShowDialog()
 exit $script:code

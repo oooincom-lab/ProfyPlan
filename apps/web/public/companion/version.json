@@ -1,9 +1,9 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "download_url": "/companion/ProfyPlanCompanionSetup.exe",
-  "sha256": "09956efd3090df8d5678b3cdb41474500d23acbba5bf83a410d3400512134c04",
-  "published_at": "2026-10-22T23:20:00+03:00",
-  "notes": "Windows-служба без входа пользователя; обновлённый установщик и MSI.",
-  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.0.msi",
-  "msi_sha256": "9f07c8402ed2454d347492c9246ab43af9af5efffdada9e8202b385a771ad6da"
+  "sha256": "208232cc353f61cf0d4d6099083d1d6390c141cbe7e26dab9bd5bab864e845b9",
+  "published_at": "2026-10-22T23:35:00+03:00",
+  "notes": "Исправлено наложение кнопок в окне проверки обновления.",
+  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.1.msi",
+  "msi_sha256": "d2630a7d28b3f3b94bcb8e25efa9e3e842ef8f7154eec857a05b577808636219"
 }
