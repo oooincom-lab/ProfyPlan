@@ -191,6 +191,16 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
     } catch (e: any) { say('Облако: ' + (e?.message || e)); void loadLog(selId); }
     setBusy(false);
   };
+  const doCloudConnect = async () => {
+    if (!sel) { say('Выберите подключение'); return; }
+    setBusy(true);
+    try {
+      const provider = cloud?.provider || 'yandex';
+      const r = await api('/integration/connections/' + sel.id + '/cloud/oauth/start?provider=' + encodeURIComponent(provider));
+      if (!r?.authorize_url) throw new Error('Сервер не вернул ссылку авторизации');
+      window.location.assign(r.authorize_url);
+    } catch (e: any) { say('OAuth: ' + (e?.message || e)); setBusy(false); }
+  };
 
   return (
     <div style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
@@ -264,10 +274,14 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
                   <span style={{ color: cloud?.configured ? '#4ADE80' : '#FBBF24' }}>
                     {cloud?.configured ? 'доступ настроен' : 'нет токена или папок на сервере'}
                   </span>
+                  {cloud?.oauth_connected && <span style={{ color: '#4ADE80' }}>аккаунт подтверждён{cloud?.account ? ': ' + cloud.account : ''}</span>}
                   <span style={{ color: '#5A7090' }}>опрос каждые {cloud?.poll_minutes || 5} мин</span>
                   {cloud?.last_poll_at && <span style={{ color: '#5A7090' }}>последний: {String(cloud.last_poll_at).slice(0, 16).replace('T', ' ')}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 7 }}>
+                  <button style={btn('primary')} disabled={busy} onClick={() => void doCloudConnect()}>
+                    {cloud?.oauth_connected ? 'Переподключить облако' : 'Подключить облако'}
+                  </button>
                   <button style={btn()} disabled={busy} onClick={() => void doCloudCheck()}>🔎 Проверить доступ</button>
                   <button style={btn('primary')} disabled={busy} onClick={() => void doCloudPoll()}>🔄 Опросить облако сейчас</button>
                 </div>

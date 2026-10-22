@@ -35,18 +35,18 @@
 }
 ```
 
-Токен **не хранится в БД**. Он задаётся переменной окружения API:
+Для обратной совместимости можно задать серверный токен окружением API (без OAuth); в этом режиме refresh token не используется:
 
 ```dotenv
 YANDEX_DISK_TOKEN=...
 YANDEX_DISK_ROOT=/ProfyPlan
 ```
 
-Для пилота допустим один серверный токен; для production — защищённое хранилище/ACL и отдельный токен на клиента.
+Основной режим — OAuth (см. 3.2): access token не персистится, а refresh token хранится в БД только в зашифрованном виде (`CLOUD_TOKEN_ENCRYPTION_KEY`). Серверный токен из env остаётся аварийным/локальным вариантом.
 
 ## 3.1. Google Drive
 
-Для Google Drive в `settings.cloud` задаются ID папок:
+Для Google Drive ID папок больше не вводятся пользователем: сервер находит или создаёт корень `ProfyPlan` и канонические папки, после чего сохраняет ID в `settings.cloud`:
 
 ```json
 {
@@ -66,7 +66,23 @@ YANDEX_DISK_ROOT=/ProfyPlan
 }
 ```
 
-Токен — только через `GOOGLE_DRIVE_ACCESS_TOKEN`; в БД не хранится. Первый срез работает с access token и готовыми ID папок; OAuth-refresh и автоматическое создание папок — следующий этап. Все ID проверяются через Drive v3; загрузка идёт multipart, перемещение — через `addParents/removeParents`.
+Доступ получается через OAuth (см. 3.2); access token не хранится, refresh token — только в зашифрованном виде. Загрузка идёт multipart, перемещение — через `addParents/removeParents`; для приложения достаточно non-sensitive scope `drive.file`.
+
+## 3.2. OAuth-подключение (Яндекс Диск и Google Drive)
+
+Пользователь один раз нажимает «Подключить», входит в аккаунт провайдера и подтверждает доступ. ProfyPlan обменивает authorization code на access/refresh token, создаёт папки и дальше обновляет access token автоматически. Клиентские ключи OAuth-приложений задаются один раз на сервере:
+
+```dotenv
+YANDEX_OAUTH_CLIENT_ID=...
+YANDEX_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+CLOUD_OAUTH_CALLBACK_URL=https://profyplan.ru/api/v1/integration/cloud/oauth/callback
+CLOUD_OAUTH_SUCCESS_URL=https://profyplan.ru/workspace
+CLOUD_TOKEN_ENCRYPTION_KEY=...
+```
+
+Redirect URI в кабинетах Яндекс OAuth и Google Cloud должен совпадать с `CLOUD_OAUTH_CALLBACK_URL`. Для Google используется `access_type=offline`, `prompt=consent` и scope `https://www.googleapis.com/auth/drive.file`; для Яндекс Диска — `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info`. Refresh token хранится в `settings.cloud.oauth.refresh_token_enc` в зашифрованном виде; открытый токен в API и браузер не возвращается. Состояние OAuth подписано JWT и живёт 15 минут.
 
 ## 4. API
 
@@ -75,8 +91,10 @@ YANDEX_DISK_ROOT=/ProfyPlan
 | GET | `/v1/integration/connections/{id}/cloud/status` | Провайдер, корень, наличие токена, список папок |
 | POST | `/v1/integration/connections/{id}/cloud/check` | Создать канонические папки и проверить доступ |
 | POST | `/v1/integration/connections/{id}/cloud/poll` | Принять `1c_to_plan`, выгрузить новый `out` в `plan_to_1c` |
+| GET | `/v1/integration/connections/{id}/cloud/oauth/start?provider=yandex|google` | Получить URL согласия провайдера |
+| GET | `/v1/integration/cloud/oauth/callback` | Принять code, сохранить refresh token и создать папки |
 
-`cloud/poll` можно вызывать по расписанию (cron/worker) с интервалом 5 минут; одновременно с локальным агентом одно подключение не опрашивать.
+`cloud/poll` можно вызывать вручную; встроенный планировщик опрашивает активные подключения по интервалу 1–60 минут. Одновременный опрос защищён PostgreSQL advisory-lock.
 
 ## 5. Поведение
 
@@ -95,7 +113,7 @@ YANDEX_DISK_ROOT=/ProfyPlan
 
 ## 7. Ограничения первого среза
 
-- Google Drive работает по access token и готовым ID папок; OAuth-refresh и создание папок — следующий этап.
-- В окне подключения выберите транспорт «Облачный обмен», провайдера (Яндекс Диск/Google Drive), корневую папку (для Google — ID папок) и интервал 1–60 минут. На странице «Интеграция» доступны статус, проверка доступа и ручной опрос.
+- Пользователь вводит только провайдера и интервал; OAuth-ключи приложения и шифрование токенов настраиваются владельцем один раз на сервере. Папки создаются автоматически.
+- В окне подключения выберите транспорт «Облачный обмен», нажмите «Подключить» и подтвердите доступ; на странице «Интеграция» доступны статус, проверка доступа и ручной опрос.
 - Встроенный планировщик опрашивает активные облачные подключения по интервалу; несколько API-воркеров защищены advisory-lock PostgreSQL.
-- Токен один на инстанс API; клиентские токены и ротация — production-этап.
+- Google OAuth-приложение должно быть In production/Internal: в Testing refresh token живёт 7 дней.

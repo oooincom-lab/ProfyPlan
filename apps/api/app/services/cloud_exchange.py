@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.integration import ExchangeLogEntry, IntegrationConnection
+from app.services.cloud_oauth import OAuthError, access_token_for
 from app.services.integration_exchange import _dirs, process_incoming
 
 FOLDERS = (
@@ -174,26 +175,22 @@ def cloud_settings(conn: IntegrationConnection) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def provider_for(conn: IntegrationConnection):
+async def provider_for(conn: IntegrationConnection, db=None):
     data = cloud_settings(conn)
     provider = str(data.get("provider") or "yandex").lower()
     root = data.get("root") or settings.yandex_disk_root or "/ProfyPlan"
+    try:
+        token = await access_token_for(conn, provider, db)
+    except OAuthError as exc:
+        raise CloudError(str(exc)) from exc
     if provider == "yandex":
-        token = os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token
-        if not token:
-            raise CloudError("Не задан YANDEX_DISK_TOKEN на сервере")
         return YandexDiskClient(token, root=root)
     if provider == "google":
         from app.services.google_drive import GoogleDriveClient
-        token = os.environ.get("GOOGLE_DRIVE_ACCESS_TOKEN") or settings.google_drive_access_token
-        if not token:
-            raise CloudError("Не задан GOOGLE_DRIVE_ACCESS_TOKEN на сервере")
         folder_ids = data.get("folder_ids") or {}
-        if not isinstance(folder_ids, dict) or not folder_ids:
-            raise CloudError("Для Google Drive нужны folder_ids канонических папок")
         return GoogleDriveClient(
             token,
-            folder_ids=folder_ids,
+            folder_ids=folder_ids if isinstance(folder_ids, dict) else {},
             root_folder_id=data.get("root_folder_id"),
         )
     raise CloudError("Неизвестный облачный провайдер: %s" % provider)
@@ -292,9 +289,10 @@ async def poll_cloud(
     conn: IntegrationConnection,
     tenant_id,
 ) -> dict:
-    provider = provider_for(conn)
+    provider = await provider_for(conn, db)
     try:
         await provider.ensure_layout()
+        await _persist_layout(conn, db, provider)
         incoming = await process_incoming_cloud(db, conn, provider, tenant_id)
         outgoing = await publish_outbox_cloud(db, conn, provider)
         return {
@@ -305,3 +303,21 @@ async def poll_cloud(
         }
     finally:
         await provider.close()
+
+
+async def _persist_layout(
+    conn: IntegrationConnection,
+    db: AsyncSession,
+    provider,
+) -> None:
+    """Сохранить автоматически созданные ID папок Google Drive."""
+    if getattr(provider, "name", "") != "google":
+        return
+    current = dict(conn.settings or {})
+    cloud = dict(current.get("cloud") or {})
+    cloud["folder_ids"] = dict(getattr(provider, "folder_ids", {}) or {})
+    if getattr(provider, "root_folder_id", None):
+        cloud["root_folder_id"] = provider.root_folder_id
+    current["cloud"] = cloud
+    conn.settings = current
+    await db.commit()

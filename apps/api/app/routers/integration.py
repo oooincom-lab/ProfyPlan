@@ -19,7 +19,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,15 @@ from app.services.integration_exchange import (
     scan_inbox_dir,
     cleanup_exchange_log,
 )
-from app.services.cloud_exchange import CloudError, FOLDERS, cloud_settings, poll_cloud, provider_for
+from app.services.cloud_exchange import CloudError, FOLDERS, _persist_layout, cloud_settings, poll_cloud, provider_for
+from app.services.cloud_oauth import (
+    OAuthError,
+    authorization_url,
+    decode_state,
+    exchange_code,
+    oauth_configured,
+    save_oauth_tokens,
+)
 from app.services.integration_apply import apply_pending
 from app.services.odata_client import CATALOG_MAP, ODataClient, ODataError, map_catalog_row
 
@@ -301,19 +309,21 @@ async def cloud_status(
     conn = await _get_conn(db, conn_id, tenant_id)
     cfg = cloud_settings(conn)
     provider = str(cfg.get("provider") or "yandex").lower()
+    oauth = cfg.get("oauth") or {}
+    oauth_connected = bool(oauth.get("refresh_token_enc")) and oauth.get("provider") == provider
     if provider == "google":
         root = str(cfg.get("root_folder_id") or "Google Drive")
-        token = bool(
+        env_token = bool(
             os.environ.get("GOOGLE_DRIVE_ACCESS_TOKEN")
             or settings.google_drive_access_token
         )
-        token = token and bool(cfg.get("folder_ids"))
     elif provider == "yandex":
         root = str(cfg.get("root") or settings.yandex_disk_root or "/ProfyPlan")
-        token = bool(os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token)
+        env_token = bool(os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token)
     else:
         root = str(cfg.get("root") or "")
-        token = False
+        env_token = False
+    token = bool(oauth_connected or env_token)
     try:
         raw_poll = cfg.get("poll_minutes")
         poll_minutes = int(raw_poll) if raw_poll is not None else 5
@@ -330,12 +340,97 @@ async def cloud_status(
         "provider": provider,
         "root": root,
         "configured": token,
+        "oauth_connected": oauth_connected,
+        "oauth_available": oauth_configured(provider),
+        "account": str(oauth.get("account") or ""),
         "folders": list(FOLDERS),
         "transport": "cloud",
         "poll_minutes": poll_minutes,
         "scheduler_enabled": bool(settings.cloud_scheduler_enabled),
         "last_poll_at": last_poll.isoformat() if last_poll else None,
     }
+
+
+@router.get("/connections/{conn_id}/cloud/oauth/start")
+async def cloud_oauth_start(
+    conn_id: UUID,
+    provider: str = "yandex",
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    """Вернуть URL согласия провайдера; пользователь только подтверждает доступ."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    provider = str(provider or "yandex").lower()
+    try:
+        url = authorization_url(str(conn.id), str(conn.tenant_id), provider)
+    except OAuthError as exc:
+        raise HTTPException(400, str(exc))
+    return {"authorize_url": url, "provider": provider}
+
+
+def _oauth_redirect(url: str, **params) -> RedirectResponse:
+    from urllib.parse import urlencode
+
+    separator = "&" if "?" in url else "?"
+    return RedirectResponse(url + separator + urlencode(params))
+
+
+@router.get("/cloud/oauth/callback")
+async def cloud_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Публичный callback OAuth: проверяет подписанный state и сохраняет токен."""
+    failure_url = settings.cloud_oauth_failure_url or settings.cloud_oauth_success_url
+    try:
+        payload = decode_state(state or "")
+    except OAuthError as exc:
+        return _oauth_redirect(failure_url, cloud="error", message=str(exc))
+    try:
+        connection_uuid = UUID(str(payload["connection_id"]))
+    except (ValueError, TypeError):
+        return _oauth_redirect(failure_url, cloud="error", message="Некорректное подключение")
+    conn = await db.get(IntegrationConnection, connection_uuid)
+    if conn is None or str(conn.tenant_id) != str(payload.get("tenant_id")):
+        return _oauth_redirect(failure_url, cloud="error", message="Подключение не найдено")
+    provider = str(payload.get("provider"))
+    if error:
+        db.add(ExchangeLogEntry(
+            tenant_id=conn.tenant_id, connection_id=conn.id, direction="in",
+            kind="cloud_oauth", status="error", entities_count=0,
+            message=("OAuth отменён: " + str(error))[:500],
+        ))
+        await db.commit()
+        return _oauth_redirect(failure_url, cloud="error", message="Доступ не подтверждён")
+    if not code:
+        return _oauth_redirect(failure_url, cloud="error", message="Провайдер не вернул код")
+    try:
+        tokens = await exchange_code(provider, code)
+        save_oauth_tokens(conn, provider, tokens)
+        # Сразу создаём канонические папки и запоминаем их ID.
+        cloud_provider = await provider_for(conn, db)
+        try:
+            await cloud_provider.ensure_layout()
+            await _persist_layout(conn, db, cloud_provider)
+        finally:
+            await cloud_provider.close()
+        await db.commit()
+    except (OAuthError, CloudError) as exc:
+        db.add(ExchangeLogEntry(
+            tenant_id=conn.tenant_id, connection_id=conn.id, direction="in",
+            kind="cloud_oauth", status="error", entities_count=0,
+            message=str(exc)[:500],
+        ))
+        await db.commit()
+        return _oauth_redirect(failure_url, cloud="error", message=str(exc)[:180])
+    return _oauth_redirect(
+        settings.cloud_oauth_success_url,
+        cloud="connected",
+        connection=str(conn.id),
+        provider=provider,
+    )
 
 
 @router.post("/connections/{conn_id}/cloud/check")
@@ -346,9 +441,10 @@ async def cloud_check(
 ):
     conn = await _get_conn(db, conn_id, tenant_id)
     try:
-        provider = provider_for(conn)
+        provider = await provider_for(conn, db)
         try:
             await provider.ensure_layout()
+            await _persist_layout(conn, db, provider)
         finally:
             await provider.close()
     except CloudError as exc:

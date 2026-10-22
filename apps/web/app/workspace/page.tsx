@@ -1361,6 +1361,21 @@ export default function AppShell() {
   const effCollapsed = menuMode === 'auto' ? (autoEnabled && sidebarCollapsed) : sidebarCollapsed;
   const win = useWindows(sidebarWidth);
 
+  // Возврат из OAuth-согласия облачного провайдера.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const cloud = params.get('cloud');
+    if (!cloud) return;
+    if (cloud === 'connected') {
+      setView('integration');
+      setMsg('Облако подключено. Проверьте статус и доступность папок.');
+    } else if (cloud === 'error') {
+      setMsg('Не удалось подключить облако: ' + (params.get('message') || 'доступ не подтверждён'));
+    }
+    window.history.replaceState({}, '', '/workspace');
+  }, []);
+
   // Событие «открой справку» ведёт в оконный менеджер: окно справки — обычное окно
   // (свернуть, развернуть, раскладка, закрыть, панель задач), а не отдельный слой.
   useEffect(() => {

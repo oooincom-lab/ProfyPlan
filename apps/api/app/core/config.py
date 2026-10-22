@@ -24,6 +24,20 @@ class Settings(BaseSettings):
     yandex_disk_token: str = ""
     yandex_disk_root: str = "/ProfyPlan"
     google_drive_access_token: str = ""
+    # OAuth-приложения ProfyPlan: пользователь только подтверждает доступ,
+    # client_id/client_secret остаются на сервере.
+    yandex_oauth_client_id: str = ""
+    yandex_oauth_client_secret: str = ""
+    yandex_oauth_scope: str = "cloud_api:disk.read cloud_api:disk.write cloud_api:disk.info"
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_scope: str = "https://www.googleapis.com/auth/drive.file"
+    cloud_oauth_callback_url: str = "https://profyplan.ru/api/v1/integration/cloud/oauth/callback"
+    cloud_oauth_success_url: str = "https://profyplan.ru/workspace"
+    cloud_oauth_failure_url: str = "https://profyplan.ru/workspace"
+    # Ключ шифрования refresh token. Если пуст — используется JWT secret
+    # (для локальной разработки); в production задайте отдельный ключ.
+    cloud_token_encryption_key: str = ""
     # Периодический опрос облачных подключений; блокировка не даёт
     # нескольким API-воркерам опрашивать одно подключение одновременно.
     cloud_scheduler_enabled: bool = True

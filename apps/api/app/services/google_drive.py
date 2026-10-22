@@ -25,7 +25,7 @@ class GoogleDriveClient:
     def __init__(
         self,
         access_token: str,
-        folder_ids: dict,
+        folder_ids: Optional[dict] = None,
         root_folder_id: Optional[str] = None,
         http_client: Optional[httpx.AsyncClient] = None,
     ):
@@ -83,18 +83,74 @@ class GoogleDriveClient:
         name = value[len(key) + 1:]
         return self._folder(key), name
 
-    async def ensure_layout(self) -> None:
-        # Проверяем, что все ID существуют и являются папками.
-        for key in FOLDERS:
-            folder_id = self.folder_ids.get(key)
-            if not folder_id:
-                raise CloudError("Не задан folder_id для папки %s" % key)
+    async def _find_folder(self, parent_id: Optional[str], name: str) -> Optional[str]:
+        escaped = name.replace("\\", "\\\\").replace("'", "\\'")
+        query = "name = '%s' and mimeType = '%s' and trashed = false" % (escaped, FOLDER_MIME)
+        if parent_id:
+            query += " and '%s' in parents" % parent_id
+        response = await self._request(
+            "GET",
+            API + "/files",
+            params={"q": query, "fields": "files(id,name)", "pageSize": 10},
+        )
+        files = response.json().get("files") or []
+        return files[0].get("id") if files else None
+
+    async def _create_folder(self, parent_id: Optional[str], name: str) -> str:
+        metadata = {"name": name, "mimeType": FOLDER_MIME}
+        if parent_id:
+            metadata["parents"] = [parent_id]
+        response = await self._client.post(
+            API + "/files",
+            params={"fields": "id,name", "supportsAllDrives": "true"},
+            headers=self.headers,
+            json=metadata,
+        )
+        if response.status_code >= 400:
+            message = response.text[:300]
+            try:
+                message = response.json().get("error", {}).get("message") or message
+            except Exception:
+                pass
+            raise CloudError("Google Drive: не удалось создать папку %s: %s" % (name, message))
+        data = response.json()
+        if not data.get("id"):
+            raise CloudError("Google Drive: не вернул ID папки %s" % name)
+        return str(data["id"])
+
+    async def _valid_folder(self, folder_id: str) -> bool:
+        try:
             response = await self._request(
-                "GET", API + "/files/" + folder_id, params={"fields": "id,name,mimeType"}
+                "GET", API + "/files/" + folder_id,
+                params={"fields": "id,mimeType", "supportsAllDrives": "true"},
             )
-            data = response.json()
-            if data.get("mimeType") != FOLDER_MIME:
-                raise CloudError("ID %s не является папкой Google Drive" % folder_id)
+            return response.json().get("mimeType") == FOLDER_MIME
+        except CloudError:
+            return False
+
+    async def ensure_layout(self) -> None:
+        """Найти или создать корень ProfyPlan и все канонические папки."""
+        if self.root_folder_id and not await self._valid_folder(str(self.root_folder_id)):
+            self.root_folder_id = None
+        if not self.root_folder_id:
+            self.root_folder_id = await self._find_folder(None, "ProfyPlan")
+            if not self.root_folder_id:
+                self.root_folder_id = await self._create_folder(None, "ProfyPlan")
+        for relative in FOLDERS:
+            parts = [p for p in str(relative).strip("/").split("/") if p]
+            parent = self.root_folder_id
+            current = ""
+            for part in parts:
+                current = (current + "/" + part).strip("/")
+                folder_id = self.folder_ids.get(current)
+                if folder_id and await self._valid_folder(str(folder_id)):
+                    parent = str(folder_id)
+                    continue
+                folder_id = await self._find_folder(parent, part)
+                if not folder_id:
+                    folder_id = await self._create_folder(parent, part)
+                self.folder_ids[current] = str(folder_id)
+                parent = str(folder_id)
 
     async def list_files(self, relative: str) -> list[dict]:
         folder_id = self._folder(relative)

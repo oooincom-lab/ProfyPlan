@@ -4,16 +4,6 @@
 import { useState } from 'react';
 import { API_V1 } from '../lib/api';
 
-const CLOUD_FOLDERS = [
-  ['1c_to_plan', '1c_to_plan'],
-  ['plan_to_1c', 'plan_to_1c'],
-  ['processed/1c_to_plan', 'processed/1c_to_plan'],
-  ['processed/plan_to_1c', 'processed/plan_to_1c'],
-  ['processed', 'processed'],
-  ['archive', 'archive'],
-  ['_state', '_state'],
-] as const;
-
 const inp: any = { background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' };
 const lbl: any = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 };
 
@@ -35,9 +25,6 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     username: (conn?.settings && conn.settings.username) || '',
     password: '',
     cloud_provider: (conn?.settings && conn.settings.cloud && conn.settings.cloud.provider) || 'yandex',
-    cloud_root: (conn?.settings && conn.settings.cloud && conn.settings.cloud.root) || '/ProfyPlan',
-    cloud_root_folder_id: (conn?.settings && conn.settings.cloud && conn.settings.cloud.root_folder_id) || '',
-    cloud_folder_ids: (conn?.settings && conn.settings.cloud && conn.settings.cloud.folder_ids) || {},
     cloud_poll_minutes: (conn?.settings && conn.settings.cloud && conn.settings.cloud.poll_minutes) || 5,
   }));
   const [busy, setBusy] = useState(false);
@@ -48,6 +35,13 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const [pairCode, setPairCode] = useState<any>(null);
   const [pairBusy, setPairBusy] = useState(false);
   const [pairErr, setPairErr] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string>(conn?.id ? String(conn.id) : '');
+  const [cloudConnected, setCloudConnected] = useState<boolean>(
+    !!(conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth && conn.settings.cloud.oauth.refresh_token_enc)
+  );
+  const [cloudAccount, setCloudAccount] = useState<string>(
+    (conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth && conn.settings.cloud.oauth.account) || ''
+  );
 
   const makePairCode = async () => {
     if (!conn || !conn.id) return;
@@ -79,7 +73,14 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     window.location.href = '/companion/ProfyPlanCompanionSetup.exe';
   };
 
-  const upd = (patch: any) => { setF((cur: any) => ({ ...cur, ...patch })); setOkMsg(null); };
+  const upd = (patch: any) => {
+    if (patch.cloud_provider && patch.cloud_provider !== f.cloud_provider) {
+      setCloudConnected(false);
+      setCloudAccount('');
+    }
+    setF((cur: any) => ({ ...cur, ...patch }));
+    setOkMsg(null);
+  };
 
   const saveNow = async () => {
     if (!f.name.trim()) { setMsg('Укажите название подключения'); return; }
@@ -98,18 +99,9 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       cloud.provider = f.cloud_provider;
       const minutes = Number(f.cloud_poll_minutes);
       cloud.poll_minutes = Number.isFinite(minutes) ? Math.max(1, Math.min(60, Math.trunc(minutes))) : 5;
-      if (f.cloud_provider === 'yandex') {
-        cloud.root = String(f.cloud_root || '').trim() || '/ProfyPlan';
-      } else {
-        const folderIds: any = {};
-        for (const [key] of CLOUD_FOLDERS) {
-          const value = String((f.cloud_folder_ids || {})[key] || '').trim();
-          if (value) folderIds[key] = value;
-        }
-        cloud.folder_ids = folderIds;
-        const rootId = String(f.cloud_root_folder_id || '').trim();
-        if (rootId) cloud.root_folder_id = rootId;
-        else delete cloud.root_folder_id;
+      if (f.cloud_provider === 'yandex' && !cloud.root) cloud.root = '/ProfyPlan';
+      if (cloud.oauth && cloud.oauth.provider !== f.cloud_provider) {
+        delete cloud.oauth;
       }
       settings.cloud = cloud;
     }
@@ -117,12 +109,38 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     try {
       const u = save ? await save(conn && conn.id ? String(conn.id) : null, body) : null;
       if (onSaved) onSaved(u || { ...conn, ...body });
+      const nextId = (u && u.id) || (conn && conn.id) || savedId;
+      if (nextId) setSavedId(String(nextId));
+      const nextCloud = u && u.settings && u.settings.cloud;
+      if (nextCloud) {
+        setCloudConnected(!!(nextCloud.oauth && nextCloud.oauth.refresh_token_enc));
+        setCloudAccount((nextCloud.oauth && nextCloud.oauth.account) || '');
+      }
       setOkMsg(wasNew ? 'Подключение создано ✅' : 'Настройки сохранены ✅');
       setF((cur: any) => ({ ...cur, password: '' }));
     } catch (e: any) {
       setMsg('Ошибка сохранения: ' + String((e && e.message) || e).slice(0, 160));
     }
     setBusy(false);
+  };
+
+  const connectCloud = async () => {
+    const id = savedId || (conn && conn.id ? String(conn.id) : '');
+    if (!id) { setMsg('Сначала сохраните подключение, затем подключите облако'); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/oauth/start?provider=${encodeURIComponent(f.cloud_provider)}`, {
+        headers: tok ? { Authorization: '***' + tok } : {},
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
+      if (!data?.authorize_url) throw new Error('Сервер не вернул ссылку авторизации');
+      window.location.assign(data.authorize_url);
+    } catch (e: any) {
+      setMsg('OAuth: ' + String((e && e.message) || e).slice(0, 200));
+      setBusy(false);
+    }
   };
 
   const row = (label: string, node: any) => (
@@ -159,7 +177,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
         </div>
       ) : f.transport === 'cloud' ? (
         <div style={{ border: '1px dashed #1E3252', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
-          <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 6 }}>Облачный обмен — папки на Яндекс Диске или Google Drive. Токен задаётся в окружении сервера и в браузере не хранится.</div>
+          <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 6 }}>Один раз подтвердите доступ к облаку. ProfyPlan сам получит и будет обновлять токен, создаст папки обмена и включит планировщик.</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {row('Провайдер', (
               <select style={inp} value={f.cloud_provider} onChange={(e) => upd({ cloud_provider: e.target.value })}>
@@ -169,24 +187,18 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
             ))}
             {row('Интервал опроса, мин', <input style={inp} type="number" min={1} max={60} value={f.cloud_poll_minutes} onChange={(e) => upd({ cloud_poll_minutes: e.target.value })} />)}
           </div>
-          {f.cloud_provider === 'yandex' ? (
-            row('Корневая папка', <input style={inp} value={f.cloud_root} placeholder="/ProfyPlan" onChange={(e) => upd({ cloud_root: e.target.value })} />)
-          ) : (
-            <>
-              {row('ID корневой папки (необязательно)', <input style={inp} value={f.cloud_root_folder_id} placeholder="folder id" onChange={(e) => upd({ cloud_root_folder_id: e.target.value })} />)}
-              <div style={{ fontSize: 11.5, color: '#5FA8D3', margin: '2px 0 6px' }}>ID канонических папок Google Drive:</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {CLOUD_FOLDERS.map(([key, label]) => (
-                  <label key={key} style={lbl}>
-                    <span>{label}</span>
-                    <input style={inp} value={(f.cloud_folder_ids || {})[key] || ''} placeholder="folder id"
-                      onChange={(e) => upd({ cloud_folder_ids: { ...(f.cloud_folder_ids || {}), [key]: e.target.value } })} />
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-          <div style={{ fontSize: 11, color: '#5A7090', marginTop: 7 }}>Сервер опрашивает папки автоматически с выбранным интервалом; кнопки проверки и ручного опроса — на странице «Интеграция».</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+            <button type="button" disabled={busy} onClick={() => void connectCloud()}
+              style={{ background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {cloudConnected ? 'Переподключить облако' : 'Подключить ' + (f.cloud_provider === 'google' ? 'Google Drive' : 'Яндекс Диск')}
+            </button>
+            <span style={{ fontSize: 11.5, color: cloudConnected ? '#4ADE80' : '#FBBF24' }}>
+              {cloudConnected ? 'Доступ подтверждён' + (cloudAccount ? ': ' + cloudAccount : '') : 'Доступ ещё не подтверждён'}
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: '#5A7090', marginTop: 6 }}>
+            Откроется страница провайдера для входа и согласия. Папки создаются автоматически; после возврата в ProfyPlan проверьте статус на странице «Интеграция».{!savedId && !conn?.id ? ' Сохраните подключение перед подключением облака.' : ''}
+          </div>
         </div>
       ) : (
         <div style={{ border: '1px dashed #1E3252', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
