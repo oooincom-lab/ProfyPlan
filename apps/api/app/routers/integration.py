@@ -37,7 +37,7 @@ from app.services.integration_exchange import (
     scan_inbox_dir,
     cleanup_exchange_log,
 )
-from app.services.cloud_exchange import CloudError, FOLDERS, _persist_layout, cloud_settings, poll_cloud, provider_for
+from app.services.cloud_exchange import CloudError, FOLDERS, _persist_layout, cloud_root_name, cloud_settings, poll_cloud, provider_for
 from app.services.cloud_oauth import (
     OAuthError,
     authorization_url,
@@ -312,13 +312,13 @@ async def cloud_status(
     oauth = cfg.get("oauth") or {}
     oauth_connected = bool(oauth.get("refresh_token_enc")) and oauth.get("provider") == provider
     if provider == "google":
-        root = str(cfg.get("root_folder_id") or "Google Drive")
+        root = str(cfg.get("root_name") or cfg.get("root_folder_id") or "Google Drive")
         env_token = bool(
             os.environ.get("GOOGLE_DRIVE_ACCESS_TOKEN")
             or settings.google_drive_access_token
         )
     elif provider == "yandex":
-        root = str(cfg.get("root") or settings.yandex_disk_root or "/ProfyPlan")
+        root = cloud_root_name(conn)
         env_token = bool(os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token)
     else:
         root = str(cfg.get("root") or "")

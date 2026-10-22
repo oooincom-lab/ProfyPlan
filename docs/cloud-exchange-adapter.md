@@ -46,7 +46,7 @@ YANDEX_DISK_ROOT=/ProfyPlan
 
 ## 3.1. Google Drive
 
-Для Google Drive ID папок больше не вводятся пользователем: сервер находит или создаёт корень `ProfyPlan` и канонические папки, после чего сохраняет ID в `settings.cloud`:
+Для Google Drive ID папок больше не вводятся пользователем: сервер находит или создаёт корень с именем из `settings.cloud.root_name` (по умолчанию `ProfyPlan`) и канонические папки, после чего сохраняет ID в `settings.cloud`:
 
 ```json
 {
@@ -66,7 +66,7 @@ YANDEX_DISK_ROOT=/ProfyPlan
 }
 ```
 
-Доступ получается через OAuth (см. 3.2); access token не хранится, refresh token — только в зашифрованном виде. Загрузка идёт multipart, перемещение — через `addParents/removeParents`; для приложения достаточно non-sensitive scope `drive.file`.
+Имя корневой папки задаёт пользователь в подключении. Если папки с таким именем нет, она создаётся; если есть — используется существующая. Доступ получается через OAuth (см. 3.2); access token не хранится, refresh token — только в зашифрованном виде. Загрузка идёт multipart, перемещение — через `addParents/removeParents`; для приложения достаточно non-sensitive scope `drive.file`.
 
 ## 3.2. OAuth-подключение (Яндекс Диск и Google Drive)
 

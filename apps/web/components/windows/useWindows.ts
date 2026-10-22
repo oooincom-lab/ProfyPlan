@@ -700,7 +700,7 @@ export function useWindows(sidebarWidth: number = 260) {
     winZ.current += 1;
     const d = deskRect();
     const w = Math.min(620, d.w - 60);
-    const h = Math.min(600, d.h - 60);
+    const h = Math.min(720, d.h - 60);
     const id = 'c' + Date.now().toString(36);
     setWins(prev => [...prev, {
       id,

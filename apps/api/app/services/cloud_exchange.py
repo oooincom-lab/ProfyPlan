@@ -38,6 +38,19 @@ def _path(root: str, relative: str) -> str:
     return root + ("/" + relative if relative else "")
 
 
+def cloud_root_name(conn: IntegrationConnection) -> str:
+    """Имя корневой папки; поддерживает старые поля root/root_folder_id."""
+    data = cloud_settings(conn)
+    value = data.get("root_name") or data.get("root") or settings.yandex_disk_root or "ProfyPlan"
+    value = str(value).strip().strip("/")
+    return value or "ProfyPlan"
+
+
+def cloud_root_path(conn: IntegrationConnection) -> str:
+    """Путь корня для Яндекс Диска (с ведущим слэшем)."""
+    return "/" + cloud_root_name(conn).strip("/")
+
+
 class YandexDiskClient:
     """Минимальный REST-клиент Яндекс Диска для файлового обмена."""
 
@@ -178,13 +191,12 @@ def cloud_settings(conn: IntegrationConnection) -> dict:
 async def provider_for(conn: IntegrationConnection, db=None):
     data = cloud_settings(conn)
     provider = str(data.get("provider") or "yandex").lower()
-    root = data.get("root") or settings.yandex_disk_root or "/ProfyPlan"
     try:
         token = await access_token_for(conn, provider, db)
     except OAuthError as exc:
         raise CloudError(str(exc)) from exc
     if provider == "yandex":
-        return YandexDiskClient(token, root=root)
+        return YandexDiskClient(token, root=cloud_root_path(conn))
     if provider == "google":
         from app.services.google_drive import GoogleDriveClient
         folder_ids = data.get("folder_ids") or {}
@@ -192,6 +204,7 @@ async def provider_for(conn: IntegrationConnection, db=None):
             token,
             folder_ids=folder_ids if isinstance(folder_ids, dict) else {},
             root_folder_id=data.get("root_folder_id"),
+            root_name=data.get("root_name") or None,
         )
     raise CloudError("Неизвестный облачный провайдер: %s" % provider)
 
@@ -315,6 +328,7 @@ async def _persist_layout(
         return
     current = dict(conn.settings or {})
     cloud = dict(current.get("cloud") or {})
+    cloud["root_name"] = getattr(provider, "root_name", None) or cloud_root_name(conn)
     cloud["folder_ids"] = dict(getattr(provider, "folder_ids", {}) or {})
     if getattr(provider, "root_folder_id", None):
         cloud["root_folder_id"] = provider.root_folder_id

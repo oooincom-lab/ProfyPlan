@@ -1447,7 +1447,7 @@
   </div>
   <div class="task">
     <div class="task-title">6.42.12 OAuth-автоматизация (23.10.2026).</div>
-    <div class="task-detail">Пользователь нажимает «Подключить» и подтверждает доступ у провайдера; ProfyPlan сам обменивает authorization code на access/refresh token, создаёт корень и канонические папки, хранит refresh token в <code>settings.cloud.oauth.refresh_token_enc</code> в зашифрованном виде и обновляет access token перед обменом. Клиентские ключи Яндекс OAuth и Google OAuth задаются на сервере один раз; ручной ввод токенов и folder ID из UI убран. OAuth-state подписан JWT на 15 минут; callback публичный, но состояние проверяется. Для Google используется <code>drive.file</code>, <code>access_type=offline</code>, <code>prompt=consent</code>; для Яндекс Диска — <code>cloud_api:disk.read|write|info</code>.</div>
+    <div class="task-detail">Пользователь задаёт имя корневой папки, нажимает «Подключить» и подтверждает доступ у провайдера; ProfyPlan сам обменивает authorization code на access/refresh token, находит существующую корневую папку или создаёт её, создаёт канонические папки, хранит refresh token в <code>settings.cloud.oauth.refresh_token_enc</code> в зашифрованном виде и обновляет access token перед обменом. Клиентские ключи Яндекс OAuth и Google OAuth задаются на сервере один раз; ручной ввод токенов и folder ID из UI убран. OAuth-state подписан JWT на 15 минут; callback публичный, но состояние проверяется. Для Google используется <code>drive.file</code>, <code>access_type=offline</code>, <code>prompt=consent</code>; для Яндекс Диска — <code>cloud_api:disk.read|write|info</code>.</div>
     
   </div>
 </div>

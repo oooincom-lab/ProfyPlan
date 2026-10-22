@@ -27,14 +27,20 @@ class GoogleDriveClient:
         access_token: str,
         folder_ids: Optional[dict] = None,
         root_folder_id: Optional[str] = None,
+        root_name: Optional[str] = None,
         http_client: Optional[httpx.AsyncClient] = None,
     ):
         if not access_token:
             raise CloudError("Не задан GOOGLE_DRIVE_ACCESS_TOKEN")
         self.token = access_token
         self.folder_ids = {str(k): str(v) for k, v in (folder_ids or {}).items() if v}
-        self.root_folder_id = root_folder_id
-        self.root = root_folder_id or self.root_label
+        self.root_name = str(root_name or "ProfyPlan").strip().strip("/") or "ProfyPlan"
+        if "/" in self.root_name or "\\" in self.root_name:
+            raise CloudError("Имя корневой папки Google Drive не должно содержать слэш")
+        # Если имя задано пользователем, ищем/создаём папку по имени, а не
+        # используем старый root_folder_id (он мог остаться от прошлого имени).
+        self.root_folder_id = None if root_name else root_folder_id
+        self.root = self.root_folder_id or self.root_name
         self._client = http_client or httpx.AsyncClient(timeout=30.0)
         self._owns_client = http_client is None
 

@@ -25,6 +25,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     username: (conn?.settings && conn.settings.username) || '',
     password: '',
     cloud_provider: (conn?.settings && conn.settings.cloud && conn.settings.cloud.provider) || 'yandex',
+    cloud_root_name: String((conn?.settings && conn.settings.cloud && (conn.settings.cloud.root_name || conn.settings.cloud.root)) || 'ProfyPlan').replace(/^\/+/, ''),
     cloud_poll_minutes: (conn?.settings && conn.settings.cloud && conn.settings.cloud.poll_minutes) || 5,
   }));
   const [busy, setBusy] = useState(false);
@@ -84,6 +85,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
 
   const saveNow = async () => {
     if (!f.name.trim()) { setMsg('Укажите название подключения'); return; }
+    const cloudRoot = String(f.cloud_root_name || '').trim().replace(/^\/+/, '');
+    if (f.transport === 'cloud' && f.cloud_provider === 'google' && /[\\/]/.test(cloudRoot)) {
+      setMsg('Для Google Drive имя корневой папки не должно содержать слэш'); return;
+    }
     if (!save) { setMsg('Сохранение недоступно'); return; }
     setBusy(true); setMsg(null);
     const wasNew = !(conn && conn.id);
@@ -97,9 +102,15 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     if (f.transport === 'cloud') {
       const cloud: any = { ...(conn?.settings?.cloud || {}) };
       cloud.provider = f.cloud_provider;
+      const rootName = cloudRoot || 'ProfyPlan';
+      cloud.root_name = rootName;
       const minutes = Number(f.cloud_poll_minutes);
       cloud.poll_minutes = Number.isFinite(minutes) ? Math.max(1, Math.min(60, Math.trunc(minutes))) : 5;
-      if (f.cloud_provider === 'yandex' && !cloud.root) cloud.root = '/ProfyPlan';
+      if (f.cloud_provider === 'yandex') {
+        cloud.root = '/' + rootName.replace(/^\/+/, '');
+      } else if ((conn?.settings?.cloud?.root_name || '') !== rootName) {
+        delete cloud.root_folder_id;
+      }
       if (cloud.oauth && cloud.oauth.provider !== f.cloud_provider) {
         delete cloud.oauth;
       }
@@ -186,6 +197,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               </select>
             ))}
             {row('Интервал опроса, мин', <input style={inp} type="number" min={1} max={60} value={f.cloud_poll_minutes} onChange={(e) => upd({ cloud_poll_minutes: e.target.value })} />)}
+          </div>
+          {row('Корневая папка', <input style={inp} value={f.cloud_root_name} placeholder="ProfyPlan" onChange={(e) => upd({ cloud_root_name: e.target.value })} />)}
+          <div style={{ fontSize: 11, color: '#5A7090', marginTop: -2, marginBottom: 6 }}>
+            Если папки с таким названием нет, ProfyPlan создаст её и канонические папки обмена.
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
             <button type="button" disabled={busy} onClick={() => void connectCloud()}
