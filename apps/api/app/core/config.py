@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 1440  # 24 часа
     refresh_token_days: int = 30
 
+    # Облачный обмен (токены не хранятся в БД)
+    yandex_disk_token: str = ""
+    yandex_disk_root: str = "/ProfyPlan"
+
     # CORS
     cors_origins: list[str] = [
         "http://localhost:3000",

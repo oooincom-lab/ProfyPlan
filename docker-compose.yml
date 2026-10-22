@@ -47,6 +47,8 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-profyplan.ai@gmail.com}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
+      YANDEX_DISK_TOKEN: ${YANDEX_DISK_TOKEN:-}
+      YANDEX_DISK_ROOT: ${YANDEX_DISK_ROOT:-/ProfyPlan}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-profyplan.ai@gmail.com}
     ports:
       - "127.0.0.1:8000:8000"

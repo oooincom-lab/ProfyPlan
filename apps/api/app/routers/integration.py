@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user, get_integration_tenant_id
 from app.models.integration import ExchangeInboxItem, ExchangeLease, ExchangeLogEntry, IntegrationConnection
@@ -36,6 +37,7 @@ from app.services.integration_exchange import (
     scan_inbox_dir,
     cleanup_exchange_log,
 )
+from app.services.cloud_exchange import CloudError, FOLDERS, cloud_settings, poll_cloud, provider_for
 from app.services.integration_apply import apply_pending
 from app.services.odata_client import CATALOG_MAP, ODataClient, ODataError, map_catalog_row
 
@@ -288,6 +290,75 @@ async def scan_dir(
     conn = await _get_conn(db, conn_id, tenant_id)
     await cleanup_exchange_log(db, tenant_id)
     return await scan_inbox_dir(db, conn, tenant_id)
+
+
+@router.get("/connections/{conn_id}/cloud/status")
+async def cloud_status(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    conn = await _get_conn(db, conn_id, tenant_id)
+    cfg = cloud_settings(conn)
+    provider = str(cfg.get("provider") or "yandex").lower()
+    root = str(cfg.get("root") or settings.yandex_disk_root or "/ProfyPlan")
+    token = bool(os.environ.get("YANDEX_DISK_TOKEN") or settings.yandex_disk_token)
+    return {
+        "provider": provider,
+        "root": root,
+        "configured": token if provider == "yandex" else False,
+        "folders": list(FOLDERS),
+        "transport": "cloud",
+    }
+
+
+@router.post("/connections/{conn_id}/cloud/check")
+async def cloud_check(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    conn = await _get_conn(db, conn_id, tenant_id)
+    try:
+        provider = provider_for(conn)
+        try:
+            await provider.ensure_layout()
+        finally:
+            await provider.close()
+    except CloudError as exc:
+        db.add(ExchangeLogEntry(
+            tenant_id=tenant_id, connection_id=conn.id, direction="in",
+            kind="cloud_check", status="error", entities_count=0, message=str(exc)[:500],
+        ))
+        await db.commit()
+        raise HTTPException(400, str(exc))
+    db.add(ExchangeLogEntry(
+        tenant_id=tenant_id, connection_id=conn.id, direction="in",
+        kind="cloud_check", status="ok", entities_count=0,
+        message="Облачные папки доступны: %s" % provider.root,
+    ))
+    await db.commit()
+    return {"ok": True, "provider": "yandex", "root": provider.root}
+
+
+@router.post("/connections/{conn_id}/cloud/poll")
+async def cloud_poll(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    conn = await _get_conn(db, conn_id, tenant_id)
+    await cleanup_exchange_log(db, tenant_id)
+    try:
+        result = await poll_cloud(db, conn, tenant_id)
+    except CloudError as exc:
+        db.add(ExchangeLogEntry(
+            tenant_id=tenant_id, connection_id=conn.id, direction="in",
+            kind="cloud_poll", status="error", entities_count=0, message=str(exc)[:500],
+        ))
+        await db.commit()
+        raise HTTPException(400, str(exc))
+    return result
 
 
 @router.post("/inbox/apply")
