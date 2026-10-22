@@ -1422,7 +1422,12 @@
   </div>
   <div class="task">
     <div class="task-title">6.42.7 Статус.</div>
-    <div class="task-detail">ТЗ 1.1 готово; реализация на стороне 1С — по заданию; адаптер ProfyPlan — следующий срез.</div>
+    <div class="task-detail">ТЗ 1.2 готово; реализация на стороне 1С — по заданию; адаптер ProfyPlan: первый срез Яндекс Диска собран 22.10 (папки, приём, выгрузка, мок-тест), Google Drive — следующий.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">6.42.9 Адаптер ProfyPlan, Яндекс Диск (22.10.2026).</div>
+    <div class="task-detail"><code>cloud_exchange.py</code>: канонические папки, <code>YandexDiskClient</code> (ensure/list/download/upload/move), приём <code>1c_to_plan</code> через общий <code>process_incoming</code>, выгрузка нового <code>out</code> в <code>plan_to_1c</code>, журнал и архив ошибок; API <code>cloud/status|check|poll</code>; токен только через env, не в БД. Мок-тест и smoke пройдены; Google Drive — следующий срез.</div>
     
   </div>
   <div class="task">
