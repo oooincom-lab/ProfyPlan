@@ -107,11 +107,21 @@ def _remove_shortcut() -> None:
         pass
 
 
+def _app_source() -> Path:
+    """Основной EXE: из payload Setup, иначе текущий исполняемый файл."""
+    if getattr(sys, "frozen", False):
+        payload = Path(getattr(sys, "_MEIPASS", "")) / "payload" / "ProfyPlanCompanion.exe"
+        if payload.exists():
+            return payload
+        return Path(sys.executable)
+    return Path(sys.argv[0])
+
+
 def install(config_path: Path, install_dir: Path = DEFAULT_DIR, start: bool = True) -> Path:
     install_dir = Path(install_dir)
     install_dir.mkdir(parents=True, exist_ok=True)
     target = install_dir / "ProfyPlanCompanion.exe"
-    source = Path(sys.executable) if getattr(sys, "frozen", False) else Path(sys.argv[0])
+    source = _app_source()
     if source.resolve() != target.resolve():
         shutil.copy2(source, target)
     shutil.copy2(config_path, install_dir / "companion.json")
