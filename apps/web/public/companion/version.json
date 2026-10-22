@@ -1,9 +1,9 @@
 {
-  "version": "0.8.3",
+  "version": "0.8.4",
   "download_url": "/companion/ProfyPlanCompanionSetup.exe",
-  "sha256": "e504a813a5255b6a3a0231c221ba7b1e5b9f4ea43b32ae94cabcd8b283c3ce40",
-  "published_at": "2026-10-23T00:08:00+03:00",
-  "notes": "Основной EXE без консольного окна; отдельный CLI для команд службы; установщик ставит основной EXE из payload.",
-  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.3.msi",
-  "msi_sha256": "337bdce3c5b64141f38dd858d4e73b0a5ab5061c451d40a51c4132c26abb4b93"
+  "sha256": "3cacc7d1aa2f1eff89243f8e761df99540fbdd711037c0671d82a44d5aa4e959",
+  "published_at": "2026-10-23T00:26:00+03:00",
+  "notes": "В настройках: запуск/остановка службы и галочка «Запускать в виде службы»; основной EXE без консоли.",
+  "msi_download_url": "/companion/ProfyPlanCompanion-0.8.4.msi",
+  "msi_sha256": "50b43aafce3d58409b708958d754da603cd86ebbb2124af6a2fcc5ddc3d00182"
 }

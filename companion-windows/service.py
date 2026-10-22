@@ -252,6 +252,41 @@ def stop_for_upgrade() -> bool:
     return True
 
 
+def start_service() -> dict:
+    if os.name != "nt":
+        raise ServiceError("Служба доступна только в Windows")
+    if not service_exists():
+        raise ServiceError("Служба не установлена")
+    if not _is_admin():
+        raise ServiceError("Для запуска службы нужны права администратора")
+    if "RUNNING" in service_status().upper():
+        return {"service": SERVICE_NAME, "status": service_status()}
+    if SERVICE_WRAPPER.exists():
+        result = _run([str(SERVICE_WRAPPER), "start"], cwd=SERVICE_DIR)
+        if result.returncode != 0:
+            raise ServiceError("WinSW start: %s" % ((result.stderr or result.stdout or "")[:400]))
+    _run(["sc", "start", SERVICE_NAME])
+    for _ in range(15):
+        if "RUNNING" in service_status().upper():
+            return {"service": SERVICE_NAME, "status": service_status()}
+        time.sleep(1)
+    raise ServiceError("Служба не перешла в состояние RUNNING: %s" % service_status())
+
+
+def stop_service() -> dict:
+    if os.name != "nt":
+        raise ServiceError("Служба доступна только в Windows")
+    if not service_exists():
+        raise ServiceError("Служба не установлена")
+    if not _is_admin():
+        raise ServiceError("Для остановки службы нужны права администратора")
+    _stop_service()
+    status = service_status()
+    if "RUNNING" in status.upper():
+        raise ServiceError("Служба не остановилась: %s" % status)
+    return {"service": SERVICE_NAME, "status": status}
+
+
 def start_after_upgrade() -> None:
     if service_exists():
         if SERVICE_WRAPPER.exists():

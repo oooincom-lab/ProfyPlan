@@ -1,9 +1,11 @@
 ﻿param(
     [Parameter(Mandatory = $true)][string]$ConfigPath,
-    [string]$Version = ""
+    [string]$Version = "",
+    [string]$CliPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+$script:CliPath = $CliPath
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -37,10 +39,62 @@ function Style-Input($box) {
     $box.ForeColor = C "#0F172A"
 }
 
+function Get-CliPath {
+    if ($script:CliPath -and (Test-Path -LiteralPath $script:CliPath)) { return $script:CliPath }
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\ProfyPlanCompanion\ProfyPlanCompanionCli.exe"),
+        (Join-Path (Split-Path -Parent $PSCommandPath) "ProfyPlanCompanionCli.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    throw "Не найден ProfyPlanCompanionCli.exe. Переустановите companion."
+}
+
+function Invoke-ServiceCli {
+    param([string[]]$Arguments)
+    $cli = Get-CliPath
+    $proc = Start-Process -FilePath $cli -ArgumentList $Arguments -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+    if ($proc.ExitCode -ne 0) {
+        throw ("Команда службы завершилась с кодом " + $proc.ExitCode + ". Проверьте права администратора.")
+    }
+}
+
+function Update-ServiceUi {
+    $svc = Get-Service -Name "ProfyPlanCompanion" -ErrorAction SilentlyContinue
+    if ($null -eq $svc) {
+        $serviceState.Text = "Служба не установлена"
+        $serviceState.ForeColor = C "#B45309"
+        $serviceMode.Checked = $false
+        $startService.Enabled = $true
+        $stopService.Enabled = $false
+        return
+    }
+    $serviceMode.Checked = $true
+    if ($svc.Status -eq "Running") {
+        $serviceState.Text = "Служба работает · автозапуск при загрузке"
+        $serviceState.ForeColor = C "#15803D"
+        $startService.Enabled = $false
+        $stopService.Enabled = $true
+    } else {
+        $stateText = switch ([string]$svc.Status) {
+            "Running" { "работает" }
+            "Stopped" { "остановлена" }
+            "StartPending" { "запускается" }
+            "StopPending" { "останавливается" }
+            default { [string]$svc.Status }
+        }
+        $serviceState.Text = ("Служба установлена · " + $stateText)
+        $serviceState.ForeColor = C "#B45309"
+        $startService.Enabled = $true
+        $stopService.Enabled = $false
+    }
+}
+
 $cfg = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "ProfyPlan Companion — Настройки"
-$form.ClientSize = New-Object System.Drawing.Size(640, 560)
+$form.ClientSize = New-Object System.Drawing.Size(640, 720)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedSingle"
 $form.MaximizeBox = $false
@@ -66,7 +120,7 @@ if ($Version) {
 }
 
 $content = New-Object System.Windows.Forms.Panel
-$content.Left = 0; $content.Top = 92; $content.Width = 640; $content.Height = 468
+$content.Left = 0; $content.Top = 92; $content.Width = 640; $content.Height = 628
 $content.AutoScroll = $true; $content.BackColor = C "#F8FAFC"
 $form.Controls.Add($content)
 
@@ -104,19 +158,44 @@ $card2.Controls.Add($interval)
 Add-Text $card2 "мин" 104 136 40 20 9 "#64748B" | Out-Null
 Add-Text $card2 "Проверка входящих файлов и отправка исходящих." 150 136 420 20 8 "#94A3B8" | Out-Null
 
-$status = Add-Text $content "" 24 396 592 28 9 "#B91C1C"
+$card3 = New-Card $content 402 150
+Add-Text $card3 "СЛУЖБА WINDOWS" 18 12 300 18 8 "#64748B" "Bold" | Out-Null
+$serviceState = Add-Text $card3 "Проверка состояния..." 18 34 556 20 9 "#64748B"
+$startService = New-Object System.Windows.Forms.Button
+$startService.Text = "Запустить службу"
+$startService.Left = 18; $startService.Top = 62; $startService.Width = 170; $startService.Height = 32
+$startService.FlatStyle = "Flat"; $startService.FlatAppearance.BorderSize = 0
+$startService.BackColor = C "#2563EB"; $startService.ForeColor = [System.Drawing.Color]::White
+$startService.Font = F 9 "Bold"; $startService.Cursor = "Hand"
+$card3.Controls.Add($startService)
+$stopService = New-Object System.Windows.Forms.Button
+$stopService.Text = "Остановить службу"
+$stopService.Left = 198; $stopService.Top = 62; $stopService.Width = 180; $stopService.Height = 32
+$stopService.FlatStyle = "Flat"; $stopService.FlatAppearance.BorderSize = 1
+$stopService.FlatAppearance.BorderColor = C "#CBD5E1"
+$stopService.BackColor = [System.Drawing.Color]::White; $stopService.ForeColor = C "#334155"
+$stopService.Font = F 9; $stopService.Cursor = "Hand"
+$card3.Controls.Add($stopService)
+$serviceMode = New-Object System.Windows.Forms.CheckBox
+$serviceMode.Text = "Запускать в виде службы"
+$serviceMode.Left = 18; $serviceMode.Top = 104; $serviceMode.Width = 320; $serviceMode.Height = 24
+$serviceMode.Font = F 9; $serviceMode.ForeColor = C "#0F172A"
+$card3.Controls.Add($serviceMode)
+Add-Text $card3 "Снять галочку — остановить и удалить службу. Нужны права администратора." 18 128 556 18 8 "#94A3B8" | Out-Null
+
+$status = Add-Text $content "" 24 560 592 28 9 "#B91C1C"
 $status.Visible = $false
 
 $save = New-Object System.Windows.Forms.Button
 $save.Text = "Сохранить"
-$save.Left = 378; $save.Top = 420; $save.Width = 120; $save.Height = 38
+$save.Left = 378; $save.Top = 590; $save.Width = 120; $save.Height = 38
 $save.FlatStyle = "Flat"; $save.FlatAppearance.BorderSize = 0
 $save.BackColor = C "#2563EB"; $save.ForeColor = [System.Drawing.Color]::White
 $save.Font = F 10 "Bold"; $save.Cursor = "Hand"
 $content.Controls.Add($save)
 $cancel = New-Object System.Windows.Forms.Button
 $cancel.Text = "Отмена"
-$cancel.Left = 506; $cancel.Top = 420; $cancel.Width = 110; $cancel.Height = 38
+$cancel.Left = 506; $cancel.Top = 590; $cancel.Width = 110; $cancel.Height = 38
 $cancel.FlatStyle = "Flat"; $cancel.FlatAppearance.BorderSize = 1
 $cancel.FlatAppearance.BorderColor = C "#CBD5E1"
 $cancel.BackColor = [System.Drawing.Color]::White; $cancel.ForeColor = C "#334155"
@@ -128,6 +207,39 @@ $browse.Add_Click({
     $dlg.SelectedPath = $folder.Text
     if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $folder.Text = $dlg.SelectedPath
+    }
+})
+$startService.Add_Click({
+    try {
+        $svc = Get-Service -Name "ProfyPlanCompanion" -ErrorAction SilentlyContinue
+        if ($null -eq $svc) {
+            Invoke-ServiceCli @("install-service", "--config", $ConfigPath)
+        } else {
+            Invoke-ServiceCli @("start-service")
+        }
+        Update-ServiceUi
+        $script:initialServiceMode = $true
+        $status.ForeColor = C "#15803D"
+        $status.Text = "Служба запущена. Она будет работать без входа пользователя."
+        $status.Visible = $true
+    } catch {
+        $status.ForeColor = C "#B91C1C"
+        $status.Text = "Не удалось запустить службу: " + $_.Exception.Message
+        $status.Visible = $true
+    }
+})
+$stopService.Add_Click({
+    try {
+        Invoke-ServiceCli @("stop-service")
+        Update-ServiceUi
+        $script:initialServiceMode = $true
+        $status.ForeColor = C "#B45309"
+        $status.Text = "Служба остановлена. Конфигурация сохранена."
+        $status.Visible = $true
+    } catch {
+        $status.ForeColor = C "#B91C1C"
+        $status.Text = "Не удалось остановить службу: " + $_.Exception.Message
+        $status.Visible = $true
     }
 })
 $cancel.Add_Click({ $form.Close() })
@@ -147,6 +259,20 @@ $save.Add_Click({
         $cfg.interval_seconds = [int]$interval.Value * 60
         $json = $cfg | ConvertTo-Json -Depth 8
         [System.IO.File]::WriteAllText($ConfigPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+        if ($serviceMode.Checked -ne $script:initialServiceMode) {
+            $svc = Get-Service -Name "ProfyPlanCompanion" -ErrorAction SilentlyContinue
+            if ($serviceMode.Checked) {
+                if ($null -eq $svc) {
+                    Invoke-ServiceCli @("install-service", "--config", $ConfigPath)
+                } else {
+                    Invoke-ServiceCli @("start-service")
+                }
+            } elseif ($null -ne $svc) {
+                Invoke-ServiceCli @("uninstall-service")
+            }
+            $script:initialServiceMode = $serviceMode.Checked
+            Update-ServiceUi
+        }
         $status.ForeColor = C "#15803D"
         $status.Text = "Сохранено. Новые параметры применятся в следующем цикле."
         $status.Visible = $true
@@ -159,6 +285,8 @@ $save.Add_Click({
     }
 })
 
+Update-ServiceUi
+$script:initialServiceMode = $serviceMode.Checked
 $form.AcceptButton = $save
 $form.CancelButton = $cancel
 [void]$form.ShowDialog()

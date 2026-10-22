@@ -32,7 +32,7 @@ if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 APP = "ProfyPlan Companion"
-VERSION = "0.8.3"
+VERSION = "0.8.4"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"
@@ -577,6 +577,28 @@ def cmd_uninstall_service(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_start_service(args: argparse.Namespace) -> int:
+    from service import ServiceError, start_service
+    try:
+        result = start_service()
+    except ServiceError as exc:
+        print("Служба не запущена: %s" % exc, file=sys.stderr)
+        return 2
+    print("Служба запущена: %s" % result["status"])
+    return 0
+
+
+def cmd_stop_service(args: argparse.Namespace) -> int:
+    from service import ServiceError, stop_service
+    try:
+        result = stop_service()
+    except ServiceError as exc:
+        print("Служба не остановлена: %s" % exc, file=sys.stderr)
+        return 2
+    print("Служба остановлена: %s" % result["status"])
+    return 0
+
+
 def cmd_service_status(args: argparse.Namespace) -> int:
     from service import service_exists, service_status
     installed = service_exists()
@@ -688,6 +710,12 @@ def main() -> int:
     p_svc_del.set_defaults(func=cmd_uninstall_service)
 
     p_svc_status = sub.add_parser("service-status", help="статус Windows-службы")
+    p_svc_start = sub.add_parser("start-service", help="Запустить Windows-службу")
+    p_svc_start.set_defaults(func=cmd_start_service)
+
+    p_svc_stop = sub.add_parser("stop-service", help="Остановить Windows-службу")
+    p_svc_stop.set_defaults(func=cmd_stop_service)
+
     p_svc_status.set_defaults(func=cmd_service_status)
 
     p_tray = sub.add_parser("tray", help="запустить с иконкой в системном трее")

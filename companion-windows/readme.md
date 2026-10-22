@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.8.3 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.8.4 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Универсальный файловый обмен ProfyPlan с учётными системами без браузера и без расширения. 1С:УНФ — первый коннектор. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -72,7 +72,13 @@ ProfyPlanCompanionCli.exe install-service --config "%LOCALAPPDATA%\ProfyPlan\com
 ProfyPlanCompanionCli.exe service-status
 ```
 
-Служба `ProfyPlanCompanion` запускается автоматически до входа пользователя, конфиг лежит в `C:\ProgramData\ProfyPlanCompanion`, токен перешифрован машинным DPAPI. Подробности — [SERVICE.md](SERVICE.md).
+В окне «Настройки» есть блок **«Служба Windows»**:
+
+- **«Запустить службу»** — устанавливает её, если ещё не установлена, и запускает;
+- **«Остановить службу»** — останавливает, не удаляя;
+- галочка **«Запускать в виде службы»** — при сохранении устанавливает/удаляет службу; снятие галочки означает остановку и удаление.
+
+Все действия требуют подтверждения UAC. Служба `ProfyPlanCompanion` запускается автоматически до входа пользователя, конфиг лежит в `C:\ProgramData\ProfyPlanCompanion`, токен перешифрован машинным DPAPI. Подробности — [SERVICE.md](SERVICE.md).
 
 ## MSI
 

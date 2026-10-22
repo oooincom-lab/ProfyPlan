@@ -226,12 +226,13 @@ class TrayApp:
         def worker():
             try:
                 script = self._settings_script()
-                subprocess.run(
-                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                     "-WindowStyle", "Hidden", "-File", str(script),
-                     "-ConfigPath", str(self.config_path), "-Version", agent.VERSION],
-                    creationflags=0x08000000,
-                )
+                cli = Path(sys.executable).parent / "ProfyPlanCompanionCli.exe"
+                args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                        "-WindowStyle", "Hidden", "-File", str(script),
+                        "-ConfigPath", str(self.config_path), "-Version", agent.VERSION]
+                if cli.exists():
+                    args += ["-CliPath", str(cli)]
+                subprocess.run(args, creationflags=0x08000000)
                 self.cfg = agent.load_config(self.config_path)
                 self._set_status("настройки сохранены")
             except Exception as exc:

@@ -1,6 +1,6 @@
 # Windows-служба ProfyPlan Companion
 
-**Версия:** 0.8.3 · **Статус:** реализовано локально, требуется проверка на чистой машине
+**Версия:** 0.8.4 · **Статус:** реализовано локально, требуется проверка на чистой машине
 
 ## 1. Зачем WinSW
 
@@ -47,11 +47,17 @@ ProfyPlanCompanion.exe install --config "%LOCALAPPDATA%\ProfyPlan\companion.json
 
 ```powershell
 ProfyPlanCompanionCli.exe service-status
+ProfyPlanCompanionCli.exe start-service
+ProfyPlanCompanionCli.exe stop-service
 ProfyPlanCompanionCli.exe uninstall-service
 ProfyPlanCompanionCli.exe uninstall-service --purge
 ```
 
-`uninstall-service` без `--purge` оставляет конфиг и логи; `--purge` удаляет файлы службы.
+`start-service` и `stop-service` требуют прав администратора. `uninstall-service` без `--purge` оставляет конфиг и логи; `--purge` удаляет файлы службы.
+
+### Управление из окна настроек
+
+В окне настроек есть блок «Служба Windows»: статус, кнопки «Запустить службу» / «Остановить службу» и галочка «Запускать в виде службы». Кнопка запуска при отсутствии службы сначала устанавливает её; галочка применяется при сохранении. Все операции вызывают UAC.
 
 ## 5. Обновление
 
