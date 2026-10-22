@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 47. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 49. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1423,6 +1423,72 @@
   <div class="task">
     <div class="task-title">6.42.7 Статус.</div>
     <div class="task-detail">ТЗ 1.1 готово; реализация на стороне 1С — по заданию; адаптер ProfyPlan — следующий срез.</div>
+    
+  </div>
+</div>
+<h2>6.44. Windows companion MVP (22.10.2026)</h2>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">Код:</div>
+    <div class="task-detail"><code>companion-windows/agent.py</code> — CLI <code>init</code>, <code>once</code>, <code>run</code>, <code>status</code>; <code>install.ps1</code>; <code>build.ps1</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Состав:</div>
+    <div class="task-detail">вход в ProfyPlan, DPAPI для пароля, lease, <code>in/out/processed</code>, <code>state.json</code>, журнал, outbox ack.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Проверено локально:</div>
+    <div class="task-detail">ping загружен и перенесён; outbox скачан и подтверждён; lease-конфликт → rc=2; <code>install.ps1 -NoTask</code> проходит.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Дальше:</div>
+    <div class="task-detail">EXE-сборка и подпись, tray/мастер, pairing-код вместо email/пароля, режим службы Windows, macOS.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Статус:</div>
+    <div class="task-detail">MVP собран локально; к клиенту не передавался.</div>
+    
+  </div>
+</div>
+<h2>6.43. Публикация Chromium-расширения — BACKLOG до завершения проекта (22.10.2026)</h2>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">Статус: BACKLOG.</div>
+    <div class="task-detail">Не делать сейчас; вернуться на финальной стадии проекта или по отдельному запросу клиента.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Причина:</div>
+    <div class="task-detail">основной продукт — companion (работа без браузера, папки на сервере 1С/UNC, macOS, Firefox/Safari). Расширение остаётся lite-режимом.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Что готово:</div>
+    <div class="task-detail"><code>extensions/exchange-chromium</code>, ZIP, <code>/extension/index.html</code>, Edge smoke, lease/outbox.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Чек-лист:</div>
+    <div class="task-detail"><code>docs/backlog/extension-store/store-publication-plan.md</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Артефакты:</div>
+    <div class="task-detail"><code>README.md</code>, <code>store-listing-ru.md</code>, <code>privacy-policy-draft.md</code>, <code>production-manifest.json</code> в <code>docs/backlog/extension-store/</code>.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">При возврате:</div>
+    <div class="task-detail">production-manifest без localhost, иконки 16/32/48/128, скриншоты, privacy policy, аккаунт Chrome Web Store, unlisted/private, затем Edge/Opera/Яндекс; после публикации — <code>externally_connectable</code> и авто-обнаружение.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Не блокирует:</div>
+    <div class="task-detail">companion, файловый обмен, облако/FTP/почту.</div>
     
   </div>
 </div>

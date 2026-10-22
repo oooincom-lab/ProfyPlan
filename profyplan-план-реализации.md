@@ -574,6 +574,24 @@
 - **6.42.6 Этапы.** Сначала приём/регистрация плана; запись дат в документы 1С — этап 2. Далее — FTP/FTPS и почта на том же конверте.
 - **6.42.7 Статус.** ТЗ 1.1 готово; реализация на стороне 1С — по заданию; адаптер ProfyPlan — следующий срез.
 
+## 6.44. Windows companion MVP (22.10.2026)
+
+- **Код:** `companion-windows/agent.py` — CLI `init`, `once`, `run`, `status`; `install.ps1`; `build.ps1`.
+- **Состав:** вход в ProfyPlan, DPAPI для пароля, lease, `in/out/processed`, `state.json`, журнал, outbox ack.
+- **Проверено локально:** ping загружен и перенесён; outbox скачан и подтверждён; lease-конфликт → rc=2; `install.ps1 -NoTask` проходит.
+- **Дальше:** EXE-сборка и подпись, tray/мастер, pairing-код вместо email/пароля, режим службы Windows, macOS.
+- **Статус:** MVP собран локально; к клиенту не передавался.
+
+## 6.43. Публикация Chromium-расширения — BACKLOG до завершения проекта (22.10.2026)
+
+- **Статус: BACKLOG.** Не делать сейчас; вернуться на финальной стадии проекта или по отдельному запросу клиента.
+- **Причина:** основной продукт — companion (работа без браузера, папки на сервере 1С/UNC, macOS, Firefox/Safari). Расширение остаётся lite-режимом.
+- **Что готово:** `extensions/exchange-chromium`, ZIP, `/extension/index.html`, Edge smoke, lease/outbox.
+- **Чек-лист:** `docs/backlog/extension-store/store-publication-plan.md`.
+- **Артефакты:** `README.md`, `store-listing-ru.md`, `privacy-policy-draft.md`, `production-manifest.json` в `docs/backlog/extension-store/`.
+- **При возврате:** production-manifest без localhost, иконки 16/32/48/128, скриншоты, privacy policy, аккаунт Chrome Web Store, unlisted/private, затем Edge/Opera/Яндекс; после публикации — `externally_connectable` и авто-обнаружение.
+- **Не блокирует:** companion, файловый обмен, облако/FTP/почту.
+
 ## Правила качества сетевого графика (блок 6.11, 26.09.2026)
 
 Спецификация — в техническом промте, «Дополнение 12. Сетевой график: правила качества» (26.09.2026). Отдельных работ по этому пункту нет: правила входят в состав блока 6.11 и применяются при его доработке. **Статус — «спецификация зафиксирована, работ нет»** (сам блок 6.11 остаётся «готово локально, проверено»).
