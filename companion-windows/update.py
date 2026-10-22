@@ -31,18 +31,25 @@ def update_url(api_base: str) -> str:
     return base + "/companion/version.json"
 
 
-def check(api_base: str, timeout: int = 10) -> dict | None:
+def check_result(api_base: str, timeout: int = 10) -> tuple:
+    """Вернуть (info|None, error|None). None,None — обновлений нет."""
     url = update_url(api_base)
     try:
         with urlopen(url, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
+    except Exception as exc:
+        return None, str(exc)
     latest = str(data.get("version") or "")
-    if not latest or parse_version(latest) <= parse_version(_current()):
-        return None
+    if not latest:
+        return None, "В version.json не указана версия"
+    if parse_version(latest) <= parse_version(_current()):
+        return None, None
     data["_base_url"] = url
-    return data
+    return data, None
+
+
+def check(api_base: str, timeout: int = 10) -> dict | None:
+    return check_result(api_base, timeout)[0]
 
 
 def _current() -> str:

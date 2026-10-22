@@ -5,11 +5,14 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 import agent
@@ -50,6 +53,7 @@ class TrayApp:
         self.sync_event = threading.Event()
         self.status = "ожидание"
         self.update_info = None
+        self.update_error = None
         self.last_update_check = 0.0
         self.status_item = pystray.MenuItem("Статус", None, enabled=False)
         self.update_item = pystray.MenuItem("Обновить", self.on_update)
@@ -64,6 +68,7 @@ class TrayApp:
                 self.status_item,
                 pystray.MenuItem("Открыть папку обмена", self.on_open_folder),
                 pystray.MenuItem("Настройки", self.on_open_config),
+                pystray.MenuItem("О программе", self.on_about),
                 pystray.MenuItem("Выход", self.on_exit),
             ),
         )
@@ -83,47 +88,125 @@ class TrayApp:
             self._set_status(text)
 
     def check_update(self, notify: bool = False):
-        try:
-            info = update.check(self.cfg.get("api_base", ""))
-        except Exception:
-            info = None
+        info, error = update.check_result(self.cfg.get("api_base", ""))
         self.update_info = info
+        self.update_error = error
         if info:
             text = "Доступна версия %s" % info.get("version")
             if notify:
                 self._notify(text)
             self._set_status(text)
+        elif error:
+            self._set_status("ошибка проверки обновления")
+        else:
+            self._set_status("обновлений нет")
         self.last_update_check = time.time()
 
+    def _info_payload(self, mode: str) -> dict:
+        info = self.update_info
+        available = bool(info)
+        if available:
+            status = "Доступна версия %s" % info.get("version")
+        elif self.update_error:
+            status = "Ошибка: %s" % self.update_error[:90]
+        else:
+            status = "Установлена актуальная версия"
+        return {
+            "mode": mode,
+            "current": agent.VERSION,
+            "latest": info.get("version") if info else "",
+            "status": status,
+            "notes": info.get("notes", "") if info else "",
+            "update_available": available,
+            "error": self.update_error or "",
+            "checked_at": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            "connection_name": self.cfg.get("connection_name") or "не задано",
+            "api_base": self.cfg.get("api_base") or "",
+            "root_dir": self.cfg.get("root_dir") or "",
+            "interval_minutes": max(1, int((self.cfg.get("interval_seconds") or 300) / 60)),
+        }
+
+    def _info_script(self) -> Path:
+        if getattr(sys, "frozen", False):
+            return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "info.ps1"
+        return Path(__file__).with_name("info.ps1")
+
+    def _show_info(self, mode: str) -> int:
+        path = Path(tempfile.gettempdir()) / ("profyplan-companion-info-%s.json" % os.getpid())
+        path.write_text(json.dumps(self._info_payload(mode), ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-WindowStyle", "Hidden", "-File", str(self._info_script()),
+                 "-InfoPath", str(path)],
+                creationflags=0x08000000,
+            )
+            return int(proc.returncode or 0)
+        finally:
+            try:
+                path.unlink()
+            except Exception:
+                pass
+
     def on_check_update(self, icon=None, item=None):
-        self.check_update(notify=True)
+        def worker():
+            while True:
+                self.check_update(notify=True)
+                try:
+                    rc = self._show_info("update")
+                except Exception as exc:
+                    self.logger.error("update info failed: %s", exc)
+                    self._notify("Не удалось открыть окно проверки")
+                    return
+                if rc != 11:
+                    return
+        threading.Thread(target=worker, daemon=True).start()
 
     def on_update(self, icon=None, item=None):
-        info = self.update_info
-        if not info:
-            self.check_update(notify=True)
-            info = self.update_info
-        if not info:
-            self._notify("Обновлений нет")
-            return
-        try:
-            answer = ctypes.windll.user32.MessageBoxW(
-                0,
-                "Скачать и установить версию %s?" % info.get("version"),
-                "ProfyPlan Companion — обновление",
-                0x04 | 0x40,
-            )
-            if answer != 6:  # IDYES
+        def worker():
+            while True:
+                if not self.update_info:
+                    self.check_update(notify=True)
+                try:
+                    rc = self._show_info("update")
+                except Exception as exc:
+                    self.logger.error("update info failed: %s", exc)
+                    self._notify("Не удалось открыть окно обновления")
+                    return
+                if rc == 11:
+                    continue
+                if rc != 10:
+                    return
+                try:
+                    self._set_status("загрузка обновления…")
+                    path = update.download_and_run(self.update_info)
+                    self._notify("Обновление %s загружено, запускаю установку" % self.update_info.get("version"))
+                    self.logger.info("update downloaded: %s", path)
+                    self.stop_event.set()
+                    self.icon.stop()
+                except Exception as exc:
+                    self.logger.error("update failed: %s", exc)
+                    self.update_info = None
+                    self.update_error = "Не удалось скачать обновление: %s" % str(exc)[:140]
+                    try:
+                        self._show_info("update")
+                    except Exception:
+                        pass
                 return
-            self._set_status("загрузка обновления…")
-            path = update.download_and_run(info)
-            self._notify("Обновление %s загружено, запускаю установку" % info.get("version"))
-            self.logger.info("update downloaded: %s", path)
-            self.stop_event.set()
-            self.icon.stop()
-        except Exception as exc:
-            self.logger.error("update failed: %s", exc)
-            self._notify("Не удалось обновить: %s" % str(exc)[:120])
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_about(self, icon=None, item=None):
+        def worker():
+            if not self.last_update_check:
+                self.check_update(notify=False)
+            try:
+                rc = self._show_info("about")
+                if rc == 11:
+                    self.on_check_update()
+            except Exception as exc:
+                self.logger.error("about failed: %s", exc)
+                self._notify("Не удалось открыть «О программе»")
+        threading.Thread(target=worker, daemon=True).start()
 
     def on_sync(self, icon=None, item=None):
         self.sync_event.set()
@@ -146,7 +229,7 @@ class TrayApp:
                 subprocess.run(
                     ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
                      "-WindowStyle", "Hidden", "-File", str(script),
-                     "-ConfigPath", str(self.config_path)],
+                     "-ConfigPath", str(self.config_path), "-Version", agent.VERSION],
                     creationflags=0x08000000,
                 )
                 self.cfg = agent.load_config(self.config_path)
