@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import ctypes
+import ctypes
 import getpass
 import json
 import logging
@@ -25,7 +26,7 @@ from urllib import error, request
 from urllib.parse import quote
 
 APP = "ProfyPlan Companion"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"
@@ -511,7 +512,42 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    from installer import run_setup
+    return run_setup()
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    from installer import install
+    cfg = Path(args.config)
+    if not cfg.exists():
+        print("Конфиг не найден: %s" % cfg, file=sys.stderr)
+        return 2
+    target = install(cfg, Path(args.dir or (Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "ProfyPlanCompanion")), start=not args.no_start)
+    print("Установлено: %s" % target)
+    return 0
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    from installer import uninstall
+    uninstall()
+    print("Удаление запущено")
+    return 0
+
+
+def _single_instance(name: str = "Global\\ProfyPlanCompanionTray") -> bool:
+    if os.name != "nt":
+        return True
+    handle = ctypes.windll.kernel32.CreateMutexW(None, False, name)
+    if not handle:
+        return True
+    return ctypes.windll.kernel32.GetLastError() != 183
+
+
 def cmd_tray(args: argparse.Namespace) -> int:
+    if not _single_instance():
+        print("ProfyPlan Companion уже работает в трее", file=sys.stderr)
+        return 2
     cfg = load_config(Path(args.config))
     ensure_dirs(cfg)
     try:
@@ -524,6 +560,10 @@ def cmd_tray(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    if "--uninstall" in sys.argv:
+        from installer import uninstall
+        uninstall()
+        return 0
     parser = argparse.ArgumentParser(prog="ProfyPlanCompanion", description="ProfyPlan Companion (Windows MVP)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -555,6 +595,18 @@ def main() -> int:
     p_run.add_argument("--interval", type=int, default=None)
     p_run.set_defaults(func=cmd_run)
 
+    p_setup = sub.add_parser("setup", help="мастер установки и привязки")
+    p_setup.set_defaults(func=cmd_setup)
+
+    p_install = sub.add_parser("install", help="установить приложение и автозапуск")
+    p_install.add_argument("--config", default=str(DEFAULT_CONFIG))
+    p_install.add_argument("--dir", default=None)
+    p_install.add_argument("--no-start", action="store_true")
+    p_install.set_defaults(func=cmd_install)
+
+    p_uninstall = sub.add_parser("uninstall", help="удалить приложение")
+    p_uninstall.set_defaults(func=cmd_uninstall)
+
     p_status = sub.add_parser("status", help="показать настройки")
     p_status.add_argument("--config", default=str(DEFAULT_CONFIG))
     p_status.set_defaults(func=cmd_status)
@@ -563,6 +615,13 @@ def main() -> int:
     p_tray.add_argument("--config", default=str(DEFAULT_CONFIG))
     p_tray.set_defaults(func=cmd_tray)
 
+    if len(sys.argv) == 1:
+        # Запуск установщика/трея без аргументов: если конфиг есть — трей, иначе мастер.
+        if DEFAULT_CONFIG.exists():
+            from tray import run_tray
+            return run_tray(load_config(DEFAULT_CONFIG), DEFAULT_CONFIG)
+        from installer import run_setup
+        return run_setup()
     args = parser.parse_args()
     return args.func(args)
 

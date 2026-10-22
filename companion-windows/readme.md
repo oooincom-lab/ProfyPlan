@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.3.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.4.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Файловый обмен с ProfyPlan без браузера и без расширения. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -58,7 +58,14 @@ python agent.py status
 python agent.py tray
 ```
 
-## Установка как задача Windows
+## Установка через Setup EXE
+
+1. В ProfyPlan откройте окно подключения → «Создать код привязки».
+2. Нажмите «Скачать установщик» — код скопируется в буфер.
+3. Запустите `ProfyPlanCompanionSetup.exe`.
+4. Установщик привяжет companion, поставит его в «Установленные программы», создаст ярлык и автозапуск в трее.
+
+## Установка как задача Windows (legacy)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1

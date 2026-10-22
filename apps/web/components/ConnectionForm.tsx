@@ -51,6 +51,18 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     }
     setPairBusy(false);
   };
+  const installerApi = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/v1'
+    : 'https://profyplan.ru/api/v1';
+  const installerCode = pairCode ? `${conn.id}|${pairCode.code}|${installerApi}` : '';
+
+  const downloadSetup = async () => {
+    if (!pairCode) return;
+    try {
+      await navigator.clipboard.writeText(installerCode);
+    } catch (e) { /* clipboard может быть запрещён — код остаётся на экране */ }
+    window.location.href = '/companion/ProfyPlanCompanionSetup.exe';
+  };
 
   const upd = (patch: any) => { setF((cur: any) => ({ ...cur, ...patch })); setOkMsg(null); };
 
@@ -145,7 +157,11 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
             {pairCode && <span style={{ fontSize: 13, color: '#86EFAC' }}>Код: <b style={{ letterSpacing: 2 }}>{pairCode.code}</b> · 10 минут</span>}
             {pairCode && (
               <span style={{ fontSize: 11.5, color: '#5A7090', width: '100%' }}>
-                ID подключения: <code>{conn.id}</code> · команда: <code>ProfyPlanCompanion.exe pair --api-base &lt;API&gt; --connection-id {conn.id} --code {pairCode.code}</code>
+                ID: <code>{conn.id}</code> · код: <code>{pairCode.code}</code> · <code>{installerCode}</code>
+                <button type="button" onClick={() => void downloadSetup()}
+                  style={{ marginLeft: 6, background: 'rgba(34,211,238,.18)', border: '1px solid rgba(34,211,238,.5)', color: '#A5F3FC', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Скачать установщик
+                </button>
               </span>
             )}
           </div>
