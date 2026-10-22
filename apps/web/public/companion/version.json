@@ -1,7 +1,7 @@
 {
-  "version": "0.6.0",
+  "version": "0.6.1",
   "download_url": "/companion/ProfyPlanCompanionSetup.exe",
-  "sha256": "e3240800386ca2043cd49adb4efe673a5842a75686aa6b94d3efaf369d0e4747",
-  "published_at": "2026-10-22T19:35:00+03:00",
-  "notes": "Окно настроек, проверка версии и автообновление из трея."
+  "sha256": "d3da11e5031fd56987cd1f2048684bf709ad6dd19700322d760c08773b0b2e9a",
+  "published_at": "2026-10-22T19:40:00+03:00",
+  "notes": "Исправлен запуск tray: убран несовместимый setter MenuItem.text."
 }

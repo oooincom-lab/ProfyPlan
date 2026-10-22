@@ -51,8 +51,8 @@ class TrayApp:
         self.status = "ожидание"
         self.update_info = None
         self.last_update_check = 0.0
-        self.status_item = pystray.MenuItem("Статус: ожидание", None, enabled=False)
-        self.update_item = pystray.MenuItem("Обновить", self.on_update, enabled=False)
+        self.status_item = pystray.MenuItem("Статус", None, enabled=False)
+        self.update_item = pystray.MenuItem("Обновить", self.on_update)
         self.icon = pystray.Icon(
             "profyplan-companion",
             _icon_image(),
@@ -72,7 +72,6 @@ class TrayApp:
         self.status = text
         try:
             self.icon.title = "ProfyPlan Companion — " + text
-            self.status_item.text = "Статус: " + text
             self.icon.update_menu()
         except Exception:
             pass
@@ -91,14 +90,9 @@ class TrayApp:
         self.update_info = info
         if info:
             text = "Доступна версия %s" % info.get("version")
-            self.update_item.text = "Обновить до %s" % info.get("version")
-            self.update_item.enabled = True
             if notify:
                 self._notify(text)
             self._set_status(text)
-        else:
-            self.update_item.text = "Обновить"
-            self.update_item.enabled = False
         self.last_update_check = time.time()
 
     def on_check_update(self, icon=None, item=None):
