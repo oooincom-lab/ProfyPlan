@@ -1,5 +1,7 @@
 # ProfyPlan Companion (Windows MVP)
 
+**Версия:** 0.1.1 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+
 Файловый обмен с ProfyPlan без браузера и без расширения. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
 ## Зачем

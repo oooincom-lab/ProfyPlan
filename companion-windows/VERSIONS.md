@@ -1,0 +1,68 @@
+# ProfyPlan Companion — версии и изменения
+
+**Текущая версия:** 0.1.1 · **Обновлено:** 22.10.2026
+
+## Таблица версий
+
+| Версия | Дата | Статус | Кратко |
+|---|---|---|---|
+| 0.1.0 | 22.10.2026 | MVP | CLI `init/once/run/status`, API-клиент, DPAPI, lease, `in/out/processed`, outbox, `install.ps1`, `build.ps1` |
+| 0.1.1 | 22.10.2026 | текущая | Собран EXE, проверены `status`/`once`, install копирует EXE из `dist`, задача Windows проверена |
+| 0.2.0 | план | — | Tray-интерфейс, pairing-код, мастер установки |
+| 0.3.0 | план | — | Служба Windows, автоперезапуск, работа без входа пользователя |
+| 0.4.0 | план | — | macOS-версия, notarization |
+| 1.0.0 | план | — | Подписанный установщик, автообновление, облако/FTP/почта |
+
+## 0.1.1 — 22.10.2026
+
+**Добавлено**
+
+- Сборка standalone EXE через PyInstaller (`dist/ProfyPlanCompanion.exe`).
+- `build.ps1` с фиксированным сообщением о результате.
+- `install.ps1` копирует `ProfyPlanCompanion.exe` из `dist` и использует его для задачи.
+- Параметр `-TaskName` для установки/тестирования задачи.
+- `status` создаёт папки обмена перед подсчётом.
+
+**Проверено**
+
+- `ProfyPlanCompanion.exe --help`, `status`, `once` работают.
+- Ping через EXE уходит в ProfyPlan и перемещается в `processed`.
+- Задача Windows создаётся в состоянии `Ready` (тестовое имя) и удаляется.
+- `install.ps1 -NoTask` проходит.
+
+**Исправлено**
+
+- RepetitionDuration задачи: заменён недопустимый `MaxValue` на 3650 дней.
+- Кириллические строки установщика, ломавшие разбор PowerShell, заменены на ASCII.
+- Путь к EXE: добавлен fallback `dist\ProfyPlanCompanion.exe`.
+
+**Ограничения**
+
+- EXE не подписан.
+- Нет tray/pairing/службы/macOS.
+
+## 0.1.0 — 22.10.2026
+
+**Добавлено**
+
+- `agent.py`: CLI `init`, `once`, `run`, `status`.
+- API-клиент: login, connections, lease, import-file, outbox, download, ack.
+- DPAPI-шифрование пароля.
+- Lease с TTL 120 c и защитой от второго экземпляра.
+- Папки `in/out/processed`, `state.json`, `companion.log`.
+- `install.ps1` и `build.ps1`.
+- Документация `README.md`, `config.example.json`.
+
+**Проверено**
+
+- Ping загружен и перенесён в `processed`.
+- Outbox скачан в `out`, ack выполнен.
+- Lease-конфликт → код 2.
+
+## Правило версионирования
+
+1. Любое изменение кода companion повышает версию в `agent.py`.
+2. Запись добавляется в этот файл: версия, дата, добавлено/исправлено/проверено/ограничения.
+3. При изменении архитектуры обновляется `ABOUT.md`; при изменении запуска — `README.md`.
+4. Изменение companion дополнительно фиксируется в общем промте, плане и тест-плане.
+5. Версия и changelog входят в тот же коммит, что и код, или в связанный docs-коммит.
