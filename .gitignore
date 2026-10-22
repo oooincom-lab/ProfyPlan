@@ -59,3 +59,5 @@ nginx/ssl/
 
 # MSI build work
 companion-windows/build-msi/
+companion-windows/build-cli/
+companion-windows/build-setup/
