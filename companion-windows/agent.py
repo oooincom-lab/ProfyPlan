@@ -25,7 +25,7 @@ from urllib import error, request
 from urllib.parse import quote
 
 APP = "ProfyPlan Companion"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"
@@ -292,11 +292,14 @@ def file_key(path: Path) -> str:
 def sync_once(cfg: dict, logger: logging.Logger) -> int:
     ensure_dirs(cfg)
     api = Api(cfg["api_base"])
-    try:
-        api.login(cfg["email"], open_password(cfg.get("password_enc", "")))
-    except ApiError as e:
-        logger.error("вход не выполнен: HTTP %s %s", e.status, e)
-        return 3
+    if cfg.get("agent_token_enc"):
+        api.token = open_password(cfg["agent_token_enc"])
+    else:
+        try:
+            api.login(cfg["email"], open_password(cfg.get("password_enc", "")))
+        except ApiError as e:
+            logger.error("вход не выполнен: HTTP %s %s", e.status, e)
+            return 3
 
     instance_id = cfg.get("instance_id") or str(uuid.uuid4())
     cfg["instance_id"] = instance_id
@@ -368,6 +371,46 @@ def sync_once(cfg: dict, logger: logging.Logger) -> int:
         return 0 if errors == 0 else 1
     finally:
         api.release(cfg["connection_id"], lease)
+
+
+def cmd_pair(args: argparse.Namespace) -> int:
+    """Привязать companion по одноразовому коду из ProfyPlan."""
+    instance_id = args.instance_id or str(uuid.uuid4())
+    api = Api(args.api_base or DEFAULT_API)
+    try:
+        res = api._request("POST", "/integration/agent/pair", json.dumps({
+            "connection_id": args.connection_id,
+            "code": args.code,
+            "instance_id": instance_id,
+            "agent_name": "windows-companion",
+        }).encode("utf-8"), "application/json")
+    except ApiError as e:
+        print("Привязка не выполнена: HTTP %s %s" % (e.status, e), file=sys.stderr)
+        return 3
+    root = Path(args.root or DEFAULT_ROOT)
+    root.mkdir(parents=True, exist_ok=True)
+    cfg = {
+        "version": 1,
+        "api_base": (args.api_base or DEFAULT_API),
+        "email": "",
+        "password_enc": "",
+        "agent_token_enc": seal_password(res["access_token"]),
+        "connection_id": args.connection_id,
+        "connection_name": res.get("connection_name") or "",
+        "root_dir": str(root),
+        "in_dir": str(root / "in"),
+        "out_dir": str(root / "out"),
+        "processed_dir": str(root / "processed"),
+        "interval_seconds": int(args.interval or 300),
+        "agent_id": AGENT_ID,
+        "instance_id": instance_id,
+    }
+    save_config(Path(args.config), cfg)
+    ensure_dirs(cfg)
+    print("Companion привязан к подключению: %s" % cfg["connection_name"])
+    print("Конфиг: %s" % args.config)
+    print("Папка: %s" % root)
+    return 0
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -457,7 +500,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     print("%s %s" % (APP, VERSION))
     print("API: %s" % cfg["api_base"])
     print("Подключение: %s (%s)" % (cfg.get("connection_name"), cfg["connection_id"]))
-    print("Email: %s" % cfg.get("email"))
+    print("Email: %s" % (cfg.get("email") or "—"))
+    print("Способ входа: %s" % ("agent token" if cfg.get("agent_token_enc") else "email/пароль"))
     print("Папка: %s" % cfg["root_dir"])
     print("  in: %s" % p_in)
     print("  out: %s" % p_out)
@@ -491,6 +535,16 @@ def main() -> int:
     p_init.add_argument("--root", default=None)
     p_init.add_argument("--interval", type=int, default=300)
     p_init.set_defaults(func=cmd_init)
+
+    p_pair = sub.add_parser("pair", help="привязать по одноразовому коду из ProfyPlan")
+    p_pair.add_argument("--config", default=str(DEFAULT_CONFIG))
+    p_pair.add_argument("--api-base", default=DEFAULT_API)
+    p_pair.add_argument("--connection-id", required=True)
+    p_pair.add_argument("--code", required=True)
+    p_pair.add_argument("--root", default=None)
+    p_pair.add_argument("--instance-id", default=None)
+    p_pair.add_argument("--interval", type=int, default=300)
+    p_pair.set_defaults(func=cmd_pair)
 
     p_once = sub.add_parser("once", help="один цикл обмена")
     p_once.add_argument("--config", default=str(DEFAULT_CONFIG))

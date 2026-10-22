@@ -2,6 +2,7 @@
 // Форма настроек подключения интеграции — открывается в MDI-окне «Интеграция · имя».
 // Сохранение — через колбэк save (PUT /v1/integration/connections/{id}), иначе — только просмотр.
 import { useState } from 'react';
+import { API_V1 } from '../lib/api';
 
 const inp: any = { background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' };
 const lbl: any = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11.5, color: '#8FA3BD', marginBottom: 8 };
@@ -29,6 +30,27 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const hasPwd = !!((conn?.settings && conn.settings.password));
   const isNew = !(conn && conn.id);
+  const [pairCode, setPairCode] = useState<any>(null);
+  const [pairBusy, setPairBusy] = useState(false);
+  const [pairErr, setPairErr] = useState<string | null>(null);
+
+  const makePairCode = async () => {
+    if (!conn || !conn.id) return;
+    setPairBusy(true); setPairErr(null); setPairCode(null);
+    try {
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(`${API_V1}/integration/connections/${conn.id}/agent-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
+      setPairCode(data);
+    } catch (e: any) {
+      setPairErr(String(e.message || e).slice(0, 180));
+    }
+    setPairBusy(false);
+  };
 
   const upd = (patch: any) => { setF((cur: any) => ({ ...cur, ...patch })); setOkMsg(null); };
 
@@ -107,6 +129,23 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
             style={{ display: 'inline-block', background: 'rgba(59,130,246,.18)', border: '1px solid rgba(59,130,246,.5)', color: '#93C5FD', borderRadius: 6, padding: '5px 10px', fontSize: 12, textDecoration: 'none' }}>
             Установить расширение
           </a>
+        </div>
+      )}
+      {!isNew && f.transport === 'file' && (
+        <div style={{ border: '1px dashed #1E3252', borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#B0C4DE', marginBottom: 3 }}>Привязка companion</div>
+          <div style={{ fontSize: 11.5, color: '#5A7090', marginBottom: 7 }}>
+            Одноразовый код для помощника на компьютере. Код действует 10 минут, пароль вводить не нужно.
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => void makePairCode()} disabled={pairBusy}
+              style={{ background: 'rgba(34,211,238,.15)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {pairBusy ? '…' : 'Создать код привязки'}
+            </button>
+            {pairCode && <span style={{ fontSize: 13, color: '#86EFAC' }}>Код: <b style={{ letterSpacing: 2 }}>{pairCode.code}</b> · 10 минут</span>}
+            {pairCode && <span style={{ fontSize: 11.5, color: '#5A7090' }}>Введите его в companion: <code>pair --code ...</code></span>}
+          </div>
+          {pairErr && <div style={{ fontSize: 11.5, color: '#F87171', marginTop: 6 }}>{pairErr}</div>}
         </div>
       )}
       {row('Комментарий', <input style={inp} value={f.comment} onChange={(e) => upd({ comment: e.target.value })} />)}

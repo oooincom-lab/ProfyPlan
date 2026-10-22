@@ -25,9 +25,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_tenant_id, get_current_user
+from app.core.deps import get_current_tenant_id, get_current_user, get_integration_tenant_id
 from app.models.integration import ExchangeInboxItem, ExchangeLease, ExchangeLogEntry, IntegrationConnection
 from app.models.tenant import User
+from app.core.security import create_agent_token
 from app.services.integration_exchange import (
     make_envelope,
     export_plan_snapshot,
@@ -128,6 +129,13 @@ class LeaseTokenIn(BaseModel):
     lease_token: str
 
 
+class AgentPairIn(BaseModel):
+    connection_id: UUID
+    code: str
+    instance_id: str
+    agent_name: Optional[str] = "windows-companion"
+
+
 class AckOutboxIn(BaseModel):
     pass
 
@@ -148,7 +156,7 @@ async def _get_conn(db: AsyncSession, conn_id: UUID, tenant_id: UUID) -> Integra
 async def create_connection(
     body: ConnectionIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
     user: User = Depends(get_current_user),
 ):
     conn = IntegrationConnection(
@@ -169,7 +177,7 @@ async def create_connection(
 @router.get("/connections")
 async def list_connections(
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     res = await db.execute(
         select(IntegrationConnection)
@@ -184,7 +192,7 @@ async def update_connection(
     conn_id: UUID,
     body: ConnectionIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     conn = await _get_conn(db, conn_id, tenant_id)
     conn.name = body.name
@@ -201,7 +209,7 @@ async def update_connection(
 async def delete_connection(
     conn_id: UUID,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     conn = await _get_conn(db, conn_id, tenant_id)
     await db.delete(conn)
@@ -214,7 +222,7 @@ async def export_plan(
     conn_id: UUID,
     body: ExportPlanIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Сформировать исходящий пакет плана из фиксации (файл в каталоге out)."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -230,7 +238,7 @@ async def download_file(
     conn_id: UUID,
     file_name: str,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Скачать файл пакета из каталога out подключения."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -255,7 +263,7 @@ async def import_file(
     conn_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Загрузить входящий пакет (файлом) — разбор и запись в журнал/очередь."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -274,7 +282,7 @@ async def import_file(
 async def scan_dir(
     conn_id: UUID,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Обработать все входящие пакеты из каталога in подключения."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -286,7 +294,7 @@ async def scan_dir(
 async def apply_inbox(
     body: ApplyIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Применить ожидающие элементы очереди к справочникам (конвейер профиля УНФ)."""
     return await apply_pending(db, tenant_id, body.connection_id, body.limit)
@@ -297,7 +305,7 @@ async def odata_test(
     conn_id: UUID,
     body: ODataTestIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Проверка соединения OData: $metadata + (опционально) чтение строки сущности."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -322,7 +330,7 @@ async def odata_pull(
     conn_id: UUID,
     body: ODataPullIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Притянуть справочники из 1С по OData и положить в очередь (пакет refs)."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -366,7 +374,7 @@ async def get_log(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     await cleanup_exchange_log(db, tenant_id)
     base = [ExchangeLogEntry.tenant_id == tenant_id]
@@ -403,7 +411,7 @@ async def get_inbox(
     status: Optional[str] = None,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     q = select(ExchangeInboxItem).where(ExchangeInboxItem.tenant_id == tenant_id)
     if connection_id:
@@ -413,6 +421,85 @@ async def get_inbox(
     q = q.order_by(ExchangeInboxItem.created_at.desc().nullslast()).limit(min(max(limit, 1), 500))
     res = await db.execute(q)
     return {"items": [InboxOut.model_validate(x) for x in res.scalars().all()]}
+
+# ─── Привязка companion по одноразовому коду ───
+
+@router.post("/connections/{conn_id}/agent-code")
+async def create_agent_code(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+    user: User = Depends(get_current_user),
+):
+    """Создать одноразовый код привязки companion (10 минут)."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    code = secrets.token_hex(3).upper()
+    settings = dict(conn.settings or {})
+    settings["agent_code_hash"] = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    settings["agent_code_expires"] = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    conn.settings = settings
+    await db.commit()
+    return {
+        "connection_id": str(conn.id),
+        "connection_name": conn.name,
+        "code": code,
+        "expires_in": 600,
+    }
+
+
+@router.post("/agent/pair")
+async def agent_pair(
+    body: AgentPairIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """Обменять одноразовый код на долгоживущий агентский токен."""
+    conn = (
+        await db.execute(
+            select(IntegrationConnection).where(
+                IntegrationConnection.id == body.connection_id,
+                IntegrationConnection.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if conn is None:
+        raise HTTPException(400, "Подключение не найдено или отключено")
+    settings = dict(conn.settings or {})
+    expected = settings.get("agent_code_hash")
+    expires_raw = settings.get("agent_code_expires")
+    if not expected or not expires_raw:
+        raise HTTPException(400, "Код привязки не создан")
+    try:
+        expires = datetime.fromisoformat(expires_raw)
+    except Exception:
+        raise HTTPException(400, "Код привязки повреждён")
+    if expires < datetime.now(timezone.utc):
+        raise HTTPException(400, "Код привязки истёк")
+    if hashlib.sha256(body.code.strip().upper().encode("utf-8")).hexdigest() != expected:
+        raise HTTPException(400, "Неверный код привязки")
+    if not body.instance_id.strip():
+        raise HTTPException(400, "instance_id обязателен")
+    token, jti = create_agent_token(
+        "agent:" + body.instance_id.strip()[:80],
+        str(conn.tenant_id),
+        str(conn.id),
+        days=90,
+    )
+    settings.pop("agent_code_hash", None)
+    settings.pop("agent_code_expires", None)
+    settings["agent_token_jti"] = jti
+    settings["agent_instance_id"] = body.instance_id.strip()[:120]
+    settings["agent_name"] = (body.agent_name or "windows-companion")[:120]
+    settings["agent_paired_at"] = datetime.now(timezone.utc).isoformat()
+    conn.settings = settings
+    await db.commit()
+    return {
+        "access_token": token,
+        "token_type": "Bearer",
+        "expires_in": 90 * 24 * 3600,
+        "connection_id": str(conn.id),
+        "connection_name": conn.name,
+    }
+
 
 # ─── Lease активного обмена: одна машина/сессия на подключение ───
 
@@ -462,7 +549,7 @@ async def _get_lease(db: AsyncSession, conn_id: UUID) -> Optional[ExchangeLease]
 async def agent_config(
     conn_id: UUID,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Метаданные подключения для браузерного помощника (без секретов)."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -480,7 +567,7 @@ async def agent_config(
 async def get_lease(
     conn_id: UUID,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Кто сейчас держит обмен на подключении."""
     await _get_conn(db, conn_id, tenant_id)
@@ -494,7 +581,7 @@ async def acquire_lease(
     conn_id: UUID,
     body: LeaseIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Взять lease обмена. Второй экземпляр получает 409 с данными держателя."""
     await _get_conn(db, conn_id, tenant_id)
@@ -543,7 +630,7 @@ async def heartbeat_lease(
     conn_id: UUID,
     body: LeaseHeartbeatIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Продлить lease; без heartbeat он истекает и обмен останавливается."""
     await _get_conn(db, conn_id, tenant_id)
@@ -562,7 +649,7 @@ async def release_lease(
     conn_id: UUID,
     body: LeaseTokenIn,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Освободить lease (закрытие сессии, остановка обмена)."""
     await _get_conn(db, conn_id, tenant_id)
@@ -577,7 +664,7 @@ async def release_lease(
 async def list_outbox(
     conn_id: UUID,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Список исходящих пакетов, ожидающих доставки на машину пользователя."""
     conn = await _get_conn(db, conn_id, tenant_id)
@@ -599,7 +686,7 @@ async def ack_outbox(
     conn_id: UUID,
     file_name: str,
     db: AsyncSession = Depends(get_db),
-    tenant_id: UUID = Depends(get_current_tenant_id),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
     """Подтвердить доставку: перенести файл в out/archive."""
     conn = await _get_conn(db, conn_id, tenant_id)

@@ -1,6 +1,7 @@
 """
 JWT-аутентификация: создание, проверка токенов, хеширование паролей.
 """
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -35,6 +36,21 @@ def create_access_token(
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
     to_encode["exp"] = expire
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_agent_token(agent_id: str, tenant_id: str, connection_id: str, days: int = 90) -> tuple[str, str]:
+    """Долгоживущий токен companion, ограниченный одним подключением интеграции."""
+    jti = uuid.uuid4().hex
+    expire = datetime.now(timezone.utc) + timedelta(days=days)
+    payload = {
+        "sub": agent_id,
+        "tenant_id": str(tenant_id),
+        "scope": "agent",
+        "connection_id": str(connection_id),
+        "jti": jti,
+        "exp": expire,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM), jti
 
 
 def create_refresh_token(user_id: str) -> str:

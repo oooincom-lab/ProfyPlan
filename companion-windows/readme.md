@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.2.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.3.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Файловый обмен с ProfyPlan без браузера и без расширения. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -27,6 +27,12 @@ python agent.py init --api-base http://localhost:8000/v1
 ```
 
 Мастер спросит email, пароль, подключение и папку обмена. Пароль шифруется Windows DPAPI и сохраняется в `%LOCALAPPDATA%\ProfyPlan\companion.json`.
+
+Или привязка по коду из ProfyPlan (без email/пароля):
+
+```powershell
+python agent.py pair --api-base https://profyplan.ru/api/v1 --connection-id <UUID> --code <КОД>
+```
 
 Один цикл:
 
