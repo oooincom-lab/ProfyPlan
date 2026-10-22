@@ -19,6 +19,7 @@ Copy-Item (Join-Path $source "agent.py") (Join-Path $InstallDir "agent.py") -For
 Copy-Item (Join-Path $source "README.md") (Join-Path $InstallDir "README.md") -Force
 Copy-Item (Join-Path $source "config.example.json") (Join-Path $InstallDir "config.example.json") -Force
 $srcExe = Join-Path $source "ProfyPlanCompanion.exe"
+if (-not (Test-Path $srcExe)) { $srcExe = Join-Path $source "dist\ProfyPlanCompanion.exe" }
 if (Test-Path $srcExe) { Copy-Item $srcExe (Join-Path $InstallDir "ProfyPlanCompanion.exe") -Force }
 
 $exe = Join-Path $InstallDir "ProfyPlanCompanion.exe"
