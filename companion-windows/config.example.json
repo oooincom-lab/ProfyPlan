@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "api_base": "https://profyplan.ru/api/v1",
+  "email": "planner@example.ru",
+  "password_enc": "dpapi:...",
+  "connection_id": "00000000-0000-0000-0000-000000000000",
+  "connection_name": "УНФ ТОПЕКС (тест)",
+  "root_dir": "C:\\ProfyPlanExchange",
+  "in_dir": "C:\\ProfyPlanExchange\\in",
+  "out_dir": "C:\\ProfyPlanExchange\\out",
+  "processed_dir": "C:\\ProfyPlanExchange\\processed",
+  "interval_seconds": 300,
+  "agent_id": "windows-companion",
+  "instance_id": "00000000-0000-0000-0000-000000000000"
+}
