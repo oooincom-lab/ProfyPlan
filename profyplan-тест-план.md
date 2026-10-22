@@ -1607,6 +1607,7 @@
 | ИНТ-1ф | Имя файла: legacy без packet_id (22.10) | `orders_20261022_090000.json`, packet_id только внутри | Принимается; ключ — packet_id из JSON; дублей нет | ⏳ ТЗ 1.2 выдано |
 | ИНТ-1х | Access token на цикл (22.10) | Токен получен один раз, передан параметром; 401 в середине | Один refresh и повтор; токен не в журнале/константе; без модульного кэша (SU225) | ⏳ ТЗ 1.2 выдано |
 | ИНТ-1ц | Адаптер Яндекс Диска (22.10) | Мок: ensure_layout, upload, list, download, move; импорт `cloud/status/check/poll` | Папки создаются; файл читается и переносится; три cloud-маршрута доступны; токен не в БД | ✅ localhost 22.10 (smoke ok; routes 3) |
+| ИНТ-1ч | Google Drive adapter (22.10) | Мок: folder_ids, list/download/upload/move; cloud routes | Файл читается и переносится; провайдер google выбирается; токен не в БД | ✅ localhost 22.10 (smoke ok) |
 
 ## 22.10.2026 — BACKLOG: публикация расширения (STORE)
 

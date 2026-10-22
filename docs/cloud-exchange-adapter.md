@@ -1,6 +1,6 @@
 # Облачный адаптер ProfyPlan — Яндекс Диск
 
-**Статус:** первый срез, 22.10.2026 · **Провайдер:** Яндекс Диск · **Google Drive:** следующий
+**Статус:** Яндекс Диск + Google Drive (первый срез), 22.10.2026
 
 ## 1. Назначение
 
@@ -44,6 +44,30 @@ YANDEX_DISK_ROOT=/ProfyPlan
 
 Для пилота допустим один серверный токен; для production — защищённое хранилище/ACL и отдельный токен на клиента.
 
+## 3.1. Google Drive
+
+Для Google Drive в `settings.cloud` задаются ID папок:
+
+```json
+{
+  "cloud": {
+    "provider": "google",
+    "root_folder_id": "ID корневой папки ProfyPlan",
+    "folder_ids": {
+      "1c_to_plan": "...",
+      "plan_to_1c": "...",
+      "processed": "...",
+      "processed/1c_to_plan": "...",
+      "processed/plan_to_1c": "...",
+      "archive": "...",
+      "_state": "..."
+    }
+  }
+}
+```
+
+Токен — только через `GOOGLE_DRIVE_ACCESS_TOKEN`; в БД не хранится. Первый срез работает с access token и готовыми ID папок; OAuth-refresh и автоматическое создание папок — следующий этап. Все ID проверяются через Drive v3; загрузка идёт multipart, перемещение — через `addParents/removeParents`.
+
 ## 4. API
 
 | Метод | Путь | Назначение |
@@ -71,7 +95,7 @@ YANDEX_DISK_ROOT=/ProfyPlan
 
 ## 7. Ограничения первого среза
 
-- Google Drive пока возвращает понятную ошибку «адаптер ещё не включён».
+- Google Drive работает по access token и готовым ID папок; OAuth-refresh и создание папок — следующий этап.
 - Нет отдельного UI настройки облака; параметры задаются в `settings` подключения.
 - Нет встроенного планировщика: `cloud/poll` вызывает внешний cron/worker.
 - Токен один на инстанс API; клиентские токены и ротация — production-этап.
