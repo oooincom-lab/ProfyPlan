@@ -583,6 +583,7 @@
 - **Проверено дополнительно:** EXE собран (`dist\ProfyPlanCompanion.exe`, ~7,8 МБ), `--help`/`status`/`once` работают; `install.ps1` создаёт задачу Windows (проверено на тестовом имени, задача удалена); EXE копируется установщиком.
 - **Tray 0.2.0:** `tray.py`, меню, ручная синхронизация, открытие папки/настроек; `install.ps1 -Tray`; EXE с tray ~15,8 МБ. Проверено: процесс живёт, `--help` содержит `tray`, `status` 0.2.0.
 - **Pairing 0.3.0:** серверные `agent-code`/`agent/pair`, агентский токен с scope и jti; companion `pair` + DPAPI; кнопка в окне подключения. Проверено: код одноразовый, токен ограничен интеграцией, `/projects` → 403.
+- **Installer 0.4.0:** `installer.py`, `ProfyPlanCompanionSetup.exe`, ярлык, Uninstall-запись, Run-автозапуск, tray, `--uninstall`; защита от второго tray. Проверено на локальной машине; осталось подписать EXE и поправить очистку каталога при uninstall.
 - **Дальше:** подпись EXE, pairing-код и мастер установки, режим службы Windows, macOS.
 - **Статус:** MVP и EXE собраны локально; к клиенту не передавались, EXE не подписан.
 - **Правило ведения модуля:** каждое изменение — версия в `agent.py`, запись в `companion-windows/VERSIONS.md`; архитектура — `ABOUT.md`, запуск — `README.md`; параллельно общий план/тест-план. Подробности — `companion-windows/DEVELOPMENT.md`.
