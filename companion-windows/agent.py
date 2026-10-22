@@ -26,7 +26,7 @@ from urllib import error, request
 from urllib.parse import quote
 
 APP = "ProfyPlan Companion"
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 DEFAULT_API = "https://profyplan.ru/api/v1"
 DEFAULT_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlanExchange"
 DEFAULT_CONFIG = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ProfyPlan" / "companion.json"
@@ -45,7 +45,7 @@ def _blob(data: bytes) -> "_DataBlob":
     return _DataBlob(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
 
 
-def _dpapi(data: bytes, protect: bool) -> bytes:
+def _dpapi(data: bytes, protect: bool, machine: bool = False) -> bytes:
     if os.name != "nt":
         prefix = b"plain:" if protect else b"plain:"
         if protect:
@@ -56,7 +56,8 @@ def _dpapi(data: bytes, protect: bool) -> bytes:
     in_blob = _blob(data)
     out_blob = _DataBlob()
     fn = ctypes.windll.crypt32.CryptProtectData if protect else ctypes.windll.crypt32.CryptUnprotectData
-    ok = fn(ctypes.byref(in_blob), None, None, None, None, 0, ctypes.byref(out_blob))
+    flags = 0x4 if machine else 0  # CRYPTPROTECT_LOCAL_MACHINE
+    ok = fn(ctypes.byref(in_blob), None, None, None, None, flags, ctypes.byref(out_blob))
     if not ok:
         raise OSError("DPAPI: не удалось %s данные" % ("зашифровать" if protect else "расшифровать"))
     try:
@@ -69,9 +70,19 @@ def seal_password(password: str) -> str:
     return "dpapi:" + base64.b64encode(_dpapi(password.encode("utf-8"), True)).decode("ascii")
 
 
+def seal_machine(value: str) -> str:
+    return "dpapi-machine:" + base64.b64encode(
+        _dpapi(value.encode("utf-8"), True, machine=True)
+    ).decode("ascii")
+
+
 def open_password(value: str) -> str:
     if not value:
         return ""
+    if value.startswith("dpapi-machine:"):
+        return _dpapi(
+            base64.b64decode(value[len("dpapi-machine:"):]), False, machine=True
+        ).decode("utf-8")
     if value.startswith("dpapi:"):
         return _dpapi(base64.b64decode(value[6:]), False).decode("utf-8")
     if value.startswith("plain:"):
@@ -514,7 +525,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_setup(args: argparse.Namespace) -> int:
     from installer import run_setup
-    return run_setup()
+    return run_setup(service=getattr(args, "service", False))
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -525,7 +536,47 @@ def cmd_install(args: argparse.Namespace) -> int:
         return 2
     target = install(cfg, Path(args.dir or (Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "ProfyPlanCompanion")), start=not args.no_start)
     print("Установлено: %s" % target)
+    if getattr(args, "service", False):
+        from service import ServiceError, install_service
+        try:
+            result = install_service(Path(target).parent / "companion.json", args.root)
+            print("Служба: %s (%s)" % (result["service"], result["status"]))
+        except ServiceError as exc:
+            print("Служба не установлена: %s" % exc, file=sys.stderr)
+            return 3
     return 0
+
+
+def cmd_install_service(args: argparse.Namespace) -> int:
+    from service import ServiceError, install_service
+    try:
+        result = install_service(Path(args.config), Path(args.root) if args.root else None)
+    except ServiceError as exc:
+        print("Служба не установлена: %s" % exc, file=sys.stderr)
+        return 2
+    print("Служба установлена: %s" % result["service"])
+    print("Статус: %s" % result["status"])
+    print("Конфиг: %s" % result["config"])
+    return 0
+
+
+def cmd_uninstall_service(args: argparse.Namespace) -> int:
+    from service import ServiceError, uninstall_service
+    try:
+        result = uninstall_service(keep_data=not args.purge)
+    except ServiceError as exc:
+        print("Служба не удалена: %s" % exc, file=sys.stderr)
+        return 2
+    print("Служба удалена: %s" % result["status"])
+    return 0
+
+
+def cmd_service_status(args: argparse.Namespace) -> int:
+    from service import service_exists, service_status
+    installed = service_exists()
+    print("service: %s" % ("installed" if installed else "not installed"))
+    print("status: %s" % service_status())
+    return 0 if installed else 1
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
@@ -560,6 +611,10 @@ def cmd_tray(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    # Setup EXE: ProfyPlanCompanionSetup.exe --service
+    if len(sys.argv) > 1 and sys.argv[1] == "--service":
+        from installer import run_setup
+        return run_setup(service=True)
     if "--upgrade" in sys.argv:
         from installer import run_upgrade
         return run_upgrade(force="--force" in sys.argv)
@@ -599,12 +654,15 @@ def main() -> int:
     p_run.set_defaults(func=cmd_run)
 
     p_setup = sub.add_parser("setup", help="мастер установки и привязки")
+    p_setup.add_argument("--service", action="store_true", help="установить Windows-службу")
     p_setup.set_defaults(func=cmd_setup)
 
     p_install = sub.add_parser("install", help="установить приложение и автозапуск")
     p_install.add_argument("--config", default=str(DEFAULT_CONFIG))
     p_install.add_argument("--dir", default=None)
     p_install.add_argument("--no-start", action="store_true")
+    p_install.add_argument("--service", action="store_true", help="установить Windows-службу")
+    p_install.add_argument("--root", default=None, help="папка обмена для службы")
     p_install.set_defaults(func=cmd_install)
 
     p_uninstall = sub.add_parser("uninstall", help="удалить приложение")
@@ -613,6 +671,18 @@ def main() -> int:
     p_status = sub.add_parser("status", help="показать настройки")
     p_status.add_argument("--config", default=str(DEFAULT_CONFIG))
     p_status.set_defaults(func=cmd_status)
+
+    p_svc = sub.add_parser("install-service", help="установить Windows-службу (нужен администратор)")
+    p_svc.add_argument("--config", default=str(DEFAULT_CONFIG))
+    p_svc.add_argument("--root", default=None)
+    p_svc.set_defaults(func=cmd_install_service)
+
+    p_svc_del = sub.add_parser("uninstall-service", help="удалить Windows-службу")
+    p_svc_del.add_argument("--purge", action="store_true", help="удалить файлы службы")
+    p_svc_del.set_defaults(func=cmd_uninstall_service)
+
+    p_svc_status = sub.add_parser("service-status", help="статус Windows-службы")
+    p_svc_status.set_defaults(func=cmd_service_status)
 
     p_tray = sub.add_parser("tray", help="запустить с иконкой в системном трее")
     p_tray.add_argument("--config", default=str(DEFAULT_CONFIG))

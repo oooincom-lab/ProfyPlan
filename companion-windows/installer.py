@@ -242,11 +242,27 @@ def run_upgrade(force: bool = False) -> int:
         return 0
     temp_cfg = Path(tempfile.gettempdir()) / "profyplan-companion-upgrade.json"
     shutil.copy2(cfg, temp_cfg)
+    has_service = False
+    try:
+        from service import service_exists, stop_for_upgrade
+        has_service = service_exists()
+        if has_service:
+            stop_for_upgrade()
+    except Exception as exc:
+        _msg("Не удалось остановить службу для обновления:\n%s" % exc, error=True)
+        return 3
     _stop_running()
     _remove_registry()
     _remove_shortcut()
     _remove_tree(DEFAULT_DIR)
     target = install(temp_cfg, DEFAULT_DIR, start=True)
+    if has_service:
+        try:
+            from service import install_service
+            install_service(target.parent / "companion.json")
+        except Exception as exc:
+            _msg("Приложение обновлено, но служба не перезапущена:\n%s" % exc, error=True)
+            return 4
     _msg("Обновление установлено: %s" % agent.VERSION)
     return 0
 
@@ -278,7 +294,7 @@ def _clipboard_setup() -> Path | None:
         return None
 
 
-def run_setup(setup_file: str | None = None) -> int:
+def run_setup(setup_file: str | None = None, service: bool = False) -> int:
     old = installed_version()
     upgrade_flag = "--upgrade" in sys.argv
     if old and (upgrade_flag or (DEFAULT_DIR / "companion.json").exists()):
@@ -312,5 +328,14 @@ def run_setup(setup_file: str | None = None) -> int:
     except Exception as exc:
         _msg("Не удалось установить companion:\n%s" % exc, error=True)
         return 3
+    if service:
+        try:
+            from service import install_service
+            install_service(target.parent / "companion.json")
+            _msg("Готово. Companion установлен как Windows-служба и запущен без входа пользователя.\n\n%s" % target.parent)
+            return 0
+        except Exception as exc:
+            _msg("Приложение установлено, но служба не создана:\n%s\n\nЗапустите установщик от имени администратора." % exc, error=True)
+            return 4
     _msg("Готово. ProfyPlan Companion установлен и запущен в системном трее.\n\n%s" % target.parent)
     return 0

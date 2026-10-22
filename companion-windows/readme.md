@@ -1,6 +1,6 @@
 # ProfyPlan Companion (Windows MVP)
 
-**Версия:** 0.7.1 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
+**Версия:** 0.8.0 · **Описание модуля:** [ABOUT.md](ABOUT.md) · **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
 Универсальный файловый обмен ProfyPlan с учётными системами без браузера и без расширения. 1С:УНФ — первый коннектор. Companion работает как отдельный агент: читает `in`, отправляет пакеты в ProfyPlan, забирает `outbox` в `out`, переносит обработанное в `processed`.
 
@@ -61,6 +61,16 @@ python agent.py tray
 ## Обновление
 
 Tray проверяет `/companion/version.json` при запуске и раз в 6 часов. Пункты «Проверить обновление» и «Обновить» открывают окно с текущей/доступной версией, датой проверки и заметками. Если версия новее, по кнопке «Скачать и установить» приложение скачивает Setup, проверяет SHA-256 и запускает `--upgrade`; настройки и привязка сохраняются.
+
+## Windows-служба
+
+```powershell
+# из установленного приложения, от администратора
+ProfyPlanCompanion.exe install-service --config "%LOCALAPPDATA%\ProfyPlan\companion.json"
+ProfyPlanCompanion.exe service-status
+```
+
+Служба `ProfyPlanCompanion` запускается автоматически до входа пользователя, конфиг лежит в `C:\ProgramData\ProfyPlanCompanion`, токен перешифрован машинным DPAPI. Подробности — [SERVICE.md](SERVICE.md).
 
 ## MSI
 

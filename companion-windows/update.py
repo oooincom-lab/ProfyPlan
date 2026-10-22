@@ -72,5 +72,23 @@ def download_and_run(info: dict) -> Path:
             raise RuntimeError("Контрольная сумма обновления не совпала")
     target = Path(tempfile.gettempdir()) / ("ProfyPlanCompanionSetup-%s.exe" % info.get("version", "new"))
     target.write_bytes(data)
-    subprocess.Popen([str(target), "--upgrade"], creationflags=0x08000000)
+    service_installed = False
+    try:
+        service_installed = subprocess.run(
+            ["sc", "query", "ProfyPlanCompanion"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=0x08000000,
+        ).returncode == 0
+    except Exception:
+        pass
+    if service_installed:
+        # Служба работает под LocalSystem: обновление требует администратора.
+        escaped = str(target).replace("'", "''")
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command",
+             "Start-Process -FilePath '%s' -ArgumentList '--upgrade' -Verb RunAs" % escaped],
+            creationflags=0x08000000,
+        )
+    else:
+        subprocess.Popen([str(target), "--upgrade"], creationflags=0x08000000)
     return target

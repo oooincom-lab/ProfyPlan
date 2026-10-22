@@ -1,6 +1,6 @@
 # ProfyPlan Companion — описание модуля
 
-**Версия:** 0.7.1 · **Статус:** Windows MVP · **Дата:** 22.10.2026
+**Версия:** 0.8.0 · **Статус:** Windows MVP · **Дата:** 22.10.2026
 **Папка исходников:** `profyplan/companion-windows`
 **История версий:** [VERSIONS.md](VERSIONS.md) · **Правила разработки:** [DEVELOPMENT.md](DEVELOPMENT.md)
 
@@ -30,9 +30,11 @@ Companion — универсальный программный модуль ф�
 | `tray.py` | Иконка в системном трее: статус, ручная синхронизация, папка, настройки |
 | `installer.py` | Установка, ярлык, запись в «Установленные программы», автозапуск, uninstall, upgrade |
 | `update.py` | Проверка `version.json`, уведомление и скачивание Setup для обновления |
+| `service.py` | Windows-служба через WinSW, машинный DPAPI, ProgramData, старт без входа |
 | `install.ps1` | Установка в `%LOCALAPPDATA%`, первичная настройка, задача Windows |
 | `build.ps1` | Сборка standalone EXE через PyInstaller |
 | `build-msi.ps1`, `msi/Product.wxs` | Сборка per-user MSI через WiX 3 |
+| `vendor/winsw.exe` | Обёртка Windows-службы |
 | `sign.ps1` | Подпись EXE/Setup/MSI код-сертификатом и проверка |
 | `config.example.json` | Пример конфигурации |
 | `README.md` | Быстрый старт |
