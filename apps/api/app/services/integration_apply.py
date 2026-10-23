@@ -61,7 +61,7 @@ async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[s
     if not name:
         return "skipped: пустое наименование"
     uid_s = _s(uid) or None
-    ext = _s(f.get("ext_id")) or None
+    ext = _s(f.get("external_code")) or _s(f.get("ext_id")) or None
     code = _s(f.get("code")) or None
     obj = None
     if uid_s:
@@ -191,7 +191,7 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
     if not name:
         return "skipped: пустое наименование"
     uid_s = _s(uid) or None
-    ext = _s(f.get("ext_id")) or None
+    ext = _s(f.get("external_code")) or _s(f.get("ext_id")) or None
     obj = None
     if uid_s:
         res = await db.execute(
@@ -273,13 +273,25 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
     if proj is not None:
         project_id = proj.id
 
-    obj = (
-        await db.execute(
-            select(ProductionOrder).where(
-                ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_id == ext
+    obj = None
+    uid_s = _s(uid) or None
+    # Правило Дополнения №1: UID — главный ключ, номер — резервный.
+    if uid_s:
+        obj = (
+            await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_uid == uid_s
+                )
             )
-        )
-    ).scalars().first()
+        ).scalars().first()
+    if obj is None and ext:
+        obj = (
+            await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_id == ext
+                )
+            )
+        ).scalars().first()
 
     if obj is None:
         db.add(
@@ -305,8 +317,11 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
     if obj.status == "draft" and obj.exploded_at is None:
         obj.quantity = qty
         obj.unit = unit
-        if _s(uid) and not obj.ext_uid:
-            obj.ext_uid = _s(uid)
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
+        # Номер мог измениться в 1С; UID остаётся стабильным.
+        if ext and obj.ext_uid == uid_s:
+            obj.ext_id = ext
         if start_date:
             obj.start_date = start_date
         if due_date:
@@ -326,7 +341,7 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
 async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     name = _s(f.get("name"))
     uid_s = _s(uid) or None
-    ext = _s(f.get("ext_id")) or None
+    ext = _s(f.get("ext_id")) or _s(f.get("code")) or None
     obj = None
     if uid_s:
         res = await db.execute(
