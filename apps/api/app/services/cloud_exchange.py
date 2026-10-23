@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -255,7 +256,9 @@ async def process_incoming_cloud(
         except Exception as exc:
             errors.append({"file": name, "error": str(exc)})
             try:
-                await provider.move(item["path"], provider.path("archive/" + name))
+                archive = "archive/" + datetime.now(timezone.utc).strftime("%Y-%m")
+                await provider.ensure_folder(archive)
+                await provider.move(item["path"], provider.path(archive + "/" + name))
             except Exception:
                 pass
             await _log_error(db, conn, tenant_id, name, str(exc))

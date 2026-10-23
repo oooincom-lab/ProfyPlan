@@ -37,4 +37,4 @@ def test_authorization_url_contains_offline_google(monkeypatch):
     assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
     assert "access_type=offline" in url
     assert "prompt=consent" in url
-    assert "drive.file" in url
+    assert "/auth/drive" in url

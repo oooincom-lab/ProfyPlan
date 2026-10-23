@@ -51,9 +51,11 @@ services:
       YANDEX_DISK_ROOT: ${YANDEX_DISK_ROOT:-/ProfyPlan}
       YANDEX_OAUTH_CLIENT_ID: ${YANDEX_OAUTH_CLIENT_ID:-}
       YANDEX_OAUTH_CLIENT_SECRET: ${YANDEX_OAUTH_CLIENT_SECRET:-}
+      YANDEX_OAUTH_SCOPE: ${YANDEX_OAUTH_SCOPE:-cloud_api:disk.read cloud_api:disk.write cloud_api:disk.info}
       GOOGLE_DRIVE_ACCESS_TOKEN: ${GOOGLE_DRIVE_ACCESS_TOKEN:-}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_SCOPE: ${GOOGLE_OAUTH_SCOPE:-https://www.googleapis.com/auth/drive}
       CLOUD_OAUTH_CALLBACK_URL: ${CLOUD_OAUTH_CALLBACK_URL:-https://profyplan.ru/api/v1/integration/cloud/oauth/callback}
       CLOUD_OAUTH_SUCCESS_URL: ${CLOUD_OAUTH_SUCCESS_URL:-https://profyplan.ru/workspace}
       CLOUD_OAUTH_FAILURE_URL: ${CLOUD_OAUTH_FAILURE_URL:-https://profyplan.ru/workspace}

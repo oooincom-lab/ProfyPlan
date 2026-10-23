@@ -200,7 +200,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
           </div>
           {row('Корневая папка', <input style={inp} value={f.cloud_root_name} placeholder="ProfyPlan" onChange={(e) => upd({ cloud_root_name: e.target.value })} />)}
           <div style={{ fontSize: 11, color: '#5A7090', marginTop: -2, marginBottom: 6 }}>
-            Если папки с таким названием нет, ProfyPlan создаст её и канонические папки обмена.
+            Если папки с таким названием нет, ProfyPlan создаст её и канонические папки обмена. Если корень создаёт 1С, расшарьте его ProfyPlan с правом «Редактор».
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
             <button type="button" disabled={busy} onClick={() => void connectCloud()}

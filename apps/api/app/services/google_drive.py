@@ -158,6 +158,26 @@ class GoogleDriveClient:
                 self.folder_ids[current] = str(folder_id)
                 parent = str(folder_id)
 
+    async def ensure_folder(self, relative: str) -> None:
+        """Создать/найти произвольную вложенную папку (например, archive/2026-10)."""
+        value = str(relative or "").strip("/")
+        if not value:
+            return
+        parts = [p for p in value.split("/") if p]
+        parent = self.root_folder_id
+        current = ""
+        for part in parts:
+            current = (current + "/" + part).strip("/")
+            folder_id = self.folder_ids.get(current)
+            if folder_id and await self._valid_folder(str(folder_id)):
+                parent = str(folder_id)
+                continue
+            folder_id = await self._find_folder(parent, part) if parent else None
+            if not folder_id:
+                folder_id = await self._create_folder(parent, part)
+            self.folder_ids[current] = str(folder_id)
+            parent = str(folder_id)
+
     async def list_files(self, relative: str) -> list[dict]:
         folder_id = self._folder(relative)
         query = "'%s' in parents and trashed = false" % folder_id

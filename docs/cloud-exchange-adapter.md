@@ -66,7 +66,7 @@ YANDEX_DISK_ROOT=/ProfyPlan
 }
 ```
 
-Имя корневой папки задаёт пользователь в подключении. Если папки с таким именем нет, она создаётся; если есть — используется существующая. Доступ получается через OAuth (см. 3.2); access token не хранится, refresh token — только в зашифрованном виде. Загрузка идёт multipart, перемещение — через `addParents/removeParents`; для приложения достаточно non-sensitive scope `drive.file`.
+Имя корневой папки задаёт пользователь в подключении. Если папки с таким именем нет, она создаётся; если есть — используется существующая. Доступ получается через OAuth (см. 3.2); access token не хранится, refresh token — только в зашифрованном виде. Загрузка идёт multipart, перемещение — через `addParents/removeParents`. Используется scope `drive`, чтобы видеть корневую папку, созданную стороной 1С и расшаренную ProfyPlan; `drive.file` для этого не подходит.
 
 ## 3.2. OAuth-подключение (Яндекс Диск и Google Drive)
 
@@ -82,7 +82,16 @@ CLOUD_OAUTH_SUCCESS_URL=https://profyplan.ru/workspace
 CLOUD_TOKEN_ENCRYPTION_KEY=...
 ```
 
-Redirect URI в кабинетах Яндекс OAuth и Google Cloud должен совпадать с `CLOUD_OAUTH_CALLBACK_URL`. Для Google используется `access_type=offline`, `prompt=consent` и scope `https://www.googleapis.com/auth/drive.file`; для Яндекс Диска — `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info`. Refresh token хранится в `settings.cloud.oauth.refresh_token_enc` в зашифрованном виде; открытый токен в API и браузер не возвращается. Состояние OAuth подписано JWT и живёт 15 минут.
+Redirect URI в кабинетах Яндекс OAuth и Google Cloud должен совпадать с `CLOUD_OAUTH_CALLBACK_URL`. Для Google используется `access_type=offline`, `prompt=consent` и scope `https://www.googleapis.com/auth/drive` (shared-папка 1С); для Яндекс Диска — `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info`. Refresh token хранится в `settings.cloud.oauth.refresh_token_enc` в зашифрованном виде; открытый токен в API и браузер не возвращается. Состояние OAuth подписано JWT и живёт 15 минут.
+
+`drive` — restricted scope: для внешних пользователей Google потребует верификацию приложения. Это осознанный выбор ради shared-папки, созданной стороной 1С. Если папку создаёт только ProfyPlan, можно вернуться к `drive.file` через `GOOGLE_OAUTH_SCOPE`.
+
+## 3.3. Совместимость с расширением 1С 0.9.0
+
+- 1С использует отдельные OAuth-приложения и отдельные комплекты настроек для Яндекс Диска и Google Диска. В ProfyPlan один объект подключения ведёт один провайдер; для параллельной работы с двумя облаками создайте два подключения.
+- Корневую папку может создать 1С или ProfyPlan. Если владелец — 1С, папка должна быть расшарена аккаунту ProfyPlan с правом «Редактор»; ProfyPlan ищет её по имени и не создаёт дубль. Для Google это требует scope `drive`.
+- Ошибочные входящие файлы ProfyPlan переносит в `archive/ГГГГ-ММ` — так же, как 1С.
+- Имена пакетов с `packet_id` и без него принимаются; ключ — `packet_id` внутри JSON.
 
 ## 4. API
 
@@ -99,7 +108,7 @@ Redirect URI в кабинетах Яндекс OAuth и Google Cloud долже
 ## 5. Поведение
 
 - Успешно разобранный файл переносится в `processed/1c_to_plan`.
-- Файл с ошибкой разбора переносится в `archive`; ошибка пишется в журнал обмена.
+- Файл с ошибкой разбора переносится в `archive/ГГГГ-ММ` (месяц создания архива, как на стороне 1С); ошибка пишется в журнал обмена.
 - Исходящие файлы перед загрузкой хешируются; повторная загрузка того же содержимого не выполняется (`settings.cloud_out_sent`).
 - Ссылки на скачивание и загрузку принимаются только по HTTPS.
 - Имена файлов нормализуются; пустые и скрытые имена пропускаются.

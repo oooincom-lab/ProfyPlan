@@ -31,7 +31,9 @@ class Settings(BaseSettings):
     yandex_oauth_scope: str = "cloud_api:disk.read cloud_api:disk.write cloud_api:disk.info"
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
-    google_oauth_scope: str = "https://www.googleapis.com/auth/drive.file"
+    # drive, а не drive.file: облачная папка может быть создана стороной 1С
+    # и расшарена ProfyPlan; drive.file не видит чужие shared-папки.
+    google_oauth_scope: str = "https://www.googleapis.com/auth/drive"
     cloud_oauth_callback_url: str = "https://profyplan.ru/api/v1/integration/cloud/oauth/callback"
     cloud_oauth_success_url: str = "https://profyplan.ru/workspace"
     cloud_oauth_failure_url: str = "https://profyplan.ru/workspace"
