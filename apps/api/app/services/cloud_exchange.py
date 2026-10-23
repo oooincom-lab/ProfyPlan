@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -256,7 +256,8 @@ async def process_incoming_cloud(
         except Exception as exc:
             errors.append({"file": name, "error": str(exc)})
             try:
-                archive = "archive/" + datetime.now(timezone.utc).strftime("%Y-%m")
+                # Профиль 1С работает в московской шкале; месяц архива должен совпадать.
+                archive = "archive/" + (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%Y-%m")
                 await provider.ensure_folder(archive)
                 await provider.move(item["path"], provider.path(archive + "/" + name))
             except Exception:
