@@ -43,6 +43,7 @@ from app.services.cloud_oauth import (
     authorization_url,
     decode_state,
     exchange_code,
+    oauth_for,
     oauth_configured,
     save_oauth_tokens,
 )
@@ -309,7 +310,7 @@ async def cloud_status(
     conn = await _get_conn(db, conn_id, tenant_id)
     cfg = cloud_settings(conn)
     provider = str(cfg.get("provider") or "yandex").lower()
-    oauth = cfg.get("oauth") or {}
+    oauth = oauth_for(conn, provider)
     oauth_connected = bool(oauth.get("refresh_token_enc")) and oauth.get("provider") == provider
     if provider == "google":
         root = str(cfg.get("root_name") or cfg.get("root_folder_id") or "Google Drive")

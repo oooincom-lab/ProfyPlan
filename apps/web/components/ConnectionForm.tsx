@@ -37,12 +37,20 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const [pairBusy, setPairBusy] = useState(false);
   const [pairErr, setPairErr] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string>(conn?.id ? String(conn.id) : '');
-  const [cloudConnected, setCloudConnected] = useState<boolean>(
-    !!(conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth && conn.settings.cloud.oauth.refresh_token_enc)
-  );
-  const [cloudAccount, setCloudAccount] = useState<string>(
-    (conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth && conn.settings.cloud.oauth.account) || ''
-  );
+  const [cloudConnected, setCloudConnected] = useState<boolean>(() => {
+    const cloud = (conn?.settings && conn.settings.cloud) || {};
+    const provider = cloud.provider || 'yandex';
+    const oauth = (cloud.oauth_by_provider || {})[provider]
+      || (cloud.oauth && cloud.oauth.provider === provider ? cloud.oauth : null);
+    return !!(oauth && oauth.refresh_token_enc);
+  });
+  const [cloudAccount, setCloudAccount] = useState<string>(() => {
+    const cloud = (conn?.settings && conn.settings.cloud) || {};
+    const provider = cloud.provider || 'yandex';
+    const oauth = (cloud.oauth_by_provider || {})[provider]
+      || (cloud.oauth && cloud.oauth.provider === provider ? cloud.oauth : null);
+    return (oauth && oauth.account) || '';
+  });
 
   const makePairCode = async () => {
     if (!conn || !conn.id) return;
@@ -111,9 +119,6 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       } else if ((conn?.settings?.cloud?.root_name || '') !== rootName) {
         delete cloud.root_folder_id;
       }
-      if (cloud.oauth && cloud.oauth.provider !== f.cloud_provider) {
-        delete cloud.oauth;
-      }
       settings.cloud = cloud;
     }
     const body = { name: f.name.trim(), profile: f.profile, transport: f.transport, settings, comment: f.comment || null, is_active: !!f.is_active };
@@ -124,8 +129,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       if (nextId) setSavedId(String(nextId));
       const nextCloud = u && u.settings && u.settings.cloud;
       if (nextCloud) {
-        setCloudConnected(!!(nextCloud.oauth && nextCloud.oauth.refresh_token_enc));
-        setCloudAccount((nextCloud.oauth && nextCloud.oauth.account) || '');
+        const nextOauth = (nextCloud.oauth_by_provider || {})[f.cloud_provider]
+          || (nextCloud.oauth && nextCloud.oauth.provider === f.cloud_provider ? nextCloud.oauth : null);
+        setCloudConnected(!!(nextOauth && nextOauth.refresh_token_enc));
+        setCloudAccount((nextOauth && nextOauth.account) || '');
       }
       setOkMsg(wasNew ? 'Подключение создано ✅' : 'Настройки сохранены ✅');
       setF((cur: any) => ({ ...cur, password: '' }));

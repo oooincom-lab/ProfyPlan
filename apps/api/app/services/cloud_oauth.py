@@ -189,21 +189,34 @@ def save_oauth_tokens(conn, provider: str, payload: dict, account: str = "") -> 
     if account:
         oauth["account"] = account
     cloud["oauth"] = oauth
+    oauth_by_provider = dict(cloud.get("oauth_by_provider") or {})
+    oauth_by_provider[provider] = oauth
+    cloud["oauth_by_provider"] = oauth_by_provider
     current["cloud"] = cloud
     conn.settings = current
 
 
-def oauth_refresh_token(conn, provider: str) -> Optional[str]:
+def oauth_for(conn, provider: str) -> dict:
+    """Настройки OAuth конкретного провайдера (с миграцией старого cloud.oauth)."""
     cloud = (conn.settings or {}).get("cloud") or {}
-    oauth = cloud.get("oauth") or {}
-    if oauth.get("provider") != provider or not oauth.get("refresh_token_enc"):
+    mapping = cloud.get("oauth_by_provider") or {}
+    if isinstance(mapping, dict) and mapping.get(provider):
+        return mapping[provider]
+    current = cloud.get("oauth") or {}
+    if current.get("provider") == provider:
+        return current
+    return {}
+
+
+def oauth_refresh_token(conn, provider: str) -> Optional[str]:
+    oauth = oauth_for(conn, provider)
+    if not oauth.get("refresh_token_enc"):
         return None
     return decrypt_secret(str(oauth["refresh_token_enc"]))
 
 
-def oauth_account(conn) -> str:
-    cloud = (conn.settings or {}).get("cloud") or {}
-    return str((cloud.get("oauth") or {}).get("account") or "")
+def oauth_account(conn, provider: str) -> str:
+    return str(oauth_for(conn, provider).get("account") or "")
 
 
 async def access_token_for(conn, provider: str, db=None) -> str:
@@ -213,7 +226,7 @@ async def access_token_for(conn, provider: str, db=None) -> str:
         payload = await refresh_tokens(provider, refresh_token)
         # Yandex может ротировать refresh token; Google обычно сохраняет старый.
         if payload.get("refresh_token"):
-            save_oauth_tokens(conn, provider, payload, oauth_account(conn))
+            save_oauth_tokens(conn, provider, payload, oauth_account(conn, provider))
         if db is not None:
             await db.commit()
         return str(payload["access_token"])
