@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan ↔ 1С — обзор интеграции</title>
+<style>
+  :root{--bg:#081221;--panel:#0d1f3a;--border:#1e3252;--fg:#e8eef5;--muted:#8fa3bd;--blue:#38bdf8;--green:#4ade80;--amber:#fbbf24;--red:#f87171;--violet:#a78bfa}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,Segoe UI,Arial,sans-serif;line-height:1.55}
+  main{max-width:1120px;margin:0 auto;padding:42px 24px 64px}
+  header{border-bottom:1px solid var(--border);padding-bottom:24px;margin-bottom:28px}
+  .kicker{color:var(--blue);font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+  h1{font-size:34px;line-height:1.15;margin:8px 0 10px} h2{font-size:21px;margin:32px 0 12px} h3{font-size:16px;margin:22px 0 8px}
+  p{color:var(--muted);margin:8px 0 14px} a{color:var(--blue)}
+  .lead{font-size:17px;color:#c7d5e5;max-width:860px}
+  .badge{display:inline-block;border:1px solid rgba(56,189,248,.4);color:var(--blue);background:rgba(56,189,248,.08);border-radius:999px;padding:3px 10px;font-size:11px;margin:2px 4px 2px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 17px}
+  .card h3{margin:0 0 7px;color:#d9e6f4} .card p{margin:0;font-size:13px}
+  .card .num{font-size:12px;color:var(--blue);font-weight:700;margin-bottom:4px}
+  table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:13px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em} td{color:#dce7f2}
+  .ok{color:var(--green)} .warn{color:var(--amber)} .bad{color:var(--red)} .muted{color:var(--muted)}
+  .timeline{border-left:2px solid rgba(56,189,248,.45);margin:18px 0 8px;padding-left:22px}
+  .step{position:relative;margin:0 0 18px} .step:before{content:'';position:absolute;left:-28px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(56,189,248,.12)}
+  .step b{color:#e4eff9} .step span{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+  .callout{border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.07);border-radius:10px;padding:13px 15px;margin:16px 0;color:#f6d88b;font-size:13px}
+  .callout.blue{border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.06);color:#bae6fd}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+  .two .card{min-height:120px}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0;font-size:12px}
+  .flow span{border:1px solid var(--border);background:var(--panel);padding:7px 10px;border-radius:7px;color:#cfe3f5}
+  .flow i{color:var(--blue);font-style:normal}
+  code{font-family:'IBM Plex Mono',Consolas,monospace;color:#bae6fd;background:rgba(56,189,248,.08);padding:1px 5px;border-radius:4px;font-size:12px}
+  footer{margin-top:42px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:12px}
+  @media(max-width:700px){h1{font-size:27px}main{padding:28px 15px 46px}.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="kicker">ProfyPlan · интеграция</div>
+    <h1>Как задуман обмен с 1С</h1>
+    <p class="lead">Два встречных контура: 1С передаёт справочники и заказы для планирования, ProfyPlan возвращает только зафиксированный план производства. Полной двусторонней синхронизации всех сущностей нет.</p>
+    <span class="badge">profyplan.exchange.v1</span>
+    <span class="badge">файловый канал</span>
+    <span class="badge">Яндекс Диск / Google Drive</span>
+    <span class="badge">OData — чтение</span>
+  </header>
+
+  <section>
+    <h2>1. Два направления</h2>
+    <div class="two">
+      <div class="card"><div class="num">1С → ProfyPlan</div><h3>Данные для расчёта</h3><p>Номенклатура, контрагенты, подразделения, ресурсы, проекты и заказы на производство. 1С — мастер этих данных.</p></div>
+      <div class="card"><div class="num">ProfyPlan → 1С</div><h3>Зафиксированный план</h3><p>Только снимок плана: ресурс, старт, финиш и загрузка по заказу. 1С записывает строки в «Ресурсы предприятия».</p></div>
+    </div>
+    <div class="callout blue"><b>Важно:</b> ProfyPlan не отправляет в 1С новые проекты, подпроекты, заказы, операции или маршруты. Это локальные сущности планирования.</div>
+  </section>
+
+  <section>
+    <h2>2. Как проходит входящий поток</h2>
+    <div class="flow"><span>1С: refs / orders / ping</span><i>→</i><span>in / 1c_to_plan</span><i>→</i><span>Скан или cloud poll</span><i>→</i><span>Очередь</span><i>→</i><span>Применить очередь</span><i>→</i><span>Справочники и черновики заказов</span></div>
+    <div class="timeline">
+      <div class="step"><b>Пакет</b><span>JSON UTF-8 с конвертом <code>profyplan.exchange.v1</code>, уникальным <code>packet_id</code> и массивом <code>entities</code>.</span></div>
+      <div class="step"><b>Проверка</b><span>Проверяется схема и структура; пакет регистрируется в журнале обмена. <code>ping</code> завершает проверку канала сразу.</span></div>
+      <div class="step"><b>Очередь</b><span><code>refs</code> и <code>orders</code> попадают в <code>ExchangeInboxItem</code> со статусом <code>pending</code>; файл переносится в <code>processed</code>.</span></div>
+      <div class="step"><b>Применение</b><span>Справочники создаются или обновляются, заказ создаётся черновиком или обновляется, если он ещё черновик и не развёрнут.</span></div>
+      <div class="step"><b>Результат</b><span>Для каждого элемента фиксируется <code>applied</code>, <code>skipped</code> или <code>error</code>; всё видно в журнале.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Ключи и таблицы трансляции</h2>
+    <p>Отдельной таблицы соответствий нет. Связь хранится в полях самих сущностей: <code>ext_uid</code> — GUID 1С, <code>ext_id</code> / <code>external_code</code> — номер или код. Порядок поиска: <b>ext_uid → ext_id/external_code/code → имя</b>.</p>
+    <table>
+      <thead><tr><th>Сущность</th><th>Главный ключ</th><th>Резервные ключи</th><th>Создаётся из 1С</th></tr></thead>
+      <tbody>
+        <tr><td>Номенклатура</td><td><code>ext_uid</code></td><td>код</td><td class="ok">да</td></tr>
+        <tr><td>Контрагент</td><td><code>ext_uid</code></td><td><code>external_code</code>, ИНН</td><td class="ok">да</td></tr>
+        <tr><td>Подразделение</td><td><code>ext_uid</code></td><td>код</td><td class="ok">да</td></tr>
+        <tr><td>Ресурс</td><td><code>ext_uid</code></td><td><code>external_code</code>, имя</td><td class="ok">да</td></tr>
+        <tr><td>Проект</td><td><code>ext_uid</code></td><td>код, имя</td><td class="warn">только сопоставление</td></tr>
+        <tr><td>Заказ</td><td><code>ext_uid</code></td><td>номер</td><td class="ok">да, черновиком</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><b>Исправлено:</b> заказ теперь ищется сначала по <code>ext_uid</code>, затем по номеру; ресурс принимает <code>external_code</code>; проект принимает <code>code</code>.</div>
+  </section>
+
+  <section>
+    <h2>4. Что именно уходит в 1С</h2>
+    <p>Экспортируется не расчёт целиком, а <b>фиксация плана</b>. Пользователь фиксирует план, затем в интеграции выбирает проект и фиксацию и нажимает «Экспорт фиксации».</p>
+    <table>
+      <thead><tr><th>Поле plan_row</th><th>Использование в 1С</th></tr></thead>
+      <tbody>
+        <tr><td><code>order_ext_uid</code> / <code>order_ext_id</code></td><td>Найти заказ; UID приоритетнее номера</td></tr>
+        <tr><td><code>resource_ext_uid</code> / <code>resource_ext_id</code> / <code>resource_name</code></td><td>Найти ресурс по цепочке ключей</td></tr>
+        <tr><td><code>start</code> / <code>finish</code></td><td>Записать интервал в «Ресурсы предприятия»</td></tr>
+        <tr><td><code>resource_load</code></td><td>Загрузка ресурса; в v1 — 1</td></tr>
+        <tr><td><code>operation_*</code>, <code>department_*</code>, <code>quantity</code>, <code>unit</code>, <code>is_critical</code></td><td>Передаются, но текущая версия 1С их не использует</td></tr>
+      </tbody>
+    </table>
+    <p>Если заказ не найден по UID или номеру, строка пропускается. Операции и проект заказа в 1С по плану не создаются и не меняются.</p>
+  </section>
+
+  <section>
+    <h2>5. Что происходит при локальных правках</h2>
+    <table>
+      <thead><tr><th>Действие в ProfyPlan</th><th>Текущий результат</th></tr></thead>
+      <tbody>
+        <tr><td>Добавить операцию в импортированный заказ</td><td>Операция остаётся локальной; в 1С уходят только ресурс/время, если план зафиксирован</td></tr>
+        <tr><td>Сменить проект у заказа</td><td>Меняется только <code>project_id</code> ProfyPlan; обратно в 1С не уходит</td></tr>
+        <tr><td>Переименовать проект</td><td>Локальное имя сохраняется; 1С его не обновляет</td></tr>
+        <tr><td>Создать проект, подпроект или заказ</td><td>Локальная сущность; в 1С не выгружается</td></tr>
+        <tr><td>Изменить номенклатуру, контрагента, ресурс, подразделение</td><td>Следующий <code>refs</code> из 1С перезапишет поля</td></tr>
+        <tr><td>Изменить заказ после развёртывания</td><td>Импорт из 1С уже не перезаписывает заказ</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>6. Ограничения и что предлагается</h2>
+    <div class="grid">
+      <div class="card"><h3>Обратной выгрузки нет</h3><p>Локальные проекты, подпроекты, заказы и операции не попадают в 1С. Для них нужен отдельный outbound-контракт.</p></div>
+      <div class="card"><h3>Привязка проекта</h3><p>Смена проекта у импортированного заказа не передаётся. Нужно решить: запрет, отдельный пакет или локальное переопределение.</p></div>
+      <div class="card"><h3>Идемпотентность</h3><p>1С ведёт реестр обработанных <code>packet_id</code>; в ProfyPlan дедупликации входящего пакета пока нет.</p></div>
+      <div class="card"><h3>OData и HTTP</h3><p>OData читает справочники; прямого HTTP-обмена с сервисом 1С ещё нет.</p></div>
+    </div>
+    <div class="callout blue"><b>Предлагаемое правило:</b> 1С — мастер справочников, заказов и корневой папки; ProfyPlan — мастер операций, маршрутов, ресурсного планирования и зафиксированного плана. Локальные проекты и заказы в 1С не отправляются до появления отдельного контракта.</div>
+  </section>
+
+  <footer>ProfyPlan · обзор подготовлен по текущей реализации и описанию расширения 1С 0.9.0 · production не обновлялся</footer>
+</main>
+</body>
+</html>
