@@ -11,7 +11,7 @@ from typing import Optional
 
 import httpx
 
-from app.services.cloud_exchange import CloudError, FOLDERS
+from app.services.cloud_exchange import CloudError, FOLDERS, archive_month
 
 API = "https://www.googleapis.com/drive/v3"
 UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
@@ -157,6 +157,7 @@ class GoogleDriveClient:
                     folder_id = await self._create_folder(parent, part)
                 self.folder_ids[current] = str(folder_id)
                 parent = str(folder_id)
+        await self.ensure_folder(archive_month())
 
     async def ensure_folder(self, relative: str) -> None:
         """Создать/найти произвольную вложенную папку (например, archive/2026-10)."""

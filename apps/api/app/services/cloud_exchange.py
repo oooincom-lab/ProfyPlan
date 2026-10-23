@@ -29,6 +29,11 @@ FOLDERS = (
 )
 
 
+def archive_month() -> str:
+    """Текущая месячная папка архива в шкале 1С (МСК)."""
+    return "archive/" + (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%Y-%m")
+
+
 class CloudError(RuntimeError):
     """Ошибка облачного провайдера или его настройки."""
 
@@ -112,6 +117,7 @@ class YandexDiskClient:
         await self.ensure_folder("")
         for folder in FOLDERS:
             await self.ensure_folder(folder)
+        await self.ensure_folder(archive_month())
 
     async def list_files(self, relative: str) -> list[dict]:
         response = await self._request(
@@ -256,8 +262,7 @@ async def process_incoming_cloud(
         except Exception as exc:
             errors.append({"file": name, "error": str(exc)})
             try:
-                # Профиль 1С работает в московской шкале; месяц архива должен совпадать.
-                archive = "archive/" + (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%Y-%m")
+                archive = archive_month()
                 await provider.ensure_folder(archive)
                 await provider.move(item["path"], provider.path(archive + "/" + name))
             except Exception:

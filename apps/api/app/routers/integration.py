@@ -37,7 +37,7 @@ from app.services.integration_exchange import (
     scan_inbox_dir,
     cleanup_exchange_log,
 )
-from app.services.cloud_exchange import CloudError, FOLDERS, _persist_layout, cloud_root_name, cloud_settings, poll_cloud, provider_for
+from app.services.cloud_exchange import CloudError, FOLDERS, _persist_layout, archive_month, cloud_root_name, cloud_settings, poll_cloud, provider_for
 from app.services.cloud_oauth import (
     OAuthError,
     authorization_url,
@@ -345,6 +345,7 @@ async def cloud_status(
         "oauth_available": oauth_configured(provider),
         "account": str(oauth.get("account") or ""),
         "folders": list(FOLDERS),
+        "archive_month": archive_month(),
         "transport": "cloud",
         "poll_minutes": poll_minutes,
         "scheduler_enabled": bool(settings.cloud_scheduler_enabled),
