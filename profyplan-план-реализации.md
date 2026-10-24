@@ -765,3 +765,4 @@
 - **История фактов:** API /integration/projects/{id}/facts и компактный блок «Факты из 1С» на карточке проекта.
 - **Сотрудники/бригады:** employee — отдельный refs-тип; бригады/отделения/участки — иерархия department с kind; факты передают executor_type.
 - **Ресурсный профиль:** подразделение/сотрудник — субъект, Resource — планировочная ёмкость (subject_type, subject_id, capacity_mode, is_bookable); не все подразделения автоматически ресурсы.
+- **Оргуровни:** `OrgLevel` (`code`, `name`, `sort_order`, `can_be_resource`), `department.level_id`, нейтральные `executor_type=employee|org_unit`; названия уровней настраиваются.
