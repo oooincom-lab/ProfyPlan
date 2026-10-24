@@ -695,6 +695,13 @@ export default function Sidebar(props: SidebarProps) {
             🏭 Организации{debug && <DebugBadge debug={debug} text="[nav:organizations]" />}
           </div>
           <div
+            className={`s-sub ${view === 'org-structure' ? 'active' : ''}`}
+            style={view === 'org-structure' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
+            onClick={() => navTo('org-structure')}
+          >
+            🏢 Оргструктура
+          </div>
+          <div
             className={`s-sub ${view === 'production-calendars' ? 'active' : ''}`}
             style={view === 'production-calendars' ? { color: 'var(--s-fg-active)', fontWeight: 600 } : {}}
             onClick={() => navTo('production-calendars')}
