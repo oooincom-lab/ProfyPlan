@@ -19,6 +19,9 @@ class Tenant(BaseModel):
     plan: Mapped[str] = mapped_column(String(20), default="trial")
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     timezone: Mapped[str] = mapped_column(String(50), default="Europe/Moscow")
+    sync_edit_policy: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="planning", server_default="planning"
+    )
 
     # Связи
     users: Mapped[list["UserTenant"]] = relationship(back_populates="tenant")

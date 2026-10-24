@@ -28,7 +28,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user, get_integration_tenant_id
 from app.models.integration import ExchangeInboxItem, ExchangeLease, ExchangeLogEntry, IntegrationConnection
-from app.models.tenant import User
+from app.models.tenant import User, Tenant
 from app.core.security import create_agent_token
 from app.services.integration_exchange import (
     make_envelope,
@@ -48,10 +48,15 @@ from app.services.cloud_oauth import (
     save_oauth_tokens,
 )
 from app.services.name_changes import decide_name_change, list_name_changes
+from app.services.edit_policy import POLICIES, get_edit_policy
 from app.services.integration_apply import apply_pending
 from app.services.odata_client import CATALOG_MAP, ODataClient, ODataError, map_catalog_row
 
 router = APIRouter(prefix="/v1/integration", tags=["integration"])
+
+
+class EditPolicyIn(BaseModel):
+    policy: str
 
 
 class ConnectionIn(BaseModel):
@@ -193,6 +198,30 @@ async def name_changes(
 ):
     items = await list_name_changes(db, tenant_id)
     return {"items": items, "count": len(items)}
+
+
+@router.get("/edit-policy")
+async def edit_policy(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    return {"policy": await get_edit_policy(db, tenant_id), "values": sorted(POLICIES)}
+
+
+@router.put("/edit-policy")
+async def set_edit_policy(
+    body: EditPolicyIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    if body.policy not in POLICIES:
+        raise HTTPException(400, "Неизвестная политика редактирования")
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(404, "Организация не найдена")
+    tenant.sync_edit_policy = body.policy
+    await db.commit()
+    return {"policy": body.policy}
 
 
 @router.post("/name-changes/{entity_type}/{entity_id}/accept")

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
+from app.services.edit_policy import require_imported_editable
 from app.models.group_shift_log import GroupShiftLog
 from app.models.operation_pin import OperationPin
 from app.services.order_priority import normalize_priority
@@ -1210,6 +1211,7 @@ async def create_order(
 ):
     """Создать один заказ на производство."""
     from uuid import UUID
+    await require_project_editable(db, tenant_id, UUID(project_id))
     parent_id = await _resolve_parent_order(body.parent_order_id, project_id, tenant_id, db)
     client_id = None
     client_name = body.client
@@ -1929,6 +1931,7 @@ async def update_order(
     order = res.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Заказ не найден")
+    await require_imported_editable(db, tenant_id, order)
     body_fields = body.model_dump(exclude_unset=True)
     # Вывод заказа из черновика: у всех операций должно быть подразделение
     if order.status == "draft" and body_fields.get("status") and body_fields.get("status") != "draft":
@@ -2044,6 +2047,7 @@ async def delete_order(
     order = res.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Заказ не найден")
+    await require_imported_editable(db, tenant_id, order)
     await db.delete(order)
     await db.commit()
 

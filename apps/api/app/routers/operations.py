@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.operation import Operation, OperationDependency, OperationResource
+from app.services.edit_policy import require_project_editable
 from app.schemas.operation import (
     DependencyCreate,
     DependencyOut,
@@ -105,6 +106,7 @@ async def create_operation(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await require_project_editable(db, tenant_id, project_id)
     operation = Operation(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -154,6 +156,7 @@ async def update_operation(
     op = result.scalar_one_or_none()
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
+    await require_project_editable(db, tenant_id, project_id)
 
     data = body.model_dump(exclude_unset=True)
     if 'department_id' in data:
@@ -184,6 +187,7 @@ async def delete_operation(
     op = result.scalar_one_or_none()
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
+    await require_project_editable(db, tenant_id, project_id)
     await db.delete(op)
     await db.commit()
 

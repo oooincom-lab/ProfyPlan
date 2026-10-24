@@ -34,6 +34,7 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
   const [resp, setResp] = useState<string>('');
   const [cloud, setCloud] = useState<any>(null);
   const [nameChanges, setNameChanges] = useState<any[]>([]);
+  const [editPolicy, setEditPolicy] = useState<string>('planning');
   const [selLogId, setSelLogId] = useState<string | null>(null);
   const [connClicked, setConnClicked] = useState<string | null>(null);
   const say = (m: string) => { setResp(m); notify(m); };
@@ -61,6 +62,9 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
   const loadNameChanges = async () => {
     try { const r = await api('/integration/name-changes'); setNameChanges(r.items || []); } catch { /* тихо */ }
   };
+  const loadEditPolicy = async () => {
+    try { const r = await api('/integration/edit-policy'); setEditPolicy(r.policy || 'planning'); } catch { /* тихо */ }
+  };
   const loadCloud = async (cid?: string | null) => {
     const conn = conns.find((x) => x.id === cid);
     if (!cid || !conn || conn.transport !== 'cloud') { setCloud(null); return; }
@@ -68,7 +72,7 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
     catch { setCloud(null); }
   };
 
-  useEffect(() => { void loadConns(); void loadProjects(); void loadNameChanges(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { void loadConns(); void loadProjects(); void loadNameChanges(); void loadEditPolicy(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { void loadLog(selId); void loadInbox(selId); /* eslint-disable-next-line */ }, [selId]);
   useEffect(() => { void loadCloud(selId); /* eslint-disable-next-line */ }, [selId, conns]);
   /* eslint-disable-next-line */
@@ -214,12 +218,34 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
     } catch (e: any) { say('Имя: ' + (e?.message || e)); }
     setBusy(false);
   };
+  const changeEditPolicy = async (policy: string) => {
+    setBusy(true);
+    try {
+      await api('/integration/edit-policy', { method: 'PUT', body: JSON.stringify({ policy }) });
+      setEditPolicy(policy);
+      say(policy === 'strict_1c' ? 'Включён строгий режим 1С' : 'Включён режим планирования');
+    } catch (e: any) { say('Политика: ' + (e?.message || e)); }
+    setBusy(false);
+  };
 
   return (
     <div style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>🔌 Интеграция с внешними системами</span>
         <span style={{ fontSize: 12, color: '#5A7090' }}>1С:УНФ · 1С:КА · 1С:ERP — файловый обмен, прямое подключение, OData</span>
+      </div>
+
+      <div style={{ ...card, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: '#B0C4DE' }}>Политика редактирования</span>
+        <select style={{ ...inp, width: 240 }} value={editPolicy} disabled={busy} onChange={(e) => void changeEditPolicy(e.target.value)}>
+          <option value="planning">1С — планирование</option>
+          <option value="strict_1c">1С — строгий</option>
+        </select>
+        <span style={{ fontSize: 11, color: '#5A7090' }}>
+          {editPolicy === 'strict_1c'
+            ? 'Импортированные проекты, заказы и операции нельзя менять в ProfyPlan — только в 1С.'
+            : 'Мастер-данные из 1С можно править локально; факты остаются read-only.'}
+        </span>
       </div>
 
       {nameChanges.length > 0 && (

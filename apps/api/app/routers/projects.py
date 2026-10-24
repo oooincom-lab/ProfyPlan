@@ -17,6 +17,7 @@ from app.models.plan_snapshot import PlanSnapshot, PlanSnapshotRow
 from app.models.plan_version import InterProjectDependency
 from app.models.tenant import User
 from app.schemas.project import ProjectCreate, ProjectList, ProjectMove, ProjectOut, ProjectUpdate
+from app.services.edit_policy import require_imported_editable
 
 MAX_PROJECT_DEPTH = 6
 
@@ -268,6 +269,7 @@ async def update_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    await require_imported_editable(db, tenant_id, project)
 
     update_data = body.model_dump(exclude_unset=True)
     if "name" in update_data and update_data["name"] != project.name:
@@ -298,7 +300,6 @@ async def project_readiness(
     project = pres.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     orders = (await db.execute(
         select(ProductionOrder).where(ProductionOrder.tenant_id == tenant_id, ProductionOrder.project_id == project_id)
     )).scalars().all()
@@ -464,6 +465,7 @@ async def delete_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    await require_imported_editable(db, tenant_id, project)
 
     # Иерархия (A): проект с подпроектами удалять нельзя
     ch = await db.execute(
