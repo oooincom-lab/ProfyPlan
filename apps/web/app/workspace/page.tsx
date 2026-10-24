@@ -50,6 +50,7 @@ import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
 import { priorityLabel, priorityBadgeClass, ORDER_PRIORITY_OPTIONS } from '@/lib/priority';
 import ProjectWidgets from '@/components/ProjectWidgets';
 import IntegrationFacts from '@/components/integrationfacts';
+import OrgStructureView from '@/components/orgstructureview';
 import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
@@ -184,7 +185,7 @@ function detailOf(e: any): string {
   return m ? m[1] : s;
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex' | 'readiness';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'org-structure' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex' | 'readiness';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -4806,6 +4807,7 @@ const changeOrderStatus = async (o: any, status: string) => {
     'work-schedules': 'Графики работы',
     'departments': 'Подразделения',
     'organizations': 'Организации',
+    'org-structure': 'Оргструктура',
     'production-calendars': 'Производственные календари',
     'ccm': 'CCM · Портфель',
     'tools': 'Инструменты',
@@ -6553,6 +6555,8 @@ const changeOrderStatus = async (o: any, status: string) => {
           )}
 
 {/* ═══ DIRECTORIES ═══ */}
+          {view === 'org-structure' && <OrgStructureView api={apiF} />}
+
           {view === 'directories' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
               {[

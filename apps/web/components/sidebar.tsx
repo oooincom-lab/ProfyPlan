@@ -10,7 +10,7 @@ type View =
   | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive'
   | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules'
   | 'departments' | 'organizations' | 'production-calendars' | 'ccm'
-  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex' | 'readiness';
+  | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex' | 'readiness' | 'org-structure';
 
 interface SidebarProps {
   view: View;
@@ -82,7 +82,7 @@ export default function Sidebar(props: SidebarProps) {
   const [expandedProjPools, setExpandedProjPools] = useState<Set<string>>(new Set());
 
   // Auto-expand directories section when navigating to a directory view
-  const dirViews = ['directories', 'catalog-operations', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'production-calendars', 'departments', 'organizations'];
+  const dirViews = ['directories', 'catalog-operations', 'nomenclature', 'units', 'counterparties', 'resources', 'work-schedules', 'production-calendars', 'departments', 'organizations', 'org-structure'];
   useEffect(() => {
     if (dirViews.includes(view)) {
       setExpandedDirectories(true);
@@ -268,6 +268,7 @@ export default function Sidebar(props: SidebarProps) {
             <span className="s-fi" onClick={() => navTo('work-schedules')}>🕒 Графики работы</span>
             <span className="s-fi" onClick={() => navTo('departments')}>🏢 Подразделения</span>
             <span className="s-fi" onClick={() => navTo('organizations')}>🏭 Организации</span>
+            <span className="s-fi" onClick={() => navTo('org-structure')}>Оргструктура</span>
             <span className="s-fi" onClick={() => navTo('production-calendars')}>📅 Производственные календари</span>
           </span>
         </button>
