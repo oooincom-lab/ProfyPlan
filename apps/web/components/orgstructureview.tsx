@@ -45,6 +45,25 @@ export default function OrgStructureView({ api }: { api: Api }) {
     } catch (e: any) { setErr(e?.message || String(e)); }
   };
 
+  const addDefaultLevels = async () => {
+    const defaults = [
+      ['company', 'Компания'],
+      ['division', 'Отделение'],
+      ['section', 'Участок'],
+      ['brigade', 'Бригада'],
+      ['department', 'Отдел'],
+    ];
+    try {
+      for (let i = 0; i < defaults.length; i += 1) {
+        await api('/org-levels', {
+          method: 'POST',
+          body: JSON.stringify({ code: defaults[i][0], name: defaults[i][1], sort_order: i, can_be_resource: i > 0 }),
+        });
+      }
+      await load();
+    } catch (e: any) { setErr(e?.message || String(e)); }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
@@ -60,6 +79,14 @@ export default function OrgStructureView({ api }: { api: Api }) {
             <input style={inp} placeholder="Название (цех, бригада, отдел)" value={levelName} onChange={(e) => setLevelName(e.target.value)} />
             <button style={btn} onClick={() => void addLevel()}>+ Уровень</button>
           </div>
+          {levels.length === 0 && (
+            <div style={{ padding: '12px 10px', border: '1px dashed #1E3252', borderRadius: 7, marginBottom: 8, color: '#8FA3BD', fontSize: 12 }}>
+              Пока нет уровней. Названия можно задать любые: цех, участок, бригада, команда, отдел.
+              <button style={{ ...btn, marginLeft: 8, padding: '4px 8px' }} onClick={() => void addDefaultLevels()}>
+                Добавить пример набора
+              </button>
+            </div>
+          )}
           {levels.map((l) => (
             <div key={l.id} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid #16294A', fontSize: 12 }}>
               <span style={{ color: '#93C5FD', minWidth: 110 }}>{l.code}</span>
@@ -78,6 +105,11 @@ export default function OrgStructureView({ api }: { api: Api }) {
             </select>
             <button style={btn} onClick={() => void addEmployee()}>+ Сотрудник</button>
           </div>
+          {employees.length === 0 && (
+            <div style={{ padding: '12px 10px', border: '1px dashed #1E3252', borderRadius: 7, color: '#8FA3BD', fontSize: 12 }}>
+              Сотрудников пока нет. Добавьте ФИО и при необходимости выберите подразделение.
+            </div>
+          )}
           {employees.map((e) => (
             <div key={e.id} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid #16294A', fontSize: 12 }}>
               <span>{e.name}</span>
