@@ -767,3 +767,4 @@
 - **Ресурсный профиль:** подразделение/сотрудник — субъект, Resource — планировочная ёмкость (subject_type, subject_id, capacity_mode, is_bookable); не все подразделения автоматически ресурсы.
 - **Оргуровни:** `OrgLevel` (`code`, `name`, `sort_order`, `can_be_resource`), `department.level_id`, нейтральные `executor_type=employee|org_unit`; названия уровней настраиваются.
 - **Справка:** статья «Оргструктура и ресурсы» — настраиваемые уровни, сотрудники, ресурсные профили и примеры.
+- **Оргструктура (начало):** добавлены `OrgLevel`, `Employee`, `Department.level_id`, `Resource.subject_type/subject_uid/capacity_mode/is_bookable`; миграция `0037_org_structure` применена локально.
