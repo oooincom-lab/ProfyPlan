@@ -125,7 +125,7 @@ async def export_plan_snapshot(
                     "resource_name": r.resource_name,
                     "start": r.start_datetime.isoformat() if r.start_datetime else None,
                     "finish": r.finish_datetime.isoformat() if r.finish_datetime else None,
-                    "duration_hours": float(r.duration_hours) if r.duration_hours is not None else None,
+                    "duration_hours": round(float(r.duration_hours), 3) if r.duration_hours is not None else None,
                     "quantity": float(r.quantity) if r.quantity is not None else None,
                     "unit": r.unit,
                     # Загрузка ресурса на интервале start–finish (единиц ресурса); в v1 операция занимает 1 единицу.

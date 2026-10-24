@@ -24,7 +24,7 @@ class CatalogOperation(BaseModel):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # типовая норма и прежнее поле (оставлено для совместимости)
-    default_duration_hours: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False, default=1)
+    default_duration_hours: Mapped[Decimal] = mapped_column(Numeric(8, 3), nullable=False, default=1)
     norm_typical: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     norm_min: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     norm_max: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)

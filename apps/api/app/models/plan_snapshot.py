@@ -77,7 +77,7 @@ class PlanSnapshotRow(BaseModel):
     start_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
     finish_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
 
-    duration_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
+    duration_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 3), nullable=True)
     quantity: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6), nullable=True)
     unit: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
 

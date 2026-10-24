@@ -32,29 +32,29 @@ class Operation(BaseModel):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     duration_base: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), nullable=False, default=1.0
+        Numeric(10, 3), nullable=False, default=1.0
     )
     duration_unit: Mapped[str] = mapped_column(
         String(10), default="hour"
     )  # sec / min / hour / day
     setup_time: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), default=0
+        Numeric(10, 3), default=0
     )
     teardown_time: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), default=0
+        Numeric(10, 3), default=0
     )
 
     # PERT-поля (для режима PERT)
-    to_optimistic: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
-    tm_likely: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
-    tp_pessimistic: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    to_optimistic: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
+    tm_likely: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
+    tp_pessimistic: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
 
     # Источник оценок (блок 6.17): expert — ввёл человек, fact — из истории, ai — принято от советника
     estimate_source: Mapped[str] = mapped_column(String(20), nullable=False, default="expert", server_default="expert")
 
     # Факт исполнения (блок 6.24): фактическая длительность и дата завершения.
     # Заполняется по завершённым операциям; основа калибровки — сравнение факта с оценкой M.
-    fact_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    fact_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
     fact_finished_on: Mapped[Optional[object]] = mapped_column(Date, nullable=True)
 
     position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

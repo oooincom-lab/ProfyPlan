@@ -411,7 +411,7 @@ async def build_snapshot(
                 "finish_date": ed_dt,
                 "start_datetime": start_dt,
                 "finish_datetime": end_dt,
-                "duration_hours": Decimal(str(round(dur_days * hpd_n, 4))),
+                "duration_hours": Decimal(str(round(dur_days * hpd_n, 3))),
                 "quantity": getattr(op, "output_quantity", None),
                 "unit": None,
                 "is_critical": bool(node.is_critical),
