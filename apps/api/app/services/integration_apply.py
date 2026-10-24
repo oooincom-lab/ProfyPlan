@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.counterparty import Counterparty
 from app.models.department import Department
+from app.models.execution_fact import ExecutionFact
 from app.models.integration import ExchangeInboxItem
 from app.models.nomenclature import Nomenclature
 from app.models.organization import Organization
@@ -609,6 +610,127 @@ async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], 
     return "applied: обновлён проект"
 
 
+async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
+    fact_type = _s(f.get("fact_type") or f.get("type")).lower()
+    if fact_type not in ("production", "order_naryad_close", "receipt", "transfer"):
+        return "skipped: неизвестный тип факта"
+    document_uid = _s(f.get("source_document_uid")) or _s(uid)
+    row_uid = _s(f.get("source_row_uid")) or document_uid
+    if not document_uid:
+        return "skipped: нет UID документа факта"
+
+    order = None
+    order_uid = _s(f.get("order_uid")) or None
+    if order_uid:
+        order = (
+            await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id,
+                    ProductionOrder.ext_uid == order_uid,
+                )
+            )
+        ).scalars().first()
+    project_id = order.project_id if order is not None else None
+    project_uid = _s(f.get("project_uid")) or None
+    if project_id is None and project_uid:
+        project = (
+            await db.execute(
+                select(Project).where(Project.tenant_id == tenant_id, Project.ext_uid == project_uid)
+            )
+        ).scalars().first()
+        project_id = project.id if project is not None else None
+
+    nomenclature_id = None
+    nomenclature_uid = _s(f.get("nomenclature_uid")) or None
+    if nomenclature_uid:
+        nomenclature = (
+            await db.execute(
+                select(Nomenclature).where(
+                    Nomenclature.tenant_id == tenant_id, Nomenclature.ext_uid == nomenclature_uid
+                )
+            )
+        ).scalars().first()
+        nomenclature_id = nomenclature.id if nomenclature is not None else None
+
+    warehouse_from_id = None
+    warehouse_to_id = None
+    for attr, key in [
+        ("warehouse_from_id", "from_warehouse_uid"),
+        ("warehouse_to_id", "to_warehouse_uid"),
+        ("warehouse_from_id", "warehouse_uid"),
+    ]:
+        warehouse_uid = _s(f.get(key)) or None
+        if not warehouse_uid:
+            continue
+        warehouse = (
+            await db.execute(
+                select(Warehouse).where(Warehouse.tenant_id == tenant_id, Warehouse.ext_uid == warehouse_uid)
+            )
+        ).scalars().first()
+        if warehouse is not None:
+            if attr == "warehouse_from_id":
+                warehouse_from_id = warehouse.id
+            else:
+                warehouse_to_id = warehouse.id
+
+    def _decimal(value):
+        try:
+            return Decimal(str(value).replace(",", ".")) if value not in (None, "") else None
+        except Exception:
+            return None
+
+    quantity = _decimal(f.get("quantity"))
+    hours = _decimal(f.get("hours"))
+    fact_date = _parse_date(f.get("date") or f.get("fact_date"))
+    status = _s(f.get("status")) or "posted"
+    revision = str(f.get("version")) if f.get("version") is not None else None
+
+    obj = (
+        await db.execute(
+            select(ExecutionFact).where(
+                ExecutionFact.tenant_id == tenant_id,
+                ExecutionFact.fact_type == fact_type,
+                ExecutionFact.source_document_uid == document_uid,
+                ExecutionFact.source_row_uid == row_uid,
+            )
+        )
+    ).scalars().first()
+
+    changed = obj is None or (
+        obj.status != status
+        or obj.quantity != quantity
+        or obj.hours != hours
+        or obj.fact_date != fact_date
+        or obj.external_revision != revision
+    )
+    if obj is None:
+        obj = ExecutionFact(
+            id=uuid.uuid4(), tenant_id=tenant_id, fact_type=fact_type,
+            source_document_uid=document_uid, source_row_uid=row_uid,
+            source="1c", external_revision=revision,
+        )
+        db.add(obj)
+    obj.project_id = project_id
+    obj.production_order_id = order.id if order is not None else None
+    obj.operation_uid = _s(f.get("operation_uid")) or None
+    obj.stage_uid = _s(f.get("stage_uid")) or None
+    obj.executor_uid = _s(f.get("executor_uid")) or None
+    obj.nomenclature_id = nomenclature_id
+    obj.warehouse_from_id = warehouse_from_id
+    obj.warehouse_to_id = warehouse_to_id
+    obj.quantity = quantity
+    obj.hours = hours
+    obj.fact_date = fact_date
+    obj.status = status
+    if changed and project_id is not None:
+        project = await db.get(Project, project_id)
+        if project is not None:
+            project.fact_revision += 1
+            project.recalc_required = True
+            project.last_fact_at = datetime.now(timezone.utc)
+    return "applied: факт обновлён" if not changed else "applied: факт создан/изменён"
+
+
 async def apply_pending(
     db: AsyncSession, tenant_id: UUID, connection_id: Optional[UUID] = None, limit: int = 500
 ) -> dict:
@@ -643,6 +765,8 @@ async def apply_pending(
                     msg = await _apply_organization(db, tenant_id, item.entity_uid, f)
                 elif et == "warehouse":
                     msg = await _apply_warehouse(db, tenant_id, item.entity_uid, f)
+                elif et in ("fact", "facts"):
+                    msg = await _apply_fact(db, tenant_id, item.entity_uid, f)
                 elif et in ("project", "проект", "проекты"):
                     msg = await _apply_project(db, tenant_id, item.entity_uid, f)
                 elif et in ("order", "заказ", "заказы", "orders", "производственный_заказ"):

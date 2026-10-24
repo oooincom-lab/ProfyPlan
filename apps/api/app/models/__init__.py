@@ -22,6 +22,7 @@ from app.models.schedule_assignment import ScheduleAssignment
 from app.models.calendar_exception import CalendarException
 from app.models.organization import Organization  # noqa: F401
 from app.models.warehouse import Warehouse  # noqa: F401
+from app.models.execution_fact import ExecutionFact  # noqa: F401
 from app.models.work_schedule import WorkSchedule, WorkScheduleSlot  # noqa: F401
 from app.models.resource_event import ResourceEvent  # noqa: F401
 from app.models.resource_department_quota import ResourceDepartmentQuota  # noqa: F401

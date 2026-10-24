@@ -86,6 +86,11 @@ class Project(BaseModel):
         Boolean, nullable=False, default=True, server_default="true"
     )  # использовать ли общие (shared) ресурсы каталога
 
+    fact_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    plan_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    calculated_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    recalc_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    last_fact_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("work_schedules.id", ondelete="SET NULL"), nullable=True
     )  # график проекта (каскад календарей, уровень 3)
