@@ -26,6 +26,7 @@ from app.models.counterparty import Counterparty
 from app.models.department import Department
 from app.models.integration import ExchangeInboxItem
 from app.models.nomenclature import Nomenclature
+from app.models.organization import Organization
 from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.resource import Resource
@@ -49,9 +50,6 @@ PRIORITY_MAP = {
     "обычный": "normal", "средний": "normal", "normal": "normal",
     "высокий": "high", "high": "high",
     "критический": "critical", "critical": "critical",
-    # 1С:УНФ может передавать числовой приоритет 1–5.
-    # Шкалу подтверждает 1С AI; пока 1 — низкий, 5 — критический.
-    "1": "low", "2": "normal", "3": "normal", "4": "high", "5": "critical",
 }
 
 
@@ -216,6 +214,58 @@ async def _apply_department(db: AsyncSession, tenant_id: UUID, uid: Optional[str
     return "applied: создано"
 
 
+async def _apply_organization(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
+    name = _s(f.get("name"))
+    if not name:
+        return "skipped: пустое наименование организации"
+    uid_s = _s(uid) or None
+    ext = _s(f.get("external_code")) or _s(f.get("ext_id")) or _s(f.get("code")) or None
+    inn = _s(f.get("inn")) or None
+    obj = None
+    if uid_s:
+        obj = (
+            await db.execute(
+                select(Organization).where(Organization.tenant_id == tenant_id, Organization.ext_uid == uid_s)
+            )
+        ).scalars().first()
+    if obj is None and ext:
+        obj = (
+            await db.execute(
+                select(Organization).where(Organization.tenant_id == tenant_id, Organization.ext_id == ext)
+            )
+        ).scalars().first()
+    if obj is None and inn:
+        obj = (
+            await db.execute(
+                select(Organization).where(Organization.tenant_id == tenant_id, Organization.inn == inn)
+            )
+        ).scalars().first()
+    if obj is None:
+        obj = (
+            await db.execute(
+                select(Organization).where(Organization.tenant_id == tenant_id, Organization.name == name)
+            )
+        ).scalars().first()
+    if obj is not None:
+        _apply_sync_name(obj, name, f.get("version"))
+        if ext and not obj.ext_id:
+            obj.ext_id = ext
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
+        if inn:
+            obj.inn = inn
+        return "applied: обновлено"
+    db.add(Organization(
+        id=uuid.uuid4(), tenant_id=tenant_id, name=name, inn=inn,
+        kpp=_s(f.get("kpp")) or None, ogrn=_s(f.get("ogrn")) or None,
+        ext_id=ext, ext_uid=uid_s,
+        source="1c", external_name=name, external_name_ack=name,
+        name_overridden=False,
+        external_revision=str(f.get("version")) if f.get("version") is not None else None,
+    ))
+    return "applied: создано"
+
+
 async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     name = _s(f.get("name"))
     if not name:
@@ -316,6 +366,31 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
     if proj is not None:
         project_id = proj.id
 
+    organization_id = None
+    org_uid = _s(f.get("organization_uid")) or None
+    if org_uid:
+        organization = (
+            await db.execute(
+                select(Organization).where(Organization.tenant_id == tenant_id, Organization.ext_uid == org_uid)
+            )
+        ).scalars().first()
+        if organization is not None:
+            organization_id = organization.id
+
+    parent_order_id = None
+    parent_uid = _s(f.get("parent_uid")) or None
+    if parent_uid:
+        parent = (
+            await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id,
+                    ProductionOrder.ext_uid == parent_uid,
+                )
+            )
+        ).scalars().first()
+        if parent is not None:
+            parent_order_id = parent.id
+
     obj = None
     uid_s = _s(uid) or None
     # Правило Дополнения №1: UID — главный ключ, номер — резервный.
@@ -342,6 +417,8 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,
                 project_id=project_id,
+                organization_id=organization_id,
+                parent_order_id=parent_order_id,
                 ext_id=ext,
                 ext_uid=(_s(uid) or None),
                 specification_name=spec,
@@ -381,6 +458,10 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
             obj.client = client
         if project_id and obj.project_id is None:
             obj.project_id = project_id
+        if organization_id and obj.organization_id is None:
+            obj.organization_id = organization_id
+        if parent_order_id and obj.parent_order_id is None:
+            obj.parent_order_id = parent_order_id
         return "applied: обновлён черновик"
 
     return "skipped: заказ уже есть (не черновик) — оставлен без изменений"
@@ -444,6 +525,8 @@ async def apply_pending(
                     msg = await _apply_department(db, tenant_id, item.entity_uid, f)
                 elif et in ("resource", "ресурс", "ресурсы"):
                     msg = await _apply_resource(db, tenant_id, item.entity_uid, f)
+                elif et == "organization":
+                    msg = await _apply_organization(db, tenant_id, item.entity_uid, f)
                 elif et in ("project", "проект", "проекты"):
                     msg = await _apply_project(db, tenant_id, item.entity_uid, f)
                 elif et in ("order", "заказ", "заказы", "orders", "производственный_заказ"):

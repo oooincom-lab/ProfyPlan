@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 52. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 53. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1783,6 +1783,34 @@
   <div class="task">
     <div class="task-title">ТЗ для 1С AI:</div>
     <div class="task-detail"><code>docs/1c-tz-1.4.md</code>.</div>
+    
+  </div>
+</div>
+<h2>Уточнения 1С AI от 24.10.2026</h2>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title"><code>priority</code> — строковое перечисление <code>Низкий / Обычный / Высокий / Критический</code>, </div>
+    
+    
+  </div>
+  <div class="task">
+    <div class="task-title"><code>organization_uid</code> обязателен в каждом заказе; добавлена связь `ProductionOrder.</div>
+    
+    
+  </div>
+  <div class="task">
+    <div class="task-title"><code>project_uid</code> стабилен при переименовании; поиск проекта идёт по UID.</div>
+    
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Дерево заказов строится через «Основание»: <code>parent_uid</code> заполняется из `ЗаказНаП</div>
+    
+    
+  </div>
+  <div class="task">
+    <div class="task-title"><code>bom</code>/<code>routes</code> — последними; строгую блокировку структуры включать после них.</div>
+    
     
   </div>
 </div>

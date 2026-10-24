@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 89. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 90. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — План тестирования</p>
 <div class="note">Живой чеклист. Ведём рядом с планом реализации: план отвечает «что строим», этот файл — «как убеждаемся, что работает».<br>Обновляем после каждого изменения/деплоя.</div>
@@ -954,6 +954,11 @@
 <div class="tablewrap"><table>
   <thead><tr><th>ID</th><th>Проверка</th><th>Ожидаемый результат</th><th>Статус</th></tr></thead>
   <tbody><tr><td>LIM-1</td><td>Имя из 1С изменилось, локальное не переопределено</td><td><code>name</code> и <code>ack</code> обновляются автоматически</td><td>⏳</td></tr><tr><td>LIM-2</td><td>Имя из 1С изменилось, локальное переопределено</td><td>Запись в «Изменения из 1С»; отказ подавляет повтор до следующего изменения</td><td>⏳</td></tr><tr><td>LIM-3</td><td>Импорт факта производства</td><td>Факт обновлён по UID; проект помечен «нужен пересчёт»</td><td>⏳</td></tr><tr><td>LIM-4</td><td>Строгий режим</td><td>API отклоняет изменение импортированного проекта/заказа с <code>SYNC_LOCKED</code></td><td>⏳</td></tr><tr><td>LIM-5</td><td>Локальный проект/заказ</td><td>Остаётся редактируемым и не выгружается в 1С</td><td>⏳</td></tr><tr><td>LIM-6</td><td>Неизвестный <code>order_type</code></td><td>Пакет не создаёт ложный производственный заказ; ошибка в журнале</td><td>⏳</td></tr></tbody>
+</table></div>
+<h2>Уточнения 1С AI: проверки</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>ID</th><th>Проверка</th><th>Ожидаемый результат</th><th>Статус</th></tr></thead>
+  <tbody><tr><td>LIM-7</td><td>Приоритет строкой</td><td><code>Низкий/Обычный/Высокий/Критический</code> маппятся в low/normal/high/critical</td><td>⏳</td></tr><tr><td>LIM-8</td><td>Организация из 1С</td><td>Заказ получает <code>organization_id</code> по <code>organization_uid</code></td><td>⏳</td></tr><tr><td>LIM-9</td><td>Дерево через Основание</td><td><code>parent_uid</code> заполняет <code>parent_order_id</code>; при отсутствии — null</td><td>⏳</td></tr><tr><td>LIM-10</td><td>Неверный order_type</td><td>Заказ не создаётся, ошибка в журнале</td><td>⏳</td></tr></tbody>
 </table></div>
 <footer>
   Файл собран автоматически — правьте текстовый план и запускайте <code>node scripts/render_plan.mjs</code>.

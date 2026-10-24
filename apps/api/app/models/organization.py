@@ -16,6 +16,8 @@ class Organization(BaseModel):
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="profyplan", server_default="profyplan")
     external_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     external_name_ack: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -28,6 +28,11 @@ class ProductionOrder(BaseModel):
         nullable=True,
         index=True,
     )
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     ext_id: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, index=True
     )  # внешний ID из ERP (напр. "ЗНП-001")
