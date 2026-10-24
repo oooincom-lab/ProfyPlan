@@ -18,6 +18,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.product_structure import ProductStructure
 from app.models.production_order import ProductionOrder
+from app.services.edit_policy import require_project_editable
 from app.models.nomenclature import Nomenclature
 from app.models.project import Project
 from app.routers.production_orders import _build_bom_link_graph, _order_to_out
@@ -72,6 +73,7 @@ async def create_bom_node(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await require_project_editable(db, tenant_id, project_id)
     """Добавить узел в BOM-дерево."""
     # Вычисляем level и path
     level = 0
@@ -130,6 +132,7 @@ async def update_bom_node(
     )).scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Узел не найден")
+    await require_project_editable(db, tenant_id, node.project_id)
 
     if body.routing_id is not None:
         node.routing_id = UUID(body.routing_id) if body.routing_id else None
@@ -184,6 +187,7 @@ async def delete_bom_node(
     )).scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Узел не найден")
+    await require_project_editable(db, tenant_id, node.project_id)
 
     # Рекурсивно удаляем потомков
     async def delete_children(parent_id: str):
@@ -223,6 +227,7 @@ async def upload_bom_json(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await require_project_editable(db, tenant_id, project_id)
     """
     Загрузить BOM из JSON-файла.
 
