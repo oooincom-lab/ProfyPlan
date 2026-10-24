@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProfyPlan ↔ 1С — решения по синхронизации</title>
+<style>
+  :root{--bg:#081221;--panel:#0d1f3a;--border:#1e3252;--fg:#e8eef5;--muted:#8fa3bd;--blue:#38bdf8;--green:#4ade80;--amber:#fbbf24;--red:#f87171}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,Segoe UI,Arial,sans-serif;line-height:1.55}
+  main{max-width:1050px;margin:0 auto;padding:40px 24px 60px}header{border-bottom:1px solid var(--border);padding-bottom:22px;margin-bottom:26px}
+  .kicker{color:var(--blue);font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+  h1{font-size:32px;line-height:1.15;margin:8px 0 8px}h2{font-size:20px;margin:30px 0 10px}p{color:var(--muted);margin:8px 0 14px}
+  .badge{display:inline-block;border:1px solid rgba(56,189,248,.4);color:var(--blue);background:rgba(56,189,248,.08);border-radius:999px;padding:3px 10px;font-size:11px;margin:2px 4px 2px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px 16px}.card h3{margin:0 0 7px;font-size:15px;color:#d9e6f4}.card p{margin:0;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:13px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}td{color:#dce7f2}
+  .ok{color:var(--green)}.warn{color:var(--amber)}.muted{color:var(--muted)}
+  .callout{border:1px solid rgba(56,189,248,.35);background:rgba(56,189,248,.06);border-radius:10px;padding:13px 15px;margin:16px 0;color:#bae6fd;font-size:13px}
+  .callout.amber{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.07);color:#f6d88b}
+  code{font-family:'IBM Plex Mono',Consolas,monospace;color:#bae6fd;background:rgba(56,189,248,.08);padding:1px 5px;border-radius:4px;font-size:12px}
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:12px}
+  @media(max-width:700px){h1{font-size:27px}main{padding:26px 15px 44px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="kicker">ProfyPlan · решения 24.10.2026</div>
+  <h1>Имена и совместное планирование</h1>
+  <p>Зафиксированы правила переименований и границы двустороннего режима: 1С отвечает за учётные документы, ProfyPlan — за планировочные поля.</p>
+  <span class="badge">1С — ведущая</span><span class="badge">Совместное планирование</span><span class="badge">production не обновлён</span>
+</header>
+
+<section>
+<h2>1. Имена</h2>
+<div class="grid">
+  <div class="card"><h3>name</h3><p>Рабочее имя в ProfyPlan. Редактируется пользователем.</p></div>
+  <div class="card"><h3>external_name</h3><p>Текущее имя в 1С. Только для чтения, обновляется импортом.</p></div>
+  <div class="card"><h3>external_name_ack</h3><p>Имя из 1С, которое пользователь уже принял или отклонил.</p></div>
+  <div class="card"><h3>name_overridden</h3><p>Пользователь закрепил локальное имя.</p></div>
+</div>
+<table>
+  <thead><tr><th>Событие</th><th>Поведение</th></tr></thead>
+  <tbody>
+    <tr><td>Новая сущность из 1С</td><td><code>name = external_name</code>, <code>ack = external_name</code>, <code>overridden = false</code></td></tr>
+    <tr><td>Имя в 1С изменилось, локальное не переопределено</td><td>Автоматически обновляются <code>name</code> и <code>ack</code></td></tr>
+    <tr><td>Имя в 1С изменилось, локальное переопределено</td><td>Появляется запись в «Изменения из 1С»</td></tr>
+    <tr><td>«Принять имя из 1С»</td><td><code>name = external_name</code>, <code>ack = external_name</code>, <code>overridden = false</code></td></tr>
+    <tr><td>«Оставить локальное»</td><td><code>name</code> не меняется, <code>ack = external_name</code>, <code>overridden = true</code>; повторно не показываем</td></tr>
+    <tr><td>Следующее изменение в 1С</td><td><code>external_name</code> снова расходится с <code>ack</code> — новая запись</td></tr>
+  </tbody>
+</table>
+<div class="callout">Пользователь видит список «Интеграция → Изменения из 1С» со счётчиком и двумя действиями: «Принять имя из 1С» / «Оставить локальное». В карточке — редактируемое имя и read-only имя 1С.</div>
+</section>
+
+<section>
+<h2>2. Режим «Совместное планирование»</h2>
+<div class="grid">
+  <div class="card"><h3>1С — ведущая система</h3><p>Справочники, заказы и факты идут из 1С. ProfyPlan возвращает только зафиксированный план.</p></div>
+  <div class="card"><h3>Совместное планирование</h3><p>1С остаётся владельцем учётных документов, а ProfyPlan может менять разрешённые планировочные поля.</p></div>
+</div>
+<div class="callout amber"><b>Главное правило:</b> 1С отвечает за то, что это за документ и что фактически произошло. ProfyPlan отвечает за то, как это спланировать. Бухгалтерские документы из ProfyPlan не создаются.</div>
+<h3>Что куда идёт</h3>
+<table>
+  <thead><tr><th>Данные</th><th>Направление</th><th>Владелец</th></tr></thead>
+  <tbody>
+    <tr><td>Организации, склады, номенклатура, контрагенты, ресурсы</td><td>1С → ProfyPlan</td><td>1С</td></tr>
+    <tr><td>Проекты и дерево проектов</td><td>1С → ProfyPlan</td><td>1С</td></tr>
+    <tr><td>Заказы на производство и дерево заказов</td><td>1С → ProfyPlan</td><td>1С</td></tr>
+    <tr><td>Состав, операции и этапы</td><td>по отдельному ТЗ</td><td>по согласованию</td></tr>
+    <tr><td>Заказ-наряд, заказ поставщику, заказ на перемещение</td><td>1С → ProfyPlan; планировочные поля — по правилам</td><td>1С / совместно</td></tr>
+    <tr><td>Факты производства, наряда, прихода, перемещения</td><td>1С → ProfyPlan</td><td>1С</td></tr>
+    <tr><td>Проект, даты, приоритет, назначения ресурсов</td><td>ProfyPlan → 1С в совместном режиме</td><td>совместно</td></tr>
+    <tr><td>Зафиксированный план</td><td>ProfyPlan → 1С</td><td>ProfyPlan</td></tr>
+    <tr><td>Номера, даты, проведение, суммы, налоги, движения</td><td>только 1С</td><td>1С</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+<h2>3. Примеры</h2>
+<table>
+  <thead><tr><th>Ситуация</th><th>1С — ведущая</th><th>Совместное планирование</th></tr></thead>
+  <tbody>
+    <tr><td>Сменили проект у импортированного заказа</td><td>Меняется только ProfyPlan</td><td>Уходит в 1С; если документ проведён — конфликт/запрет</td></tr>
+    <tr><td>Добавили операцию</td><td>Операция локальная</td><td>Операция локальная; в 1С уходят ресурс/время плана</td></tr>
+    <tr><td>Создали заказ в ProfyPlan</td><td>В 1С не уходит</td><td>Можно включить создание черновика в 1С; по умолчанию выключено</td></tr>
+    <tr><td>Изменился факт производства</td><td>1С → ProfyPlan, проект помечается «пересчитать»</td><td>То же; факты остаются read-only</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+<h2>4. Конфликты и что не мигрирует</h2>
+<div class="grid">
+  <div class="card"><h3>Конфликт</h3><p>Если обе стороны изменили одно поле — запись в «Конфликты обмена» с выбором стороны. Молча не перезаписываем.</p></div>
+  <div class="card"><h3>Проведённые документы</h3><p>1С не принимает изменения из ProfyPlan автоматически. Сначала документ должен быть доступен для изменения.</p></div>
+  <div class="card"><h3>Не мигрирует</h3><p>Проводки, налоги, оплаты, остатки, номера, даты, проведение и полные копии документов.</p></div>
+  <div class="card"><h3>Идемпотентность</h3><p>Пакеты и операции обмена имеют UID; повторный пакет не создаёт дубль.</p></div>
+</div>
+</section>
+
+<section>
+<h2>5. Настройки</h2>
+<p>В подключении — один переключатель режима. В свёрнутом блоке «Дополнительно»: создание черновиков заказов в 1С, приём/передача имён, список типов сущностей и политика конфликтов.</p>
+<table>
+  <thead><tr><th>Настройка</th><th>По умолчанию</th></tr></thead>
+  <tbody>
+    <tr><td>Режим обмена</td><td>1С — ведущая система</td></tr>
+    <tr><td>Создавать черновик заказа в 1С</td><td>выключено</td></tr>
+    <tr><td>Принимать переименования из 1С</td><td>включено</td></tr>
+    <tr><td>Передавать переименования в 1С</td><td>выключено</td></tr>
+  </tbody>
+</table>
+</section>
+
+<footer>ProfyPlan · решения по синхронизации 1С ↔ ProfyPlan · 24.10.2026 · production не обновлён</footer>
+</main>
+</body>
+</html>
