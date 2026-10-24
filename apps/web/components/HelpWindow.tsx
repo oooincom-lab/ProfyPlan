@@ -290,6 +290,18 @@ export default function HelpContent({
             </Section>
           ) : null}
 
+          {article.examples?.length ? (
+            <Section title="Примеры">
+              <ul style={{ margin: 0, paddingLeft: 18, ...bodyText, color: 'var(--fg-2)' }}>
+                {article.examples.map((s, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <RichText text={s} onSelect={go} />
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : null}
+
           {article.limits?.length ? (
             <Section title="Ограничения">
               <ul style={{ margin: 0, paddingLeft: 18, ...bodyText, color: 'var(--fg-3)' }}>
