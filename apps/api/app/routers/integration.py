@@ -28,6 +28,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id, get_current_user, get_integration_tenant_id
 from app.models.integration import ExchangeInboxItem, ExchangeLease, ExchangeLogEntry, IntegrationConnection
+from app.models.execution_fact import ExecutionFact
 from app.models.tenant import User, Tenant
 from app.core.security import create_agent_token
 from app.services.integration_exchange import (
@@ -198,6 +199,46 @@ async def name_changes(
 ):
     items = await list_name_changes(db, tenant_id)
     return {"items": items, "count": len(items)}
+
+
+FACT_LABELS = {
+    "production": "Производство",
+    "order_naryad_close": "Закрытие наряда",
+    "receipt": "Приход",
+    "transfer": "Перемещение",
+}
+
+
+@router.get("/projects/{project_id}/facts")
+async def project_facts(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    rows = (await db.execute(
+        select(ExecutionFact).where(
+            ExecutionFact.tenant_id == tenant_id,
+            ExecutionFact.project_id == project_id,
+        ).order_by(ExecutionFact.fact_date.desc().nullslast(), ExecutionFact.created_at.desc()).limit(200)
+    )).scalars().all()
+    return {
+        "items": [
+            {
+                "id": str(row.id),
+                "fact_type": row.fact_type,
+                "fact_label": FACT_LABELS.get(row.fact_type, row.fact_type),
+                "quantity": float(row.quantity) if row.quantity is not None else None,
+                "hours": float(row.hours) if row.hours is not None else None,
+                "fact_date": row.fact_date.isoformat() if row.fact_date else None,
+                "status": row.status,
+                "operation_uid": row.operation_uid,
+                "source_document_uid": row.source_document_uid,
+                "updated_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ],
+        "count": len(rows),
+    }
 
 
 @router.get("/edit-policy")

@@ -49,6 +49,7 @@ import ReferenceField from '@/components/ReferenceField';
 import PlanningSettingsPanel from '@/components/PlanningSettingsPanel';
 import { priorityLabel, priorityBadgeClass, ORDER_PRIORITY_OPTIONS } from '@/lib/priority';
 import ProjectWidgets from '@/components/ProjectWidgets';
+import IntegrationFacts from '@/components/integrationfacts';
 import PortfolioWidgets from '@/components/PortfolioWidgets';
 import ResourceDashboard from '@/components/ResourceDashboard';
 import ReportsPanel from '@/components/ReportsPanel';
@@ -5084,6 +5085,7 @@ const changeOrderStatus = async (o: any, status: string) => {
               </div>
 
               <ProjectWidgets projectId={selectedProject?.id || null} />
+              <IntegrationFacts projectId={selectedProject?.id || null} api={apiF} />
 
               {projGroups.length > 0 && projGroups.map((g: any) => {
                 const gOrds = grpOrders(g.id);
