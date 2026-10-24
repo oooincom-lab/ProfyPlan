@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 50. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 51. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1721,6 +1721,29 @@
 <div class="tasks">
   <div class="task">
     <div class="task-title">[ ] <b>Коммерческий Code Signing сертификат</b> — купить/зарегистрировать, подписат</div>
+    
+    
+  </div>
+</div>
+<h2>После пилота: документы 1С (отложено)</h2>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">«Событие: Запись»</div>
+    <div class="task-detail">— импортировать как <code>ResourceBooking</code> (запись/бронь ресурса), не как <code>ResourceEvent</code>; включать в расчёт только настройкой. Требуется подтвердить поля 1С.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">«Задание на работу»</div>
+    <div class="task-detail">— отдельная <code>WorkTask</code>, не <code>Operation</code>; импортировать только при влиянии на загрузку ресурсов.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">«Учёт времени»</div>
+    <div class="task-detail">— компактный <code>WorkTimeFact</code>, обновление по UID; факт не копирует документ.</div>
+    
+  </div>
+  <div class="task">
+    <div class="task-title">Возврат к теме — после завершения пилота и стабилизации ограниченного режима.</div>
     
     
   </div>
