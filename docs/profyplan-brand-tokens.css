@@ -1,0 +1,23 @@
+:root {
+  /* ProfyPlan brand tokens — source: profyplan.ru landing, 24.10.2026 */
+  --pp-bg: #0A1628;
+  --pp-bg-2: #0F1E36;
+  --pp-bg-3: #162844;
+  --pp-fg: #E8EEF5;
+  --pp-fg-2: #B0C4DE;
+  --pp-fg-3: #8FA3BD;
+  --pp-fg-4: #5A7090;
+  --pp-border: #1E3252;
+  --pp-accent: #3B82F6;
+  --pp-accent-deep: #2563EB;
+  --pp-accent-light: #60A5FA;
+  --pp-accent-pale: #93C5FD;
+  --pp-success: #10B981;
+  --pp-warning: #F59E0B;
+  --pp-danger: #F87171;
+  --pp-radius-card: 12px;
+  --pp-radius-button: 7px;
+  --pp-font-ui: Inter, "Segoe UI", Arial, sans-serif;
+  --pp-font-mono: "IBM Plex Mono", Consolas, monospace;
+  --pp-grid: 60px;
+}
