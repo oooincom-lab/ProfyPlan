@@ -43,6 +43,21 @@ from app.services.bom_explosion import (
 bom_router = APIRouter(prefix="/v1/bom", tags=["BOM"])
 
 
+async def _guard_routing(db: AsyncSession, tenant_id: UUID, routing_id: UUID) -> None:
+    routing = await db.get(Routing, routing_id)
+    if routing is None or not routing.product_node_id:
+        return
+    node = await db.get(ProductStructure, routing.product_node_id)
+    if node is not None:
+        await require_project_editable(db, tenant_id, node.project_id)
+
+
+async def _guard_routing_operation(db: AsyncSession, tenant_id: UUID, operation_id: UUID) -> None:
+    op = await db.get(RoutingOperation, operation_id)
+    if op is not None:
+        await _guard_routing(db, tenant_id, op.routing_id)
+
+
 # ── ProductStructure CRUD ──
 
 @bom_router.get("/projects/{project_id}/tree", response_model=BOMTreeOut)
@@ -358,6 +373,10 @@ async def create_routing(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    if body.product_node_id:
+        node = await db.get(ProductStructure, UUID(body.product_node_id))
+        if node is not None:
+            await require_project_editable(db, tenant_id, node.project_id)
     """Создать техмаршрут с операциями."""
     total_setup = Decimal("0")
     routing = Routing(
@@ -513,6 +532,7 @@ async def update_routing_operation(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await _guard_routing_operation(db, tenant_id, operation_id)
     """Обновить операцию маршрута (ресурс, длительность и т.д.). Тенант-скоп через маршрут."""
     op = (await db.execute(
         select(RoutingOperation)
@@ -541,6 +561,7 @@ async def add_routing_operation(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await _guard_routing(db, tenant_id, body.routing_id)
     """Добавить операцию в маршрут. Тенант-скоп через маршрут."""
     routing = (await db.execute(
         select(Routing).where(Routing.id == body.routing_id, Routing.tenant_id == tenant_id)
@@ -622,6 +643,7 @@ async def delete_routing_operation(
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
+    await _guard_routing_operation(db, tenant_id, operation_id)
     """Удалить операцию маршрута. Тенант-скоп через маршрут."""
     op = (await db.execute(
         select(RoutingOperation)
