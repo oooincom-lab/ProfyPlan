@@ -60,6 +60,14 @@ class Resource(BaseModel):
         String(20), nullable=False, default="shared", server_default="shared"
     )  # 'project' (эксклюзивно под проект) | 'shared' (межпроектный пул)
 
+    subject_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    subject_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    capacity_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="individual", server_default="individual"
+    )
+    is_bookable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
     )  # принадлежность подразделению (каскад календарей, уровень 2)

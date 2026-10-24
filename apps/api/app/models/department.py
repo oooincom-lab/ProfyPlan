@@ -33,4 +33,7 @@ class Department(BaseModel):
     parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
     )  # родительское подразделение (иерархия: цех → участок → бригада)
+    level_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("org_levels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
