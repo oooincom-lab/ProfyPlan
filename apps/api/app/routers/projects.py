@@ -270,6 +270,8 @@ async def update_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     update_data = body.model_dump(exclude_unset=True)
+    if "name" in update_data and update_data["name"] != project.name:
+        project.name_overridden = True
     for key, value in update_data.items():
         setattr(project, key, value)
 

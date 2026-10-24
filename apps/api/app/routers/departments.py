@@ -90,7 +90,10 @@ async def update_item(
     if not item:
         raise HTTPException(404, "Подразделение не найдено")
     await _validate_parent(db, tenant_id, body.parent_id, self_id=item.id)
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] != item.name:
+        item.name_overridden = True
+    for k, v in data.items():
         setattr(item, k, v)
     await db.commit()
     await db.refresh(item)

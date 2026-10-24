@@ -41,7 +41,10 @@ async def update_item(item_id: str, body: OrganizationUpdate, tenant_id: str = D
     item = (await db.execute(select(Organization).where(Organization.id == item_id, Organization.tenant_id == tenant_id))).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Организация не найдена")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] != item.name:
+        item.name_overridden = True
+    for k, v in data.items():
         setattr(item, k, v)
     await db.commit()
     await db.refresh(item)

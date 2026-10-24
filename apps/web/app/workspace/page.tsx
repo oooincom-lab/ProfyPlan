@@ -5002,6 +5002,15 @@ const changeOrderStatus = async (o: any, status: string) => {
               {projects.filter((p: any) => p.status !== 'archived').map((p: any, pi: number) => (
                 <div key={p.id} className="proj-card" data-module="dash:card:project">{debugMode && <DebugBadge debug={debugMode} corner text={`[dash:card:project #${pi + 1}]`} />}
                   <div className="pc-name">📁 {p.name}</div>
+                  {p.recalc_required && (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); loadProjectDashboard(p); }}
+                      title="В 1С появились новые или изменённые факты. Откройте проект и пересчитайте план."
+                      style={{ marginTop: 4, fontSize: 11.5, color: '#FBBF24', cursor: 'pointer' }}
+                    >
+                      ⚠ Есть изменения из 1С — нужен пересчёт
+                    </div>
+                  )}
                   {p.start_issue === 'missing' && (
                     <div
                       onClick={(e) => { e.stopPropagation(); setSelectedProject(p); setSettingsCalc(false); setView('settings'); }}

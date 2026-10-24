@@ -112,6 +112,8 @@ async def update_resource(
         raise HTTPException(status_code=404, detail="Resource not found")
 
     data = body.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] != resource.name:
+        resource.name_overridden = True
     if "schedule_id" in data:
         data["schedule_id"] = UUID(data["schedule_id"]) if data["schedule_id"] else None
     for key, value in data.items():
@@ -141,5 +143,4 @@ async def delete_resource(
         raise HTTPException(status_code=404, detail="Resource not found")
     await db.delete(resource)
     await db.commit()
-
 

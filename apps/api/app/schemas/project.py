@@ -81,6 +81,13 @@ class ProjectOut(BaseModel):
     country_code: str
     schedule_id: Optional[UUID] = None
     use_shared_resources: Optional[bool] = None
+    source: Optional[str] = None
+    external_name: Optional[str] = None
+    fact_revision: int = 0
+    plan_revision: int = 0
+    calculated_revision: int = 0
+    recalc_required: bool = False
+    last_fact_at: Optional[datetime] = None
     start_date: Optional[datetime] = None
     priority: Optional[str] = None
     due_date: Optional[datetime] = None

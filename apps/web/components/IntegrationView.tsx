@@ -33,6 +33,7 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
   const [busy, setBusy] = useState(false);
   const [resp, setResp] = useState<string>('');
   const [cloud, setCloud] = useState<any>(null);
+  const [nameChanges, setNameChanges] = useState<any[]>([]);
   const [selLogId, setSelLogId] = useState<string | null>(null);
   const [connClicked, setConnClicked] = useState<string | null>(null);
   const say = (m: string) => { setResp(m); notify(m); };
@@ -57,6 +58,9 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
   const loadProjects = async () => {
     try { const r = await api('/projects'); setProjects(r.items || []); } catch { /* тихо */ }
   };
+  const loadNameChanges = async () => {
+    try { const r = await api('/integration/name-changes'); setNameChanges(r.items || []); } catch { /* тихо */ }
+  };
   const loadCloud = async (cid?: string | null) => {
     const conn = conns.find((x) => x.id === cid);
     if (!cid || !conn || conn.transport !== 'cloud') { setCloud(null); return; }
@@ -64,7 +68,7 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
     catch { setCloud(null); }
   };
 
-  useEffect(() => { void loadConns(); void loadProjects(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { void loadConns(); void loadProjects(); void loadNameChanges(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { void loadLog(selId); void loadInbox(selId); /* eslint-disable-next-line */ }, [selId]);
   useEffect(() => { void loadCloud(selId); /* eslint-disable-next-line */ }, [selId, conns]);
   /* eslint-disable-next-line */
@@ -201,6 +205,15 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
       window.location.assign(r.authorize_url);
     } catch (e: any) { say('OAuth: ' + (e?.message || e)); setBusy(false); }
   };
+  const decideName = async (item: any, accept: boolean) => {
+    setBusy(true);
+    try {
+      await api('/integration/name-changes/' + item.entity_type + '/' + item.id + '/' + (accept ? 'accept' : 'keep'), { method: 'POST' });
+      say(accept ? 'Имя принято из 1С' : 'Оставлено локальное имя');
+      void loadNameChanges();
+    } catch (e: any) { say('Имя: ' + (e?.message || e)); }
+    setBusy(false);
+  };
 
   return (
     <div style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
@@ -208,6 +221,31 @@ export default function IntegrationView({ api, notify, openXlog, openXconn, open
         <span style={{ fontSize: 16, fontWeight: 700, color: '#E8EEF5' }}>🔌 Интеграция с внешними системами</span>
         <span style={{ fontSize: 12, color: '#5A7090' }}>1С:УНФ · 1С:КА · 1С:ERP — файловый обмен, прямое подключение, OData</span>
       </div>
+
+      {nameChanges.length > 0 && (
+        <div style={{ ...card, marginBottom: 12, borderColor: 'rgba(245,158,11,.35)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 7 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#FBBF24' }}>Изменения из 1С</span>
+            <span style={{ fontSize: 11, color: '#5A7090' }}>наименования, которые изменились после вашего переименования</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#FBBF24' }}>{nameChanges.length}</span>
+          </div>
+          <div style={{ display: 'grid', gap: 5 }}>
+            {nameChanges.slice(0, 8).map((n) => (
+              <div key={n.entity_type + n.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 8px', background: '#0A1628', border: '1px solid #1E3252', borderRadius: 7 }}>
+                <span style={{ fontSize: 11, color: '#8FA3BD', minWidth: 100 }}>{n.entity_label}</span>
+                <span style={{ fontSize: 12, color: '#E8EEF5' }}>{n.name}</span>
+                <span style={{ fontSize: 11, color: '#5A7090' }}>→</span>
+                <span style={{ fontSize: 12, color: '#93C5FD' }}>{n.external_name}</span>
+                <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                  <button style={{ ...btn('primary'), padding: '3px 8px', fontSize: 11 }} disabled={busy} onClick={() => void decideName(n, true)}>Принять имя из 1С</button>
+                  <button style={{ ...btn(), padding: '3px 8px', fontSize: 11 }} disabled={busy} onClick={() => void decideName(n, false)}>Оставить локальное</button>
+                </span>
+              </div>
+            ))}
+          </div>
+          {nameChanges.length > 8 && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 5 }}>Показаны первые 8 из {nameChanges.length}.</div>}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 12 }}>
         <div>

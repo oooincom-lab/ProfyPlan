@@ -113,7 +113,10 @@ async def update_item(
     item = res.scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Not found")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] != item.name:
+        item.name_overridden = True
+    for k, v in data.items():
         setattr(item, k, v)
     await db.commit()
     await db.refresh(item)

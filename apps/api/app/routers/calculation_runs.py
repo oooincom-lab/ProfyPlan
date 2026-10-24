@@ -219,6 +219,9 @@ async def perform_project_run(
         created_by=author_id,
     )
     db.add(run)
+    # После успешного расчёта факты, попавшие в него, считаются учтёнными.
+    project.calculated_revision = project.fact_revision
+    project.recalc_required = False
     await db.commit()
     await db.refresh(run)
     return run

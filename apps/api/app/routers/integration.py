@@ -47,6 +47,7 @@ from app.services.cloud_oauth import (
     oauth_configured,
     save_oauth_tokens,
 )
+from app.services.name_changes import decide_name_change, list_name_changes
 from app.services.integration_apply import apply_pending
 from app.services.odata_client import CATALOG_MAP, ODataClient, ODataError, map_catalog_row
 
@@ -183,6 +184,41 @@ async def create_connection(
     db.add(conn)
     await db.commit()
     return conn
+
+
+@router.get("/name-changes")
+async def name_changes(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    items = await list_name_changes(db, tenant_id)
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/name-changes/{entity_type}/{entity_id}/accept")
+async def accept_name_change(
+    entity_type: str,
+    entity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    result = await decide_name_change(db, tenant_id, entity_type, entity_id, True)
+    if result is None:
+        raise HTTPException(404, "Изменение имени не найдено")
+    return result
+
+
+@router.post("/name-changes/{entity_type}/{entity_id}/keep")
+async def keep_local_name(
+    entity_type: str,
+    entity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    result = await decide_name_change(db, tenant_id, entity_type, entity_id, False)
+    if result is None:
+        raise HTTPException(404, "Изменение имени не найдено")
+    return result
 
 
 @router.get("/connections")

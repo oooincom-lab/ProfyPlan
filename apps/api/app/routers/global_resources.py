@@ -148,6 +148,8 @@ async def update_global_resource(
         raise HTTPException(status_code=404, detail="Resource not found")
 
     data = body.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] != resource.name:
+        resource.name_overridden = True
     for _k in ("department_name", "schedule_name", "usage_count"):
         data.pop(_k, None)
     if "schedule_id" in data:
