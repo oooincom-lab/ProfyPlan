@@ -49,6 +49,9 @@ PRIORITY_MAP = {
     "обычный": "normal", "средний": "normal", "normal": "normal",
     "высокий": "high", "high": "high",
     "критический": "critical", "critical": "critical",
+    # 1С:УНФ может передавать числовой приоритет 1–5.
+    # Шкалу подтверждает 1С AI; пока 1 — низкий, 5 — критический.
+    "1": "low", "2": "normal", "3": "normal", "4": "high", "5": "critical",
 }
 
 
@@ -265,6 +268,9 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
 
 async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     """Приём заказа на производство из 1С: новые — черновиками; черновики обновляются; не-черновики не трогаем."""
+    order_type = _s(f.get("order_type")).lower()
+    if order_type and order_type != "production_order":
+        return "skipped: тип %s пока не поддержан" % order_type
     number = _s(f.get("number")) or _s(f.get("name"))
     ext = number or _s(uid)
     if not ext:
@@ -291,10 +297,15 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
 
     # Проект — только сопоставление (по коду/ext_id, затем по имени)
     project_id = None
+    puid = _s(f.get("project_uid")) or None
     pcode = _s(f.get("project_code")) or _s(f.get("project_ext_id"))
     pname = _s(f.get("project_name")) or _s(f.get("project"))
     proj = None
-    if pcode:
+    if puid:
+        proj = (
+            await db.execute(select(Project).where(Project.tenant_id == tenant_id, Project.ext_uid == puid))
+        ).scalars().first()
+    if proj is None and pcode:
         proj = (
             await db.execute(select(Project).where(Project.tenant_id == tenant_id, Project.ext_id == pcode))
         ).scalars().first()
