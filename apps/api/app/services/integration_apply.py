@@ -30,6 +30,7 @@ from app.models.organization import Organization
 from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.resource import Resource
+from app.models.warehouse import Warehouse
 
 NTYPE_MAP = {
     "запас": "material",
@@ -210,6 +211,93 @@ async def _apply_department(db: AsyncSession, tenant_id: UUID, uid: Optional[str
         source="1c", external_name=name, external_name_ack=name,
         name_overridden=False,
         external_revision=str(f.get("version")) if f.get("version") is not None else None,
+    ))
+    return "applied: создано"
+
+
+async def _apply_warehouse(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
+    name = _s(f.get("name"))
+    if not name:
+        return "skipped: пустое наименование склада"
+    uid_s = _s(uid) or None
+    ext = _s(f.get("external_code")) or _s(f.get("ext_id")) or None
+    code = _s(f.get("code")) or None
+    organization_id = None
+    organization_uid = _s(f.get("organization_uid")) or None
+    if organization_uid:
+        organization = (
+            await db.execute(
+                select(Organization).where(
+                    Organization.tenant_id == tenant_id,
+                    Organization.ext_uid == organization_uid,
+                )
+            )
+        ).scalars().first()
+        if organization is not None:
+            organization_id = organization.id
+    department_id = None
+    department_uid = _s(f.get("department_uid")) or None
+    if department_uid:
+        department = (
+            await db.execute(
+                select(Department).where(
+                    Department.tenant_id == tenant_id,
+                    Department.ext_uid == department_uid,
+                )
+            )
+        ).scalars().first()
+        if department is not None:
+            department_id = department.id
+
+    obj = None
+    if uid_s:
+        obj = (
+            await db.execute(
+                select(Warehouse).where(Warehouse.tenant_id == tenant_id, Warehouse.ext_uid == uid_s)
+            )
+        ).scalars().first()
+    if obj is None and ext:
+        obj = (
+            await db.execute(
+                select(Warehouse).where(Warehouse.tenant_id == tenant_id, Warehouse.ext_id == ext)
+            )
+        ).scalars().first()
+    if obj is None and code:
+        obj = (
+            await db.execute(
+                select(Warehouse).where(Warehouse.tenant_id == tenant_id, Warehouse.code == code)
+            )
+        ).scalars().first()
+    if obj is None:
+        obj = (
+            await db.execute(
+                select(Warehouse).where(Warehouse.tenant_id == tenant_id, Warehouse.name == name)
+            )
+        ).scalars().first()
+
+    if obj is not None:
+        _apply_sync_name(obj, name, f.get("version"))
+        if code:
+            obj.code = code
+        if organization_id is not None:
+            obj.organization_id = organization_id
+        if department_id is not None:
+            obj.department_id = department_id
+        obj.needs_mapping = department_id is None
+        if ext and not obj.ext_id:
+            obj.ext_id = ext
+        if uid_s and not obj.ext_uid:
+            obj.ext_uid = uid_s
+        return "applied: обновлено"
+
+    db.add(Warehouse(
+        id=uuid.uuid4(), tenant_id=tenant_id, name=name, code=code,
+        organization_id=organization_id, department_id=department_id,
+        ext_id=ext, ext_uid=uid_s,
+        source="1c", external_name=name, external_name_ack=name,
+        name_overridden=False,
+        external_revision=str(f.get("version")) if f.get("version") is not None else None,
+        needs_mapping=department_id is None,
     ))
     return "applied: создано"
 
@@ -487,12 +575,38 @@ async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], 
             select(Project).where(Project.tenant_id == tenant_id, Project.name == name)
         )
         obj = res.scalars().first()
+    parent_id = None
+    parent_uid = _s(f.get("parent_uid")) or None
+    if parent_uid:
+        parent = (
+            await db.execute(
+                select(Project).where(
+                    Project.tenant_id == tenant_id,
+                    Project.ext_uid == parent_uid,
+                )
+            )
+        ).scalars().first()
+        if parent is not None:
+            parent_id = parent.id
     if obj is None:
-        return "skipped: проект не найден — создайте его в интерфейсе или проверьте код"
+        if not name:
+            return "skipped: пустое наименование проекта"
+        db.add(Project(
+            id=uuid.uuid4(), tenant_id=tenant_id, name=name,
+            parent_id=parent_id, status="draft", mode="quick",
+            ext_id=ext, ext_uid=uid_s,
+            source="1c", external_name=name, external_name_ack=name,
+            name_overridden=False,
+            external_revision=str(f.get("version")) if f.get("version") is not None else None,
+        ))
+        return "applied: создан проект"
     _apply_sync_name(obj, name, f.get("version"))
+    obj.parent_id = parent_id
     if uid_s and not obj.ext_uid:
         obj.ext_uid = uid_s
-    return "applied: проект сопоставлен"
+    if ext:
+        obj.ext_id = ext
+    return "applied: обновлён проект"
 
 
 async def apply_pending(
@@ -527,6 +641,8 @@ async def apply_pending(
                     msg = await _apply_resource(db, tenant_id, item.entity_uid, f)
                 elif et == "organization":
                     msg = await _apply_organization(db, tenant_id, item.entity_uid, f)
+                elif et == "warehouse":
+                    msg = await _apply_warehouse(db, tenant_id, item.entity_uid, f)
                 elif et in ("project", "проект", "проекты"):
                     msg = await _apply_project(db, tenant_id, item.entity_uid, f)
                 elif et in ("order", "заказ", "заказы", "orders", "производственный_заказ"):
