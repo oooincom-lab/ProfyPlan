@@ -34,3 +34,8 @@ class Nomenclature(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     ext_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # UID источника (GUID 1С)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="profyplan", server_default="profyplan")
+    external_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    external_name_ack: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    name_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    external_revision: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

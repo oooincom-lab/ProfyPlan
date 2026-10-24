@@ -35,6 +35,8 @@ class ProductionOrder(BaseModel):
     # UID объекта в источнике (GUID ссылки 1С). Надёжнее номера: номер меняется при
     # перенумерации/смене префикса, GUID — нет. Заполняется при приёме заказов из 1С.
     ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="profyplan", server_default="profyplan")
+    external_revision: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # Привязка к спецификации (ID из product_structures, либо строка-имя)
     specification_id: Mapped[Optional[str]] = mapped_column(

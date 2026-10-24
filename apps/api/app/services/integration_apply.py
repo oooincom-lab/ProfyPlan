@@ -56,6 +56,17 @@ def _s(v) -> str:
     return str(v).strip() if v is not None else ""
 
 
+def _apply_sync_name(obj, name: str, version=None) -> None:
+    """Обновить внешнее имя, не затирая закреплённое локальное."""
+    obj.source = "1c"
+    obj.external_name = name
+    if version not in (None, ""):
+        obj.external_revision = str(version)[:64]
+    if not getattr(obj, "name_overridden", False):
+        obj.name = name
+        obj.external_name_ack = name
+
+
 async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     name = _s(f.get("name"))
     if not name:
@@ -83,7 +94,7 @@ async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[s
     article = _s(f.get("article")) or None
     unit = _s(f.get("unit")) or None
     if obj is not None:
-        obj.name = name
+        _apply_sync_name(obj, name, f.get("version"))
         if code:
             obj.code = code
         if article:
@@ -107,6 +118,11 @@ async def _apply_nomenclature(db: AsyncSession, tenant_id: UUID, uid: Optional[s
             unit=unit,
             ext_id=ext or None,
             ext_uid=uid_s,
+            source="1c",
+            external_name=name,
+            external_name_ack=name,
+            name_overridden=False,
+            external_revision=str(f.get("version")) if f.get("version") is not None else None,
         )
     )
     return "applied: создано"
@@ -141,7 +157,7 @@ async def _apply_counterparty(db: AsyncSession, tenant_id: UUID, uid: Optional[s
         )
         obj = res.scalars().first()
     if obj is not None:
-        obj.name = name
+        _apply_sync_name(obj, name, f.get("version"))
         if inn:
             obj.inn = inn
         if ext and not getattr(obj, "external_code", None):
@@ -149,7 +165,13 @@ async def _apply_counterparty(db: AsyncSession, tenant_id: UUID, uid: Optional[s
         if uid_s and not obj.ext_uid:
             obj.ext_uid = uid_s
         return "applied: обновлено"
-    db.add(Counterparty(id=uuid.uuid4(), tenant_id=tenant_id, name=name, inn=inn, external_code=ext or None, ext_uid=uid_s))
+    db.add(Counterparty(
+        id=uuid.uuid4(), tenant_id=tenant_id, name=name, inn=inn,
+        external_code=ext or None, ext_uid=uid_s,
+        source="1c", external_name=name, external_name_ack=name,
+        name_overridden=False,
+        external_revision=str(f.get("version")) if f.get("version") is not None else None,
+    ))
     return "applied: создано"
 
 
@@ -176,13 +198,18 @@ async def _apply_department(db: AsyncSession, tenant_id: UUID, uid: Optional[str
         )
         obj = res.scalars().first()
     if obj is not None:
-        obj.name = name
+        _apply_sync_name(obj, name, f.get("version"))
         if code:
             obj.code = code
         if uid_s and not obj.ext_uid:
             obj.ext_uid = uid_s
         return "applied: обновлено"
-    db.add(Department(id=uuid.uuid4(), tenant_id=tenant_id, name=name, code=code, ext_uid=uid_s))
+    db.add(Department(
+        id=uuid.uuid4(), tenant_id=tenant_id, name=name, code=code, ext_uid=uid_s,
+        source="1c", external_name=name, external_name_ack=name,
+        name_overridden=False,
+        external_revision=str(f.get("version")) if f.get("version") is not None else None,
+    ))
     return "applied: создано"
 
 
@@ -209,7 +236,7 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
         )
         obj = res.scalars().first()
     if obj is not None:
-        obj.name = name
+        _apply_sync_name(obj, name, f.get("version"))
         if ext and not obj.ext_id:
             obj.ext_id = ext
         if uid_s and not obj.ext_uid:
@@ -222,6 +249,11 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
             name=name,
             ext_id=ext or None,
             ext_uid=uid_s,
+            source="1c",
+            external_name=name,
+            external_name_ack=name,
+            name_overridden=False,
+            external_revision=str(f.get("version")) if f.get("version") is not None else None,
             scope=f.get("scope") or "global",
             resource_type=(_s(f.get("resource_type")) or "equipment")[:20],
             capacity_per_unit=Decimal("1"),
@@ -310,11 +342,16 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
                 client=client,
                 status="draft",
                 notes="Импорт из 1С (интеграция)",
+                source="1c",
+                external_revision=str(f.get("version")) if f.get("version") is not None else None,
             )
         )
         return "applied: создан черновик" + ("" if project_id else " (без проекта — сопоставьте в системе)")
 
     if obj.status == "draft" and obj.exploded_at is None:
+        obj.source = "1c"
+        if f.get("version") is not None:
+            obj.external_revision = str(f.get("version"))[:64]
         obj.quantity = qty
         obj.unit = unit
         if uid_s and not obj.ext_uid:
@@ -360,6 +397,7 @@ async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], 
         obj = res.scalars().first()
     if obj is None:
         return "skipped: проект не найден — создайте его в интерфейсе или проверьте код"
+    _apply_sync_name(obj, name, f.get("version"))
     if uid_s and not obj.ext_uid:
         obj.ext_uid = uid_s
     return "applied: проект сопоставлен"
