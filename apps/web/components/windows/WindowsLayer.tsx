@@ -22,6 +22,7 @@ import { API_ORIGIN, API_V1 } from '@/lib/api';
 import { CatalogOpEditForm } from '@/components/CatalogOps';
 import ConnectionForm from '@/components/ConnectionForm';
 import JournalView from '@/components/JournalView';
+import OrgStructureView from '@/components/orgstructureview';
 
 // ── Единая шапка MDI-окна: свернуть, развернуть, раскладка окон (Snap), закрыть ──
 // Все типы окон обязаны использовать эту шапку — иначе набор кнопок расходится
@@ -227,6 +228,18 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     debug = false,
   } = props;
 
+  const orgApi = async (path: string, opts: any = {}) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+    const headers: any = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (token) headers.Authorization = 'B' + 'earer ' + token;
+    const response = await fetch(API_V1 + path, { ...opts, headers });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.detail?.message || payload?.detail || ('HTTP ' + response.status));
+    }
+    return response.json();
+  };
+
   // Зона ресурса: подразделение ресурса + все его потомки (по дереву подразделений)
   const zoneOf = (rid: string | null): string[] | null => {
     const res = resourcesList.find((x: any) => x.id === rid);
@@ -298,6 +311,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'help') return w.title || 'Справка';
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
+    if (w.kind === 'org') return w.title || 'Оргструктура';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
   if (w.kind === 'catoped') return w.title || 'Операция справочника';
   if (w.kind === 'xlog') return w.title || 'Журнал обмена';
@@ -312,6 +326,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
     if (w.kind === 'help') return w.title || 'Справка';
     if (w.kind === 'list') return w.title || 'Список';
     if (w.kind === 'dir') return w.title || 'Справочник';
+    if (w.kind === 'org') return w.title || 'Оргструктура';
     if (w.kind === 'resedit') return w.title || 'Ресурс';
   if (w.kind === 'catoped') return w.title || 'Операция справочника';
   if (w.kind === 'xlog') return w.title || 'Журнал обмена';
@@ -379,8 +394,9 @@ if (w.kind === 'xlog') return { badge: `[xlog:openWin #${n}]`, copy: `[xlog:open
         const isBom = w.kind === 'bom';
         const isDir = w.kind === 'dir';
         const isResEdit = w.kind === 'resedit';
-        const o = (isList || isDir || isResEdit) ? null : (w.data || orderById(w.orderId));
-        if (!isList && !isDir && !isResEdit && !o) return null;
+        const isOrg = w.kind === 'org';
+        const o = (isList || isDir || isResEdit || isOrg) ? null : (w.data || orderById(w.orderId));
+        if (!isList && !isDir && !isResEdit && !isOrg && !o) return null;
 
         const bomNodes = o ? orderBomNodes(o) : [];
 
@@ -677,6 +693,19 @@ if (w.kind === 'xlog') return { badge: `[xlog:openWin #${n}]`, copy: `[xlog:open
               </div>
             );
           }
+          if (w.kind === 'org') {
+            return (
+              <div key={w.id} id={'pp-win-' + w.id} className={'pp-win' + (w.min ? ' min' : '') + (w.z === maxZ ? ' focus' : '')}
+                style={{ left: w.x, top: w.y, width: w.w, height: w.h, zIndex: 200 + w.z }}
+                onPointerDown={() => { if (w.z !== maxZ) onFocus(w.id); }}>
+                <WinTitleBar w={w} dot="#3B82F6" title={w.title || 'Оргструктура'} debug={debug} debugId={debugIdOf(w, wi)} onDrag={onDrag} onReset={onReset} onToggleMin={onToggleMin} onToggleMax={onToggleMax} onClose={onClose} onSnap={snapWin} />
+                <div style={{ padding: 14, overflow: 'auto', height: 'calc(100% - 32px)' }}>
+                  <OrgStructureView api={orgApi} />
+                </div>
+              </div>
+            );
+          }
+
           if (w.kind === 'xconn') {
             const c = (w.data && w.data.conn) || {};
             return (

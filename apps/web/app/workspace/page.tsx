@@ -1367,8 +1367,14 @@ export default function AppShell() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'org-structure') {
+      setView('org-structure');
+    }
     const cloud = params.get('cloud');
-    if (!cloud) return;
+    if (!cloud) {
+      if (params.get('view')) window.history.replaceState({}, '', '/workspace');
+      return;
+    }
     if (cloud === 'connected') {
       setView('integration');
       setMsg('Облако подключено. Проверьте статус и доступность папок.');
@@ -1762,7 +1768,9 @@ const [chainDialog, setChainDialog] = useState<null | {
   const openDirectory = (entity: string) => {
     const cfg = DIR_COLUMNS[entity];
     if (!cfg) return;
-    if (panelMode === 'window') {
+    const wantsWindows = panelMode === 'window'
+      || (typeof window !== 'undefined' && localStorage.getItem('profyplan_panel_mode') === 'window');
+    if (wantsWindows) {
       const dirEndpoints = (entity === 'departments' || entity === 'organizations')
         ? { item: (id: string) => `${API_ORIGIN}/api/v1/${entity}/${id}`, method: 'PATCH' as const }
         : undefined;
@@ -3310,7 +3318,10 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
   const navTo = (v: View) => {
     if (v === 'settings') setSettingsCalc(false); // из меню — полная страница настроек
     // Справочники при «Окна (MDI)» — открываются окнами (как карточки раздела «Справочники»)
-    if (panelMode === 'window') {
+    const wantsWindows = panelMode === 'window'
+      || (typeof window !== 'undefined' && localStorage.getItem('profyplan_panel_mode') === 'window');
+    if (wantsWindows) {
+      if (v === 'org-structure') { win.openOrgWin(); return; }
       if (['nomenclature', 'units', 'counterparties', 'resources', 'departments', 'organizations'].includes(v)) {
         if (DIR_COLUMNS[v]) { openDirectory(v); return; }
       }
@@ -3318,7 +3329,7 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       if (v === 'production-calendars') { win.openManagerWin('pcal', '📅 Производственные календари'); return; }
     }
     setView(v); setSelectedProject(null); setOrders([]); setGroups({}); setPools({});
-    if (['directories','nomenclature','units','resources','work-schedules','production-calendars','departments','organizations','settings'].includes(v)) win.minimizeAll();
+    if (['directories','nomenclature','units','resources','work-schedules','production-calendars','departments','organizations','org-structure','settings'].includes(v)) win.minimizeAll();
   };
 
   // ── Сетевой график (вид рабочего поля) ──
@@ -6566,11 +6577,13 @@ const changeOrderStatus = async (o: any, status: string) => {
                 { id: 'resources', icon: '🔧', title: 'Ресурсы', desc: 'Станки, люди, бригады' },
                 { id: 'departments', icon: '🏢', title: 'Подразделения', desc: 'Цеха, участки, отделы' },
                 { id: 'organizations', icon: '🏭', title: 'Организации', desc: 'Клиенты, поставщики, юрлица' },
+                { id: 'org-structure', icon: '🏢', title: 'Оргструктура', desc: 'Уровни, подразделения, сотрудники' },
                 { id: 'production-calendars', icon: '📅', title: 'Производственные календари', desc: 'Рабочие и праздничные дни по странам' },
                 { id: 'work-schedules', icon: '🕒', title: 'Графики работы', desc: 'Смены, интервалы, перерывы' },
                 { id: 'catalog-operations', icon: '⚙️', title: 'Операции', desc: 'Типовые операции, нормы времени, коды и артикулы' },
               ].map(d => (
                 <div key={d.id} className="dir-card" onClick={() => {
+                        if (d.id === 'org-structure') { if (panelMode === 'window' || localStorage.getItem('profyplan_panel_mode') === 'window') win.openOrgWin(); else navTo('org-structure' as View); return; }
                         if (d.id === 'work-schedules') { if (panelMode === 'window') win.openManagerWin('wsched', '🕒 Графики работы'); else navTo('work-schedules' as View); return; }
                         if (d.id === 'production-calendars') { if (panelMode === 'window') win.openManagerWin('pcal', '📅 Производственные календари'); else navTo('production-calendars' as View); return; }
                         if (DIR_COLUMNS[d.id]) openDirectory(d.id); else setDirectoryModal(d.id);
