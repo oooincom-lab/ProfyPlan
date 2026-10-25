@@ -52,6 +52,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     return !!(oauth && oauth.refresh_token_enc);
   });
   const [oauthCode, setOauthCode] = useState('');
+  const [oauthUrl, setOauthUrl] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
   const [cloudAccount, setCloudAccount] = useState<string>(() => {
     const cloud = (conn?.settings && conn.settings.cloud) || {};
@@ -95,7 +96,9 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     if (patch.cloud_provider && patch.cloud_provider !== f.cloud_provider) {
       setCloudConnected(false);
       setCloudAccount('');
+      setOauthUrl('');
     }
+    if (patch.cloud_flow && patch.cloud_flow !== f.cloud_flow) setOauthUrl('');
     setF((cur: any) => ({ ...cur, ...patch }));
     setOkMsg(null);
   };
@@ -164,8 +167,6 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     const id = savedId || (conn && conn.id ? String(conn.id) : '');
     if (!id) { setMsg('Сначала сохраните подключение, затем подключите облако'); return; }
     const codeMode = f.cloud_provider === 'yandex' && f.cloud_flow === 'code';
-    // Открываем вкладку сразу по клику, иначе браузер блокирует popup после await fetch.
-    const codeWindow = codeMode ? window.open('about:blank', '_blank') : null;
     setBusy(true); setMsg(null);
     try {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -177,15 +178,13 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
       if (!data?.authorize_url) throw new Error('Сервер не вернул ссылку авторизации');
       if (mode === 'code') {
-        if (codeWindow) codeWindow.location.href = data.authorize_url;
-        else window.open(data.authorize_url, '_blank', 'noopener,noreferrer');
-        setMsg('Открыл страницу Яндекса. Скопируйте код подтверждения и вставьте его ниже.');
+        setOauthUrl(data.authorize_url);
+        setMsg('Ссылка готова. Нажмите «Открыть страницу Яндекса», подтвердите доступ и вставьте код ниже.');
       } else {
         window.location.assign(data.authorize_url);
       }
       setBusy(false);
     } catch (e: any) {
-      if (codeWindow) codeWindow.close();
       setMsg('OAuth: ' + String((e && e.message) || e).slice(0, 200));
       setBusy(false);
     }
@@ -307,6 +306,14 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 6 }}>
                 Откройте страницу Яндекса, подтвердите доступ и вставьте код подтверждения из браузера.
               </div>
+              {oauthUrl && (
+                <div style={{ marginBottom: 7 }}>
+                  <a href={oauthUrl} target="_blank" rel="noreferrer"
+                    style={{ display: 'inline-block', background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '6px 10px', fontSize: 12, textDecoration: 'none' }}>
+                    Открыть страницу Яндекса
+                  </a>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input style={{ ...inp, flex: '1 1 220px' }} value={oauthCode} onChange={(e) => setOauthCode(e.target.value)} placeholder="Код подтверждения" />
                 <button type="button" disabled={codeBusy} onClick={() => void exchangeCloudCode()}
