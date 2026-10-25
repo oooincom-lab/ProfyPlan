@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.core.security import ALGORITHM, SECRET_KEY
 
 YANDEX_AUTHORIZE = "https://oauth.yandex.ru/authorize"
+YANDEX_CODE_REDIRECT = "https://oauth.yandex.ru/verification_code"
 YANDEX_TOKEN = "https://oauth.yandex.ru/token"
 GOOGLE_AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
@@ -108,12 +109,16 @@ def decode_state(state: str) -> dict:
     return payload
 
 
-def authorization_url(connection_id: str, tenant_id: str, provider: str, conn=None) -> str:
+def authorization_url(
+    connection_id: str, tenant_id: str, provider: str, conn=None, flow: str = "callback"
+) -> str:
     client_id, _, scope = _credentials(provider, conn)
     if not client_id:
         raise OAuthError("OAuth-приложение ProfyPlan для %s не настроено" % provider)
     state = make_state(connection_id, tenant_id, provider)
-    callback = _callback_url()
+    # Яндекс: verification_code — тот же сценарий, что в расширении 1С.
+    # Пользователь копирует код со страницы Яндекса, callback не нужен.
+    callback = YANDEX_CODE_REDIRECT if provider == "yandex" and flow == "code" else _callback_url()
     if provider == "yandex":
         params = {
             "response_type": "code",
@@ -152,7 +157,9 @@ async def _token_request(url: str, data: dict) -> dict:
     return payload
 
 
-async def exchange_code(provider: str, code: str, conn=None) -> dict:
+async def exchange_code(
+    provider: str, code: str, conn=None, redirect_uri: Optional[str] = None
+) -> dict:
     client_id, client_secret, _ = _credentials(provider, conn)
     if not client_id or not client_secret:
         raise OAuthError("OAuth-приложение ProfyPlan для %s не настроено" % provider)
@@ -161,7 +168,7 @@ async def exchange_code(provider: str, code: str, conn=None) -> dict:
         "code": code,
         "client_id": client_id,
         "client_secret": client_secret,
-        "redirect_uri": _callback_url(),
+        "redirect_uri": redirect_uri or _callback_url(),
     }
     return await _token_request(YANDEX_TOKEN if provider == "yandex" else GOOGLE_TOKEN, data)
 

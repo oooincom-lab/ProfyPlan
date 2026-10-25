@@ -33,6 +33,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth_app
       && conn.settings.cloud.oauth_app.client_secret_enc
     ),
+    cloud_flow: (conn?.settings && conn.settings.cloud && conn.settings.cloud.flow) || 'code',
   }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -50,6 +51,8 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       || (cloud.oauth && cloud.oauth.provider === provider ? cloud.oauth : null);
     return !!(oauth && oauth.refresh_token_enc);
   });
+  const [oauthCode, setOauthCode] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
   const [cloudAccount, setCloudAccount] = useState<string>(() => {
     const cloud = (conn?.settings && conn.settings.cloud) || {};
     const provider = cloud.provider || 'yandex';
@@ -120,6 +123,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       cloud.root_name = rootName;
       const minutes = Number(f.cloud_poll_minutes);
       cloud.poll_minutes = Number.isFinite(minutes) ? Math.max(1, Math.min(60, Math.trunc(minutes))) : 5;
+      cloud.flow = f.cloud_flow === 'callback' ? 'callback' : 'code';
       const oauthApp: any = { ...(conn?.settings?.cloud?.oauth_app || {}) };
       const clientId = String(f.cloud_client_id || '').trim();
       const clientSecret = String(f.cloud_client_secret || '').trim();
@@ -162,17 +166,48 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     setBusy(true); setMsg(null);
     try {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/oauth/start?provider=${encodeURIComponent(f.cloud_provider)}`, {
+      const mode = f.cloud_provider === 'yandex' && f.cloud_flow === 'code' ? 'code' : 'callback';
+      const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/oauth/start?provider=${encodeURIComponent(f.cloud_provider)}&mode=${mode}`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
       if (!data?.authorize_url) throw new Error('Сервер не вернул ссылку авторизации');
-      window.location.assign(data.authorize_url);
+      if (mode === 'code') {
+        window.open(data.authorize_url, '_blank', 'noopener,noreferrer');
+        setMsg('Открыл страницу Яндекса. Скопируйте код подтверждения и вставьте его ниже.');
+      } else {
+        window.location.assign(data.authorize_url);
+      }
+      setBusy(false);
     } catch (e: any) {
       setMsg('OAuth: ' + String((e && e.message) || e).slice(0, 200));
       setBusy(false);
     }
+  };
+
+  const exchangeCloudCode = async () => {
+    const id = savedId || (conn && conn.id ? String(conn.id) : '');
+    if (!id) { setMsg('Сначала сохраните подключение'); return; }
+    const code = oauthCode.trim();
+    if (!code) { setMsg('Вставьте код подтверждения из Яндекса'); return; }
+    setCodeBusy(true); setMsg(null); setOkMsg(null);
+    try {
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/oauth/exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body: JSON.stringify({ code }),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
+      setCloudConnected(true);
+      setOauthCode('');
+      setOkMsg('Доступ к облаку подтверждён' + (data?.root ? ': ' + data.root : '') + ' ✅');
+    } catch (e: any) {
+      setMsg('Код: ' + String((e && e.message) || e).slice(0, 220));
+    }
+    setCodeBusy(false);
   };
 
   const checkCloud = async () => {
@@ -238,6 +273,14 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
             ))}
             {row('Интервал опроса, мин', <input style={inp} type="number" min={1} max={60} value={f.cloud_poll_minutes} onChange={(e) => upd({ cloud_poll_minutes: e.target.value })} />)}
           </div>
+          {f.cloud_provider === 'yandex' && (
+            row('Способ подключения', (
+              <select style={inp} value={f.cloud_flow} onChange={(e) => upd({ cloud_flow: e.target.value })}>
+                <option value="code">Код подтверждения (как в 1С)</option>
+                <option value="callback">Redirect callback</option>
+              </select>
+            ))
+          )}
           {row('Корневая папка', <input style={inp} value={f.cloud_root_name} placeholder="ProfyPlan" onChange={(e) => upd({ cloud_root_name: e.target.value })} />)}
           <div style={{ fontSize: 11, color: '#5A7090', marginTop: -2, marginBottom: 6 }}>
             Если папки с таким названием нет, ProfyPlan создаст её и канонические папки обмена. Если корень создаёт 1С, расшарьте его ProfyPlan с правом «Редактор».
@@ -254,6 +297,20 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               Callback URL: {typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/integration/cloud/oauth/callback
             </div>
           </div>
+          {f.cloud_provider === 'yandex' && f.cloud_flow === 'code' && (
+            <div style={{ border: '1px solid rgba(34,211,238,.25)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+              <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 6 }}>
+                Откройте страницу Яндекса, подтвердите доступ и вставьте код подтверждения из браузера.
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input style={{ ...inp, flex: '1 1 220px' }} value={oauthCode} onChange={(e) => setOauthCode(e.target.value)} placeholder="Код подтверждения" />
+                <button type="button" disabled={codeBusy} onClick={() => void exchangeCloudCode()}
+                  style={{ background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '7px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {codeBusy ? 'Проверка…' : 'Получить токены'}
+                </button>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
             <button type="button" disabled={busy} onClick={() => void connectCloud()}
               style={{ background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>

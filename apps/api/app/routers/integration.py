@@ -41,6 +41,7 @@ from app.services.integration_exchange import (
 from app.services.cloud_exchange import CloudError, FOLDERS, _persist_layout, archive_month, cloud_root_name, cloud_settings, poll_cloud, provider_for
 from app.services.cloud_oauth import (
     OAuthError,
+    YANDEX_CODE_REDIRECT,
     authorization_url,
     decode_state,
     encrypt_secret,
@@ -86,6 +87,10 @@ class ConnectionOut(BaseModel):
 
 class ExportPlanIn(BaseModel):
     snapshot_id: UUID
+
+
+class CloudOAuthCodeIn(BaseModel):
+    code: str
 
 
 class LogOut(BaseModel):
@@ -487,6 +492,7 @@ async def cloud_status(
 async def cloud_oauth_start(
     conn_id: UUID,
     provider: str = "yandex",
+    mode: str = "callback",
     db: AsyncSession = Depends(get_db),
     tenant_id: UUID = Depends(get_integration_tenant_id),
 ):
@@ -494,7 +500,7 @@ async def cloud_oauth_start(
     conn = await _get_conn(db, conn_id, tenant_id)
     provider = str(provider or "yandex").lower()
     try:
-        url = authorization_url(str(conn.id), str(conn.tenant_id), provider, conn)
+        url = authorization_url(str(conn.id), str(conn.tenant_id), provider, conn, flow=mode)
     except OAuthError as exc:
         raise HTTPException(400, str(exc))
     return {"authorize_url": url, "provider": provider}
@@ -563,6 +569,49 @@ async def cloud_oauth_callback(
         connection=str(conn.id),
         provider=provider,
     )
+
+
+@router.post("/connections/{conn_id}/cloud/oauth/exchange")
+async def cloud_oauth_exchange(
+    conn_id: UUID,
+    body: CloudOAuthCodeIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    """Обменять код подтверждения Яндекса на токены (flow как в расширении 1С)."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    provider = str(cloud_settings(conn).get("provider") or "yandex").lower()
+    code = str(body.code or "").strip()
+    if not code:
+        raise HTTPException(400, "Введите код подтверждения")
+    try:
+        tokens = await exchange_code(
+            provider,
+            code,
+            conn,
+            redirect_uri=YANDEX_CODE_REDIRECT if provider == "yandex" else None,
+        )
+        save_oauth_tokens(conn, provider, tokens)
+        cloud_provider = await provider_for(conn, db)
+        try:
+            await cloud_provider.ensure_layout()
+            await _persist_layout(conn, db, cloud_provider)
+        finally:
+            await cloud_provider.close()
+        await db.commit()
+    except (OAuthError, CloudError) as exc:
+        db.add(ExchangeLogEntry(
+            tenant_id=conn.tenant_id, connection_id=conn.id, direction="in",
+            kind="cloud_oauth", status="error", entities_count=0,
+            message=str(exc)[:500],
+        ))
+        await db.commit()
+        raise HTTPException(400, str(exc))
+    return {
+        "ok": True,
+        "provider": provider,
+        "root": getattr(cloud_provider, "root_label", cloud_root_name(conn)),
+    }
 
 
 @router.post("/connections/{conn_id}/cloud/check")
