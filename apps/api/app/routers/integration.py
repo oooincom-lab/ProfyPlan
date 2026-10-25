@@ -671,6 +671,29 @@ async def cloud_check(
     return {"ok": True, "provider": provider_name, "root": root_label}
 
 
+@router.post("/connections/{conn_id}/cloud/reset")
+async def cloud_reset(
+    conn_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_integration_tenant_id),
+):
+    """Сбросить доступ к облаку, сохранив само подключение и OAuth-приложение."""
+    conn = await _get_conn(db, conn_id, tenant_id)
+    settings = dict(conn.settings or {})
+    cloud = dict(settings.get("cloud") or {})
+    for key in ("oauth", "oauth_by_provider", "root_folder_id", "folder_ids", "cloud_out_sent"):
+        cloud.pop(key, None)
+    settings["cloud"] = cloud
+    conn.settings = settings
+    db.add(ExchangeLogEntry(
+        tenant_id=tenant_id, connection_id=conn.id, direction="in",
+        kind="cloud_reset", status="ok", entities_count=0,
+        message="Доступ к облаку сброшен пользователем",
+    ))
+    await db.commit()
+    return {"ok": True}
+
+
 @router.post("/connections/{conn_id}/cloud/poll")
 async def cloud_poll(
     conn_id: UUID,

@@ -169,6 +169,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const connectCloud = async () => {
     const id = savedId || (conn && conn.id ? String(conn.id) : '');
     if (!id) { setMsg('Сначала сохраните подключение, затем подключите облако'); return; }
+    setTokenJustReceived(false);
     const codeMode = f.cloud_provider === 'yandex' && f.cloud_flow === 'code';
     setBusy(true); setMsg(null);
     try {
@@ -242,9 +243,37 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
       setOkMsg('Доступ к облаку подтверждён' + (data?.root ? ': ' + data.root : '') + ' ✅');
     } catch (e: any) {
+      setCloudConnected(false);
+      setTokenJustReceived(false);
       setMsg('Проверка доступа: ' + String((e && e.message) || e).slice(0, 200));
     }
     setBusy(false);
+  };
+
+  const resetCloud = async () => {
+    const id = savedId || (conn && conn.id ? String(conn.id) : '');
+    if (!id) return;
+    if (typeof window !== 'undefined' && !window.confirm('Сбросить доступ к облаку? Полученные токены будут удалены, подключение и Client ID/secret останутся.')) return;
+    setBusy(true); setMsg(null); setOkMsg(null);
+    try {
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/reset`, {
+        method: 'POST',
+        headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
+      setCloudConnected(false);
+      setTokenJustReceived(false);
+      setCloudAccount('');
+      setOauthUrl('');
+      setOauthCode('');
+      setBusy(false);
+      if (onClose) onClose();
+    } catch (e: any) {
+      setMsg('Сброс: ' + String((e && e.message) || e).slice(0, 200));
+      setBusy(false);
+    }
   };
 
   const row = (label: string, node: any) => (
@@ -348,6 +377,12 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               style={{ background: 'transparent', border: '1px solid #1E3252', color: '#B0C4DE', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
               Проверить доступ
             </button>
+            {!isNew && (
+              <button type="button" disabled={busy} onClick={() => void resetCloud()}
+                style={{ background: 'transparent', border: '1px solid rgba(248,113,113,.45)', color: '#FCA5A5', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Сбросить подключение
+              </button>
+            )}
             <span style={{ fontSize: 11.5, color: cloudConnected ? '#4ADE80' : '#FBBF24' }}>
               {cloudConnected ? 'Доступ подтверждён' + (cloudAccount ? ': ' + cloudAccount : '') : 'Доступ ещё не подтверждён'}
             </span>
