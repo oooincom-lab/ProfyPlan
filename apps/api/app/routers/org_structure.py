@@ -15,6 +15,7 @@ from app.core.deps import get_current_tenant_id
 from app.models.department import Department
 from app.models.employee import Employee
 from app.models.org_level import OrgLevel
+from app.models.resource import Resource
 
 router = APIRouter(prefix="/v1", tags=["org-structure"])
 
@@ -52,12 +53,19 @@ def _level_out(row: OrgLevel) -> dict:
     }
 
 
-def _employee_out(row: Employee) -> dict:
+def _employee_out(row: Employee, resource=None) -> dict:
     return {
         "id": str(row.id), "department_id": str(row.department_id) if row.department_id else None,
         "name": row.name, "code": row.code, "position": row.position,
         "is_active": row.is_active, "source": row.source,
+        "resource_enabled": bool(resource and resource.is_active),
+        "resource_id": str(resource.id) if resource else None,
     }
+
+
+class ResourceProfileIn(BaseModel):
+    enabled: bool = True
+    capacity_mode: str = "individual"
 
 
 @router.get("/org-levels")
@@ -143,7 +151,11 @@ async def list_employees(
     if department_id:
         query = query.where(Employee.department_id == _uuid(department_id))
     rows = (await db.execute(query.order_by(Employee.name.asc()))).scalars().all()
-    return {"items": [_employee_out(x) for x in rows], "count": len(rows)}
+    items = []
+    for row in rows:
+        resource = await _resource_for(db, tenant_id, "employee", str(row.id))
+        items.append(_employee_out(row, resource))
+    return {"items": items, "count": len(items)}
 
 
 @router.post("/employees", status_code=201)
@@ -214,3 +226,97 @@ async def set_department_level(
     row.level_id = _uuid(level_id)
     await db.commit()
     return {"id": str(row.id), "level_id": str(row.level_id) if row.level_id else None}
+
+
+async def _resource_for(db: AsyncSession, tenant_id: UUID, subject_type: str, subject_uid: str):
+    return (await db.execute(
+        select(Resource).where(
+            Resource.tenant_id == tenant_id,
+            Resource.subject_type == subject_type,
+            Resource.subject_uid == subject_uid,
+        )
+    )).scalars().first()
+
+
+@router.get("/employees/{employee_id}/resource-profile")
+async def get_employee_resource_profile(
+    employee_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    employee = (await db.execute(
+        select(Employee).where(Employee.id == employee_id, Employee.tenant_id == tenant_id)
+    )).scalars().first()
+    if employee is None:
+        raise HTTPException(404, "Сотрудник не найден")
+    resource = await _resource_for(db, tenant_id, "employee", str(employee.id))
+    return {"enabled": bool(resource and resource.is_active), "resource_id": str(resource.id) if resource else None,
+            "capacity_mode": resource.capacity_mode if resource else "individual"}
+
+
+@router.put("/employees/{employee_id}/resource-profile")
+async def set_employee_resource_profile(
+    employee_id: UUID,
+    body: ResourceProfileIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    employee = (await db.execute(
+        select(Employee).where(Employee.id == employee_id, Employee.tenant_id == tenant_id)
+    )).scalars().first()
+    if employee is None:
+        raise HTTPException(404, "Сотрудник не найден")
+    resource = await _resource_for(db, tenant_id, "employee", str(employee.id))
+    if not body.enabled:
+        if resource is not None:
+            resource.is_active = False
+            await db.commit()
+        return {"enabled": False, "resource_id": str(resource.id) if resource else None}
+    if resource is None:
+        resource = Resource(
+            id=uuid4(), tenant_id=tenant_id, name=employee.name,
+            resource_type="employee", capacity_per_unit=1, capacity_unit="hour",
+            scope="shared", subject_type="employee", subject_uid=str(employee.id),
+            capacity_mode=body.capacity_mode if body.capacity_mode in ("individual", "pool") else "individual",
+            is_bookable=True, department_id=employee.department_id, is_active=True,
+        )
+        db.add(resource)
+    else:
+        resource.is_active = True
+        resource.capacity_mode = body.capacity_mode if body.capacity_mode in ("individual", "pool") else "individual"
+    await db.commit()
+    return {"enabled": True, "resource_id": str(resource.id), "capacity_mode": resource.capacity_mode}
+
+
+@router.put("/departments/{department_id}/resource-profile")
+async def set_department_resource_profile(
+    department_id: UUID,
+    body: ResourceProfileIn,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    department = (await db.execute(
+        select(Department).where(Department.id == department_id, Department.tenant_id == tenant_id)
+    )).scalars().first()
+    if department is None:
+        raise HTTPException(404, "Подразделение не найдено")
+    resource = await _resource_for(db, tenant_id, "org_unit", str(department.id))
+    if not body.enabled:
+        if resource is not None:
+            resource.is_active = False
+            await db.commit()
+        return {"enabled": False, "resource_id": str(resource.id) if resource else None}
+    if resource is None:
+        resource = Resource(
+            id=uuid4(), tenant_id=tenant_id, name=department.name,
+            resource_type="team", capacity_per_unit=1, capacity_unit="hour",
+            scope="shared", subject_type="org_unit", subject_uid=str(department.id),
+            capacity_mode=body.capacity_mode if body.capacity_mode in ("individual", "pool") else "pool",
+            is_bookable=True, department_id=department.id, is_active=True,
+        )
+        db.add(resource)
+    else:
+        resource.is_active = True
+        resource.capacity_mode = body.capacity_mode if body.capacity_mode in ("individual", "pool") else "pool"
+    await db.commit()
+    return {"enabled": True, "resource_id": str(resource.id), "capacity_mode": resource.capacity_mode}

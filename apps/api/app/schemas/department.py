@@ -10,6 +10,7 @@ class DepartmentCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     code: Optional[str] = Field(None, max_length=50)
     parent_id: Optional[UUID] = None
+    level_id: Optional[UUID] = None
 
 
 class DepartmentUpdate(BaseModel):

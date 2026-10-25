@@ -16,6 +16,7 @@ export default function OrgStructureView({ api }: { api: Api }) {
   const [levelCode, setLevelCode] = useState('');
   const [empName, setEmpName] = useState('');
   const [empDept, setEmpDept] = useState('');
+  const [deptResources, setDeptResources] = useState<Record<string, boolean>>({});
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -61,6 +62,34 @@ export default function OrgStructureView({ api }: { api: Api }) {
         });
       }
       await load();
+    } catch (e: any) { setErr(e?.message || String(e)); }
+  };
+
+  const toggleEmployeeResource = async (employee: any) => {
+    try {
+      await api('/employees/' + employee.id + '/resource-profile', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !employee.resource_enabled, capacity_mode: 'individual' }),
+      });
+      await load();
+    } catch (e: any) { setErr(e?.message || String(e)); }
+  };
+
+  const setDepartmentLevel = async (department: any, levelId: string) => {
+    try {
+      await api('/departments/' + department.id + '/level?level_id=' + encodeURIComponent(levelId), { method: 'PUT' });
+      await load();
+    } catch (e: any) { setErr(e?.message || String(e)); }
+  };
+
+  const toggleDepartmentResource = async (department: any) => {
+    const enabled = !deptResources[department.id];
+    try {
+      await api('/departments/' + department.id + '/resource-profile', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled, capacity_mode: 'pool' }),
+      });
+      setDeptResources((prev) => ({ ...prev, [department.id]: enabled }));
     } catch (e: any) { setErr(e?.message || String(e)); }
   };
 
@@ -114,9 +143,29 @@ export default function OrgStructureView({ api }: { api: Api }) {
             <div key={e.id} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid #16294A', fontSize: 12 }}>
               <span>{e.name}</span>
               <span style={{ marginLeft: 'auto', color: '#5A7090' }}>{departments.find((d: any) => d.id === e.department_id)?.name || 'без подразделения'}</span>
+              <label style={{ display: 'flex', gap: 4, alignItems: 'center', color: e.resource_enabled ? '#4ADE80' : '#5A7090', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!e.resource_enabled} onChange={() => void toggleEmployeeResource(e)} />
+                ресурс
+              </label>
             </div>
           ))}
         </div>
+      </div>
+      <div style={{ ...card, marginTop: 14 }}>
+        <div style={{ fontWeight: 650, marginBottom: 8 }}>Подразделения</div>
+        {departments.length === 0 && <div style={{ color: '#8FA3BD', fontSize: 12 }}>Подразделений пока нет. Создайте их в справочнике подразделений.</div>}
+        {departments.map((d: any) => (
+          <div key={d.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #16294A', fontSize: 12, flexWrap: 'wrap' }}>
+            <span style={{ minWidth: 160 }}>{d.name}</span>
+            <select style={{ ...inp, width: 170 }} value={d.level_id || ''} onChange={(e) => void setDepartmentLevel(d, e.target.value)}>
+              <option value="">Без уровня</option>
+              {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <button style={{ ...btn, padding: '4px 8px', color: deptResources[d.id] ? '#4ADE80' : '#93C5FD' }} onClick={() => void toggleDepartmentResource(d)} disabled={!levels.length}>
+              {deptResources[d.id] ? 'Ресурс включён' : 'Сделать ресурсом'}
+            </button>
+          </div>
+        ))}
       </div>
       <div style={{ ...card, marginTop: 14, color: '#8FA3BD', fontSize: 12 }}>
         Ресурсный профиль включается у подразделения или сотрудника только там, где есть планируемая ёмкость. Названия уровней — цех, участок, бригада, команда, отдел — произвольные.
