@@ -214,6 +214,12 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     setCodeBusy(false);
   };
 
+  const openOAuthPage = () => {
+    if (!oauthUrl) return;
+    const win = window.open(oauthUrl, '_blank', 'noopener,noreferrer');
+    if (!win) window.location.assign(oauthUrl);
+  };
+
   const checkCloud = async () => {
     const id = savedId || (conn && conn.id ? String(conn.id) : '');
     if (!id) { setMsg('Сначала сохраните подключение, затем проверьте доступ'); return; }
@@ -308,10 +314,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               </div>
               {oauthUrl && (
                 <div style={{ marginBottom: 7 }}>
-                  <a href={oauthUrl} target="_blank" rel="noreferrer"
-                    style={{ display: 'inline-block', background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '6px 10px', fontSize: 12, textDecoration: 'none' }}>
+                  <button type="button" onClick={openOAuthPage}
+                    style={{ background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '6px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
                     Открыть страницу Яндекса
-                  </a>
+                  </button>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
