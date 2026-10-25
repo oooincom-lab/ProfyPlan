@@ -149,7 +149,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     try {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/oauth/start?provider=${encodeURIComponent(f.cloud_provider)}`, {
-        headers: tok ? { Authorization: '***' + tok } : {},
+        headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
@@ -169,7 +169,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
       const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/check`, {
         method: 'POST',
-        headers: tok ? { Authorization: '***' + tok } : {},
+        headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
