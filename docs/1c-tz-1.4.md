@@ -526,6 +526,8 @@ ProfyPlan **отклоняет** удаление родителя, если у 
 - по каждой сущности: `type`, `uid`, `op`, `status` (`applied` / `skipped` / `error`), `code`, `message`;
 - итог пакета: `meta.result` = `ok` / `partial` / `rejected`.
 
+Квитанция формируется после применения очереди (`inbox/apply`), а не в момент принятия файла в очередь. Если пакет не прошёл проверку конверта и `packet_id` отсутствует, создаётся `receipt_invalid_<timestamp>.json` с `meta.result = "rejected"` и `code = "INVALID_PACKET"`; имя исходного файла передаётся в `meta.incoming_file`.
+
 Ошибка зависимости передаётся структурированно, а не только текстом:
 
 ```json
