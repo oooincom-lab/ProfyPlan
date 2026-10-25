@@ -27,6 +27,12 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     cloud_provider: (conn?.settings && conn.settings.cloud && conn.settings.cloud.provider) || 'yandex',
     cloud_root_name: String((conn?.settings && conn.settings.cloud && (conn.settings.cloud.root_name || conn.settings.cloud.root)) || 'ProfyPlan').replace(/^\/+/, ''),
     cloud_poll_minutes: (conn?.settings && conn.settings.cloud && conn.settings.cloud.poll_minutes) || 5,
+    cloud_client_id: (conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth_app && conn.settings.cloud.oauth_app.client_id) || '',
+    cloud_client_secret: '',
+    cloud_client_secret_set: !!(
+      conn?.settings && conn.settings.cloud && conn.settings.cloud.oauth_app
+      && conn.settings.cloud.oauth_app.client_secret_enc
+    ),
   }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -114,6 +120,14 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       cloud.root_name = rootName;
       const minutes = Number(f.cloud_poll_minutes);
       cloud.poll_minutes = Number.isFinite(minutes) ? Math.max(1, Math.min(60, Math.trunc(minutes))) : 5;
+      const oauthApp: any = { ...(conn?.settings?.cloud?.oauth_app || {}) };
+      const clientId = String(f.cloud_client_id || '').trim();
+      const clientSecret = String(f.cloud_client_secret || '').trim();
+      if (clientId) oauthApp.client_id = clientId;
+      else delete oauthApp.client_id;
+      if (clientSecret) oauthApp.client_secret = clientSecret;
+      if (clientId && (clientSecret || oauthApp.client_secret_enc)) cloud.oauth_app = oauthApp;
+      else delete cloud.oauth_app;
       if (f.cloud_provider === 'yandex') {
         cloud.root = '/' + rootName.replace(/^\/+/, '');
       } else if ((conn?.settings?.cloud?.root_name || '') !== rootName) {
@@ -227,6 +241,18 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
           {row('Корневая папка', <input style={inp} value={f.cloud_root_name} placeholder="ProfyPlan" onChange={(e) => upd({ cloud_root_name: e.target.value })} />)}
           <div style={{ fontSize: 11, color: '#5A7090', marginTop: -2, marginBottom: 6 }}>
             Если папки с таким названием нет, ProfyPlan создаст её и канонические папки обмена. Если корень создаёт 1С, расшарьте его ProfyPlan с правом «Редактор».
+          </div>
+          <div style={{ borderTop: '1px dashed #1E3252', paddingTop: 8, marginTop: 2 }}>
+            <div style={{ fontSize: 11.5, color: '#8FA3BD', marginBottom: 6 }}>
+              OAuth-приложение Яндекса. Можно оставить пустым, если оно уже задано на сервере.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {row('Client ID', <input style={inp} value={f.cloud_client_id} placeholder="Из OAuth-приложения" onChange={(e) => upd({ cloud_client_id: e.target.value })} />)}
+              {row('Client secret', <input style={inp} type="password" value={f.cloud_client_secret} placeholder={f.cloud_client_secret_set ? '•••••• сохранён' : 'Секрет приложения'} onChange={(e) => upd({ cloud_client_secret: e.target.value })} />)}
+            </div>
+            <div style={{ fontSize: 11, color: '#5A7090', marginTop: -2, marginBottom: 6 }}>
+              Callback URL: {typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/integration/cloud/oauth/callback
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
             <button type="button" disabled={busy} onClick={() => void connectCloud()}

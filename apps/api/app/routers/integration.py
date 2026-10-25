@@ -43,6 +43,7 @@ from app.services.cloud_oauth import (
     OAuthError,
     authorization_url,
     decode_state,
+    encrypt_secret,
     exchange_code,
     oauth_for,
     oauth_configured,
@@ -170,6 +171,29 @@ async def _get_conn(db: AsyncSession, conn_id: UUID, tenant_id: UUID) -> Integra
     return conn
 
 
+def _prepare_connection_settings(settings: Optional[dict]) -> Optional[dict]:
+    """Зашифровать Client Secret облачного OAuth-приложения перед сохранением."""
+    if not isinstance(settings, dict):
+        return settings
+    data = dict(settings)
+    cloud = data.get("cloud")
+    if not isinstance(cloud, dict):
+        return data
+    cloud = dict(cloud)
+    app = cloud.get("oauth_app")
+    if isinstance(app, dict):
+        app = dict(app)
+        secret = str(app.pop("client_secret", "") or "").strip()
+        if secret:
+            app["client_secret_enc"] = encrypt_secret(secret)
+        if str(app.get("client_id") or "").strip() and str(app.get("client_secret_enc") or "").strip():
+            cloud["oauth_app"] = app
+        else:
+            cloud.pop("oauth_app", None)
+    data["cloud"] = cloud
+    return data
+
+
 @router.post("/connections", response_model=ConnectionOut, status_code=201)
 async def create_connection(
     body: ConnectionIn,
@@ -183,7 +207,7 @@ async def create_connection(
         name=body.name,
         profile=body.profile,
         transport=body.transport,
-        settings=body.settings,
+        settings=_prepare_connection_settings(body.settings),
         comment=body.comment,
         is_active=body.is_active,
     )
@@ -315,7 +339,7 @@ async def update_connection(
     conn.name = body.name
     conn.profile = body.profile
     conn.transport = body.transport
-    conn.settings = body.settings
+    conn.settings = _prepare_connection_settings(body.settings)
     conn.comment = body.comment
     conn.is_active = body.is_active
     await db.commit()
@@ -448,7 +472,7 @@ async def cloud_status(
         "root": root,
         "configured": token,
         "oauth_connected": oauth_connected,
-        "oauth_available": oauth_configured(provider),
+        "oauth_available": oauth_configured(provider, conn),
         "account": str(oauth.get("account") or ""),
         "folders": list(FOLDERS),
         "archive_month": archive_month(),
@@ -470,7 +494,7 @@ async def cloud_oauth_start(
     conn = await _get_conn(db, conn_id, tenant_id)
     provider = str(provider or "yandex").lower()
     try:
-        url = authorization_url(str(conn.id), str(conn.tenant_id), provider)
+        url = authorization_url(str(conn.id), str(conn.tenant_id), provider, conn)
     except OAuthError as exc:
         raise HTTPException(400, str(exc))
     return {"authorize_url": url, "provider": provider}
@@ -515,7 +539,7 @@ async def cloud_oauth_callback(
     if not code:
         return _oauth_redirect(failure_url, cloud="error", message="Провайдер не вернул код")
     try:
-        tokens = await exchange_code(provider, code)
+        tokens = await exchange_code(provider, code, conn)
         save_oauth_tokens(conn, provider, tokens)
         # Сразу создаём канонические папки и запоминаем их ID.
         cloud_provider = await provider_for(conn, db)
