@@ -33,6 +33,9 @@ class ProductionOrder(BaseModel):
         nullable=True,
         index=True,
     )
+    pending_project_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pending_organization_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pending_parent_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ext_id: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, index=True
     )  # внешний ID из ERP (напр. "ЗНП-001")

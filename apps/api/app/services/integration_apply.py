@@ -509,6 +509,9 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
                 project_id=project_id,
                 organization_id=organization_id,
                 parent_order_id=parent_order_id,
+                pending_project_uid=None if project_id else (puid or pcode or None),
+                pending_organization_uid=None if organization_id else org_uid,
+                pending_parent_uid=None if parent_order_id else parent_uid,
                 ext_id=ext,
                 ext_uid=(_s(uid) or None),
                 specification_name=spec,
@@ -552,6 +555,9 @@ async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f:
             obj.organization_id = organization_id
         if parent_order_id and obj.parent_order_id is None:
             obj.parent_order_id = parent_order_id
+        obj.pending_project_uid = None if project_id else (puid or pcode or None)
+        obj.pending_organization_uid = None if organization_id else org_uid
+        obj.pending_parent_uid = None if parent_order_id else parent_uid
         return "applied: обновлён черновик"
 
     return "skipped: заказ уже есть (не черновик) — оставлен без изменений"
@@ -713,6 +719,8 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
         db.add(obj)
     obj.project_id = project_id
     obj.production_order_id = order.id if order is not None else None
+    obj.pending_project_uid = None if project_id else project_uid
+    obj.pending_order_uid = None if order is not None else order_uid
     obj.operation_uid = _s(f.get("operation_uid")) or None
     obj.stage_uid = _s(f.get("stage_uid")) or None
     obj.executor_uid = _s(f.get("executor_uid")) or None
@@ -795,6 +803,70 @@ async def _apply_delete(db: AsyncSession, tenant_id: UUID, entity_type: str, uid
     return "skipped: у сущности нет признака активности"
 
 
+async def _relink_pending(db: AsyncSession, tenant_id: UUID) -> None:
+    """Досвязать заказы/факты, пришедшие раньше справочников."""
+    orders = (await db.execute(
+        select(ProductionOrder).where(ProductionOrder.tenant_id == tenant_id)
+    )).scalars().all()
+    for order in orders:
+        if order.pending_project_uid:
+            project = (await db.execute(
+                select(Project).where(
+                    Project.tenant_id == tenant_id, Project.ext_uid == order.pending_project_uid
+                )
+            )).scalars().first()
+            if project is not None:
+                order.project_id = project.id
+                order.pending_project_uid = None
+        if order.pending_organization_uid:
+            organization = (await db.execute(
+                select(Organization).where(
+                    Organization.tenant_id == tenant_id,
+                    Organization.ext_uid == order.pending_organization_uid,
+                )
+            )).scalars().first()
+            if organization is not None:
+                order.organization_id = organization.id
+                order.pending_organization_uid = None
+        if order.pending_parent_uid:
+            parent = (await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id,
+                    ProductionOrder.ext_uid == order.pending_parent_uid,
+                )
+            )).scalars().first()
+            if parent is not None:
+                order.parent_order_id = parent.id
+                order.pending_parent_uid = None
+
+    facts = (await db.execute(
+        select(ExecutionFact).where(ExecutionFact.tenant_id == tenant_id)
+    )).scalars().all()
+    for fact in facts:
+        if fact.pending_order_uid:
+            order = (await db.execute(
+                select(ProductionOrder).where(
+                    ProductionOrder.tenant_id == tenant_id,
+                    ProductionOrder.ext_uid == fact.pending_order_uid,
+                )
+            )).scalars().first()
+            if order is not None:
+                fact.production_order_id = order.id
+                if fact.project_id is None:
+                    fact.project_id = order.project_id
+                fact.pending_order_uid = None
+        if fact.pending_project_uid:
+            project = (await db.execute(
+                select(Project).where(
+                    Project.tenant_id == tenant_id, Project.ext_uid == fact.pending_project_uid
+                )
+            )).scalars().first()
+            if project is not None:
+                fact.project_id = project.id
+                fact.pending_project_uid = None
+    await db.flush()
+
+
 async def apply_pending(
     db: AsyncSession, tenant_id: UUID, connection_id: Optional[UUID] = None, limit: int = 500
 ) -> dict:
@@ -851,5 +923,6 @@ async def apply_pending(
             item.status = "error"
             stats["errors"] += 1
         stats["details"].append({"id": str(item.id), "type": item.entity_type, "result": msg})
+    await _relink_pending(db, tenant_id)
     await db.commit()
     return stats

@@ -32,6 +32,8 @@ class ExecutionFact(BaseModel):
     project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    pending_project_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pending_order_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     production_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("production_orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
