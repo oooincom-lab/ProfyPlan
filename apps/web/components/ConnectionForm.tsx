@@ -54,6 +54,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const [oauthCode, setOauthCode] = useState('');
   const [oauthUrl, setOauthUrl] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
+  const [tokenJustReceived, setTokenJustReceived] = useState(false);
   const [cloudAccount, setCloudAccount] = useState<string>(() => {
     const cloud = (conn?.settings && conn.settings.cloud) || {};
     const provider = cloud.provider || 'yandex';
@@ -61,6 +62,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       || (cloud.oauth && cloud.oauth.provider === provider ? cloud.oauth : null);
     return (oauth && oauth.account) || '';
   });
+  const saveLocked = f.transport === 'cloud' && tokenJustReceived;
 
   const makePairCode = async () => {
     if (!conn || !conn.id) return;
@@ -97,6 +99,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       setCloudConnected(false);
       setCloudAccount('');
       setOauthUrl('');
+      setTokenJustReceived(false);
     }
     if (patch.cloud_flow && patch.cloud_flow !== f.cloud_flow) setOauthUrl('');
     setF((cur: any) => ({ ...cur, ...patch }));
@@ -206,6 +209,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
       setCloudConnected(true);
+      setTokenJustReceived(true);
       setOauthCode('');
       setOkMsg('Доступ к облаку подтверждён' + (data?.root ? ': ' + data.root : '') + ' ✅');
     } catch (e: any) {
@@ -250,6 +254,8 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#B0C4DE', marginBottom: 10 }}>{isNew ? '🔌 Новое подключение' : '🔌 Настройки подключения'}</div>
+      {msg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(248,113,113,.5)', borderRadius: 8, color: '#F87171', fontSize: 12, marginBottom: 8 }}>{msg}</div>}
+      {okMsg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(74,222,128,.5)', borderRadius: 8, color: '#4ADE80', fontSize: 12, marginBottom: 8 }}>{okMsg}</div>}
       {row('Название', <input style={inp} value={f.name} placeholder="Например: УНФ ТОПЕКС" onChange={(e) => upd({ name: e.target.value })} />)}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {row('Система', (
@@ -402,11 +408,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
         <input type="checkbox" checked={!!f.is_active} onChange={(e) => upd({ is_active: e.target.checked })} />
         Подключение включено (участвует в обмене)
       </label>
-      {msg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(248,113,113,.5)', borderRadius: 8, color: '#F87171', fontSize: 12, marginBottom: 8 }}>{msg}</div>}
-      {okMsg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(74,222,128,.5)', borderRadius: 8, color: '#4ADE80', fontSize: 12, marginBottom: 8 }}>{okMsg}</div>}
+      {saveLocked && <div style={{ fontSize: 11.5, color: '#4ADE80', marginBottom: 6 }}>Доступ уже подтверждён — повторное сохранение не требуется.</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 10, borderTop: '1px solid #1E3252' }}>
         <button onClick={() => { if (onClose) onClose(); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
-        <button onClick={() => void saveNow()} disabled={busy} style={{ background: '#0891B2', border: 'none', color: '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>{busy ? 'Сохранение…' : (isNew ? '➕ Создать' : '💾 Сохранить')}</button>
+        <button onClick={() => void saveNow()} disabled={busy || saveLocked} title={saveLocked ? 'Доступ уже подтверждён' : undefined} style={{ background: saveLocked ? '#334155' : '#0891B2', border: 'none', color: saveLocked ? '#94A3B8' : '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: saveLocked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: (busy || saveLocked) ? 0.6 : 1 }}>{busy ? 'Сохранение…' : (isNew ? '➕ Создать' : '💾 Сохранить')}</button>
       </div>
     </div>
   );

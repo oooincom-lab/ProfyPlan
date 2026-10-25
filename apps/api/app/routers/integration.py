@@ -199,6 +199,31 @@ def _prepare_connection_settings(settings: Optional[dict]) -> Optional[dict]:
     return data
 
 
+def _merge_connection_settings(conn: IntegrationConnection, settings: Optional[dict]) -> Optional[dict]:
+    """Не терять OAuth-токены и служебные ID при сохранении карточки подключения."""
+    prepared = _prepare_connection_settings(settings)
+    if not isinstance(prepared, dict):
+        return prepared
+    old_cloud = ((conn.settings or {}).get("cloud") or {})
+    new_cloud = prepared.get("cloud")
+    if not isinstance(new_cloud, dict) or not isinstance(old_cloud, dict):
+        return prepared
+    new_cloud = dict(new_cloud)
+    for key in ("oauth", "oauth_by_provider", "root_folder_id", "folder_ids", "cloud_out_sent"):
+        if key not in new_cloud and key in old_cloud:
+            new_cloud[key] = old_cloud[key]
+    # Если форма не пересылает секрет повторно, сохранить уже зашифрованный.
+    new_app = new_cloud.get("oauth_app")
+    old_app = old_cloud.get("oauth_app")
+    if isinstance(new_app, dict) and isinstance(old_app, dict):
+        if not new_app.get("client_secret_enc") and old_app.get("client_secret_enc") and new_app.get("client_id") == old_app.get("client_id"):
+            new_app = dict(new_app)
+            new_app["client_secret_enc"] = old_app["client_secret_enc"]
+            new_cloud["oauth_app"] = new_app
+    prepared["cloud"] = new_cloud
+    return prepared
+
+
 @router.post("/connections", response_model=ConnectionOut, status_code=201)
 async def create_connection(
     body: ConnectionIn,
@@ -344,7 +369,7 @@ async def update_connection(
     conn.name = body.name
     conn.profile = body.profile
     conn.transport = body.transport
-    conn.settings = _prepare_connection_settings(body.settings)
+    conn.settings = _merge_connection_settings(conn, body.settings)
     conn.comment = body.comment
     conn.is_active = body.is_active
     await db.commit()
