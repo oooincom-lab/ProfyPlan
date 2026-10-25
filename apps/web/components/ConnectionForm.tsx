@@ -216,8 +216,12 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
 
   const openOAuthPage = () => {
     if (!oauthUrl) return;
-    const win = window.open(oauthUrl, '_blank', 'noopener,noreferrer');
-    if (!win) window.location.assign(oauthUrl);
+    const win = window.open(oauthUrl, '_blank', 'popup=yes,width=520,height=760');
+    if (win) {
+      try { win.opener = null; } catch { /* cross-origin — нормально */ }
+    } else {
+      setMsg('Браузер заблокировал новое окно. Разрешите всплывающие окна для localhost:3000.');
+    }
   };
 
   const checkCloud = async () => {
