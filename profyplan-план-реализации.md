@@ -770,3 +770,4 @@
 - **Оргструктура (начало):** добавлены `OrgLevel`, `Employee`, `Department.level_id`, `Resource.subject_type/subject_uid/capacity_mode/is_bookable`; миграция `0037_org_structure` применена локально.
 - **Экран оргструктуры:** добавлены API org-levels/employees и интерфейс настройки уровней и сотрудников.
 - **Удаление/отмена:** op=delete в обычном пакете, мягкое удаление, status=cancelled вместо op=cancel; при зависимостях — DEPENDENCY_CONFLICT, без каскада.
+- **Отложенное связывание:** pending_project_uid/pending_organization_uid/pending_parent_uid у заказов и pending_* у фактов; повторное связывание после прихода refs.
