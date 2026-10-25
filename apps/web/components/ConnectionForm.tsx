@@ -161,6 +161,25 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
     }
   };
 
+  const checkCloud = async () => {
+    const id = savedId || (conn && conn.id ? String(conn.id) : '');
+    if (!id) { setMsg('Сначала сохраните подключение, затем проверьте доступ'); return; }
+    setBusy(true); setMsg(null); setOkMsg(null);
+    try {
+      const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
+      const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/check`, {
+        method: 'POST',
+        headers: tok ? { Authorization: '***' + tok } : {},
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
+      setOkMsg('Доступ к облаку подтверждён' + (data?.root ? ': ' + data.root : '') + ' ✅');
+    } catch (e: any) {
+      setMsg('Проверка доступа: ' + String((e && e.message) || e).slice(0, 200));
+    }
+    setBusy(false);
+  };
+
   const row = (label: string, node: any) => (
     <label style={lbl}><span>{label}</span>{node}</label>
   );
@@ -213,6 +232,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
             <button type="button" disabled={busy} onClick={() => void connectCloud()}
               style={{ background: 'rgba(34,211,238,.14)', border: '1px solid rgba(34,211,238,.45)', color: '#A5F3FC', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
               {cloudConnected ? 'Переподключить облако' : 'Подключить ' + (f.cloud_provider === 'google' ? 'Google Drive' : 'Яндекс Диск')}
+            </button>
+            <button type="button" disabled={busy} onClick={() => void checkCloud()}
+              style={{ background: 'transparent', border: '1px solid #1E3252', color: '#B0C4DE', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Проверить доступ
             </button>
             <span style={{ fontSize: 11.5, color: cloudConnected ? '#4ADE80' : '#FBBF24' }}>
               {cloudConnected ? 'Доступ подтверждён' + (cloudAccount ? ': ' + cloudAccount : '') : 'Доступ ещё не подтверждён'}
