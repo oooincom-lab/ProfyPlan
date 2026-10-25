@@ -163,10 +163,13 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const connectCloud = async () => {
     const id = savedId || (conn && conn.id ? String(conn.id) : '');
     if (!id) { setMsg('Сначала сохраните подключение, затем подключите облако'); return; }
+    const codeMode = f.cloud_provider === 'yandex' && f.cloud_flow === 'code';
+    // Открываем вкладку сразу по клику, иначе браузер блокирует popup после await fetch.
+    const codeWindow = codeMode ? window.open('about:blank', '_blank') : null;
     setBusy(true); setMsg(null);
     try {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
-      const mode = f.cloud_provider === 'yandex' && f.cloud_flow === 'code' ? 'code' : 'callback';
+      const mode = codeMode ? 'code' : 'callback';
       const r = await fetch(`${API_V1}/integration/connections/${id}/cloud/oauth/start?provider=${encodeURIComponent(f.cloud_provider)}&mode=${mode}`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
@@ -174,13 +177,15 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
       if (!r.ok) throw new Error((data && (data.detail || data.message)) || ('HTTP ' + r.status));
       if (!data?.authorize_url) throw new Error('Сервер не вернул ссылку авторизации');
       if (mode === 'code') {
-        window.open(data.authorize_url, '_blank', 'noopener,noreferrer');
+        if (codeWindow) codeWindow.location.href = data.authorize_url;
+        else window.open(data.authorize_url, '_blank', 'noopener,noreferrer');
         setMsg('Открыл страницу Яндекса. Скопируйте код подтверждения и вставьте его ниже.');
       } else {
         window.location.assign(data.authorize_url);
       }
       setBusy(false);
     } catch (e: any) {
+      if (codeWindow) codeWindow.close();
       setMsg('OAuth: ' + String((e && e.message) || e).slice(0, 200));
       setBusy(false);
     }
