@@ -284,7 +284,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#B0C4DE', marginBottom: 10 }}>{isNew ? '🔌 Новое подключение' : '🔌 Настройки подключения'}</div>
-      {msg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(248,113,113,.5)', borderRadius: 8, color: '#F87171', fontSize: 12, marginBottom: 8 }}>{msg}</div>}
+      {msg && f.transport !== 'cloud' && <div style={{ padding: '7px 10px', border: '1px dashed rgba(248,113,113,.5)', borderRadius: 8, color: '#F87171', fontSize: 12, marginBottom: 8 }}>{msg}</div>}
       {okMsg && f.transport !== 'cloud' && <div style={{ padding: '7px 10px', border: '1px dashed rgba(74,222,128,.5)', borderRadius: 8, color: '#4ADE80', fontSize: 12, marginBottom: 8 }}>{okMsg}</div>}
       {row('Название', <input style={inp} value={f.name} placeholder="Например: УНФ ТОПЕКС" onChange={(e) => upd({ name: e.target.value })} />)}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -388,9 +388,10 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               {cloudConnected ? 'Доступ подтверждён' + (cloudAccount ? ': ' + cloudAccount : '') : 'Доступ ещё не подтверждён'}
             </span>
           </div>
-          {okMsg && f.transport === 'cloud' && (
-            <div style={{ marginTop: 8, padding: '7px 10px', border: '1px dashed rgba(74,222,128,.5)', borderRadius: 8, color: '#4ADE80', fontSize: 11.5 }}>
-              {okMsg}
+          {f.transport === 'cloud' && (msg || okMsg) && (
+            <div style={{ display: 'grid', gap: 5, marginTop: 8 }}>
+              {msg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(248,113,113,.5)', borderRadius: 8, color: '#F87171', fontSize: 11.5 }}>{msg}</div>}
+              {okMsg && <div style={{ padding: '7px 10px', border: '1px dashed rgba(74,222,128,.5)', borderRadius: 8, color: '#4ADE80', fontSize: 11.5 }}>{okMsg}</div>}
             </div>
           )}
           <div style={{ fontSize: 11, color: '#5A7090', marginTop: 6 }}>
