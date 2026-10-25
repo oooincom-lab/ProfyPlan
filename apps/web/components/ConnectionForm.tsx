@@ -2,6 +2,7 @@
 // Форма настроек подключения интеграции — открывается в MDI-окне «Интеграция · имя».
 // Сохранение — через колбэк save (PUT /v1/integration/connections/{id}), иначе — только просмотр.
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { API_V1 } from '../lib/api';
 
 const inp: any = { background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#E8EEF5', padding: '7px 10px', fontSize: 12.5, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' };
@@ -55,6 +56,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const [oauthUrl, setOauthUrl] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
   const [tokenJustReceived, setTokenJustReceived] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [cloudAccount, setCloudAccount] = useState<string>(() => {
     const cloud = (conn?.settings && conn.settings.cloud) || {};
     const provider = cloud.provider || 'yandex';
@@ -253,7 +255,6 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
   const resetCloud = async () => {
     const id = savedId || (conn && conn.id ? String(conn.id) : '');
     if (!id) return;
-    if (typeof window !== 'undefined' && !window.confirm('Сбросить доступ к облаку? Полученные токены будут удалены, подключение и Client ID/secret останутся.')) return;
     setBusy(true); setMsg(null); setOkMsg(null);
     try {
       const tok = typeof window !== 'undefined' ? localStorage.getItem('profyplan_token') : null;
@@ -378,7 +379,7 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
               Проверить доступ
             </button>
             {!isNew && (
-              <button type="button" disabled={busy} onClick={() => void resetCloud()}
+              <button type="button" disabled={busy} onClick={() => setResetConfirmOpen(true)}
                 style={{ background: 'transparent', border: '1px solid rgba(248,113,113,.45)', color: '#FCA5A5', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
                 Сбросить подключение
               </button>
@@ -448,6 +449,38 @@ export default function ConnectionForm({ conn, save, onSaved, onClose }: {
         <button onClick={() => { if (onClose) onClose(); }} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
         <button onClick={() => void saveNow()} disabled={busy || saveLocked} title={saveLocked ? 'Доступ уже подтверждён' : undefined} style={{ background: saveLocked ? '#334155' : '#0891B2', border: 'none', color: saveLocked ? '#94A3B8' : '#fff', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: saveLocked ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: (busy || saveLocked) ? 0.6 : 1 }}>{busy ? 'Сохранение…' : (isNew ? '➕ Создать' : '💾 Сохранить')}</button>
       </div>
+      {resetConfirmOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          role="presentation"
+          onClick={() => setResetConfirmOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(3,10,20,.74)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cloud-reset-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 'min(460px, calc(100vw - 40px))', background: '#0A1628', border: '1px solid rgba(248,113,113,.45)', borderRadius: 12, boxShadow: '0 24px 70px rgba(0,0,0,.55)', padding: '18px 20px 16px' }}
+          >
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(248,113,113,.12)', border: '1px solid rgba(248,113,113,.35)', fontSize: 16 }}>!</span>
+              <div>
+                <div id="cloud-reset-title" style={{ fontSize: 15, fontWeight: 700, color: '#F1F5F9' }}>Сбросить подключение?</div>
+                <div style={{ fontSize: 12, color: '#8FA3BD', marginTop: 3 }}>Доступ к облаку будет отключён</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.55, color: '#B0C4DE', marginBottom: 14 }}>
+              Будут удалены сохранённые токены и ID папок. Само подключение, провайдер, корневая папка и <b style={{ color: '#E8EEF5' }}>Client ID / Client secret</b> останутся.
+              Чтобы снова подключиться, потребуется заново получить код подтверждения Яндекса.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" onClick={() => setResetConfirmOpen(false)} style={{ background: 'transparent', border: '1px solid #1E3A5F', color: '#8FA3BD', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>Отмена</button>
+              <button type="button" onClick={() => { setResetConfirmOpen(false); void resetCloud(); }} style={{ background: 'rgba(185,28,28,.92)', border: '1px solid rgba(248,113,113,.55)', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Сбросить подключение</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
