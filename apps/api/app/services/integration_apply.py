@@ -19,11 +19,12 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.counterparty import Counterparty
 from app.models.department import Department
+from app.models.employee import Employee
 from app.models.execution_fact import ExecutionFact
 from app.models.integration import ExchangeInboxItem
 from app.models.nomenclature import Nomenclature
@@ -731,6 +732,69 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
     return "applied: факт обновлён" if not changed else "applied: факт создан/изменён"
 
 
+async def _apply_delete(db: AsyncSession, tenant_id: UUID, entity_type: str, uid: Optional[str]) -> str:
+    """Мягкое удаление импортированной сущности; повторный delete — no-op."""
+    uid_s = _s(uid) or None
+    if not uid_s:
+        return "skipped: нет UID для удаления"
+    et = (entity_type or "").lower().strip()
+
+    if et in ("project", "проект", "проекты"):
+        obj = (await db.execute(
+            select(Project).where(Project.tenant_id == tenant_id, Project.ext_uid == uid_s)
+        )).scalars().first()
+        if obj is None:
+            return "applied: no-op (проект уже отсутствует)"
+        active = (await db.execute(
+            select(func.count(ProductionOrder.id)).where(
+                ProductionOrder.tenant_id == tenant_id,
+                ProductionOrder.project_id == obj.id,
+                ProductionOrder.status.notin_(("cancelled", "archived", "closed")),
+            )
+        )).scalar() or 0
+        if active:
+            return "skipped: DEPENDENCY_CONFLICT: активных заказов %s" % active
+        obj.status = "archived"
+        return "applied: проект архивирован"
+
+    if et in ("order", "orders", "заказ", "заказы", "производственный_заказ"):
+        obj = (await db.execute(
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_uid == uid_s
+            )
+        )).scalars().first()
+        if obj is None:
+            return "applied: no-op (заказ уже отсутствует)"
+        if obj.status not in ("cancelled", "archived", "closed"):
+            obj.status = "cancelled"
+            return "applied: заказ отменён (мягкое удаление)"
+        return "applied: no-op (заказ уже отменён)"
+
+    models = {
+        "nomenclature": Nomenclature, "номенклатура": Nomenclature,
+        "counterparty": Counterparty, "контрагент": Counterparty, "контрагенты": Counterparty,
+        "department": Department, "подразделение": Department, "подразделения": Department,
+        "resource": Resource, "ресурс": Resource, "ресурсы": Resource,
+        "organization": Organization, "организация": Organization,
+        "warehouse": Warehouse, "склад": Warehouse,
+        "employee": Employee, "сотрудник": Employee,
+    }
+    model = models.get(et)
+    if model is None:
+        return "skipped: тип удаления не поддержан (%s)" % entity_type
+    obj = (await db.execute(
+        select(model).where(model.tenant_id == tenant_id, model.ext_uid == uid_s)
+    )).scalars().first()
+    if obj is None:
+        return "applied: no-op (уже отсутствует)"
+    if hasattr(obj, "is_active"):
+        if not obj.is_active:
+            return "applied: no-op (уже неактивна)"
+        obj.is_active = False
+        return "applied: помечено неактивным"
+    return "skipped: у сущности нет признака активности"
+
+
 async def apply_pending(
     db: AsyncSession, tenant_id: UUID, connection_id: Optional[UUID] = None, limit: int = 500
 ) -> dict:
@@ -753,7 +817,9 @@ async def apply_pending(
         f = f if isinstance(f, dict) else {}
         try:
             async with db.begin_nested():
-                if et in ("nomenclature", "номенклатура"):
+                if (item.op or "upsert").lower() == "delete":
+                    msg = await _apply_delete(db, tenant_id, et, item.entity_uid)
+                elif et in ("nomenclature", "номенклатура"):
                     msg = await _apply_nomenclature(db, tenant_id, item.entity_uid, f)
                 elif et in ("counterparty", "контрагент", "контрагенты"):
                     msg = await _apply_counterparty(db, tenant_id, item.entity_uid, f)
