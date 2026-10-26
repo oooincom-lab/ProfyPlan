@@ -4,7 +4,7 @@ CRUD-роутер для проектов.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,6 +12,8 @@ from app.core.deps import get_current_tenant_id, get_current_user
 from app.models.project import Project
 from app.models.production_order import ProductionOrder
 from app.models.operation import Operation, OperationResource
+from app.models.department import Department
+from app.models.resource import Resource
 from app.models.calculation_run import CalculationRun
 from app.models.plan_snapshot import PlanSnapshot, PlanSnapshotRow
 from app.models.plan_version import InterProjectDependency
@@ -319,7 +321,8 @@ async def project_readiness(
     if op_ids:
         with_res = (await db.execute(
             select(func.count(func.distinct(OperationResource.operation_id))).where(
-                OperationResource.operation_id.in_(op_ids)
+                OperationResource.operation_id.in_(op_ids),
+                OperationResource.role == "primary",
             )
         )).scalar() or 0
     ops_without_res = max(0, len(ops) - with_res)
@@ -370,7 +373,7 @@ async def project_readiness(
     if len(ops) == 0:
         add("resources", "Ресурсы", "warn", "Нет операций — назначить ресурсы некому", "project")
     elif ops_without_res > 0:
-        add("resources", "Ресурсы", "warn", f"Операций без ресурсов: {ops_without_res}", "project")
+        add("resources", "Ресурсы", "warn", f"Операций без primary-ресурса: {ops_without_res}", "project")
     else:
         add("resources", "Ресурсы", "ok", "Все операции с ресурсами", "project")
 
@@ -412,6 +415,114 @@ async def project_readiness(
     ok = len([i for i in items if i["status"] == "ok"])
     nxt = next((i["id"] for i in items if i["status"] == "block"), None) or next((i["id"] for i in items if i["status"] == "warn"), None)
     return {"project_id": str(project_id), "project_name": project.name, "score": {"ok": ok, "total": len(items)}, "next": nxt, "items": items}
+
+
+@router.get("/{project_id}/resource-coverage")
+async def project_resource_coverage(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+):
+    """Операции проекта и их покрытие ресурсами для экрана «Ресурсы операций»."""
+    project = (await db.execute(
+        select(Project).where(Project.id == project_id, Project.tenant_id == tenant_id)
+    )).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    op_rows = (await db.execute(
+        select(Operation, ProductionOrder.ext_id, ProductionOrder.specification_name, Department.name)
+        .outerjoin(ProductionOrder, ProductionOrder.id == Operation.order_id)
+        .outerjoin(Department, Department.id == Operation.department_id)
+        .where(Operation.tenant_id == tenant_id, Operation.project_id == project_id)
+        .order_by(Operation.order_id, Operation.position, Operation.name)
+    )).all()
+
+    op_ids = [row[0].id for row in op_rows]
+    assignments: dict[str, list[dict]] = {}
+    if op_ids:
+        assign_rows = (await db.execute(
+            select(OperationResource, Resource)
+            .join(Resource, Resource.id == OperationResource.resource_id)
+            .where(OperationResource.operation_id.in_(op_ids))
+            .order_by(OperationResource.role, OperationResource.priority, Resource.name)
+        )).all()
+        for assignment, resource in assign_rows:
+            assignments.setdefault(str(assignment.operation_id), []).append({
+                "id": str(assignment.id),
+                "resource_id": str(resource.id),
+                "resource_name": resource.name,
+                "resource_type": resource.resource_type,
+                "role": assignment.role,
+                "capacity_demand": float(assignment.capacity_demand or 0),
+                "ktu": float(assignment.ktu or 1),
+                "priority": assignment.priority,
+            })
+
+    items = []
+    for op, order_ext_id, order_spec_name, dept_name in op_rows:
+        order_name = order_ext_id or order_spec_name
+        linked = assignments.get(str(op.id), [])
+        primary = [x for x in linked if x["role"] == "primary"]
+        if not linked:
+            status = "missing"
+        elif len(primary) == 0:
+            status = "warning"
+        elif len(primary) > 1:
+            status = "multiple"
+        else:
+            status = "ok"
+        items.append({
+            "id": str(op.id),
+            "name": op.name,
+            "order_id": str(op.order_id) if op.order_id else None,
+            "order_name": order_name,
+            "department_id": str(op.department_id) if op.department_id else None,
+            "department_name": dept_name,
+            "duration_hours": float(op.duration_base or 0),
+            "operation_type": op.operation_type or "production",
+            "position": op.position,
+            "status": status,
+            "primary_count": len(primary),
+            "resources": linked,
+        })
+
+    resources = (await db.execute(
+        select(Resource)
+        .where(
+            Resource.tenant_id == tenant_id,
+            Resource.is_active.is_(True),
+            or_(
+                Resource.scope == "shared",
+                Resource.project_id == project_id,
+                Resource.project_id.is_(None),
+            ),
+        )
+        .order_by(Resource.name)
+    )).scalars().all()
+
+    return {
+        "project_id": str(project_id),
+        "project_name": project.name,
+        "summary": {
+            "total": len(items),
+            "ok": len([i for i in items if i["status"] == "ok"]),
+            "missing": len([i for i in items if i["status"] == "missing"]),
+            "warning": len([i for i in items if i["status"] == "warning"]),
+            "multiple": len([i for i in items if i["status"] == "multiple"]),
+        },
+        "items": items,
+        "resources": [
+            {
+                "id": str(r.id),
+                "name": r.name,
+                "resource_type": r.resource_type,
+                "scope": r.scope,
+                "is_bookable": r.is_bookable,
+            }
+            for r in resources
+        ],
+    }
 
 
 @router.patch("/{project_id}/move", response_model=ProjectOut)

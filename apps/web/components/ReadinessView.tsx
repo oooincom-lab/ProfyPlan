@@ -1,6 +1,7 @@
 'use client';
 // Готовность к расчёту: пошаговый чек-лист подготовки данных проекта.
 import { useEffect, useState } from 'react';
+import OperationResourcesModal from './operationresourcesmodal';
 
 type Api = (path: string, opts?: any) => Promise<any>;
 
@@ -29,6 +30,7 @@ export default function ReadinessView({ api, projects, notify, onOpenProject, on
   const [pid, setPid] = useState('');
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
 
   useEffect(() => {
     if (!pid && active.length) setPid(active[0].id);
@@ -48,6 +50,7 @@ export default function ReadinessView({ api, projects, notify, onOpenProject, on
   useEffect(() => { void load(); }, [pid]);
 
   const open = (item: any) => {
+    if (item.id === 'resources') { setResourcesOpen(true); return; }
     if (item.action === 'complex' && onOpenComplex) { onOpenComplex(); return; }
     if (item.action === 'ccm' && onOpenCcm) { onOpenCcm(); return; }
     const p = (projects || []).find((x: any) => x.id === pid);
@@ -55,6 +58,7 @@ export default function ReadinessView({ api, projects, notify, onOpenProject, on
   };
 
   const nextItem = data?.items?.find((i: any) => i.id === data.next);
+  const activeProject = (projects || []).find((x: any) => x.id === pid);
 
   return (
     <div>
@@ -97,10 +101,19 @@ export default function ReadinessView({ api, projects, notify, onOpenProject, on
             {HINTS[item.id] && <div style={{ fontSize: 11, color: '#5A7090', marginTop: 2 }}>{HINTS[item.id]}</div>}
           </div>
           <button style={btn} onClick={() => open(item)}>
-            {item.action === 'complex' ? 'Комплекс' : item.action === 'ccm' ? 'К выравниванию' : item.id === 'fixation' ? 'К фиксации' : 'Перейти'}
+            {item.id === 'resources' ? 'Исправить' : item.action === 'complex' ? 'Комплекс' : item.action === 'ccm' ? 'К выравниванию' : item.id === 'fixation' ? 'К фиксации' : 'Перейти'}
           </button>
         </div>
       ))}
+      {resourcesOpen && (
+        <OperationResourcesModal
+          api={api}
+          projectId={pid}
+          projectName={activeProject?.name}
+          notify={notify}
+          onClose={() => { setResourcesOpen(false); void load(); }}
+        />
+      )}
     </div>
   );
 }
