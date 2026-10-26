@@ -1730,12 +1730,12 @@
 | CCM-MN-4 | Только alternative | Ошибка `RESOURCE_PRIMARY_MISSING`; alternative не грузится одновременно | ⏳ |
 | CCM-MN-5 | Дублирующая связь operation+resource | Ошибка `RESOURCE_DUPLICATE` или идемпотентное обновление | ⏳ |
 | CCM-MN-6 | Ресурс другого tenant | API отклоняет назначение | ⏳ |
-| CCM-MN-7 | Заказ-наряд `work_order` | Создаётся WorkOrder, а не ProductionOrder; строки работ с `ntype=service` | ⏳ |
+| CCM-MN-7 | Заказ-наряд `work_order` | Создаётся WorkOrder, а не ProductionOrder; строки работ с `nomenclature_kind=service / work` | ⏳ |
 | CCM-MN-8 | Сотрудник как ресурс | Создаётся Employee/Resource `employee`, не `equipment` | ⏳ |
 | CCM-MN-9 | Бригада как ресурс | Создаётся Department/Resource `team`, не `equipment` | ⏳ |
-| CCM-MN-10 | Вид работы в строке | `work_type_uid/name` сохранён; не подменён номенклатурой | ⏳ |
+| CCM-MN-10 | Виды «Услуга» и «Работа» | Оба вида сохранены в `nomenclature_kind`; `work_type_uid/name` не подменяет номенклатуру | ⏳ |
 | CCM-MN-11 | Операция без primary в готовности | Виден список конкретных операций; доступно назначение | ⏳ |
 | CCM-MN-12 | Plan snapshot с helper/alternative | В план попадает primary; ограничение зафиксировано, данные не теряются молча | ⏳ |
 | CCM-MN-13 | Bottleneck с alternative | Alternative не считается одновременной загрузкой | ⏳ |
-| CCM-MN-14 | Регистр 1С `ПФП_ОперацияРесурс` | Связь импортируется по `operation_uid + resource_uid`, роль сохраняется | ⏳ |
+| CCM-MN-14 | Регистр 1С `ПФП_РесурсыОпераций` | Связь импортируется по `operation_uid + resource_uid`, роль сохраняется | ⏳ |
 | CCM-MN-15 | Заказ-наряд без родительского production order | Импортируется как самостоятельный WorkOrder или отклоняется по правилу | ⏳ |
