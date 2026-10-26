@@ -45,7 +45,7 @@
   <div class="kicker">ProfyPlan · план реализации</div>
   <h1>План реализации</h1>
   <div class="meta">Веб-версия собрана из канонического текста плана: <code>profyplan-план-реализации.md</code>.
-    Разделов: 53. Правки вносятся в текст, затем сборка повторяется.</div>
+    Разделов: 54. Правки вносятся в текст, затем сборка повторяется.</div>
 </header>
 <p># ProfyPlan — план реализации (канонический текст)</p>
 <p>Версия v3.4 · 26.09.2026.</p>
@@ -1903,6 +1903,45 @@
     <div class="task-detail">API включения ресурса для сотрудника/подразделения; в экране оргструктуры — уровень подразделения, переключатель ресурса.</div>
     
   </div>
+</div>
+<div class="phase"><div class="phase-head"><span class="tag">Блок 6</span> 45. CCM/M:N, заказ-наряды и ресурсные связи (26.10.2026) — не начато</div>
+<p><b>Решение:</b> пилот включает CCM; ресурсы и связи «операция ↔ ресурс» становятся обязательной частью модели. Спецификации как справочник не используем; операции и ресурсы берём из заказа на производство и заказ-наряда.</p>
+<p><b>Текущее состояние:</b> <code>orders</code> принимает только <code>production_order</code>; <code>work_order</code> отбрасывается; <code>OperationResource</code> M:N есть, но leveling/plan snapshot/bottleneck используют один ресурс; проверка готовности считает только наличие любой связи; удобного назначения ресурса операции нет; регистр 1С отсутствует.</p>
+<p><b>Срезы:</b></p>
+<div class="tasks">
+  <div class="task">
+    <div class="task-title">6.45.1. Целостность связей: tenant/project-проверка ресурса, уникальность `opera</div>
+    
+    <div class="status st-idle">не начато.</div>
+  </div>
+  <div class="task">
+    <div class="task-title">6.45.2. Покрытие ресурсами: API и экран «Ресурсы операций» со списком операций б</div>
+    
+    <div class="status st-idle">не начато.</div>
+  </div>
+  <div class="task">
+    <div class="task-title">6.45.3. M:N-движок: leveling по primary/helper, capacity/effectivity, календарь </div>
+    
+    <div class="status st-idle">не начато.</div>
+  </div>
+  <div class="task">
+    <div class="task-title">6.45.4. Заказ-наряд: модель <code>WorkOrder</code>, строки работ, операции, исполнители, AP</div>
+    
+    <div class="status st-idle">не начато.</div>
+  </div>
+  <div class="task">
+    <div class="task-title">6.45.5. 1С: ТЗ 1.5, регистр <code>ПФП_ОперацияРесурс</code>, <code>ПФП_UIDОперации</code>, тестовые па</div>
+    
+    <div class="status st-idle">не начато.</div>
+  </div>
+  <div class="task">
+    <div class="task-title">6.45.6. CCM-пилот: тесты M:N, конфликты, альтернативы, бригады, отсутствие prima</div>
+    
+    <div class="status st-idle">не начато.</div>
+  </div>
+</div>
+<p><b>Критерии приёмки:</b> заказ-наряд импортируется; люди/бригады не становятся оборудованием; операция и ресурс связаны M:N; у производственной операции ровно один primary; альтернативы не грузятся одновременно; helper учитывается; CCM блокируется без primary; план не теряет primary; ошибки содержат UID операции/ресурса.</p>
+<p><b>Документы:</b> <code>docs/1c-tz-1.5-work-orders-resources.md</code>; тесты — <code>profyplan-тест-план.md</code>, раздел CCM-MN.</p>
 </div>
 <footer>
   Файл собран автоматически — правьте текстовый план и запускайте <code>node scripts/render_plan.mjs</code>.
