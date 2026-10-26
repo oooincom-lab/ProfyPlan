@@ -781,7 +781,7 @@
 
 **Срезы:**
 
-- 6.45.1. Целостность связей: tenant/project-проверка ресурса, уникальность `operation_id + resource_id`, enum ролей, правило одного primary — не начато.
+- 6.45.1. Целостность связей: tenant/project-проверка ресурса, уникальность `operation_id + resource_id`, enum ролей, КТУ и правило одного primary — backend готово, UI не начато.
 - 6.45.2. Покрытие ресурсами: API и экран «Ресурсы операций» со списком операций без primary, массовым назначением, ролями и переходом из «Готовности» — не начато.
 - 6.45.3. M:N-движок: leveling по primary/helper, capacity/effectivity, календарь primary, bottleneck без alternative, plan snapshot с primary — не начато.
 - 6.45.4. Заказ-наряд: модель `WorkOrder`, строки работ «Услуга/Работа» (`nomenclature_kind`) как операции планирования, несколько исполнителей с КТУ, исполнитель строки/бригада как primary-ресурс, API/UI, импорт `work_order` — не начато.

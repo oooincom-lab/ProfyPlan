@@ -6,7 +6,20 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -128,6 +141,20 @@ class OperationDependency(BaseModel):
 class OperationResource(BaseModel):
     """M:N связь операций с ресурсами."""
     __tablename__ = "operation_resources"
+    __table_args__ = (
+        UniqueConstraint("operation_id", "resource_id", name="uq_operation_resources_operation_resource"),
+        CheckConstraint(
+            "role IN ('primary', 'member', 'alternative', 'helper')",
+            name="ck_operation_resources_role",
+        ),
+        CheckConstraint("ktu >= 0.1 AND ktu <= 3.0", name="ck_operation_resources_ktu"),
+        Index(
+            "uq_operation_resources_primary",
+            "operation_id",
+            unique=True,
+            postgresql_where=text("role = 'primary'"),
+        ),
+    )
 
     operation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("operations.id", ondelete="CASCADE"),
@@ -139,13 +166,16 @@ class OperationResource(BaseModel):
     )
     role: Mapped[str] = mapped_column(
         String(20), default="primary"
-    )  # primary / alternative / helper
+    )  # primary / member / alternative / helper
     efficiency_factor: Mapped[Decimal] = mapped_column(
         Numeric(5, 3), default=1.0
     )
     capacity_demand: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), default=1.0
     )
+    ktu: Mapped[Decimal] = mapped_column(
+        Numeric(8, 3), nullable=False, default=Decimal("1.0"), server_default="1.0"
+    )  # коэффициент трудового участия; не влияет на CCM
     duration_override: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2), nullable=True
     )

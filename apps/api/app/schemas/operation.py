@@ -3,7 +3,8 @@ Pydantic-схемы для операций.
 """
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -81,10 +82,11 @@ class DependencyOut(BaseModel):
 
 
 class OperationResourceCreate(BaseModel):
-    resource_id: str
-    role: str = "primary"  # primary / alternative / helper
+    resource_id: UUID
+    role: Literal["primary", "member", "alternative", "helper"] = "primary"
     efficiency_factor: Decimal = Field(default=Decimal("1.0"), ge=0, le=3)
-    capacity_demand: Decimal = Field(default=Decimal("1.0"), ge=0)
+    capacity_demand: Decimal = Field(default=Decimal("1.0"), gt=0)
+    ktu: Decimal = Field(default=Decimal("1.0"), ge=Decimal("0.1"), le=Decimal("3.0"))
     duration_override: Optional[Decimal] = None
     setup_time_override: Optional[Decimal] = None
     teardown_time_override: Optional[Decimal] = None
@@ -98,6 +100,7 @@ class OperationResourceOut(BaseModel):
     role: str
     efficiency_factor: Decimal
     capacity_demand: Decimal
+    ktu: Decimal
     duration_override: Optional[Decimal] = None
     setup_time_override: Optional[Decimal] = None
     teardown_time_override: Optional[Decimal] = None

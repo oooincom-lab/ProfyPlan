@@ -4,12 +4,13 @@ CRUD-роутер для операций и зависимостей.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.operation import Operation, OperationDependency, OperationResource
+from app.models.resource import Resource
 from app.services.edit_policy import require_project_editable
 from app.schemas.operation import (
     DependencyCreate,
@@ -289,7 +290,7 @@ async def list_operation_resources(
     )
     items = []
     for r in result.scalars().all():
-        items.append(OperationResourceOut(id=str(r.id), operation_id=str(r.operation_id), resource_id=str(r.resource_id), role=r.role, efficiency_factor=r.efficiency_factor, capacity_demand=r.capacity_demand, duration_override=r.duration_override, setup_time_override=r.setup_time_override, teardown_time_override=r.teardown_time_override, priority=r.priority))
+        items.append(OperationResourceOut(id=str(r.id), operation_id=str(r.operation_id), resource_id=str(r.resource_id), role=r.role, efficiency_factor=r.efficiency_factor, capacity_demand=r.capacity_demand, ktu=r.ktu, duration_override=r.duration_override, setup_time_override=r.setup_time_override, teardown_time_override=r.teardown_time_override, priority=r.priority))
     return items
 
 
@@ -302,7 +303,7 @@ async def assign_resource_to_operation(
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     """Назначить ресурс на операцию."""
-    # Verify operation
+    # Verify operation and tenant/project scope
     op_result = await db.execute(
         select(Operation).where(
             Operation.id == operation_id,
@@ -313,14 +314,74 @@ async def assign_resource_to_operation(
     if not op_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Operation not found")
 
-    assignment = OperationResource(
-        operation_id=operation_id,
-        **body.model_dump(),
-    )
-    db.add(assignment)
+    # Resource must belong to this tenant and be either shared or belong to this project.
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == body.resource_id,
+                Resource.tenant_id == tenant_id,
+                Resource.is_active.is_(True),
+                or_(
+                    Resource.scope == "shared",
+                    Resource.project_id == project_id,
+                    Resource.project_id.is_(None),
+                ),
+            )
+        )
+    ).scalar_one_or_none()
+    if not resource:
+        raise HTTPException(status_code=404, detail="RESOURCE_NOT_FOUND: ресурс не найден или недоступен")
+
+    existing = (
+        await db.execute(
+            select(OperationResource).where(OperationResource.operation_id == operation_id)
+        )
+    ).scalars().all()
+    same = next((row for row in existing if row.resource_id == body.resource_id), None)
+    if body.role == "primary":
+        other_primary = next(
+            (row for row in existing if row.role == "primary" and row.id != (same.id if same else None)),
+            None,
+        )
+        if other_primary:
+            raise HTTPException(
+                status_code=409,
+                detail="RESOURCE_PRIMARY_MULTIPLE: у операции уже есть основной ресурс",
+            )
+
+    # Повторное назначение того же ресурса обновляет строку, а не создаёт дубль.
+    if same:
+        same.role = body.role
+        same.efficiency_factor = body.efficiency_factor
+        same.capacity_demand = body.capacity_demand
+        same.ktu = body.ktu
+        same.duration_override = body.duration_override
+        same.setup_time_override = body.setup_time_override
+        same.teardown_time_override = body.teardown_time_override
+        same.priority = body.priority
+        assignment = same
+    else:
+        assignment = OperationResource(
+            operation_id=operation_id,
+            **body.model_dump(),
+        )
+        db.add(assignment)
+
     await db.commit()
     await db.refresh(assignment)
-    return OperationResourceOut(id=str(assignment.id), operation_id=str(assignment.operation_id), resource_id=str(assignment.resource_id), role=assignment.role, efficiency_factor=assignment.efficiency_factor, capacity_demand=assignment.capacity_demand, duration_override=assignment.duration_override, setup_time_override=assignment.setup_time_override, teardown_time_override=assignment.teardown_time_override, priority=assignment.priority)
+    return OperationResourceOut(
+        id=str(assignment.id),
+        operation_id=str(assignment.operation_id),
+        resource_id=str(assignment.resource_id),
+        role=assignment.role,
+        efficiency_factor=assignment.efficiency_factor,
+        capacity_demand=assignment.capacity_demand,
+        ktu=assignment.ktu,
+        duration_override=assignment.duration_override,
+        setup_time_override=assignment.setup_time_override,
+        teardown_time_override=assignment.teardown_time_override,
+        priority=assignment.priority,
+    )
 
 
 @router.delete("/{operation_id}/resources/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -332,6 +393,16 @@ async def remove_resource_assignment(
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     """Снять назначение ресурса с операции."""
+    op_result = await db.execute(
+        select(Operation).where(
+            Operation.id == operation_id,
+            Operation.project_id == project_id,
+            Operation.tenant_id == tenant_id,
+        )
+    )
+    if not op_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Operation not found")
+
     result = await db.execute(
         select(OperationResource).where(
             OperationResource.id == assignment_id,
