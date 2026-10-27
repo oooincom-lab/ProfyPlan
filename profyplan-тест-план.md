@@ -1755,4 +1755,4 @@
 | CCM-MN-29 | Импорт `operation_resource` | Связь создаётся по order_uid + operation_uid + resource_uid, роль/КТУ и плановые даты сохраняются | ⏳ |
 | CCM-MN-30 | Plan snapshot с M:N | На операцию с primary/member создаются отдельные строки с role/ktu/resource_load; alternative не попадает | ✅ 27.10, пилот |
 | CCM-MN-31 | Факт закрытия заказ-наряда | `work_order_close` не дублирует часы и поднимает ревизию проекта | ⏳ |
-| CCM-MN-32 | Факт выполнения с КТУ | `work_order_execution` привязывается к строке/исполнителю, КТУ сохраняется | ⏳ |
+| CCM-MN-32 | Факт выполнения с КТУ | `work_order_execution` привязывается к строке/исполнителю, КТУ сохраняется | ✅ 28.10, пилот |
