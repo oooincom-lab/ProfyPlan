@@ -1408,6 +1408,8 @@ export function articleIdForView(view: string, calcTab?: string): string {
       return articleIdForCalcTab(calcTab || 'overview');
     case 'ccm':
       return 'ccm';
+    case 'work-orders':
+      return 'integration';
     case 'reports':
       return 'reports';
     case 'tools':
