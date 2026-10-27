@@ -1453,6 +1453,7 @@ export default function AppShell() {
   const [orderSortKey, setOrderSortKey] = useState<string | null>(null);
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('asc');
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('free');
+  const [orderKindFilter, setOrderKindFilter] = useState<'all' | 'production_order' | 'work_order'>('all');
   const [orderTreeSections, setOrderTreeSections] = useState(true); // дерево секциями: Группы / Кластеры / Свободные
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
@@ -3738,6 +3739,9 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
             if (orderShowAll && orderTypeFilter === 'free') {
               filtered = filtered.filter((o: any) => !o.group_id && !o.pool_id);
             }
+            if (orderKindFilter !== 'all') {
+              filtered = filtered.filter((o: any) => (o.order_type || 'production_order') === orderKindFilter);
+            }
             if (orderSortKey) {
               filtered.sort((a: any, b: any) => {
                 let aVal: string, bVal: string;
@@ -3919,6 +3923,11 @@ const renderOrdersView = (mode: 'full' | 'table' = 'full') => {
                           {projPools.map((p: any) => <option key={'p-'+p.id} value={p.id}>📦 {p.name}</option>)}
                         </select>
                       )}
+                      <select value={orderKindFilter} onChange={e => setOrderKindFilter(e.target.value as any)} style={{ background: '#0A1628', border: '1px solid #1E3252', borderRadius: 6, color: '#B0C4DE', padding: '4px 8px', fontSize: 12 }} title="Тип заказа">
+                        <option value="all">Все заказы</option>
+                        <option value="production_order">Производственные</option>
+                        <option value="work_order">Заказ-наряды</option>
+                      </select>
                       <button onClick={() => setAllOrdersCollapsed(collapsedOrderIds.size === 0)} style={{ background: 'none', border: '1px solid #1E3252', color: '#8FA3BD', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '4px 8px', whiteSpace: 'nowrap' }} title={collapsedOrderIds.size === 0 ? 'Свернуть все поддеревья цепочки' : 'Развернуть все поддеревья цепочки'}>{collapsedOrderIds.size === 0 ? '▾ Свернуть всё' : '▸ Развернуть всё'}</button>
                       <button className="btn btn-primary btn-sm" onClick={() => setShowNewOrder(true)}>+ Заказ</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkPaste(!showBulkPaste)}>📋 Вставить</button>
