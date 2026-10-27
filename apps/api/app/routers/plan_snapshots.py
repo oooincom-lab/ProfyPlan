@@ -65,6 +65,9 @@ class SnapshotRowOut(BaseModel):
     resource_name: Optional[str] = None
     resource_id: Optional[str] = None
     resource_ext_id: Optional[str] = None
+    resource_role: Optional[str] = None
+    ktu: Optional[float] = None
+    resource_load: Optional[float] = None
     start_date: Optional[datetime] = None
     finish_date: Optional[datetime] = None
     start_datetime: Optional[datetime] = None
