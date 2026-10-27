@@ -1371,6 +1371,9 @@ export default function AppShell() {
     if (params.get('view') === 'org-structure') {
       setView('org-structure');
     }
+    if (params.get('view') === 'work-orders') {
+      setView('work-orders');
+    }
     const cloud = params.get('cloud');
     if (!cloud) {
       if (params.get('view')) window.history.replaceState({}, '', '/workspace');
