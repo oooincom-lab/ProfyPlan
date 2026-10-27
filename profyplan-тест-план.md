@@ -1748,9 +1748,9 @@
 | CCM-MN-22 | Факт закрытия и СдельныйНаряд | Нет двойного учёта; один источник истины по UID | ⏳ |
 | CCM-MN-23 | КТУ в факте | КТУ передан с фактическими часами; CCM-план не изменился | ⏳ |
 | CCM-MN-24 | Покрытие из «Готовности» | «Ресурсы» показывает число без primary; «Исправить» открывает список операций и назначение | ⏳ |
-| CCM-MN-25 | Leveling с shared-ресурсом | Общий ресурс участвует в выравнивании, а не только ресурс проекта | ⏳ |
+| CCM-MN-25 | Leveling с shared-ресурсом | Общий ресурс участвует в выравнивании, а не только ресурс проекта | ✅ 27.10, пилот |
 | CCM-MN-26 | Alternative в bottleneck | Alternative не увеличивает загрузку и не создаёт узкое место | ⏳ |
-| CCM-MN-27 | Leveling с CPM по умолчанию | `resource-leveling` не падает при `use_cpm_result=true` | ⏳ |
+| CCM-MN-27 | Leveling с CPM по умолчанию | `resource-leveling` не падает при `use_cpm_result=true` | ✅ 27.10, пилот |
 | CCM-MN-28 | Импорт заказ-наряда | `work_order` создаёт WorkOrder, строку-операцию и исполнителя; повторный импорт не дублирует | ⏳ |
 | CCM-MN-29 | Импорт `operation_resource` | Связь создаётся по order_uid + operation_uid + resource_uid, роль/КТУ и плановые даты сохраняются | ⏳ |
-| CCM-MN-30 | Plan snapshot с M:N | На операцию с primary/member создаются отдельные строки с role/ktu/resource_load; alternative не попадает | ⏳ |
+| CCM-MN-30 | Plan snapshot с M:N | На операцию с primary/member создаются отдельные строки с role/ktu/resource_load; alternative не попадает | ✅ 27.10, пилот |
