@@ -7,7 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -125,6 +125,8 @@ class ScheduledOperation:
     total_float: Decimal
     predecessor_ids: list[UUID]
     batch_group: Optional[str] = None
+    booked_resource_ids: list[UUID] = field(default_factory=list)
+    booked_resource_names: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -198,8 +200,13 @@ async def resource_leveling_sgs(
     # Загружаем ресурсы
     resources_result = await db.execute(
         select(Resource).where(
-            Resource.project_id == project_id,
             Resource.tenant_id == tenant_id,
+            Resource.is_active.is_(True),
+            or_(
+                Resource.project_id == project_id,
+                Resource.project_id.is_(None),
+                Resource.scope == "shared",
+            ),
         )
     )
     resources = {r.id: r for r in resources_result.scalars().all()}
@@ -245,7 +252,7 @@ async def resource_leveling_sgs(
 
     # 4. Serial SGS — пооперационное размещение
     scheduled: dict[UUID, ScheduledOperation] = {}
-    resource_free: dict[str, Decimal] = {}  # resource_name → время освобождения
+    resource_free: dict[UUID, Decimal] = {}  # resource_id → время освобождения
     completed: dict[UUID, Decimal] = {}  # operation_id → время завершения (EF)
     started: dict[UUID, Decimal] = {}  # operation_id → время старта (ES)
 
@@ -254,15 +261,20 @@ async def resource_leveling_sgs(
     for _, op in op_priorities:
         # Определяем ресурс(ы) операции
         op_resources = res_assignments.get(op.id, [])
-        resource_name = None
-        if op_resources:
-            primary = [a for a in op_resources if a.role == "primary"]
-            if primary:
-                res = resources.get(primary[0].resource_id)
-                resource_name = res.name if res else f"resource_{primary[0].resource_id}"
-            else:
-                res = resources.get(op_resources[0].resource_id)
-                resource_name = res.name if res else None
+        primary_assignment = next((a for a in op_resources if a.role == "primary"), None)
+        # alternative — только кандидат замены; одновременно не бронируется.
+        booked_assignments = [a for a in op_resources if a.role in ("primary", "member", "helper")]
+        primary_assignment = primary_assignment or (booked_assignments[0] if booked_assignments else None)
+        primary_resource_id = primary_assignment.resource_id if primary_assignment else None
+        primary_resource = resources.get(primary_resource_id) if primary_resource_id else None
+        resource_name = primary_resource.name if primary_resource else (
+            f"resource_{primary_resource_id}" if primary_resource_id else None
+        )
+        booked_ids = [a.resource_id for a in booked_assignments]
+        booked_names = [
+            resources[a.resource_id].name if a.resource_id in resources else f"resource_{a.resource_id}"
+            for a in booked_assignments
+        ]
 
         duration = float(op.duration_base) + float(op.setup_time) + float(op.teardown_time)
 
@@ -273,10 +285,9 @@ async def resource_leveling_sgs(
                 est = max(est, completed[pred_id])
 
         # Если операция использует ресурс — учесть занятость и календарь
-        if resource_name and op_resources:
-            res_id = op_resources[0].resource_id
-            cal_slots = calendars.get(res_id, {})
-            rf = resource_free.get(resource_name, Decimal("0"))
+        if primary_resource_id:
+            cal_slots = calendars.get(primary_resource_id, {})
+            rf = max((resource_free.get(rid, Decimal("0")) for rid in booked_ids), default=Decimal("0"))
             if est < rf:
                 conflicts_resolved += 1
             est = find_earliest_working_start(est, Decimal(str(duration)), cal_slots, rf)
@@ -287,7 +298,7 @@ async def resource_leveling_sgs(
         scheduled[op.id] = ScheduledOperation(
             operation_id=op.id,
             operation_name=op.name,
-            resource_id=op_resources[0].resource_id if op_resources else None,
+            resource_id=primary_resource_id,
             resource_name=resource_name,
             project_id=project_id,
             planned_start=start,
@@ -296,13 +307,15 @@ async def resource_leveling_sgs(
             is_critical=op.is_critical,
             total_float=Decimal("0"),
             predecessor_ids=[p for p in predecessors.get(op.id, [])],
+            booked_resource_ids=booked_ids,
+            booked_resource_names=booked_names,
         )
 
         started[op.id] = start
         completed[op.id] = end
 
-        if resource_name:
-            resource_free[resource_name] = end
+        for rid in booked_ids:
+            resource_free[rid] = end
 
     # 5. Расчёт загрузки ресурсов
     total_makespan = max(completed.values()) if completed else Decimal("0")
@@ -310,12 +323,10 @@ async def resource_leveling_sgs(
     resource_queues: dict[str, int] = {}
 
     for op_id, sched in scheduled.items():
-        if sched.resource_name:
-            resource_hours[sched.resource_name] = (
-                resource_hours.get(sched.resource_name, 0)
-                + float(sched.duration)
-            )
-            resource_queues.setdefault(sched.resource_name, 0)
+        for rid in sched.booked_resource_ids:
+            name = resources[rid].name if rid in resources else f"resource_{rid}"
+            resource_hours[name] = resource_hours.get(name, 0) + float(sched.duration)
+            resource_queues.setdefault(name, 0)
 
     # Использование ресурсов
     utilization = {}

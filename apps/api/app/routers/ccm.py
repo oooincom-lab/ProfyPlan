@@ -463,7 +463,7 @@ async def run_resource_leveling(
     if use_cpm_result:
         from app.routers.calculations import run_cpm
         try:
-            cpm_result = await run_cpm(project_id, db, tenant_id)
+            cpm_result = await run_cpm(project_id, None, db, tenant_id)
         except HTTPException:
             pass  # Продолжаем без CPM
 
@@ -1156,7 +1156,9 @@ async def analyze_bottleneck(
     or_dicts = [
         {"operation_id": str(or_.operation_id),
          "resource_id": str(or_.resource_id),
-         "capacity_demand": float(or_.capacity_demand)}
+         "capacity_demand": float(or_.capacity_demand),
+         "role": or_.role,
+         "ktu": float(or_.ktu or 1)}
         for or_ in op_resources
     ]
 
@@ -1692,7 +1694,9 @@ async def export_project_excel(
             or_dicts = [
                 {"operation_id": str(or_.operation_id),
                  "resource_id": str(or_.resource_id),
-                 "capacity_demand": float(or_.capacity_demand)}
+                 "capacity_demand": float(or_.capacity_demand),
+                 "role": or_.role,
+                 "ktu": float(or_.ktu or 1)}
                 for or_ in op_resources
             ]
             res_dicts = [
@@ -1849,7 +1853,9 @@ async def sync_to_google_sheets(
             or_dicts = [
                 {"operation_id": str(or_.operation_id),
                  "resource_id": str(or_.resource_id),
-                 "capacity_demand": float(or_.capacity_demand)}
+                 "capacity_demand": float(or_.capacity_demand),
+                 "role": or_.role,
+                 "ktu": float(or_.ktu or 1)}
                 for or_ in op_resources
             ]
             res_dicts = [

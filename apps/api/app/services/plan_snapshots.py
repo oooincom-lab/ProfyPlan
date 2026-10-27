@@ -359,8 +359,11 @@ async def build_snapshot(
             datetime.combine(ed_dt, time.min) + timedelta(hours=end_hour)
         ).replace(second=0, microsecond=0)
 
-        ors = sorted(op_resources.get(op.id, []), key=lambda o: 0 if o.role == "primary" else 1)
-        lead_res = resources.get(ors[0].resource_id) if ors else None
+        primary_assignment = next(
+            (o for o in op_resources.get(op.id, []) if o.role == "primary"),
+            None,
+        )
+        lead_res = resources.get(primary_assignment.resource_id) if primary_assignment else None
 
         # Подразделение обязательно для передачи во внешние системы (1С).
         # Основа — resolve_dept; для закупок — «куда закупается» (потребитель материала).

@@ -107,6 +107,9 @@ def analyze_bottlenecks(
         wait_times: list[Decimal] = []
 
         for ass in assignments:
+            # alternative — только кандидат замены, не одновременная загрузка.
+            if str(ass.get("role") or "primary") == "alternative":
+                continue
             op = ops_by_id.get(str(ass.get("operation_id", "")))
             if not op:
                 continue
