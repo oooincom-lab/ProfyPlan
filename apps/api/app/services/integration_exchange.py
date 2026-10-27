@@ -123,13 +123,15 @@ async def export_plan_snapshot(
                     "resource_ext_id": r.resource_ext_id,
                     "resource_ext_uid": r.resource_ext_uid,
                     "resource_name": r.resource_name,
+                    "resource_role": r.resource_role,
+                    "ktu": round(float(r.ktu), 3) if r.ktu is not None else None,
                     "start": r.start_datetime.isoformat() if r.start_datetime else None,
                     "finish": r.finish_datetime.isoformat() if r.finish_datetime else None,
                     "duration_hours": round(float(r.duration_hours), 3) if r.duration_hours is not None else None,
                     "quantity": float(r.quantity) if r.quantity is not None else None,
                     "unit": r.unit,
                     # Загрузка ресурса на интервале start–finish (единиц ресурса); в v1 операция занимает 1 единицу.
-                    "resource_load": 1,
+                    "resource_load": round(float(r.resource_load), 3) if r.resource_load is not None else None,
                     "is_critical": bool(r.is_critical),
                 },
             }

@@ -71,6 +71,9 @@ class PlanSnapshotRow(BaseModel):
     resource_name: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     resource_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     resource_ext_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    resource_role: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    ktu: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 3), nullable=True)
+    resource_load: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
 
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     finish_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

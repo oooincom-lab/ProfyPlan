@@ -363,7 +363,6 @@ async def build_snapshot(
             (o for o in op_resources.get(op.id, []) if o.role == "primary"),
             None,
         )
-        lead_res = resources.get(primary_assignment.resource_id) if primary_assignment else None
 
         # Подразделение обязательно для передачи во внешние системы (1С).
         # Основа — resolve_dept; для закупок — «куда закупается» (потребитель материала).
@@ -387,40 +386,50 @@ async def build_snapshot(
         dept_id_out = _dinfo[0] if _dinfo else None
         dept_code_out = _dinfo[1] if _dinfo else None
         dept_ext_uid_out = _dinfo[2] if _dinfo else None
-        res_id_out = ors[0].resource_id if ors else None
-        res_ext_out = (getattr(lead_res, "ext_id", None) if lead_res else None)
-        res_ext_uid_out = (getattr(lead_res, "ext_uid", None) if lead_res else None)
-
         o = orders_by_id.get(getattr(op, "order_id", None))
+        base_row = {
+            "order_id": getattr(op, "order_id", None),
+            "order_ext_id": (o.ext_id if o else None),
+            "order_ext_uid": (getattr(o, "ext_uid", None) if o else None),
+            "order_name": (o.specification_name if o else None),
+            "operation_id": op.id,
+            "operation_name": op.name,
+            "operation_ext_id": getattr(op, "ext_id", None),
+            "department_name": dept_name,
+            "department_id": dept_id_out,
+            "department_code": dept_code_out,
+            "department_ext_uid": dept_ext_uid_out,
+            "start_date": sd_dt,
+            "finish_date": ed_dt,
+            "start_datetime": start_dt,
+            "finish_datetime": end_dt,
+            "duration_hours": Decimal(str(round(dur_days * hpd_n, 3))),
+            "quantity": getattr(op, "output_quantity", None),
+            "unit": None,
+            "is_critical": bool(node.is_critical),
+            "position": getattr(op, "position", None),
+        }
 
-        row_data.append(
-            {
-                "order_id": getattr(op, "order_id", None),
-                "order_ext_id": (o.ext_id if o else None),
-                "order_ext_uid": (getattr(o, "ext_uid", None) if o else None),
-                "order_name": (o.specification_name if o else None),
-                "operation_id": op.id,
-                "operation_name": op.name,
-                "operation_ext_id": getattr(op, "ext_id", None),
-                "department_name": dept_name,
-                "department_id": dept_id_out,
-                "department_code": dept_code_out,
-                "department_ext_uid": dept_ext_uid_out,
-                "resource_name": (lead_res.name if lead_res else None),
-                "resource_id": res_id_out,
-                "resource_ext_id": res_ext_out,
-                "resource_ext_uid": res_ext_uid_out,
-                "start_date": sd_dt,
-                "finish_date": ed_dt,
-                "start_datetime": start_dt,
-                "finish_datetime": end_dt,
-                "duration_hours": Decimal(str(round(dur_days * hpd_n, 3))),
-                "quantity": getattr(op, "output_quantity", None),
-                "unit": None,
-                "is_critical": bool(node.is_critical),
-                "position": getattr(op, "position", None),
-            }
-        )
+        # Одна строка на каждый реально бронируемый ресурс. alternative не бронируется.
+        booked = [
+            a for a in op_resources.get(op.id, [])
+            if a.role in ("primary", "member", "helper")
+        ]
+        booked.sort(key=lambda a: 0 if a.role == "primary" else 1)
+        if not booked:
+            booked = [None]
+        for ass in booked:
+            res = resources.get(ass.resource_id) if ass is not None else None
+            row_data.append({
+                **base_row,
+                "resource_name": (res.name if res else None),
+                "resource_id": (res.id if res else None),
+                "resource_ext_id": (getattr(res, "ext_id", None) if res else None),
+                "resource_ext_uid": (getattr(res, "ext_uid", None) if res else None),
+                "resource_role": (ass.role if ass is not None else "primary"),
+                "ktu": (getattr(ass, "ktu", None) if ass is not None else None),
+                "resource_load": (getattr(ass, "capacity_demand", None) if ass is not None else None),
+            })
 
     if not row_data:
         raise ValueError("Не удалось построить строки плана: нет рассчитанных операций")
