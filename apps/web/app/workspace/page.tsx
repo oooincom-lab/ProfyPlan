@@ -62,7 +62,6 @@ import SavedViewsPanel from '@/components/SavedViewsPanel';
 import IntegrationView from '@/components/IntegrationView';
 import ComplexView from '@/components/ComplexView';
 import ReadinessView from '@/components/ReadinessView';
-import WorkOrdersView from '@/components/workordersview';
 import GroupScale from '@/components/groupscale';
 
 const API = API_ORIGIN + '/api/v1';
@@ -186,7 +185,7 @@ function detailOf(e: any): string {
   return m ? m[1] : s;
 }
 
-type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'org-structure' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex' | 'readiness' | 'work-orders';
+type View = 'dashboard' | 'projects' | 'project-dashboard' | 'project-orders' | 'calculations' | 'project-gantt' | 'project-pools' | 'project-groups' | 'archive' | 'directories' | 'nomenclature' | 'units' | 'counterparties' | 'resources' | 'work-schedules' | 'departments' | 'organizations' | 'org-structure' | 'production-calendars' | 'ccm' | 'reports' | 'settings' | 'new-project' | 'tools' | 'network' | 'scale' | 'catalog-operations' | 'team' | 'integration' | 'complex' | 'readiness';
 
 export default function AppShell() {
   const [loaded, setLoaded] = useState(false);
@@ -1370,9 +1369,6 @@ export default function AppShell() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'org-structure') {
       setView('org-structure');
-    }
-    if (params.get('view') === 'work-orders') {
-      setView('work-orders');
     }
     const cloud = params.get('cloud');
     if (!cloud) {
@@ -4834,7 +4830,6 @@ const changeOrderStatus = async (o: any, status: string) => {
     'integration': 'Интеграция',
     'complex': 'Комплекс (C)',
     'readiness': 'Готовность к расчёту',
-    'work-orders': 'Заказ-наряды',
     'new-project': 'Новый проект',
   };
 
@@ -7472,15 +7467,6 @@ const changeOrderStatus = async (o: any, status: string) => {
               onOpenProject={(p: any) => loadProjectDashboard(p)}
               onOpenCcm={() => navTo('ccm' as any)}
               onOpenComplex={() => navTo('complex' as any)} />
-          )}
-
-          {view === 'work-orders' && (
-            <WorkOrdersView
-              api={apiF}
-              projects={projects}
-              notify={(m: string) => setMsg(m)}
-              onOpenProject={(p: any) => loadProjectDashboard(p)}
-            />
           )}
 
           {view === 'team' && (() => {
