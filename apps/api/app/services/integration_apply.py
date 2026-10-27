@@ -80,6 +80,15 @@ def _parse_date(v):
         return None
 
 
+def _parse_datetime(v):
+    if v in (None, ""):
+        return None
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def _apply_sync_name(obj, name: str, version=None) -> None:
     """Обновить внешнее имя, не затирая закреплённое локальное."""
     obj.source = "1c"
@@ -678,6 +687,97 @@ async def _apply_work_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str
     return "applied: заказ-наряд %s" % (number or ext_uid or ext_id)
 
 
+async def _apply_operation_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
+    """Импорт записи регистра 1С «РесурсыОпераций» в OperationResource."""
+    order_type = _s(f.get("order_type")).lower() or "production_order"
+    order_uid = _s(f.get("order_uid")) or None
+    operation_uid = _s(f.get("operation_uid")) or _s(uid) or None
+    resource_uid = _s(f.get("resource_uid")) or None
+    if not operation_uid or not resource_uid:
+        return "skipped: нет operation_uid/resource_uid"
+
+    operation = None
+    if order_type == "work_order" and order_uid:
+        wo = (await db.execute(
+            select(WorkOrder).where(
+                WorkOrder.tenant_id == tenant_id, WorkOrder.ext_uid == order_uid
+            )
+        )).scalars().first()
+        if wo is not None:
+            line = (await db.execute(
+                select(WorkOrderLine).where(
+                    WorkOrderLine.work_order_id == wo.id,
+                    WorkOrderLine.line_uid == operation_uid,
+                )
+            )).scalars().first()
+            if line is not None and line.operation_id:
+                operation = await db.get(Operation, line.operation_id)
+    if operation is None:
+        operation = (await db.execute(
+            select(Operation).where(
+                Operation.tenant_id == tenant_id,
+                Operation.ext_id == operation_uid,
+            )
+        )).scalars().first()
+    if operation is None:
+        try:
+            operation = await db.get(Operation, UUID(operation_uid))
+        except Exception:
+            operation = None
+    if operation is None:
+        return "skipped: операция не найдена (%s)" % operation_uid
+
+    resource = (await db.execute(
+        select(Resource).where(
+            Resource.tenant_id == tenant_id,
+            Resource.is_active.is_(True),
+            (Resource.ext_uid == resource_uid) | (Resource.subject_uid == resource_uid),
+        )
+    )).scalars().first()
+    if resource is None:
+        try:
+            resource = await db.get(Resource, UUID(resource_uid))
+        except Exception:
+            resource = None
+    if resource is None:
+        return "skipped: RESOURCE_NOT_FOUND (%s)" % resource_uid
+
+    role = _s(f.get("role")).lower() or "primary"
+    if role not in ("primary", "member", "alternative", "helper"):
+        return "skipped: RESOURCE_ROLE_INVALID (%s)" % role
+    capacity_demand = _decimal(f.get("capacity_demand"), Decimal("1"))
+    if capacity_demand <= 0:
+        return "skipped: RESOURCE_CAPACITY_INVALID"
+    ktu = _decimal(f.get("ktu"), Decimal("1"))
+    if ktu < Decimal("0.1") or ktu > Decimal("3.0"):
+        return "skipped: KTU_INVALID"
+
+    existing = (await db.execute(
+        select(OperationResource).where(OperationResource.operation_id == operation.id)
+    )).scalars().all()
+    op_res = next((x for x in existing if x.resource_id == resource.id), None)
+    if role == "primary":
+        other_primary = next(
+            (x for x in existing if x.role == "primary" and x.id != (op_res.id if op_res else None)),
+            None,
+        )
+        if other_primary is not None:
+            return "skipped: RESOURCE_PRIMARY_MULTIPLE"
+
+    if op_res is None:
+        op_res = OperationResource(
+            id=uuid.uuid4(), operation_id=operation.id, resource_id=resource.id
+        )
+        db.add(op_res)
+    op_res.role = role
+    op_res.capacity_demand = capacity_demand
+    op_res.ktu = ktu
+    op_res.planned_start = _parse_datetime(f.get("plan_start") or f.get("planned_start"))
+    op_res.planned_end = _parse_datetime(f.get("plan_finish") or f.get("planned_end"))
+    await db.commit()
+    return "applied: связь операции с ресурсом"
+
+
 async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     """Приём заказа на производство из 1С: новые — черновиками; черновики обновляются; не-черновики не трогаем."""
     order_type = _s(f.get("order_type")).lower()
@@ -1183,6 +1283,8 @@ async def apply_pending(
                     msg = await _apply_project(db, tenant_id, item.entity_uid, f)
                 elif et in ("order", "заказ", "заказы", "orders", "производственный_заказ"):
                     msg = await _apply_order(db, tenant_id, item.entity_uid, f)
+                elif et in ("operation_resource", "operation-resource", "operation_resources", "ресурсы_операций"):
+                    msg = await _apply_operation_resource(db, tenant_id, item.entity_uid, f)
                 else:
                     msg = "skipped: тип не поддержан каркасом (%s)" % (item.entity_type or "?")
         except Exception as e:

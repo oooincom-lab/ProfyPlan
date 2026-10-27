@@ -101,6 +101,8 @@ class OperationResourceOut(BaseModel):
     efficiency_factor: Decimal
     capacity_demand: Decimal
     ktu: Decimal
+    planned_start: Optional[str] = None
+    planned_end: Optional[str] = None
     duration_override: Optional[Decimal] = None
     setup_time_override: Optional[Decimal] = None
     teardown_time_override: Optional[Decimal] = None

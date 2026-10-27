@@ -176,6 +176,12 @@ class OperationResource(BaseModel):
     ktu: Mapped[Decimal] = mapped_column(
         Numeric(8, 3), nullable=False, default=Decimal("1.0"), server_default="1.0"
     )  # коэффициент трудового участия; не влияет на CCM
+    planned_start: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # план по операции из регистра 1С
+    planned_end: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     duration_override: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2), nullable=True
     )

@@ -321,6 +321,31 @@ line_uid = <UID документа> + ":" + <КлючСвязи>
 - для людей/бригад `Ресурс` ссылается на сотрудника/подразделение, а не на оборудование;
 - интерфейс связывания должен позволять выбрать операцию и ресурс, роль и количество, а также массово назначить ресурс на группу операций.
 
+### 8.1. Передача регистра в ProfyPlan
+
+Если регистр выгружается отдельными сущностями, использовать тип `operation_resource` в `entities`:
+
+```json
+{
+  "type": "operation_resource",
+  "uid": "ORDER-UID:OPERATION-UID:RESOURCE-UID",
+  "op": "upsert",
+  "fields": {
+    "order_uid": "ORDER-UID",
+    "order_type": "work_order",
+    "operation_uid": "OPERATION-UID",
+    "resource_uid": "RESOURCE-UID",
+    "role": "primary",
+    "capacity_demand": 1,
+    "ktu": 1.0,
+    "plan_start": "2026-10-27T09:00:00+03:00",
+    "plan_finish": "2026-10-27T13:30:00+03:00"
+  }
+}
+```
+
+ProfyPlan сопоставляет `order_uid + operation_uid` с операцией, `resource_uid` — с ресурсом, и сохраняет связь в `OperationResource`; `plan_start/plan_finish` используются для плана по операции. Повторная передача обновляет строку, а не создаёт дубль.
+
 ## 9. Возврат плана в 1С
 
 `РесурсыПредприятия` в 1С — таблица уровня заказа, а не операции. Поэтому:
