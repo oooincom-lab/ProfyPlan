@@ -260,6 +260,9 @@ FACT_LABELS = {
     "order_naryad_close": "Закрытие наряда",
     "receipt": "Приход",
     "transfer": "Перемещение",
+    "work_order_close": "Закрытие заказ-наряда",
+    "work_order_execution": "Выполнение работы",
+    "work_order_line": "Строка заказ-наряда",
 }
 
 
@@ -286,6 +289,9 @@ async def project_facts(
                 "fact_date": row.fact_date.isoformat() if row.fact_date else None,
                 "status": row.status,
                 "operation_uid": row.operation_uid,
+                "executor_uid": row.executor_uid,
+                "executor_type": row.executor_type,
+                "ktu": float(row.ktu) if row.ktu is not None else None,
                 "source_document_uid": row.source_document_uid,
                 "updated_at": row.created_at.isoformat() if row.created_at else None,
             }

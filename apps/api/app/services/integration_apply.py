@@ -993,7 +993,10 @@ async def _apply_project(db: AsyncSession, tenant_id: UUID, uid: Optional[str], 
 
 async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     fact_type = _s(f.get("fact_type") or f.get("type")).lower()
-    if fact_type not in ("production", "order_naryad_close", "receipt", "transfer"):
+    if fact_type not in (
+        "production", "order_naryad_close", "receipt", "transfer",
+        "work_order_close", "work_order_execution", "work_order_line",
+    ):
         return "skipped: неизвестный тип факта"
     document_uid = _s(f.get("source_document_uid")) or _s(uid)
     row_uid = _s(f.get("source_row_uid")) or document_uid
@@ -1012,6 +1015,21 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
             )
         ).scalars().first()
     project_id = order.project_id if order is not None else None
+    work_order = None
+    work_order_uid = _s(f.get("work_order_uid")) or None
+    if fact_type.startswith("work_order") or work_order_uid:
+        work_order_uid = work_order_uid or order_uid
+        if work_order_uid:
+            work_order = (
+                await db.execute(
+                    select(WorkOrder).where(
+                        WorkOrder.tenant_id == tenant_id,
+                        WorkOrder.ext_uid == work_order_uid,
+                    )
+                )
+            ).scalars().first()
+        if work_order is not None and work_order.project_id:
+            project_id = work_order.project_id
     project_uid = _s(f.get("project_uid")) or None
     if project_id is None and project_uid:
         project = (
@@ -1062,6 +1080,14 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
 
     quantity = _decimal(f.get("quantity"))
     hours = _decimal(f.get("hours"))
+    ktu = _decimal(f.get("ktu"))
+    executor_type = _s(f.get("executor_type")) or None
+    work_order_line_uid = (
+        _s(f.get("work_order_line_uid"))
+        or _s(f.get("line_uid"))
+        or _s(f.get("operation_uid"))
+        or None
+    )
     fact_date = _parse_date(f.get("date") or f.get("fact_date"))
     status = _s(f.get("status")) or "posted"
     revision = str(f.get("version")) if f.get("version") is not None else None
@@ -1081,6 +1107,8 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
         obj.status != status
         or obj.quantity != quantity
         or obj.hours != hours
+        or obj.ktu != ktu
+        or obj.executor_uid != (_s(f.get("executor_uid")) or None)
         or obj.fact_date != fact_date
         or obj.external_revision != revision
     )
@@ -1093,11 +1121,15 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
         db.add(obj)
     obj.project_id = project_id
     obj.production_order_id = order.id if order is not None else None
+    obj.work_order_id = work_order.id if work_order is not None else None
+    obj.work_order_line_uid = work_order_line_uid
     obj.pending_project_uid = None if project_id else project_uid
     obj.pending_order_uid = None if order is not None else order_uid
     obj.operation_uid = _s(f.get("operation_uid")) or None
     obj.stage_uid = _s(f.get("stage_uid")) or None
     obj.executor_uid = _s(f.get("executor_uid")) or None
+    obj.executor_type = executor_type
+    obj.ktu = ktu
     obj.nomenclature_id = nomenclature_id
     obj.warehouse_from_id = warehouse_from_id
     obj.warehouse_to_id = warehouse_to_id
