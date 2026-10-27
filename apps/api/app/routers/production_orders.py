@@ -1338,6 +1338,7 @@ def _order_to_out(o: ProductionOrder, by_id: Optional[dict] = None, children: Op
     return ProductionOrderOut(
         id=str(o.id),
         tenant_id=str(o.tenant_id),
+        order_type=getattr(o, "order_type", "production_order"),
         project_id=str(o.project_id) if o.project_id else None,
         ext_id=o.ext_id,
         specification_id=o.specification_id,

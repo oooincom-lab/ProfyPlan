@@ -30,11 +30,11 @@ from app.models.integration import ExchangeInboxItem
 from app.models.nomenclature import Nomenclature
 from app.models.organization import Organization
 from app.models.operation import Operation, OperationResource
+from app.models.order_line import OrderLine, OrderLineExecutor
 from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.resource import Resource
 from app.models.warehouse import Warehouse
-from app.models.work_order import WorkOrder, WorkOrderLine, WorkOrderLineExecutor
 
 NTYPE_MAP = {
     "запас": "material",
@@ -490,40 +490,41 @@ async def _apply_work_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str
     wo = None
     if ext_uid:
         wo = (await db.execute(
-            select(WorkOrder).where(
-                WorkOrder.tenant_id == tenant_id, WorkOrder.ext_uid == ext_uid
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_uid == ext_uid
             )
         )).scalars().first()
     if wo is None and ext_id:
         wo = (await db.execute(
-            select(WorkOrder).where(
-                WorkOrder.tenant_id == tenant_id, WorkOrder.ext_id == ext_id
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_id == ext_id
             )
         )).scalars().first()
 
     if wo is None:
-        wo = WorkOrder(
+        wo = ProductionOrder(
             id=uuid.uuid4(),
             tenant_id=tenant_id,
             ext_uid=ext_uid,
             ext_id=ext_id,
-            number=number,
             source="1c",
+            order_type="work_order",
         )
         db.add(wo)
 
     wo.project_id = project_id
     wo.organization_id = organization_id
-    wo.parent_production_order_id = parent_order_id
+    wo.parent_order_id = parent_order_id
     wo.pending_project_uid = None if project_id else (puid or pcode)
     wo.pending_organization_uid = None if organization_id else org_uid
     wo.pending_parent_uid = None if parent_order_id else parent_uid
-    wo.number = number or wo.number
     wo.ext_uid = ext_uid or wo.ext_uid
     wo.ext_id = ext_id or wo.ext_id
     wo.doc_date = _parse_date(f.get("date") or f.get("doc_date")) or wo.doc_date
+    wo.start_date = wo.doc_date or wo.start_date
     wo.status = _s(f.get("status")) or wo.status or "draft"
-    wo.description = _s(f.get("comment")) or _s(f.get("description")) or wo.description
+    wo.notes = _s(f.get("comment")) or _s(f.get("description")) or wo.notes
+    wo.order_type = "work_order"
     if f.get("version") is not None:
         wo.external_revision = str(f.get("version"))[:64]
     await db.flush()
@@ -538,14 +539,14 @@ async def _apply_work_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str
             or f"{ext_uid or ext_id}:{_s(line.get('source_line_key')) or idx + 1}"
         )
         line_obj = (await db.execute(
-            select(WorkOrderLine).where(
-                WorkOrderLine.work_order_id == wo.id,
-                WorkOrderLine.line_uid == line_uid,
+            select(OrderLine).where(
+                OrderLine.order_id == wo.id,
+                OrderLine.line_uid == line_uid,
             )
         )).scalars().first()
         if line_obj is None:
-            line_obj = WorkOrderLine(
-                id=uuid.uuid4(), work_order_id=wo.id, line_uid=line_uid
+            line_obj = OrderLine(
+                id=uuid.uuid4(), order_id=wo.id, line_uid=line_uid
             )
             db.add(line_obj)
         line_obj.source_line_key = _s(line.get("source_line_key")) or line_obj.source_line_key
@@ -643,14 +644,14 @@ async def _apply_work_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str
                 if role == "primary":
                     primary_set = True
                 row = (await db.execute(
-                    select(WorkOrderLineExecutor).where(
-                        WorkOrderLineExecutor.work_order_line_id == line_obj.id,
-                        WorkOrderLineExecutor.executor_uid == exec_uid,
+                    select(OrderLineExecutor).where(
+                        OrderLineExecutor.order_line_id == line_obj.id,
+                        OrderLineExecutor.executor_uid == exec_uid,
                     )
                 )).scalars().first()
                 if row is None:
-                    row = WorkOrderLineExecutor(
-                        id=uuid.uuid4(), work_order_line_id=line_obj.id, executor_uid=exec_uid
+                    row = OrderLineExecutor(
+                        id=uuid.uuid4(), order_line_id=line_obj.id, executor_uid=exec_uid
                     )
                     db.add(row)
                 row.executor_type = (_s(ex.get("executor_type")) or line_obj.executor_type or "employee").lower()
@@ -699,15 +700,15 @@ async def _apply_operation_resource(db: AsyncSession, tenant_id: UUID, uid: Opti
     operation = None
     if order_type == "work_order" and order_uid:
         wo = (await db.execute(
-            select(WorkOrder).where(
-                WorkOrder.tenant_id == tenant_id, WorkOrder.ext_uid == order_uid
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id, ProductionOrder.ext_uid == order_uid
             )
         )).scalars().first()
         if wo is not None:
             line = (await db.execute(
-                select(WorkOrderLine).where(
-                    WorkOrderLine.work_order_id == wo.id,
-                    WorkOrderLine.line_uid == operation_uid,
+                select(OrderLine).where(
+                    OrderLine.order_id == wo.id,
+                    OrderLine.line_uid == operation_uid,
                 )
             )).scalars().first()
             if line is not None and line.operation_id:
@@ -1022,9 +1023,9 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
         if work_order_uid:
             work_order = (
                 await db.execute(
-                    select(WorkOrder).where(
-                        WorkOrder.tenant_id == tenant_id,
-                        WorkOrder.ext_uid == work_order_uid,
+                    select(ProductionOrder).where(
+                        ProductionOrder.tenant_id == tenant_id,
+                        ProductionOrder.ext_uid == work_order_uid,
                     )
                 )
             ).scalars().first()
@@ -1080,6 +1081,10 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
 
     quantity = _decimal(f.get("quantity"))
     hours = _decimal(f.get("hours"))
+    # Закрытие — статус документа; часы и количество идут отдельными execution-фактами.
+    if fact_type == "work_order_close":
+        quantity = None
+        hours = None
     ktu = _decimal(f.get("ktu"))
     executor_type = _s(f.get("executor_type")) or None
     work_order_line_uid = (
@@ -1120,8 +1125,11 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
         )
         db.add(obj)
     obj.project_id = project_id
-    obj.production_order_id = order.id if order is not None else None
-    obj.work_order_id = work_order.id if work_order is not None else None
+    obj.production_order_id = (
+        order.id if order is not None else (work_order.id if work_order is not None else None)
+    )
+    obj.work_order_id = None
+    obj.order_line_uid = work_order_line_uid
     obj.work_order_line_uid = work_order_line_uid
     obj.pending_project_uid = None if project_id else project_uid
     obj.pending_order_uid = None if order is not None else order_uid

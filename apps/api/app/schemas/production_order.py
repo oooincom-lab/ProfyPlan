@@ -50,6 +50,7 @@ class ProductionOrderCreate(BaseModel):
 class ProductionOrderOut(BaseModel):
     id: str
     tenant_id: str
+    order_type: str = "production_order"
     project_id: Optional[str] = None
     ext_id: Optional[str] = None
     specification_id: Optional[str] = None

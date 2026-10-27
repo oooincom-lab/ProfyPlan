@@ -45,6 +45,14 @@ class ProductionOrder(BaseModel):
     ext_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="profyplan", server_default="profyplan")
     external_revision: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    order_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="production_order", server_default="production_order",
+        index=True,
+    )
+    parent_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("production_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    doc_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Привязка к спецификации (ID из product_structures, либо строка-имя)
     specification_id: Mapped[Optional[str]] = mapped_column(
