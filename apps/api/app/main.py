@@ -53,7 +53,7 @@ def create_app() -> FastAPI:
             request.scope["path"] = path[4:]
         return await call_next(request)
 
-    from app.routers import auth, projects, resources, global_resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check, directory_state, project_stages, catalog_operations, departments, order_resources, schedule_assignments, calendar_exceptions, organizations, resource_events, reports, department_quotas, reports_loading, reports_departments, planning_settings, planning_pins, saved_views, calculation_runs, goals, gap_applications, calibration_applications, ccm_shifts, team, plan_snapshots, integration, org_structure
+    from app.routers import auth, projects, resources, global_resources, project_resources, operations, calculations, ccm, early_access, actual, bom, calendars, production_orders, excel_import, order_groups, nomenclature, units, counterparties, work_schedules, production_calendars, delete_check, directory_state, project_stages, catalog_operations, departments, order_resources, schedule_assignments, calendar_exceptions, organizations, resource_events, reports, department_quotas, reports_loading, reports_departments, planning_settings, planning_pins, saved_views, calculation_runs, goals, gap_applications, calibration_applications, ccm_shifts, team, plan_snapshots, integration, org_structure, work_orders
     from app.routers.suppliers import sc_router
     app.include_router(auth.router)
     app.include_router(team.router)
@@ -103,6 +103,7 @@ def create_app() -> FastAPI:
     app.include_router(calibration_applications.router)
     app.include_router(ccm_shifts.router)
     app.include_router(org_structure.router)
+    app.include_router(work_orders.router)
 
     @app.get("/v1/health")
     async def health():

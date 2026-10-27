@@ -29,10 +29,12 @@ from app.models.execution_fact import ExecutionFact
 from app.models.integration import ExchangeInboxItem
 from app.models.nomenclature import Nomenclature
 from app.models.organization import Organization
+from app.models.operation import Operation, OperationResource
 from app.models.production_order import ProductionOrder
 from app.models.project import Project
 from app.models.resource import Resource
 from app.models.warehouse import Warehouse
+from app.models.work_order import WorkOrder, WorkOrderLine, WorkOrderLineExecutor
 
 NTYPE_MAP = {
     "запас": "material",
@@ -58,6 +60,24 @@ PRIORITY_MAP = {
 
 def _s(v) -> str:
     return str(v).strip() if v is not None else ""
+
+
+def _decimal(v, default: Decimal = Decimal("0")) -> Decimal:
+    if v in (None, ""):
+        return default
+    try:
+        return Decimal(str(v).replace(",", "."))
+    except Exception:
+        return default
+
+
+def _parse_date(v):
+    if v in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except Exception:
+        return None
 
 
 def _apply_sync_name(obj, name: str, version=None) -> None:
@@ -406,9 +426,263 @@ async def _apply_resource(db: AsyncSession, tenant_id: UUID, uid: Optional[str],
     return "applied: создано"
 
 
+async def _apply_work_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
+    """Импорт заказ-наряда: строки работ становятся операциями проекта."""
+    ext_uid = _s(uid) or None
+    number = _s(f.get("number")) or _s(f.get("name")) or None
+    ext_id = number or ext_uid
+    if not ext_uid and not ext_id:
+        return "skipped: нет UID/номера заказ-наряда"
+
+    # Проект — только существующий; иначе строки сохраняем без операций.
+    project_id = None
+    puid = _s(f.get("project_uid")) or None
+    pcode = _s(f.get("project_code")) or _s(f.get("project_ext_id")) or None
+    pname = _s(f.get("project_name")) or _s(f.get("project")) or None
+    proj = None
+    if puid:
+        proj = (await db.execute(
+            select(Project).where(Project.tenant_id == tenant_id, Project.ext_uid == puid)
+        )).scalars().first()
+    if proj is None and pcode:
+        proj = (await db.execute(
+            select(Project).where(Project.tenant_id == tenant_id, Project.ext_id == pcode)
+        )).scalars().first()
+    if proj is None and pname:
+        proj = (await db.execute(
+            select(Project).where(Project.tenant_id == tenant_id, Project.name == pname)
+        )).scalars().first()
+    if proj is not None:
+        project_id = proj.id
+
+    organization_id = None
+    org_uid = _s(f.get("organization_uid")) or None
+    if org_uid:
+        org = (await db.execute(
+            select(Organization).where(
+                Organization.tenant_id == tenant_id, Organization.ext_uid == org_uid
+            )
+        )).scalars().first()
+        if org is not None:
+            organization_id = org.id
+
+    parent_order_id = None
+    parent_uid = _s(f.get("parent_production_order_uid")) or _s(f.get("parent_uid")) or None
+    if parent_uid:
+        parent = (await db.execute(
+            select(ProductionOrder).where(
+                ProductionOrder.tenant_id == tenant_id,
+                ProductionOrder.ext_uid == parent_uid,
+            )
+        )).scalars().first()
+        if parent is not None:
+            parent_order_id = parent.id
+
+    wo = None
+    if ext_uid:
+        wo = (await db.execute(
+            select(WorkOrder).where(
+                WorkOrder.tenant_id == tenant_id, WorkOrder.ext_uid == ext_uid
+            )
+        )).scalars().first()
+    if wo is None and ext_id:
+        wo = (await db.execute(
+            select(WorkOrder).where(
+                WorkOrder.tenant_id == tenant_id, WorkOrder.ext_id == ext_id
+            )
+        )).scalars().first()
+
+    if wo is None:
+        wo = WorkOrder(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            ext_uid=ext_uid,
+            ext_id=ext_id,
+            number=number,
+            source="1c",
+        )
+        db.add(wo)
+
+    wo.project_id = project_id
+    wo.organization_id = organization_id
+    wo.parent_production_order_id = parent_order_id
+    wo.pending_project_uid = None if project_id else (puid or pcode)
+    wo.pending_organization_uid = None if organization_id else org_uid
+    wo.pending_parent_uid = None if parent_order_id else parent_uid
+    wo.number = number or wo.number
+    wo.ext_uid = ext_uid or wo.ext_uid
+    wo.ext_id = ext_id or wo.ext_id
+    wo.doc_date = _parse_date(f.get("date") or f.get("doc_date")) or wo.doc_date
+    wo.status = _s(f.get("status")) or wo.status or "draft"
+    wo.description = _s(f.get("comment")) or _s(f.get("description")) or wo.description
+    if f.get("version") is not None:
+        wo.external_revision = str(f.get("version"))[:64]
+    await db.flush()
+
+    raw_lines = f.get("lines") or []
+    for idx, line in enumerate(raw_lines):
+        if not isinstance(line, dict):
+            continue
+        line_uid = (
+            _s(line.get("line_uid"))
+            or _s(line.get("uid"))
+            or f"{ext_uid or ext_id}:{_s(line.get('source_line_key')) or idx + 1}"
+        )
+        line_obj = (await db.execute(
+            select(WorkOrderLine).where(
+                WorkOrderLine.work_order_id == wo.id,
+                WorkOrderLine.line_uid == line_uid,
+            )
+        )).scalars().first()
+        if line_obj is None:
+            line_obj = WorkOrderLine(
+                id=uuid.uuid4(), work_order_id=wo.id, line_uid=line_uid
+            )
+            db.add(line_obj)
+        line_obj.source_line_key = _s(line.get("source_line_key")) or line_obj.source_line_key
+        line_obj.nomenclature_uid = _s(line.get("nomenclature_uid")) or line_obj.nomenclature_uid
+        line_obj.nomenclature_name = _s(line.get("nomenclature_name")) or line_obj.nomenclature_name
+        line_obj.nomenclature_kind = _s(line.get("nomenclature_kind")).lower() or line_obj.nomenclature_kind or "work"
+        line_obj.work_type_uid = _s(line.get("work_type_uid")) or line_obj.work_type_uid
+        line_obj.work_type_name = _s(line.get("work_type_name")) or line_obj.work_type_name
+        line_obj.quantity = _decimal(line.get("quantity"), line_obj.quantity or Decimal("1"))
+        line_obj.unit = _s(line.get("unit")) or line_obj.unit
+        line_obj.duration_hours = _decimal(line.get("duration_hours"), line_obj.duration_hours or Decimal("0"))
+        line_obj.sequence = int(line.get("sequence") or line.get("position") or line_obj.sequence or (idx + 1) * 10)
+        line_obj.position = line_obj.sequence
+        line_obj.stage_uid = _s(line.get("stage_uid")) or line_obj.stage_uid
+        line_obj.executor_uid = _s(line.get("executor_uid")) or line_obj.executor_uid
+        line_obj.executor_type = (_s(line.get("executor_type")) or line_obj.executor_type or "").lower() or None
+        line_obj.resource_uid = _s(line.get("resource_uid")) or line_obj.resource_uid
+        line_obj.ktu = _decimal(line.get("ktu"), line_obj.ktu or Decimal("1"))
+
+        dept_uid = _s(line.get("department_uid")) or None
+        if dept_uid:
+            dept = (await db.execute(
+                select(Department).where(
+                    Department.tenant_id == tenant_id,
+                    (Department.ext_uid == dept_uid) | (Department.code == dept_uid),
+                )
+            )).scalars().first()
+            if dept is not None:
+                line_obj.department_id = dept.id
+
+        # Строка заказ-наряда = операция проекта.
+        if project_id:
+            op_ext = f"wo:{ext_uid or ext_id}:{line_uid}"[:100]
+            operation = (await db.execute(
+                select(Operation).where(
+                    Operation.tenant_id == tenant_id,
+                    Operation.project_id == project_id,
+                    Operation.ext_id == op_ext,
+                )
+            )).scalars().first()
+            op_name = (
+                _s(line.get("work_type_name"))
+                or _s(line.get("nomenclature_name"))
+                or _s(line.get("name"))
+                or "Работа"
+            )
+            if operation is None:
+                operation = Operation(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    name=op_name,
+                    duration_base=line_obj.duration_hours,
+                    position=line_obj.sequence,
+                    operation_type="production",
+                    ext_id=op_ext,
+                )
+                db.add(operation)
+            else:
+                operation.name = op_name
+                operation.duration_base = line_obj.duration_hours
+                operation.position = line_obj.sequence
+            operation.department_id = line_obj.department_id
+            await db.flush()
+            line_obj.operation_id = operation.id
+
+            executors = line.get("executors")
+            if not isinstance(executors, list):
+                executors = []
+            if not executors and (line_obj.executor_uid or line_obj.resource_uid):
+                executors = [{
+                    "executor_uid": line_obj.executor_uid,
+                    "executor_type": line_obj.executor_type,
+                    "resource_uid": line_obj.resource_uid,
+                    "role": "primary",
+                    "ktu": line_obj.ktu,
+                }]
+
+            primary_set = False
+            for ex in executors:
+                if not isinstance(ex, dict):
+                    continue
+                exec_uid = _s(ex.get("executor_uid")) or _s(ex.get("resource_uid"))
+                if not exec_uid:
+                    continue
+                resource = (await db.execute(
+                    select(Resource).where(
+                        Resource.tenant_id == tenant_id,
+                        Resource.is_active.is_(True),
+                        (Resource.ext_uid == (_s(ex.get("resource_uid")) or exec_uid))
+                        | (Resource.subject_uid == exec_uid),
+                    )
+                )).scalars().first()
+                role = _s(ex.get("role")).lower() or ("primary" if not primary_set else "member")
+                if role == "primary":
+                    primary_set = True
+                row = (await db.execute(
+                    select(WorkOrderLineExecutor).where(
+                        WorkOrderLineExecutor.work_order_line_id == line_obj.id,
+                        WorkOrderLineExecutor.executor_uid == exec_uid,
+                    )
+                )).scalars().first()
+                if row is None:
+                    row = WorkOrderLineExecutor(
+                        id=uuid.uuid4(), work_order_line_id=line_obj.id, executor_uid=exec_uid
+                    )
+                    db.add(row)
+                row.executor_type = (_s(ex.get("executor_type")) or line_obj.executor_type or "employee").lower()
+                row.resource_uid = _s(ex.get("resource_uid")) or line_obj.resource_uid
+                row.role = role
+                row.capacity_demand = _decimal(ex.get("capacity_demand"), row.capacity_demand or Decimal("1"))
+                row.ktu = _decimal(ex.get("ktu"), row.ktu or line_obj.ktu or Decimal("1"))
+
+                if resource is not None:
+                    existing_primary = (await db.execute(
+                        select(OperationResource).where(
+                            OperationResource.operation_id == operation.id,
+                            OperationResource.role == "primary",
+                        )
+                    )).scalars().first()
+                    if role == "primary" and existing_primary is not None and existing_primary.resource_id != resource.id:
+                        role = "member"
+                    op_res = (await db.execute(
+                        select(OperationResource).where(
+                            OperationResource.operation_id == operation.id,
+                            OperationResource.resource_id == resource.id,
+                        )
+                    )).scalars().first()
+                    if op_res is None:
+                        op_res = OperationResource(
+                            id=uuid.uuid4(), operation_id=operation.id, resource_id=resource.id
+                        )
+                        db.add(op_res)
+                    op_res.role = role
+                    op_res.capacity_demand = row.capacity_demand
+                    op_res.ktu = row.ktu
+
+    await db.commit()
+    return "applied: заказ-наряд %s" % (number or ext_uid or ext_id)
+
+
 async def _apply_order(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: dict) -> str:
     """Приём заказа на производство из 1С: новые — черновиками; черновики обновляются; не-черновики не трогаем."""
     order_type = _s(f.get("order_type")).lower()
+    if order_type == "work_order":
+        return await _apply_work_order(db, tenant_id, uid, f)
     if order_type and order_type != "production_order":
         return "skipped: тип %s пока не поддержан" % order_type
     number = _s(f.get("number")) or _s(f.get("name"))

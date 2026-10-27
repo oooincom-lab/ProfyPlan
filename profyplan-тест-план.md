@@ -1751,3 +1751,4 @@
 | CCM-MN-25 | Leveling с shared-ресурсом | Общий ресурс участвует в выравнивании, а не только ресурс проекта | ⏳ |
 | CCM-MN-26 | Alternative в bottleneck | Alternative не увеличивает загрузку и не создаёт узкое место | ⏳ |
 | CCM-MN-27 | Leveling с CPM по умолчанию | `resource-leveling` не падает при `use_cpm_result=true` | ⏳ |
+| CCM-MN-28 | Импорт заказ-наряда | `work_order` создаёт WorkOrder, строку-операцию и исполнителя; повторный импорт не дублирует | ⏳ |
