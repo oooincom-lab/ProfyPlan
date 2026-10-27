@@ -37,10 +37,6 @@ class ExecutionFact(BaseModel):
     production_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("production_orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    work_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("work_orders.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    work_order_line_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     order_line_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     operation_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     stage_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

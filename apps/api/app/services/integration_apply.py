@@ -1128,9 +1128,7 @@ async def _apply_fact(db: AsyncSession, tenant_id: UUID, uid: Optional[str], f: 
     obj.production_order_id = (
         order.id if order is not None else (work_order.id if work_order is not None else None)
     )
-    obj.work_order_id = None
     obj.order_line_uid = work_order_line_uid
-    obj.work_order_line_uid = work_order_line_uid
     obj.pending_project_uid = None if project_id else project_uid
     obj.pending_order_uid = None if order is not None else order_uid
     obj.operation_uid = _s(f.get("operation_uid")) or None
