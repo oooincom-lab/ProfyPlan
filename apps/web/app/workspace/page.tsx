@@ -1367,6 +1367,8 @@ export default function AppShell() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    if (params.get('project_id')) sessionStorage.setItem('pp_initial_project', params.get('project_id')!);
+    if (params.get('view') === 'project-orders') sessionStorage.setItem('pp_initial_view', 'project-orders');
     if (params.get('view') === 'org-structure') {
       setView('org-structure');
     }
@@ -3303,6 +3305,22 @@ if (selectedProject.start_date) body.start_date = selectedProject.start_date;
       } catch (e: any) { setMsg(String(e)); }
     }
   };
+
+  // Прямая ссылка на проект/заказы (удобно для проверки и передачи ссылок).
+  useEffect(() => {
+    if (!projects.length || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('project_id') || sessionStorage.getItem('pp_initial_project');
+    if (!projectId) return;
+    const p = projects.find((x: any) => String(x.id) === String(projectId));
+    if (!p) return;
+    const wantedView = params.get('view') || sessionStorage.getItem('pp_initial_view');
+    sessionStorage.removeItem('pp_initial_project');
+    sessionStorage.removeItem('pp_initial_view');
+    if (wantedView === 'project-orders') void loadProjectOrdersView(p);
+    else void loadProjectDashboard(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
   const refresh = () => {
     if (!selectedProject) return;
