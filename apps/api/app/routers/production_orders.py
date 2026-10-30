@@ -10,10 +10,12 @@ from uuid import uuid4, UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_tenant_id
 from app.models.production_order import ProductionOrder
+from app.models.order_line import OrderLine
 from app.services.edit_policy import require_imported_editable
 from app.models.group_shift_log import GroupShiftLog
 from app.models.operation_pin import OperationPin
@@ -1329,6 +1331,63 @@ async def get_order(
         raise HTTPException(404, "Заказ не найден")
     by_id, children = await _load_chain(db, tenant_id, order.project_id)
     return _order_to_out(order, by_id, children)
+
+
+@router.get("/{order_id}/lines")
+async def get_order_lines(
+    order_id: str,
+    tenant_id: str = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Строки заказ-наряда (работы/услуги) и исполнители с КТУ."""
+    order = (await db.execute(
+        select(ProductionOrder).where(
+            ProductionOrder.id == UUID(order_id),
+            ProductionOrder.tenant_id == tenant_id,
+        )
+    )).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    rows = (await db.execute(
+        select(OrderLine)
+        .options(selectinload(OrderLine.executors))
+        .where(OrderLine.order_id == order.id)
+        .order_by(OrderLine.sequence, OrderLine.created_at)
+    )).scalars().all()
+    return [
+        {
+            "id": str(line.id),
+            "line_uid": line.line_uid,
+            "operation_id": str(line.operation_id) if line.operation_id else None,
+            "nomenclature_uid": line.nomenclature_uid,
+            "nomenclature_name": line.nomenclature_name,
+            "nomenclature_kind": line.nomenclature_kind,
+            "work_type_uid": line.work_type_uid,
+            "work_type_name": line.work_type_name,
+            "quantity": float(line.quantity or 0),
+            "unit": line.unit,
+            "duration_hours": float(line.duration_hours or 0),
+            "sequence": line.sequence,
+            "department_id": str(line.department_id) if line.department_id else None,
+            "stage_uid": line.stage_uid,
+            "executor_uid": line.executor_uid,
+            "executor_type": line.executor_type,
+            "ktu": float(line.ktu or 1),
+            "executors": [
+                {
+                    "id": str(e.id),
+                    "executor_uid": e.executor_uid,
+                    "executor_type": e.executor_type,
+                    "resource_uid": e.resource_uid,
+                    "role": e.role,
+                    "capacity_demand": float(e.capacity_demand or 0),
+                    "ktu": float(e.ktu or 1),
+                }
+                for e in (line.executors or [])
+            ],
+        }
+        for line in rows
+    ]
 
 
 def _order_to_out(o: ProductionOrder, by_id: Optional[dict] = None, children: Optional[dict] = None) -> ProductionOrderOut:

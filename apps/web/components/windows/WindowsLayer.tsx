@@ -145,6 +145,7 @@ type WindowsLayerProps = {
 
   /** Ресурсы заказа (Шаг 5): {orderId: items[]} — из операций маршрутов + переопределения */
   orderRes?: Record<string, any[]>;
+  orderLines?: Record<string, any[]>;
   /** Добавить ресурс в заказ (ReferenceField) */
   onOrderResAdd?: (orderId: string, resourceId: string) => void;
   /** Загрузить ресурсы заказа (lazy при открытой вкладке «Ресурсы») */
@@ -221,7 +222,7 @@ export default function WindowsLayer(props: WindowsLayerProps) {
   onConflictsLoad, onConflictResolve, conflictsData, interleavePlan, conflictGhost,
     onNodeOrderChange, onBomNodeQuantity, onBomNodeRemove, onBomNodeAdd,
     onRoutingOpUpdate, onPickResource, onOpenDirPick, onRoutingOpCreate, opNameSuggestions,
-    schedules = [], onSaveResourceEdit, orderRes, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
+  schedules = [], onSaveResourceEdit, orderRes, orderLines = {}, onOrderResAdd, onOrderResLoad, onOrderResChange, onOrderResRemove, onOrderResPersonalize, departments = [], onDirEditSave, onDirAddSave, onDirEditWindow, onOpenWsched, onOpenWschedPick, onOpenWschedEdit, refreshWsched = 0, onWschedChanged,
     projects = [], resAssign, onResAssignLoad, onResAssignAdd, onResAssignDel,
     onNewOrderDraftSave,
     onDirCalendar, calData, onCalLoad, onCalAddAssignment, onCalDelAssignment, onCalAddException, onCalDelException,
@@ -1042,6 +1043,48 @@ if (w.kind === 'xlog') return { badge: `[xlog:openWin #${n}]`, copy: `[xlog:open
                       <div style={{ color: '#E2E8F0' }}>{kv[1]}</div>
                     </div>
                   ))}
+                </div>
+              )}
+              {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && o?.order_type === 'work_order' && (
+                <div style={{ marginTop: 14, borderTop: '1px solid #1E3252', paddingTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#A9D6E5' }}>Работы и исполнители</span>
+                    <span style={{ fontSize: 11, color: '#5A7090' }}>заказ-наряд · КТУ</span>
+                  </div>
+                  {(orderLines[o!.id] || []).length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#5A7090' }}>Строки работ ещё не загружены или отсутствуют.</div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ color: '#8FA3BD', textAlign: 'left', fontSize: 10.5, textTransform: 'uppercase' }}>
+                            <th style={{ padding: '5px 6px' }}>Работа/услуга</th>
+                            <th style={{ padding: '5px 6px' }}>Вид</th>
+                            <th style={{ padding: '5px 6px' }}>Кол-во</th>
+                            <th style={{ padding: '5px 6px' }}>Часы</th>
+                            <th style={{ padding: '5px 6px' }}>Исполнители</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(orderLines[o!.id] || []).map((line: any) => (
+                            <tr key={line.id} style={{ borderTop: '1px solid #1E3252', verticalAlign: 'top' }}>
+                              <td style={{ padding: '6px' }}>{line.work_type_name || line.nomenclature_name || 'Работа'}</td>
+                              <td style={{ padding: '6px', color: '#B0C4DE' }}>{line.nomenclature_kind === 'service' ? 'Услуга' : 'Работа'}</td>
+                              <td style={{ padding: '6px', color: '#B0C4DE' }}>{Number(line.quantity || 0)} {line.unit || ''}</td>
+                              <td style={{ padding: '6px', color: '#B0C4DE' }}>{Number(line.duration_hours || 0).toFixed(3)}</td>
+                              <td style={{ padding: '6px' }}>
+                                {(line.executors || []).length === 0 ? <span style={{ color: '#F87171' }}>не назначены</span> : (line.executors || []).map((e: any) => (
+                                  <span key={e.id} style={{ display: 'inline-block', margin: '1px 4px 1px 0', padding: '1px 6px', borderRadius: 5, background: e.role === 'primary' ? 'rgba(74,222,128,.12)' : 'rgba(59,130,246,.12)', color: e.role === 'primary' ? '#4ADE80' : '#93C5FD', fontSize: 11 }}>
+                                    {e.role}: {e.executor_uid || e.resource_uid} · КТУ {Number(e.ktu || 1)}
+                                  </span>
+                                ))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
               {!isList && !isBom && !isDir && !isResEdit && w.tab === 'order' && (
