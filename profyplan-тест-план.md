@@ -1763,5 +1763,5 @@
 | CCM-MN-37 | Нет primary у production-операции | CCM блокируется с `RESOURCE_PRIMARY_MISSING` и списком операций | ✅ 30.10 |
 | CCM-MN-38 | Alternative в bottleneck | Alternative не увеличивает загрузку и не создаёт узкое место | ✅ 30.10 |
 | CCM-MN-39 | Готовность: production-ресурсы | Закупки без ресурсов не считаются ошибкой; отсутствие primary у production блокирует CCM | ⏳ |
-| CCM-MN-40 | Мастер проекта: CCM | Выбор CCM сохраняет `planning_logic=ccm` и `default_method=cpm_ccm` | ⏳ |
+| CCM-MN-40 | Мастер проекта: CCM | Выбор CCM сохраняет `planning_logic=ccm` и `default_method=cpm_ccm` | ✅ 30.10, визуально: режим CCM есть |
 | CCM-MN-41 | Полный CCM-прогон | Leveling, snapshot, экспорт в 1С, факты, primary и bottleneck проходят на локальной базе | ✅ 30.10 |
