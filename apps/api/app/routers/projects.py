@@ -14,7 +14,7 @@ from app.models.production_order import ProductionOrder
 from app.models.operation import Operation, OperationResource
 from app.models.department import Department
 from app.models.resource import Resource
-from app.models.work_order import WorkOrder, WorkOrderLine
+from app.models.order_line import OrderLine
 from app.models.calculation_run import CalculationRun
 from app.models.plan_snapshot import PlanSnapshot, PlanSnapshotRow
 from app.models.plan_version import InterProjectDependency
@@ -318,15 +318,26 @@ async def project_readiness(
         o for o in ops
         if o.department_id is None and (o.order_id is None or o.order_id in nondraft)
     ])
+    prod_ops = [o for o in ops if (o.operation_type or "production") == "production"]
+    prod_ids = [o.id for o in prod_ops]
     with_res = 0
-    if op_ids:
+    if prod_ids:
         with_res = (await db.execute(
             select(func.count(func.distinct(OperationResource.operation_id))).where(
-                OperationResource.operation_id.in_(op_ids),
+                OperationResource.operation_id.in_(prod_ids),
                 OperationResource.role == "primary",
             )
         )).scalar() or 0
-    ops_without_res = max(0, len(ops) - with_res)
+    ops_without_res = max(0, len(prod_ops) - with_res)
+    work_orders = [o for o in orders if getattr(o, "order_type", "production_order") == "work_order"]
+    wo_lines_without_operation = 0
+    if work_orders:
+        wo_lines_without_operation = (await db.execute(
+            select(func.count(OrderLine.id)).where(
+                OrderLine.order_id.in_([o.id for o in work_orders]),
+                OrderLine.operation_id.is_(None),
+            )
+        )).scalar() or 0
 
     last_run = (await db.execute(
         select(CalculationRun).where(CalculationRun.tenant_id == tenant_id, CalculationRun.project_id == project_id)
@@ -357,7 +368,13 @@ async def project_readiness(
     elif drafts > 0:
         add("orders", "Заказы", "warn", f"Заказов: {total_orders}, черновиков: {drafts}", "project")
     else:
-        add("orders", "Заказы", "ok", f"Заказов: {total_orders}", "project")
+        add("orders", "Заказы", "ok", f"Заказов: {total_orders}" + (f", из них заказ-нарядов: {len(work_orders)}" if work_orders else ""), "project")
+
+    if work_orders:
+        if wo_lines_without_operation > 0:
+            add("work_orders", "Заказ-наряды", "warn", f"Заказ-нарядов: {len(work_orders)}, работ без операций: {wo_lines_without_operation}", "project")
+        else:
+            add("work_orders", "Заказ-наряды", "ok", f"Заказ-нарядов: {len(work_orders)}, все работы связаны с операциями", "project")
 
     if len(ops) == 0:
         add("structure", "Структура", "block", "Операций нет — разверните заказы по маршрутам" if total_orders else "Нет заказов и операций", "project")
@@ -374,9 +391,11 @@ async def project_readiness(
     if len(ops) == 0:
         add("resources", "Ресурсы", "warn", "Нет операций — назначить ресурсы некому", "project")
     elif ops_without_res > 0:
-        add("resources", "Ресурсы", "warn", f"Операций без primary-ресурса: {ops_without_res}", "project")
+        ccm_required = (project.planning_logic == "ccm") or ("ccm" in (project.default_method or ""))
+        add("resources", "Ресурсы", "block" if ccm_required else "warn",
+            f"Production-операций без primary-ресурса: {ops_without_res}" + (" — CCM заблокирован" if ccm_required else ""), "project")
     else:
-        add("resources", "Ресурсы", "ok", "Все операции с ресурсами", "project")
+        add("resources", "Ресурсы", "ok", f"Все production-операции с primary-ресурсом ({len(prod_ops)})", "project")
 
     if last_run is None:
         add("calculation", "Локальный расчёт", "warn", "Расчёт ещё не запускался", "project")
@@ -437,12 +456,8 @@ async def project_resource_coverage(
             ProductionOrder.ext_id,
             ProductionOrder.specification_name,
             Department.name,
-            WorkOrder.number,
-            WorkOrder.ext_id,
         )
         .outerjoin(ProductionOrder, ProductionOrder.id == Operation.order_id)
-        .outerjoin(WorkOrderLine, WorkOrderLine.operation_id == Operation.id)
-        .outerjoin(WorkOrder, WorkOrder.id == WorkOrderLine.work_order_id)
         .outerjoin(Department, Department.id == Operation.department_id)
         .where(Operation.tenant_id == tenant_id, Operation.project_id == project_id)
         .order_by(Operation.order_id, Operation.position, Operation.name)
@@ -470,8 +485,8 @@ async def project_resource_coverage(
             })
 
     items = []
-    for op, order_ext_id, order_spec_name, dept_name, wo_number, wo_ext_id in op_rows:
-        order_name = order_ext_id or order_spec_name or wo_number or wo_ext_id
+    for op, order_ext_id, order_spec_name, dept_name in op_rows:
+        order_name = order_ext_id or order_spec_name
         linked = assignments.get(str(op.id), [])
         primary = [x for x in linked if x["role"] == "primary"]
         if not linked:

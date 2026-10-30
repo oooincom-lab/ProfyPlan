@@ -1762,3 +1762,5 @@
 | CCM-MN-36 | Legacy WorkOrder удалён | Таблицы `work_orders`/`work_order_lines` отсутствуют; импорт/факты работают через единый заказ | ✅ 28.10 |
 | CCM-MN-37 | Нет primary у production-операции | CCM блокируется с `RESOURCE_PRIMARY_MISSING` и списком операций | ✅ 30.10 |
 | CCM-MN-38 | Alternative в bottleneck | Alternative не увеличивает загрузку и не создаёт узкое место | ⏳ |
+| CCM-MN-39 | Готовность: production-ресурсы | Закупки без ресурсов не считаются ошибкой; отсутствие primary у production блокирует CCM | ⏳ |
+| CCM-MN-40 | Мастер проекта: CCM | Выбор CCM сохраняет `planning_logic=ccm` и `default_method=cpm_ccm` | ⏳ |
