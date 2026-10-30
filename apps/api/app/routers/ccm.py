@@ -24,7 +24,11 @@ from app.models.plan_version import ActualExecution, InterProjectDependency, Pla
 from app.models.production_order import ProductionOrder
 from app.services.cpm import calculate_cpm
 from app.services.multi_project import merge_projects, format_merged_result
-from app.services.resource_leveling import resource_leveling_sgs, format_leveling_result
+from app.services.resource_leveling import (
+    ResourcePrimaryMissing,
+    format_leveling_result,
+    resource_leveling_sgs,
+)
 from app.services.forecast import recalculate_forecast, format_forecast_result
 from app.services.batch_scheduling import analyze_batches, BatchScheduleResult
 from app.services.bottleneck import analyze_bottlenecks, BottleneckResult
@@ -469,6 +473,15 @@ async def run_resource_leveling(
 
     try:
         result = await resource_leveling_sgs(db, project_id, tenant_id, cpm_result)
+    except ResourcePrimaryMissing as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "RESOURCE_PRIMARY_MISSING",
+                "message": str(exc),
+                "operations": exc.operations,
+            },
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка выравнивания: {e}")
 

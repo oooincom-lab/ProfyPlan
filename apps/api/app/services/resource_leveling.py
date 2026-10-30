@@ -7,7 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -140,6 +140,18 @@ class ResourceLevelResult:
     queue_lengths: dict[str, int]  # resource_name → очередь
 
 
+class ResourcePrimaryMissing(RuntimeError):
+    """У производственной операции нет primary-ресурса — CCM запускать нельзя."""
+
+    def __init__(self, operations: list[dict]):
+        self.operations = operations
+        names = ", ".join(str(x.get("name") or x.get("id")) for x in operations[:5])
+        super().__init__(
+            "RESOURCE_PRIMARY_MISSING: нет primary-ресурса у %d операций%s"
+            % (len(operations), (": " + names) if names else "")
+        )
+
+
 async def resource_leveling_sgs(
     db: AsyncSession,
     project_id: UUID,
@@ -163,6 +175,27 @@ async def resource_leveling_sgs(
     Returns:
         ResourceLevelResult с выровненным расписанием
     """
+    missing_rows = (await db.execute(
+        select(Operation.id, Operation.name)
+        .outerjoin(
+            OperationResource,
+            and_(
+                OperationResource.operation_id == Operation.id,
+                OperationResource.role == "primary",
+            ),
+        )
+        .where(
+            Operation.tenant_id == tenant_id,
+            Operation.project_id == project_id,
+            Operation.operation_type == "production",
+            OperationResource.id.is_(None),
+        )
+    )).all()
+    if missing_rows:
+        raise ResourcePrimaryMissing([
+            {"id": str(row[0]), "name": row[1]} for row in missing_rows
+        ])
+
     # 1. Загружаем операции с их связями ресурсов
     ops_result = await db.execute(
         select(Operation).where(
