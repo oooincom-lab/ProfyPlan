@@ -1726,8 +1726,8 @@
 |---|---|---|---|
 | CCM-MN-1 | Одна операция — два ресурса (primary + helper) | Оба ресурса сохранены; primary определяет длительность, helper учитывается в загрузке | ⏳ |
 | CCM-MN-2 | Один ресурс — две операции | Ресурс связан с обеими; пересечение по времени обнаруживается | ⏳ |
-| CCM-MN-3 | Два primary у операции | Ошибка `RESOURCE_PRIMARY_MULTIPLE`; CCM не стартует | ⏳ |
-| CCM-MN-4 | Только alternative | Ошибка `RESOURCE_PRIMARY_MISSING`; alternative не грузится одновременно | ⏳ |
+| CCM-MN-3 | Два primary у операции | Ошибка `RESOURCE_PRIMARY_MULTIPLE`; CCM не стартует | ✅ 28.10, API |
+| CCM-MN-4 | Только alternative | Ошибка `RESOURCE_PRIMARY_MISSING`; alternative не грузится одновременно | ✅ 30.10, CCM |
 | CCM-MN-5 | Дублирующая связь operation+resource | Ошибка `RESOURCE_DUPLICATE` или идемпотентное обновление | ⏳ |
 | CCM-MN-6 | Ресурс другого tenant | API отклоняет назначение | ⏳ |
 | CCM-MN-7 | Заказ-наряд `work_order` | Создаётся WorkOrder, а не ProductionOrder; строка работы становится операцией, `nomenclature_kind=service / work` | ⏳ |
@@ -1761,6 +1761,6 @@
 | CCM-MN-35 | Единый заказ | `work_order` — тип в общем списке заказов, без отдельного API/пункта меню; права и расчёты общие | ✅ 30.10, общий список и бейдж проверены |
 | CCM-MN-36 | Legacy WorkOrder удалён | Таблицы `work_orders`/`work_order_lines` отсутствуют; импорт/факты работают через единый заказ | ✅ 28.10 |
 | CCM-MN-37 | Нет primary у production-операции | CCM блокируется с `RESOURCE_PRIMARY_MISSING` и списком операций | ✅ 30.10 |
-| CCM-MN-38 | Alternative в bottleneck | Alternative не увеличивает загрузку и не создаёт узкое место | ⏳ |
+| CCM-MN-38 | Alternative в bottleneck | Alternative не увеличивает загрузку и не создаёт узкое место | ✅ 30.10 |
 | CCM-MN-39 | Готовность: production-ресурсы | Закупки без ресурсов не считаются ошибкой; отсутствие primary у production блокирует CCM | ⏳ |
 | CCM-MN-40 | Мастер проекта: CCM | Выбор CCM сохраняет `planning_logic=ccm` и `default_method=cpm_ccm` | ⏳ |
